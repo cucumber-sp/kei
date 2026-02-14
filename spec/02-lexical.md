@@ -58,8 +58,8 @@ Identifiers starting with `__` (double underscore) are reserved for compiler-gen
 
 ```kei
 // Reserved - compiler use only
-__free
-__refcount
+__destroy
+__oncopy
 __kei_internal
 
 // User code should avoid these
@@ -139,12 +139,11 @@ r#"raw string with "quotes" inside"#
 The following identifiers are reserved as keywords:
 
 ```
-break       case        catch       const       continue    
+break       case        catch       const       continue
 default     else        enum        extern      false
 fn          for         if          import      let
-match       move        null        return      ref
-struct      throw       throws      true        unsafe
-while
+match       move        null        return      struct
+throw       throws      true        unsafe      while
 ```
 
 ## Operators

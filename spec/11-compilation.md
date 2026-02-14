@@ -9,9 +9,9 @@
        ↓
      Parser → AST
        ↓
-     Type Checker (value/ref/unsafe validation, refcount analysis, exhaustiveness)
+     Type Checker (value/unsafe validation, lifecycle hook analysis, exhaustiveness)
        ↓
-     KIR Lowering → KIR (monomorphization, __free generation, refcount ops, checks)
+     KIR Lowering → KIR (monomorphization, __destroy/__oncopy generation, lifecycle ops, checks)
        ↓
      C Backend → .c file
        ↓
@@ -25,7 +25,7 @@ All imports from `src/` and `deps/` are resolved at compile time. Everything is 
 **Benefits:**
 - Whole-program visibility for monomorphization and optimization
 - No ABI contracts, no header files, no precompiled libraries
-- Compiler can eliminate unused code, inline aggressively, and elide refcount operations
+- Compiler can eliminate unused code, inline aggressively, and elide lifecycle hook calls
 
 ## CLI
 
@@ -45,12 +45,12 @@ kei run src/main.kei                # build and execute
 - Integer overflow detection
 - Null pointer dereference checks (unsafe blocks)
 - Use-after-move detection
-- Reference count validation
+- Lifecycle hook validation
 - Full stack traces on panic
 
 ### Release mode
 - All debug checks removed
-- Refcount elision where compiler proves single ownership
+- Lifecycle hook elision where compiler proves no-op or single ownership
 - Aggressive inlining via C compiler optimizations (`-O2`/`-O3`)
 - Dead code elimination
 - Equivalent performance to hand-written C

@@ -167,7 +167,7 @@ When switching on enum values, the compiler enforces exhaustiveness:
 ```kei
 enum Color { Red, Green, Blue }
 
-fn describe(c: Color) -> str {
+fn describe(c: Color) -> string {
     switch c {
         case Red: return "warm";
         case Green: return "natural";  

@@ -58,7 +58,7 @@ static internal_cache = 0;       // internal only
 
 **What can be made public:**
 - Functions (`pub fn`)
-- Structures (`pub struct`, `pub ref struct`, `pub unsafe struct`)
+- Structures (`pub struct`, `pub unsafe struct`)
 - Type aliases (`pub type`)
 - Static constants (`pub static`)
 - Enums (`pub enum`)
@@ -183,7 +183,7 @@ struct DbError {
 unsafe struct Database {
     handle: ptr<void>;
     
-    fn Database(path: str) -> Database throws DbError {
+    fn Database(path: string) -> Database throws DbError {
         let db = Database{ handle: null };
         
         unsafe {
@@ -197,7 +197,7 @@ unsafe struct Database {
         return db;
     }
     
-    fn exec(self: Database, sql: str) -> bool throws DbError {
+    fn exec(self: Database, sql: string) -> bool throws DbError {
         unsafe {
             let c_sql = sql.toCString();
             let rc = sqlite3_exec(self.handle, c_sql, null, null, null);
@@ -208,9 +208,9 @@ unsafe struct Database {
         return true;
     }
     
-    fn free(self) {
+    fn __destroy(self: Database) {
         unsafe {
-            if self.handle != null {
+            if (self.handle != null) {
                 sqlite3_close(self.handle);
             }
         }
@@ -275,7 +275,7 @@ Converting between Kei strings and C strings:
 ```kei
 extern fn puts(s: ptr<c_char>) -> int;
 
-fn printString(message: str) {
+fn printString(message: string) {
     unsafe {
         let c_str = message.toCString();
         puts(c_str);
@@ -300,7 +300,7 @@ extern fn fread(buffer: ptr<void>, size: usize, count: usize, file: ptr<void>) -
 unsafe struct File {
     handle: ptr<void>;
     
-    fn File(path: str, mode: str) -> File throws IOError {
+    fn File(path: string, mode: string) -> File throws IOError {
         unsafe {
             let c_path = path.toCString();
             let c_mode = mode.toCString();
@@ -318,9 +318,9 @@ unsafe struct File {
         }
     }
     
-    fn free(self) {
+    fn __destroy(self: File) {
         unsafe {
-            if self.handle != null {
+            if (self.handle != null) {
                 fclose(self.handle);
             }
         }

@@ -58,7 +58,7 @@ Kei performs local type inference for variable declarations when the type can be
 let x = 42;          // int (default integer type)
 let y = 3.14;        // f64 (default float type)
 let z = true;        // bool
-let s = "hello";     // str
+let s = "hello";     // string
 let arr = [1, 2, 3]; // array<int, 3>
 ```
 
@@ -227,20 +227,19 @@ let float_val: f64 = large as f64;
 ```
 
 ### Assignment semantics by type category
-- **Value types:** Assignment copies the value
-- **Reference types:** Assignment increments reference count
-- **Move semantics:** Use `move` keyword for zero-cost transfer
+- **All types:** Assignment copies the value and calls `__oncopy` (no-op for primitive-only structs)
+- **Move semantics:** Use `move` keyword for zero-cost transfer without `__oncopy`
 
 ```kei
-// Value types - copy
+// Primitive-only struct - copy (just memcpy, hooks are no-op)
 struct Point { x: f64; y: f64; }
 let p1 = Point{ x: 1.0, y: 2.0 };
 let p2 = p1;  // p2 is independent copy
 
-// Reference types - refcount
-ref struct Data { value: int; }
-let d1 = Data{ value: 42 };
-let d2 = d1;        // reference count increment
+// Struct with managed fields - copy + lifecycle hooks
+struct Data { name: string; value: int; }
+let d1 = Data{ name: "hello", value: 42 };
+let d2 = d1;        // __oncopy called (name refcount++)
 let d3 = move d1;   // zero-cost transfer, d1 becomes invalid
 ```
 

@@ -19,7 +19,7 @@ fn name(param1: Type1, param2: Type2) -> ReturnType {
 - `void` functions can use `return;` (without value) or omit return statement
 
 ```kei
-fn greet(name: str) {           // returns void
+fn greet(name: string) {        // returns void
     print("Hello, " + name);
 }
 
@@ -46,18 +46,12 @@ let result = increment(value);  // value is still 5, result is 6
 
 **Important:** `mut` creates a copy of the parameter. Changes do not affect the caller's original value.
 
-### Parameter passing by type category
+### Parameter passing
 
-The parameter passing convention depends on the type category:
-
-| Type Category | Default Behavior | Copy Cost |
-|---------------|------------------|-----------|
-| `struct` (value) | Copy by value | Cheap (stack) |
-| `ref struct` | Reference count increment | Medium |
-| `unsafe struct` | Transfer ownership | Cheap |
+All parameters are copied by default with `__oncopy` called. For primitive-only structs this is just a memcpy. For structs with managed fields, lifecycle hooks are called:
 
 ```kei
-// Value types - always copied
+// Primitive-only struct - just memcpy
 struct Point { x: f64; y: f64; }
 fn distance(p1: Point, p2: Point) -> f64 {
     // p1 and p2 are independent copies
@@ -66,73 +60,38 @@ fn distance(p1: Point, p2: Point) -> f64 {
     return sqrt(dx * dx + dy * dy);
 }
 
-// Reference types - refcount increment by default
-ref struct Database { connection: str; }
-fn query(db: Database, sql: str) -> str {
-    // db's reference count is incremented
-    return db.execute(sql);
-}
+// Struct with managed fields - copy + lifecycle hooks
+fn greet(user: User) {
+    // __oncopy called on entry (user.name refcount++)
+    print("Hello, " + user.name);
+}   // __destroy called on exit (user.name refcount--)
 ```
-
-## Optimized parameter passing (Design Question)
-
-**Note:** This section describes a feature that is under design consideration.
-
-For `ref struct` types, there may be a `borrow` keyword to avoid reference count overhead:
-
-```kei
-fn printUser(borrow user: User) {
-    // Receives a pointer, does not increment refcount
-    // Cannot modify, store, or return the borrowed reference
-    print("User: " + user.name);
-}
-```
-
-**Borrow restrictions (if implemented):**
-- Callee receives a pointer without ownership
-- Cannot store borrowed references in struct fields
-- Cannot return borrowed references from functions  
-- Cannot call `__free` or `free` on borrowed references
-
-**Alternative approach:** The language may rely entirely on reference counting with compiler optimizations to eliminate unnecessary increments/decrements.
-
-*This design question will be resolved in future iterations.*
 
 ## Return value semantics
 
-Return values follow the same type category rules:
-
-### Value types
-Copied to the caller:
+Return values are copied to the caller with `__oncopy`. The compiler applies Return Value Optimization (RVO) to avoid unnecessary copies:
 
 ```kei
 fn createPoint() -> Point {
-    return Point{ x: 1.0, y: 2.0 };  // copied to caller
+    return Point{ x: 1.0, y: 2.0 };  // RVO - constructed directly at call site
+}
+
+fn createUser(name: string) -> User {
+    return User{ name: name, age: 0 };  // RVO - no extra __oncopy/__destroy
 }
 ```
 
-### Reference types
-Use Return Value Optimization (RVO) to avoid unnecessary reference count operations:
-
-```kei
-fn createUser(name: str) -> User {
-    return User{ name: name, email: "" };  // RVO - no refcount overhead
-}
-```
-
-The compiler implements RVO by passing an "out-pointer" parameter where the return value is constructed directly at the call site.
-
-### Move semantics
+### Move parameters
 Use `move` for zero-cost transfer of ownership:
 
 ```kei
-fn takeOwnership(data: move Database) -> bool {
-    // data is moved, no refcount increment
-    return data.isValid();
-}
+fn consume(move user: User) {
+    // user is moved, no __oncopy
+    print(user.name);
+}   // __destroy called here
 
-let db = Database{ connection: "localhost" };
-let valid = takeOwnership(move db);  // db becomes invalid after this call
+let user = User{ name: "Alice", age: 25 };
+consume(move user);  // user becomes invalid after this call
 ```
 
 ## Function overloading
@@ -142,14 +101,14 @@ Function overloading is **not supported** in version 0.0.1. Functions must have 
 ```kei
 // Not allowed in v0.0.1
 fn process(data: int) -> int { return data * 2; }
-fn process(data: str) -> str { return data + "!"; }  // ERROR
+fn process(data: string) -> string { return data + "!"; }  // ERROR
 ```
 
 Use descriptive names instead:
 
 ```kei
 fn processInt(data: int) -> int { return data * 2; }
-fn processStr(data: str) -> str { return data + "!"; }
+fn processStr(data: string) -> string { return data + "!"; }
 ```
 
 ## Recursion
@@ -208,7 +167,6 @@ Kei compiles to C, so calling conventions follow the target C compiler:
 
 - **Small value types:** Passed in registers when possible
 - **Large value types:** Passed by pointer (compiler decision)
-- **Reference types:** Passed as pointer + refcount metadata
 - **Return values:** Small values in registers, large values via RVO
 
 ## Function pointers (Future)
@@ -229,9 +187,9 @@ The compiler may inline small functions when beneficial. No manual `inline` keyw
 ### Zero-cost abstractions
 Functions that operate only on value types compile to efficient C code with no overhead.
 
-### Reference counting overhead
-Functions receiving `ref struct` parameters incur reference counting cost unless optimized away by the compiler.
+### Lifecycle hook overhead
+Functions receiving parameters with managed fields incur `__oncopy`/`__destroy` cost unless optimized away by the compiler (e.g. last-use optimization converts copy to move).
 
 ---
 
-The function system balances familiar syntax with the performance characteristics needed for systems programming, while managing the complexity of Kei's three-tier memory model.
+The function system balances familiar syntax with the performance characteristics needed for systems programming, while managing the complexity of Kei's two-tier memory model.

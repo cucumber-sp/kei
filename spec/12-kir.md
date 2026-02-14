@@ -5,23 +5,24 @@
 AST = what the programmer wrote. KIR = what will actually execute.
 
 All implicit behavior is made explicit during lowering:
-- Reference count increments/decrements
-- `__free` calls at scope exits
+- Lifecycle hook calls (`__destroy`/`__oncopy`) at scope exits and assignments
 - Move semantics (ownership transfers)
 - Debug checks (bounds, overflow, null)
-- Monomorphization of generic-like built-in types
+- Monomorphization of generic types and functions
 
 ## KIR Lowering Transformations
 
 | Source construct | KIR output |
 |---|---|
-| `ref struct` assignment | `refcount_inc` + copy pointer |
-| Scope exit of `ref struct` | `refcount_dec` + conditional `__free` |
-| `move` keyword | Direct pointer transfer, no refcount |
-| `ref struct` function param | `refcount_inc` on entry, `refcount_dec` on exit |
-| `move` function param | No refcount operations |
-| `ref struct` return | RVO: out-pointer, direct write |
+| Variable declaration | `stack_alloc` |
+| Assignment to variable with hooks | `call __destroy` on old + copy + `call __oncopy` on new |
+| Scope exit | `call __destroy` on all live variables (reverse order) |
+| `move` keyword | Direct copy, no `__oncopy`/`__destroy`, mark source invalid |
+| Function param (copy) | `call __oncopy` on entry, `call __destroy` on exit |
+| Function param (`move`) | No lifecycle ops |
+| Return value | RVO: out-pointer, direct write |
 | `defer` statement | Reordered to scope exit (LIFO) |
+| Generic type usage | Monomorphized to concrete type |
 | Debug bounds check | `bounds_check` instruction |
 | Debug overflow | `overflow_check` instruction |
 
@@ -30,13 +31,11 @@ All implicit behavior is made explicit during lowering:
 Flat, labeled instruction format with typed registers.
 
 ### Memory
-- `heap_alloc <Type>` — allocate on heap
-- `heap_free <reg>` — deallocate
 - `stack_alloc <Type>` — allocate on stack frame
 - `load <reg.field>` — load field from struct
 - `store <reg.field>, <value>` — store into field
-- `refcount_inc <reg>` — increment reference count
-- `refcount_dec <reg>` — decrement, free if zero
+- `call_destroy <reg>` — call `__destroy` on value
+- `call_oncopy <reg>` — call `__oncopy` on value
 
 ### Functions
 - `call <func>(<args>)` — function call
@@ -63,17 +62,17 @@ Flat, labeled instruction format with typed registers.
 
 Kei source:
 ```kei
-ref struct User {
-    name: String;
+struct User {
+    name: string;
     age: int;
 }
 
-fn createUser(n: String, a: int) -> User {
-    return User { name: n, age: a };
+fn createUser(n: string, a: int) -> User {
+    return User{ name: n, age: a };
 }
 
 fn main() -> int {
-    let user = createUser(String.from("Andrey"), 21);
+    let user = createUser("Andrey", 21);
     let age = user.age;
     return age;
 }
@@ -81,23 +80,19 @@ fn main() -> int {
 
 KIR output (debug):
 ```
-method User.__free(self: ptr<User>):
-    %0 = load self.name
-    call_method %0.__free()
-    call heap_free(self)
-    ret_void
-
-func createUser(n: String, a: i32, __out: ptr<User>):
+func createUser(n: string, a: i32, __out: ptr<User>):
+    call_oncopy n                ; n.count++
     store __out.name, n
     store __out.age, a
     ret_void
 
 func main() -> i32:
-    %0 = heap_alloc User
-    %1 = call String.from("Andrey")
+    %0 = stack_alloc User
+    %1 = string_literal "Andrey"
     call createUser(%1, 21, %0)
     %2 = load %0.age
-    refcount_dec %0          ; triggers __free if count == 0
+    call_destroy %0              ; triggers User.__destroy
+                                 ;   -> calls string.__destroy on name field
     ret %2
 ```
 
@@ -105,7 +100,8 @@ func main() -> i32:
 
 The KIR pass can perform optimizations before C codegen:
 
-- **Refcount elision**: If a value is created, used, and destroyed without sharing, skip all refcount operations
+- **No-op hook elimination**: If `__destroy`/`__oncopy` are no-ops (primitive-only struct), remove all calls
+- **Last-use move**: Automatically convert last-use of a variable to move (skip `__oncopy`/`__destroy`)
 - **Inline expansion**: Small functions inlined at KIR level
 - **Dead store elimination**: Remove writes to variables that are never read
-- **Move detection**: Automatically convert last-use assignments to moves (no refcount overhead)
+- **RVO**: Return values constructed directly at call site via out-pointer

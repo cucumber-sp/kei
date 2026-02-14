@@ -1,6 +1,6 @@
 # Types
 
-Kei has a structured type system organized into primitive types, compound types, and user-defined types. All types fall into one of three memory categories: value types, reference types, or unsafe types.
+Kei has a structured type system organized into primitive types, compound types, and user-defined types. All types fall into one of two memory categories: value types (`struct`) and unsafe types (`unsafe struct`). Both live on the stack with lifecycle hooks for cleanup and copying.
 
 ## Primitive types
 
@@ -10,13 +10,13 @@ Kei has a structured type system organized into primitive types, compound types,
 |---------|---------|------------------------|
 | `i8`    | 8 bits  | -128 to 127           |
 | `i16`   | 16 bits | -32,768 to 32,767     |
-| `i32`   | 32 bits | -2³¹ to 2³¹-1         |
-| `i64`   | 64 bits | -2⁶³ to 2⁶³-1         |
+| `i32`   | 32 bits | -2^31 to 2^31-1         |
+| `i64`   | 64 bits | -2^63 to 2^63-1         |
 | `isize` | Platform| Pointer-sized signed   |
 | `u8`    | 8 bits  | 0 to 255              |
 | `u16`   | 16 bits | 0 to 65,535           |
-| `u32`   | 32 bits | 0 to 2³²-1            |
-| `u64`   | 64 bits | 0 to 2⁶⁴-1            |
+| `u32`   | 32 bits | 0 to 2^32-1            |
+| `u64`   | 64 bits | 0 to 2^64-1            |
 | `usize` | Platform| Pointer-sized unsigned |
 
 #### Built-in aliases
@@ -64,13 +64,9 @@ let d = 2.5f32; // f32 (explicit suffix)
 
 ### `ptr<T>` — Raw pointer
 
-Unmanaged pointer that does not own memory. Only allowed in `unsafe struct` fields and local variables within unsafe contexts.
+Unmanaged pointer that does not own memory. Only allowed in `unsafe struct` fields and `unsafe` blocks.
 
 ```kei
-let x = 42;
-let p: ptr<int> = &x;
-let value = p.*;        // dereference
-
 // Only in unsafe structs
 unsafe struct RawBuffer {
     data: ptr<u8>;
@@ -79,6 +75,71 @@ unsafe struct RawBuffer {
 ```
 
 **Safety:** No automatic cleanup, no bounds checking, no lifetime validation.
+
+## Generics
+
+Kei supports generic types and functions through compile-time monomorphization. Generic code is instantiated for each concrete type at compile time, producing specialized, efficient code.
+
+### Generic functions
+
+```kei
+fn max<T>(a: T, b: T) -> T {
+    return if a > b { a } else { b };
+}
+
+let x = max<int>(10, 20);       // monomorphized to max_int
+let y = max<f64>(3.14, 2.71);   // monomorphized to max_f64
+```
+
+### Generic structs
+
+```kei
+struct Pair<A, B> {
+    first: A;
+    second: B;
+}
+
+let p = Pair<int, string>{ first: 42, second: "hello" };
+```
+
+### Generic unsafe structs
+
+```kei
+unsafe struct Shared<T> {
+    ptr: ptr<T>;
+    count: ptr<u32>;
+
+    fn __oncopy(self: Shared<T>) -> Shared<T> {
+        self.count.increment();
+        return self;
+    }
+
+    fn __destroy(self: Shared<T>) {
+        self.count.decrement();
+        if (self.count.value == 0) {
+            self.ptr.destroy();
+            c_free(self.ptr);
+            c_free(self.count);
+        }
+    }
+}
+```
+
+### Monomorphization
+
+All generic types and functions are monomorphized at compile time:
+
+```kei
+// Source code
+let a = Pair<int, bool>{ first: 1, second: true };
+let b = Pair<string, f64>{ first: "hi", second: 3.14 };
+
+// Compiler generates two separate struct types:
+// Pair_int_bool { first: int; second: bool; }
+// Pair_string_f64 { first: string; second: f64; }
+```
+
+No runtime overhead — generics are a purely compile-time feature.
 
 ## Array and collection types
 
@@ -98,7 +159,7 @@ let n = a.len;          // compile-time constant (3)
 
 ### `dynarray<T>` — Dynamic array
 
-Growable, heap-allocated array that owns its memory:
+Growable, heap-allocated array that owns its memory. Implemented as `unsafe struct` in stdlib:
 
 ```kei
 let nums: dynarray<int> = [1, 2, 3];
@@ -107,11 +168,9 @@ nums.pop();
 let len = nums.len;     // runtime value
 ```
 
-- **Memory:** Heap-allocated with automatic cleanup
-- **Category:** Reference type (has compiler-generated `__free`)
-- **Internal structure:** `{ data: ptr<T>, len: usize, cap: usize }`
-
-When `T` is a `ref struct` or `unsafe struct`, the `__free` function iterates through all elements and calls their cleanup methods. This is monomorphized at the KIR level for efficiency.
+- **Memory:** Heap-allocated buffer with automatic cleanup via `__destroy`
+- **Copying:** `__oncopy` increments internal refcount (COW semantics)
+- **Internal structure:** `{ data: ptr<T>, len: usize, cap: usize, count: ptr<u32> }`
 
 ### `slice<T>` — Non-owning view
 
@@ -119,61 +178,47 @@ A view into contiguous memory that does not own the data:
 
 ```kei
 let arr = [1, 2, 3, 4, 5];
-let s: slice<int> = arr[1:4];   // view of elements 1, 2, 3
+let s: slice<int> = arr[1..4];   // view of elements 1, 2, 3
 let len = s.len;
 ```
 
 - **Memory:** Does not own memory
 - **Internal structure:** `{ ptr: ptr<T>, len: usize }`
-- **Restrictions:** 
+- **Restrictions:**
   - Cannot outlive source data
-  - Cannot be returned from functions  
-  - Cannot be stored in `ref struct` fields
+  - Cannot be returned from functions
+  - Cannot be stored in struct fields
 
-## String types
+## String type
 
-### `str` — Non-owning string view
+### `string` — The only string type
 
-Read-only string view, equivalent to `slice<u8>`:
-
-```kei
-let s: str = "hello";
-let sub: str = s[1:4];     // "ell" - zero-cost slice
-
-fn greet(name: str) {
-    print("Hello, " + name);
-}
-```
-
-- **Memory:** Points to static data (for literals) or borrowed data
-- **Performance:** Zero-cost slicing and passing
-- **Same restrictions as `slice<T>`**
-
-String literals produce `str` values that point to static binary data.
-
-### `string` — Owning dynamic string
-
-Heap-allocated, growable string:
+Kei has a single `string` type with Copy-on-Write (COW) semantics. It is implemented as an `unsafe struct` in the standard library.
 
 ```kei
-let s: string = string.from("hello");
-s.push(" world");
-let view: str = s.as_str();
+let s = "hello";              // string literal -> string value
+let sub = s[6..];             // substring, shares buffer (refcount++)
+let copy = s;                 // refcount++, no data copy
+s.push("!");                  // COW: if refcount > 1, copies buffer first
 ```
 
-- **Memory:** Heap-allocated with automatic cleanup
-- **Category:** Reference type (internally implemented as `ref struct`)
+- **Location:** Struct lives on the stack, buffer data on the heap
+- **Copying:** `__oncopy` increments internal refcount
+- **Mutation:** Copy-on-Write — copies buffer only when mutating with shared references
+- **Internal structure:** `{ ptr: ptr<u8>, offset: usize, len: usize, cap: usize, count: ptr<u32> }`
+
+String literals produce `string` values pointing to static data. Mutating a literal-backed string triggers COW — the static data is copied to a heap buffer.
 
 ## Type comparison
 
-| Category | Stack | Heap | Owns Memory | Auto Cleanup | Can Contain `ptr<T>` |
-|----------|-------|------|-------------|--------------|---------------------|
-| `struct` | ✓ | ✗ | N/A | ✗ | ✗ |
-| `ref struct` | ✗ | ✓ | ✓ | ✓ | ✗ |
-| `unsafe struct` | ✗ | ✓ | ✓ | Manual | ✓ |
-| `array<T,N>` | ✓ | ✗ | N/A | ✗ | ✗ |
-| `dynarray<T>` | ✗ | ✓ | ✓ | ✓ | ✗ |
-| `slice<T>` | ✓ | ✗ | ✗ | ✗ | ✗ |
+| Category | Location | Owns Memory | Lifecycle Hooks | Can Contain `ptr<T>` |
+|----------|----------|-------------|-----------------|---------------------|
+| `struct` | Stack | N/A | Auto-generated | No |
+| `unsafe struct` | Stack | Manual | User-defined | Yes |
+| `array<T,N>` | Stack | N/A | Per-element | No |
+| `dynarray<T>` | Stack (struct) + Heap (buffer) | Yes | User-defined (stdlib) | No |
+| `slice<T>` | Stack | No | None | No |
+| `string` | Stack (struct) + Heap (buffer) | Yes | User-defined (stdlib) | No |
 
 ## Special types
 
@@ -215,14 +260,13 @@ let user_id: UserId = 42;
 let regular_int: int = user_id;  // allowed - same underlying type
 ```
 
-Type aliases are completely transparent - they create no new type, just an alternative name.
+Type aliases are completely transparent — they create no new type, just an alternative name.
 
 ## Type conversion
 
 ### Implicit conversions
 - Integer types promote to larger sizes when safe
 - Arrays convert to slices automatically
-- Owning strings convert to string views
 
 ```kei
 let small: i32 = 42;
@@ -230,9 +274,6 @@ let large: i64 = small;     // implicit widening
 
 let arr = [1, 2, 3];
 let slice: slice<int> = arr; // automatic conversion
-
-let owned: string = string.from("hello");
-let view: str = owned;       // automatic conversion
 ```
 
 ### Explicit conversions
@@ -244,4 +285,4 @@ let c: f64 = a as f64;      // int to float
 
 ---
 
-This type system provides memory safety through the three-category approach while maintaining the performance characteristics needed for systems programming.
+This type system provides memory safety through the two-category approach with lifecycle hooks, while maintaining the performance characteristics needed for systems programming. Generics enable code reuse through compile-time monomorphization with zero runtime overhead.

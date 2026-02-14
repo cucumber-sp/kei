@@ -23,16 +23,16 @@ fn getUser(id: int) -> User throws NotFound, DbError {
         throw NotFound{};
     }
     if !dbConnected() {
-        throw DbError{ message: string.from("no connection") };
+        throw DbError{ message: "no connection" };
     }
-    return User{ name: string.from("Alice"), age: 25 };
+    return User{ name: "Alice", age: 25 };
 }
 ```
 
 **Syntax:**
 - `fn name(...) -> ReturnType throws ErrorType1, ErrorType2`
 - Functions without `throws` cannot generate errors
-- Error types are typically defined as `struct` or `ref struct`
+- Error types are typically defined as `struct`
 
 ## Error handling (`catch`)
 
@@ -122,7 +122,7 @@ fn loadProfile(id: int) -> Profile throws DbError {
 
 ## Error types
 
-Errors are regular Kei types, typically `struct` or `ref struct`:
+Errors are regular Kei types, typically `struct`:
 
 ### Simple error types
 ```kei
@@ -135,11 +135,11 @@ struct InvalidInput {
 
 ### Rich error types
 ```kei
-ref struct DbError {
+struct DbError {
     message: string;
     error_code: int;
     query: string;
-    
+
     fn toString(self: DbError) -> string {
         return "DB Error " + self.error_code + ": " + self.message;
     }
@@ -192,7 +192,7 @@ enum Color : u8 {
     Blue = 2;
 }
 
-fn colorName(c: Color) -> str {
+fn colorName(c: Color) -> string {
     switch c {
         Red: return "red";
         Green: return "green";
@@ -297,7 +297,7 @@ fn validateUser(user: User) -> bool throws ValidationError {
 
 ### Error transformation
 ```kei
-fn loadConfig(path: str) -> Config throws ConfigError {
+fn loadConfig(path: string) -> Config throws ConfigError {
     let content = readFile(path) catch {
         FileNotFound: throw ConfigError{ message: "config file missing" };
         PermissionDenied: throw ConfigError{ message: "cannot read config" };
@@ -311,7 +311,7 @@ fn loadConfig(path: str) -> Config throws ConfigError {
 
 ### Partial success with cleanup
 ```kei
-fn processFiles(paths: slice<str>) -> int throws ProcessingError {
+fn processFiles(paths: slice<string>) -> int throws ProcessingError {
     let processed = 0;
     defer cleanupTempFiles();
     
