@@ -277,7 +277,7 @@ fn example() -> int throws NetworkError {
 ### Error accumulation
 ```kei
 fn validateUser(user: User) -> bool throws ValidationError {
-    let errors: dynarray<string> = [];
+    let errors: array<string> = [];
     
     if user.name.isEmpty() {
         errors.push("name required");

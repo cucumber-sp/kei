@@ -96,7 +96,7 @@ for item, index in numbers {
 
 **Supported collection types:**
 - `array<T, N>` — fixed-size arrays
-- `dynarray<T>` — dynamic arrays  
+- `array<T>` — dynamic arrays  
 - `slice<T>` — array slices
 
 #### Loop variable scope
@@ -293,3 +293,39 @@ let result = switch mode {
 ---
 
 This control flow system provides familiar constructs with modern safety features, ensuring predictable execution while maintaining the performance characteristics needed for systems programming.
+## Assertions
+
+### `assert` — Debug-only check
+
+Validates invariants during development. Compiled out in release builds:
+
+```kei
+assert(index < len);
+assert(ptr != null, "pointer must not be null");
+```
+
+- **Debug build:** Panics with message and source location if condition is false
+- **Release build:** Completely removed (zero overhead)
+- **Use for:** Internal invariants, "this should never happen" checks
+
+### `require` — Always-on check
+
+Validates conditions in both debug and release builds:
+
+```kei
+require(size > 0, "size must be positive");
+require(input.len <= MAX_INPUT);
+```
+
+- **Debug build:** Panics with message and source location
+- **Release build:** Panics with message and source location
+- **Use for:** Input validation, preconditions, safety-critical checks
+
+### When to use which
+
+| | `assert` | `require` |
+|--|----------|-----------|
+| **Meaning** | "I believe this is true" | "This must be true" |
+| **Failure means** | Bug in code | Invalid input/state |
+| **Release** | Removed | Kept |
+| **Performance** | Zero cost in release | Always has cost |

@@ -99,7 +99,7 @@ let p = Pair<int, string>{ first: 42, second: "hello" };
 
 ## `unsafe struct` — Managed resource types
 
-Unsafe structs provide manual lifecycle management and can contain raw pointers. They are used to build managed abstractions like `string`, `Shared<T>`, `dynarray<T>`.
+Unsafe structs provide manual lifecycle management and can contain raw pointers. They are used to build managed abstractions like `string`, `Shared<T>`, `array<T>`.
 
 ```kei
 unsafe struct FileHandle {

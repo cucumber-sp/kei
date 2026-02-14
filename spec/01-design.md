@@ -121,7 +121,7 @@ unsafe struct RawBuffer {
 }
 ```
 
-`unsafe struct` is used to build managed abstractions like `string`, `Shared<T>`, `dynarray<T>` in the standard library. If lifecycle hooks are implemented incorrectly, memory corruption or leaks may occur — hence the `unsafe` keyword.
+`unsafe struct` is used to build managed abstractions like `string`, `Shared<T>`, `array<T>` in the standard library. If lifecycle hooks are implemented incorrectly, memory corruption or leaks may occur — hence the `unsafe` keyword.
 
 ## Zero-cost defaults
 

@@ -157,12 +157,12 @@ let n = a.len;          // compile-time constant (3)
 - **Safety:** Bounds-checked in debug builds
 - **Performance:** Zero overhead, compiles to C array
 
-### `dynarray<T>` — Heap-allocated array
+### `array<T>` — Heap-allocated array
 
 Heap-allocated array with runtime-determined size. **Not resizable after creation** — use `List<T>` for growable collections. Implemented as `unsafe struct` in stdlib with COW semantics:
 
 ```kei
-let nums: dynarray<int> = [1, 2, 3];
+let nums: array<int> = [1, 2, 3];
 let len = nums.len;          // runtime value (3)
 let x = nums[0];             // element access
 let copy = nums;             // refcount++ (COW, no data copy)
@@ -235,7 +235,7 @@ String literals produce `string` values pointing to static data. Mutating a lite
 | `struct` | Stack | N/A | Auto-generated | Yes | No |
 | `unsafe struct` | Stack | Manual | User-defined (required with `ptr<T>`) | Yes | Yes |
 | `array<T,N>` | Stack | N/A | Per-element | Yes | No |
-| `dynarray<T>` | Stack + Heap | Yes (COW) | User-defined (stdlib) | Elements (COW) | No |
+| `array<T>` | Stack + Heap | Yes (COW) | User-defined (stdlib) | Elements (COW) | No |
 | `List<T>` | Stack + Heap | Yes | User-defined (stdlib) | Yes (push/pop) | No |
 | `slice<T>` | Stack | No | None | **Read-only** | No |
 | `string` | Stack + Heap | Yes (COW) | User-defined (stdlib) | COW | No |

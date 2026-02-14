@@ -67,7 +67,7 @@ let arr = [1, 2, 3]; // array<int, 3>
 ```kei
 let a: u32 = 42;     // specific integer size
 let b: f32 = 3.14;   // specific float size
-let c: dynarray<int> = [1, 2, 3]; // specific collection type
+let c: array<int> = [1, 2, 3]; // specific collection type
 ```
 
 ## Shadowing

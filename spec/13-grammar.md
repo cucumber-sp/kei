@@ -115,3 +115,7 @@ virtual     where       yield
 > - `move` keyword for explicit ownership transfer
 > - `enum` supports both data variants and simple numeric enums
 > - `ref` moved to reserved keywords (potential future use)
+
+// Assertions
+assert_stmt    = "assert" "(" expr ("," string_lit)? ")" ";" ;
+require_stmt   = "require" "(" expr ("," string_lit)? ")" ";" ;

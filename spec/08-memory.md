@@ -9,7 +9,7 @@ Kei achieves memory safety and performance through:
 - **Lifecycle hooks** (`__destroy`/`__oncopy`) for deterministic resource management
 - **Stack-first design** — all structs live on the stack, heap usage is explicit
 - **Compiler auto-generation** of lifecycle hooks for `struct` types
-- **Copy-on-Write** for standard library types like `string` and `dynarray<T>`
+- **Copy-on-Write** for standard library types like `string` and `array<T>`
 
 ## Stack allocation (default)
 
@@ -237,7 +237,7 @@ All checks are **completely removed in release builds** for zero overhead.
 
 ### Arrays and slices
 - Fixed arrays: contiguous stack allocation
-- Dynamic arrays (`dynarray`): stack struct + heap buffer
+- Dynamic arrays (`array`): stack struct + heap buffer
 - Slices (`slice`): pointer + length on stack, no ownership
 
 ### Strings
@@ -309,20 +309,20 @@ unsafe struct Shared<T> {
 }
 ```
 
-### `dynarray<T>` — Heap-allocated array (COW, not resizable)
+### `array<T>` — Heap-allocated array (COW, not resizable)
 ```kei
-unsafe struct dynarray<T> {
+unsafe struct array<T> {
     data: ptr<T>;
     len: usize;
     cap: usize;
     count: ptr<u32>;
 
-    fn __oncopy(self: dynarray<T>) -> dynarray<T> {
+    fn __oncopy(self: array<T>) -> array<T> {
         self.count.increment();
         return self;
     }
 
-    fn __destroy(self: dynarray<T>) {
+    fn __destroy(self: array<T>) {
         self.count.decrement();
         if (self.count.value == 0) {
             for i in 0..self.len {
@@ -334,7 +334,7 @@ unsafe struct dynarray<T> {
     }
 
     // Element mutation triggers COW
-    fn set(self: ptr<dynarray<T>>, index: usize, value: T) {
+    fn set(self: ptr<array<T>>, index: usize, value: T) {
         self.*.ensure_unique();  // copy buffer if refcount > 1
         self.*.data[index].__destroy();
         self.*.data[index] = value;
@@ -343,7 +343,7 @@ unsafe struct dynarray<T> {
 }
 ```
 
-**Note:** `dynarray<T>` is not resizable — no `push`/`pop`. Use `List<T>` for growable collections.
+**Note:** `array<T>` is not resizable — no `push`/`pop`. Use `List<T>` for growable collections.
 
 ### `List<T>` — Growable collection (deep copy)
 ```kei
@@ -386,7 +386,7 @@ Reference counting (used by `Shared<T>`, `string`, etc.) cannot automatically ha
 // Tree with parent back-pointer
 unsafe struct TreeNode {
     parent: ptr<TreeNode>;         // non-owning back-pointer
-    children: dynarray<TreeNode>;  // owns children
+    children: array<TreeNode>;  // owns children
     value: int;
 
     fn __destroy(self: TreeNode) {
