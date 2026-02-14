@@ -138,9 +138,9 @@ unsafe struct FileHandle {
 | `__oncopy` | `fn __oncopy(self: T) -> T` | Value is copied (assignment, parameter passing) |
 
 **Rules:**
-- `__destroy` is required when the struct contains `ptr<T>` fields (compile error if missing)
-- `__oncopy` is optional — if not defined, the struct uses bitwise copy (default)
-- If `__oncopy` is not defined but the struct contains pointers, the compiler emits a warning (potential double-free)
+- `__destroy` is **required** when the struct contains `ptr<T>` fields (compile error if missing)
+- `__oncopy` is **required** when the struct contains `ptr<T>` fields (compile error if missing — bitwise copy of pointers leads to double-free)
+- For `unsafe struct` without `ptr<T>` fields, both hooks are optional (bitwise copy is safe)
 - Hooks cannot throw errors
 
 ### When hooks are called
@@ -211,7 +211,7 @@ The compiler enforces safety rules:
 
 ```kei
 struct BadValue { data: ptr<u8>; }               // ERROR: ptr<T> requires unsafe struct
-unsafe struct BadUnsafe { data: ptr<u8>; }       // ERROR: must define __destroy
+unsafe struct BadUnsafe { data: ptr<u8>; }       // ERROR: must define __destroy and __oncopy
 ```
 
 ---

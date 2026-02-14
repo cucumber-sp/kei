@@ -157,20 +157,38 @@ let n = a.len;          // compile-time constant (3)
 - **Safety:** Bounds-checked in debug builds
 - **Performance:** Zero overhead, compiles to C array
 
-### `dynarray<T>` — Dynamic array
+### `dynarray<T>` — Heap-allocated array
 
-Growable, heap-allocated array that owns its memory. Implemented as `unsafe struct` in stdlib:
+Heap-allocated array with runtime-determined size. **Not resizable after creation** — use `List<T>` for growable collections. Implemented as `unsafe struct` in stdlib with COW semantics:
 
 ```kei
 let nums: dynarray<int> = [1, 2, 3];
-nums.push(4);
-nums.pop();
-let len = nums.len;     // runtime value
+let len = nums.len;          // runtime value (3)
+let x = nums[0];             // element access
+let copy = nums;             // refcount++ (COW, no data copy)
+nums[0] = 99;                // COW: copies buffer if shared, then mutates
 ```
 
 - **Memory:** Heap-allocated buffer with automatic cleanup via `__destroy`
-- **Copying:** `__oncopy` increments internal refcount (COW semantics)
+- **Copying:** `__oncopy` increments internal refcount (COW — data copied only on mutation when shared)
+- **Size:** Fixed after creation — no `push`/`pop`
 - **Internal structure:** `{ data: ptr<T>, len: usize, cap: usize, count: ptr<u32> }`
+
+### `List<T>` — Growable collection (stdlib)
+
+Resizable list for when elements need to be added or removed. Implemented as `unsafe struct` in stdlib:
+
+```kei
+let items = List<int>.create();
+items.push(1);
+items.push(2);
+items.pop();
+let len = items.len;     // runtime value
+```
+
+- **Memory:** Heap-allocated, grows dynamically
+- **Copying:** Deep copy (no COW — mutable by design)
+- **Internal structure:** `{ data: ptr<T>, len: usize, cap: usize }`
 
 ### `slice<T>` — Non-owning view
 
@@ -183,6 +201,7 @@ let len = s.len;
 ```
 
 - **Memory:** Does not own memory
+- **Read-only:** Elements cannot be modified through a slice
 - **Internal structure:** `{ ptr: ptr<T>, len: usize }`
 - **Restrictions:**
   - Cannot outlive source data
@@ -211,14 +230,15 @@ String literals produce `string` values pointing to static data. Mutating a lite
 
 ## Type comparison
 
-| Category | Location | Owns Memory | Lifecycle Hooks | Can Contain `ptr<T>` |
-|----------|----------|-------------|-----------------|---------------------|
-| `struct` | Stack | N/A | Auto-generated | No |
-| `unsafe struct` | Stack | Manual | User-defined | Yes |
-| `array<T,N>` | Stack | N/A | Per-element | No |
-| `dynarray<T>` | Stack (struct) + Heap (buffer) | Yes | User-defined (stdlib) | No |
-| `slice<T>` | Stack | No | None | No |
-| `string` | Stack (struct) + Heap (buffer) | Yes | User-defined (stdlib) | No |
+| Category | Location | Owns Memory | Lifecycle Hooks | Mutable | Can Contain `ptr<T>` |
+|----------|----------|-------------|-----------------|---------|---------------------|
+| `struct` | Stack | N/A | Auto-generated | Yes | No |
+| `unsafe struct` | Stack | Manual | User-defined (required with `ptr<T>`) | Yes | Yes |
+| `array<T,N>` | Stack | N/A | Per-element | Yes | No |
+| `dynarray<T>` | Stack + Heap | Yes (COW) | User-defined (stdlib) | Elements (COW) | No |
+| `List<T>` | Stack + Heap | Yes | User-defined (stdlib) | Yes (push/pop) | No |
+| `slice<T>` | Stack | No | None | **Read-only** | No |
+| `string` | Stack + Heap | Yes (COW) | User-defined (stdlib) | COW | No |
 
 ## Special types
 

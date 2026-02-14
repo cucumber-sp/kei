@@ -285,6 +285,9 @@ unsafe struct string {
 ```
 
 ### `Shared<T>` — Reference-counted pointer
+
+`Shared<T>` is 2 × pointer size on the stack (pointer to data + pointer to refcount). The data itself lives on the heap. Assignment increments the refcount — no data copying.
+
 ```kei
 unsafe struct Shared<T> {
     ptr: ptr<T>;
@@ -306,7 +309,7 @@ unsafe struct Shared<T> {
 }
 ```
 
-### `dynarray<T>` — Dynamic array
+### `dynarray<T>` — Heap-allocated array (COW, not resizable)
 ```kei
 unsafe struct dynarray<T> {
     data: ptr<T>;
@@ -322,7 +325,6 @@ unsafe struct dynarray<T> {
     fn __destroy(self: dynarray<T>) {
         self.count.decrement();
         if (self.count.value == 0) {
-            // destroy each element
             for i in 0..self.len {
                 self.data[i].__destroy();
             }
@@ -330,7 +332,46 @@ unsafe struct dynarray<T> {
             c_free(self.count);
         }
     }
+
+    // Element mutation triggers COW
+    fn set(self: ptr<dynarray<T>>, index: usize, value: T) {
+        self.*.ensure_unique();  // copy buffer if refcount > 1
+        self.*.data[index].__destroy();
+        self.*.data[index] = value;
+        value.__oncopy();
+    }
 }
+```
+
+**Note:** `dynarray<T>` is not resizable — no `push`/`pop`. Use `List<T>` for growable collections.
+
+### `List<T>` — Growable collection (deep copy)
+```kei
+unsafe struct List<T> {
+    data: ptr<T>;
+    len: usize;
+    cap: usize;
+
+    fn __oncopy(self: List<T>) -> List<T> {
+        // Deep copy — allocates new buffer, copies all elements
+        let new_data = c_malloc(self.cap * sizeof(T));
+        for i in 0..self.len {
+            new_data[i] = self.data[i];
+            new_data[i].__oncopy();
+        }
+        return List<T>{ data: new_data, len: self.len, cap: self.cap };
+    }
+
+    fn __destroy(self: List<T>) {
+        for i in 0..self.len {
+            self.data[i].__destroy();
+        }
+        c_free(self.data);
+    }
+}
+```
+
+**Note:** `List<T>` always deep copies on assignment — no COW. Mutable by design (push/pop/insert/remove).
 ```
 
 ## Cyclic reference handling
