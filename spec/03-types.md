@@ -6,19 +6,27 @@ Kei has a structured type system organized into primitive types, compound types,
 
 ### Integer types
 
-| Type  | Size    | Range                  |
-|-------|---------|------------------------|
-| `i8`  | 8 bits  | -128 to 127           |
-| `i16` | 16 bits | -32,768 to 32,767     |
-| `i32` | 32 bits | -2³¹ to 2³¹-1         |
-| `i64` | 64 bits | -2⁶³ to 2⁶³-1         |
-| `int` | Platform| Same as `i32`/`i64`   |
-| `u8`  | 8 bits  | 0 to 255              |
-| `u16` | 16 bits | 0 to 65,535           |
-| `u32` | 32 bits | 0 to 2³²-1            |
-| `u64` | 64 bits | 0 to 2⁶⁴-1            |
-| `uint`| Platform| Same as `u32`/`u64`   |
-| `usize`| Platform| Pointer-sized unsigned |
+| Type    | Size    | Range                  |
+|---------|---------|------------------------|
+| `i8`    | 8 bits  | -128 to 127           |
+| `i16`   | 16 bits | -32,768 to 32,767     |
+| `i32`   | 32 bits | -2³¹ to 2³¹-1         |
+| `i64`   | 64 bits | -2⁶³ to 2⁶³-1         |
+| `isize` | Platform| Pointer-sized signed   |
+| `u8`    | 8 bits  | 0 to 255              |
+| `u16`   | 16 bits | 0 to 65,535           |
+| `u32`   | 32 bits | 0 to 2³²-1            |
+| `u64`   | 64 bits | 0 to 2⁶⁴-1            |
+| `usize` | Platform| Pointer-sized unsigned |
+
+#### Built-in aliases
+
+| Alias    | Equivalent | Notes |
+|----------|-----------|-------|
+| `byte`   | `u8`      | |
+| `short`  | `i16`     | |
+| `int`    | `i32`     | Default for integer literals |
+| `long`   | `i64`     | |
 
 ### Floating-point types
 
@@ -26,6 +34,13 @@ Kei has a structured type system organized into primitive types, compound types,
 |-------|---------|-----------|
 | `f32` | 32 bits | IEEE 754 single |
 | `f64` | 64 bits | IEEE 754 double |
+
+#### Built-in aliases
+
+| Alias    | Equivalent | Notes |
+|----------|-----------|-------|
+| `float`  | `f32`     | |
+| `double` | `f64`     | Default for float literals |
 
 ### Other primitive types
 
@@ -35,12 +50,12 @@ Kei has a structured type system organized into primitive types, compound types,
 | `c_char` | C-compatible character type |
 
 ### Type inference defaults
-- Integer literals default to `int`
-- Floating-point literals default to `f64`
+- Integer literals default to `int` (`i32`)
+- Floating-point literals default to `double` (`f64`)
 
 ```kei
-let a = 42;     // int
-let b = 3.14;   // f64
+let a = 42;     // int (i32)
+let b = 3.14;   // double (f64)
 let c = 42u32;  // u32 (explicit suffix)
 let d = 2.5f32; // f32 (explicit suffix)
 ```
@@ -94,7 +109,7 @@ let len = nums.len;     // runtime value
 
 - **Memory:** Heap-allocated with automatic cleanup
 - **Category:** Reference type (has compiler-generated `__free`)
-- **Internal structure:** `{ data: ptr<T>, len: uint, cap: uint }`
+- **Internal structure:** `{ data: ptr<T>, len: usize, cap: usize }`
 
 When `T` is a `ref struct` or `unsafe struct`, the `__free` function iterates through all elements and calls their cleanup methods. This is monomorphized at the KIR level for efficiency.
 
@@ -109,7 +124,7 @@ let len = s.len;
 ```
 
 - **Memory:** Does not own memory
-- **Internal structure:** `{ ptr: ptr<T>, len: uint }`
+- **Internal structure:** `{ ptr: ptr<T>, len: usize }`
 - **Restrictions:** 
   - Cannot outlive source data
   - Cannot be returned from functions  
