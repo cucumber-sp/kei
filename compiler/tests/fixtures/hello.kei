@@ -1,0 +1,35 @@
+// Simple Kei program for testing the lexer
+fn main() -> int {
+    let msg: string = "Hello, World!";
+    let count: int = 42;
+    let pi: f64 = 3.14159;
+    let is_valid: bool = true;
+    
+    /* Multi-line comment
+       with some details */
+    
+    if is_valid {
+        print(msg);
+        count += 1;
+        return 0;
+    } else {
+        return 1;
+    }
+}
+
+// Test various number formats
+fn number_tests() -> void {
+    let decimal = 1_000_000;
+    let hex = 0xFF_EE_DD_CC;
+    let binary = 0b1010_0001;
+    let octal = 0o755;
+    let float_sci = 1.5e-10;
+}
+
+// Test string escapes
+fn string_tests() -> void {
+    let newlines = "line1\nline2\r\nline3";
+    let quotes = "He said \"Hello world\"";
+    let hex_escape = "\x48\x65\x6C\x6C\x6F"; // "Hello"
+    let mixed = "Path: C:\\Users\\file.txt\t(tab)\x00";
+}
