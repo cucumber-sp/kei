@@ -37,6 +37,7 @@ import type {
   AssertStmt,
   RequireStmt,
   Expression,
+  ArrayLiteral,
   BinaryExpr,
   UnaryExpr,
   CallExpr,
@@ -915,6 +916,8 @@ export class KirLowerer {
         return this.lowerCatchExpr(expr);
       case "CastExpr":
         return this.lowerCastExpr(expr);
+      case "ArrayLiteral":
+        return this.lowerArrayLiteral(expr);
       default:
         // Unhandled expression types return a placeholder
         return this.emitConstInt(0);
@@ -1166,6 +1169,26 @@ export class KirLowerer {
   }
 
   private lowerMemberExpr(expr: MemberExpr): VarId {
+    // Handle .len on arrays — emit compile-time constant
+    if (expr.property === "len") {
+      const objectType = this.checkResult.typeMap.get(expr.object);
+      if (objectType?.kind === "array" && objectType.length != null) {
+        const dest = this.freshVar();
+        this.emit({ kind: "const_int", dest, type: { kind: "int", bits: 64, signed: false }, value: objectType.length });
+        return dest;
+      }
+      // For strings, .len is a field access on the kei_string struct
+      if (objectType?.kind === "string") {
+        const baseId = this.lowerExpr(expr.object);
+        const dest = this.freshVar();
+        const resultType = this.getExprKirType(expr);
+        const ptrDest = this.freshVar();
+        this.emit({ kind: "field_ptr", dest: ptrDest, base: baseId, field: "len", type: resultType });
+        this.emit({ kind: "load", dest, ptr: ptrDest, type: resultType });
+        return dest;
+      }
+    }
+
     const baseId = this.lowerExpr(expr.object);
     const dest = this.freshVar();
     const resultType = this.getExprKirType(expr);
@@ -1181,6 +1204,14 @@ export class KirLowerer {
     const baseId = this.lowerExpr(expr.object);
     const indexId = this.lowerExpr(expr.index);
     const resultType = this.getExprKirType(expr);
+
+    // Emit bounds check for arrays with known length
+    const objectType = this.checkResult.typeMap.get(expr.object);
+    if (objectType?.kind === "array" && objectType.length != null) {
+      const lenId = this.freshVar();
+      this.emit({ kind: "const_int", dest: lenId, type: { kind: "int", bits: 64, signed: false }, value: objectType.length });
+      this.emit({ kind: "bounds_check", index: indexId, length: lenId });
+    }
 
     const ptrDest = this.freshVar();
     this.emit({ kind: "index_ptr", dest: ptrDest, base: baseId, index: indexId, type: resultType });
@@ -1271,6 +1302,30 @@ export class KirLowerer {
       const fieldType = this.getExprKirType(field.value);
       this.emit({ kind: "field_ptr", dest: fieldPtrId, base: ptrId, field: field.name, type: fieldType });
       this.emit({ kind: "store", ptr: fieldPtrId, value: valueId });
+    }
+
+    return ptrId;
+  }
+
+  private lowerArrayLiteral(expr: ArrayLiteral): VarId {
+    const checkerType = this.checkResult.typeMap.get(expr);
+    let elemType: KirType = { kind: "int", bits: 32, signed: true };
+    if (checkerType?.kind === "array") {
+      elemType = this.lowerCheckerType(checkerType.element);
+    }
+
+    const arrType: KirType = { kind: "array", element: elemType, length: expr.elements.length };
+    const ptrId = this.freshVar();
+    this.emit({ kind: "stack_alloc", dest: ptrId, type: arrType });
+
+    // Store each element at its index
+    for (let i = 0; i < expr.elements.length; i++) {
+      const valueId = this.lowerExpr(expr.elements[i]!);
+      const idxId = this.freshVar();
+      this.emit({ kind: "const_int", dest: idxId, type: { kind: "int", bits: 64, signed: false }, value: i });
+      const elemPtrId = this.freshVar();
+      this.emit({ kind: "index_ptr", dest: elemPtrId, base: ptrId, index: idxId, type: elemType });
+      this.emit({ kind: "store", ptr: elemPtrId, value: valueId });
     }
 
     return ptrId;
@@ -2076,7 +2131,7 @@ export class KirLowerer {
           })),
         };
       case "array":
-        return { kind: "array", element: this.lowerCheckerType(t.element), length: 0 };
+        return { kind: "array", element: this.lowerCheckerType(t.element), length: t.length ?? 0 };
       case "function":
         return {
           kind: "function",

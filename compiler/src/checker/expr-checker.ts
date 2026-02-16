@@ -3,6 +3,7 @@
  */
 
 import type {
+  ArrayLiteral,
   AssignExpr,
   BinaryExpr,
   BoolLiteral,
@@ -34,6 +35,7 @@ import type { FunctionOverload } from "./symbols.ts";
 import { SymbolKind } from "./symbols.ts";
 import type { ArrayType, FunctionType, PtrType, RangeType, SliceType, StructType, Type } from "./types.ts";
 import {
+  arrayType,
   BOOL_TYPE,
   ERROR_TYPE,
   extractLiteralInfo,
@@ -132,6 +134,8 @@ export class ExpressionChecker {
         return this.checkUnsafeExpression(expr);
       case "CastExpr":
         return this.checkCastExpression(expr);
+      case "ArrayLiteral":
+        return this.checkArrayLiteral(expr);
     }
   }
 
@@ -1371,5 +1375,33 @@ export class ExpressionChecker {
       expr.span
     );
     return ERROR_TYPE;
+  }
+
+  private checkArrayLiteral(expr: ArrayLiteral): Type {
+    if (expr.elements.length === 0) {
+      this.checker.error("empty array literal — cannot infer element type", expr.span);
+      return ERROR_TYPE;
+    }
+
+    const firstType = this.checkExpression(expr.elements[0]!);
+    if (isErrorType(firstType)) return ERROR_TYPE;
+
+    for (let i = 1; i < expr.elements.length; i++) {
+      const elemType = this.checkExpression(expr.elements[i]!);
+      if (isErrorType(elemType)) continue;
+      if (!isAssignableTo(elemType, firstType)) {
+        // Check literal assignability
+        const litInfo = extractLiteralInfo(expr.elements[i]!);
+        const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, firstType);
+        if (!isLiteralOk) {
+          this.checker.error(
+            `array element ${i}: expected '${typeToString(firstType)}', got '${typeToString(elemType)}'`,
+            expr.elements[i]!.span
+          );
+        }
+      }
+    }
+
+    return arrayType(firstType, expr.elements.length);
   }
 }

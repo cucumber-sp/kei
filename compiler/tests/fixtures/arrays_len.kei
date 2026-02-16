@@ -1,0 +1,8 @@
+import { print } from io;
+
+fn main() -> int {
+    let arr = [10, 20, 30, 40];
+    let n = arr.len;
+    print(n as int);
+    return 0;
+}

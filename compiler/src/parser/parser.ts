@@ -3,6 +3,7 @@
  */
 
 import type {
+  ArrayLiteral,
   AssertStmt,
   AssignExpr,
   BlockStmt,
@@ -1507,6 +1508,25 @@ export class Parser {
         expression,
         span: { start: token.span.start, end: end.span.end },
       };
+    }
+
+    // Array literal: [expr, expr, ...]
+    if (token.kind === TokenKind.LeftBracket) {
+      this.advance();
+      const elements: Expression[] = [];
+      if (!this.check(TokenKind.RightBracket)) {
+        elements.push(this.parseExpression());
+        while (this.match(TokenKind.Comma)) {
+          if (this.check(TokenKind.RightBracket)) break; // trailing comma
+          elements.push(this.parseExpression());
+        }
+      }
+      const end = this.expect(TokenKind.RightBracket);
+      return {
+        kind: "ArrayLiteral",
+        elements,
+        span: { start: token.span.start, end: end.span.end },
+      } as ArrayLiteral;
     }
 
     this.addError(`Unexpected token '${token.kind}' in expression`, token);

@@ -64,6 +64,7 @@ export interface PtrType {
 export interface ArrayType {
   kind: typeof TypeKind.Array;
   element: Type;
+  length?: number;
 }
 
 export interface SliceType {
@@ -179,8 +180,8 @@ export function ptrType(pointee: Type): PtrType {
   return { kind: TypeKind.Ptr, pointee };
 }
 
-export function arrayType(element: Type): ArrayType {
-  return { kind: TypeKind.Array, element };
+export function arrayType(element: Type, length?: number): ArrayType {
+  return { kind: TypeKind.Array, element, length };
 }
 
 export function sliceType(element: Type): SliceType {

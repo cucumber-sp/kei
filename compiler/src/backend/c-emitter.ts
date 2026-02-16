@@ -383,7 +383,11 @@ function emitInst(inst: KirInst): string {
   switch (inst.kind) {
     case "stack_alloc": {
       // Allocate local — backing storage is declared at the top as _vN_alloc,
-      // and the pointer variable _vN is set to its address
+      // and the pointer variable _vN is set to its address.
+      // For arrays, the backing storage is a C array which decays to a pointer.
+      if (inst.type.kind === "array") {
+        return `${varName(inst.dest)} = ${varName(inst.dest)}_alloc;`;
+      }
       return `${varName(inst.dest)} = &${varName(inst.dest)}_alloc;`;
     }
     case "load":

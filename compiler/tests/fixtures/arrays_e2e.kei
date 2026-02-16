@@ -1,0 +1,17 @@
+import { print } from io;
+
+fn main() -> int {
+    let arr = [10, 20, 30, 40, 50];
+    print(arr[0]);
+    print(arr[4]);
+
+    let sum = 0;
+    let i = 0;
+    while i < 5 {
+        sum = sum + arr[i];
+        i = i + 1;
+    }
+    print(sum);
+
+    return 0;
+}
