@@ -177,6 +177,10 @@ export type KirInst =
   // Type ops
   | KirCast
   | KirSizeof
+  // Lifecycle
+  | KirDestroy
+  | KirOncopy
+  | KirMove
   // Debug
   | KirBoundsCheck
   | KirOverflowCheck
@@ -334,6 +338,27 @@ export interface KirCast {
 export interface KirSizeof {
   kind: "sizeof";
   dest: VarId;
+  type: KirType;
+}
+
+// ── Lifecycle ─────────────────────────────────────────────────────────────
+
+export interface KirDestroy {
+  kind: "destroy";
+  value: VarId;
+  structName: string;
+}
+
+export interface KirOncopy {
+  kind: "oncopy";
+  value: VarId;
+  structName: string;
+}
+
+export interface KirMove {
+  kind: "move";
+  dest: VarId;
+  source: VarId;
   type: KirType;
 }
 

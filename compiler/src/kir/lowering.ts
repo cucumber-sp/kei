@@ -54,6 +54,7 @@ import type {
   DecrementExpr,
   GroupExpr,
   RangeExpr,
+  MoveExpr,
 } from "../ast/nodes.ts";
 import type {
   KirModule,
@@ -72,6 +73,14 @@ import type {
   KirIntType,
   KirFloatType,
 } from "./kir-types.ts";
+
+// ─── Scope variable tracking for lifecycle ───────────────────────────────────
+
+interface ScopeVar {
+  name: string;
+  varId: VarId;
+  structName: string; // struct type name (for __destroy/__oncopy dispatch)
+}
 
 // ─── Lowerer ─────────────────────────────────────────────────────────────────
 
@@ -92,6 +101,15 @@ export class KirLowerer {
   // Track break/continue targets for loops
   private loopBreakTarget: BlockId | null = null;
   private loopContinueTarget: BlockId | null = null;
+
+  // Scope stack for lifecycle tracking: each scope has a list of vars needing destroy
+  private scopeStack: ScopeVar[][] = [];
+
+  // Set of variable names that have been moved (no destroy on scope exit)
+  private movedVars: Set<string> = new Set();
+
+  // Map from struct name → whether it has __destroy/__oncopy methods
+  private structLifecycleCache: Map<string, { hasDestroy: boolean; hasOncopy: boolean }> = new Map();
 
   // Collected module-level items
   private functions: KirFunction[] = [];
@@ -160,6 +178,11 @@ export class KirLowerer {
     this.currentBlockId = "entry";
     this.loopBreakTarget = null;
     this.loopContinueTarget = null;
+    this.scopeStack = [];
+    this.movedVars = new Set();
+
+    // Push function-level scope
+    this.pushScope();
 
     const params: KirParam[] = decl.params.map((p) => {
       const type = this.resolveParamType(decl, p.name);
@@ -168,12 +191,25 @@ export class KirLowerer {
       return { name: p.name, type };
     });
 
+    // Track params with lifecycle hooks for destroy on function exit
+    for (const p of decl.params) {
+      const checkerType = this.resolveParamCheckerType(decl, p.name);
+      this.trackScopeVarByType(p.name, `%${p.name}`, checkerType);
+    }
+
     const returnType = this.lowerCheckerType(
       this.getFunctionReturnType(decl)
     );
 
     // Lower body
     this.lowerBlock(decl.body);
+
+    // Emit destroy for function-scope variables before implicit return
+    if (!this.isBlockTerminated()) {
+      this.popScopeWithDestroy();
+    } else {
+      this.scopeStack.pop(); // discard without emitting (already returned)
+    }
 
     // Ensure the last block has a terminator
     this.ensureTerminator(returnType);
@@ -200,6 +236,11 @@ export class KirLowerer {
     this.currentBlockId = "entry";
     this.loopBreakTarget = null;
     this.loopContinueTarget = null;
+    this.scopeStack = [];
+    this.movedVars = new Set();
+
+    // Push function-level scope
+    this.pushScope();
 
     const params: KirParam[] = decl.params.map((p) => {
       const type = this.resolveParamType(decl, p.name);
@@ -219,6 +260,13 @@ export class KirLowerer {
 
     // Lower body
     this.lowerBlock(decl.body);
+
+    // Emit destroy for function-scope variables before implicit return
+    if (!this.isBlockTerminated()) {
+      this.popScopeWithDestroy();
+    } else {
+      this.scopeStack.pop();
+    }
 
     // Ensure the last block has a terminator
     this.ensureTerminator(returnType);
@@ -296,6 +344,19 @@ export class KirLowerer {
     }
   }
 
+  /** Lower a block statement that introduces its own scope (e.g., nested { } blocks) */
+  private lowerScopedBlock(block: BlockStmt): void {
+    this.pushScope();
+    for (const stmt of block.statements) {
+      this.lowerStatement(stmt);
+    }
+    if (!this.isBlockTerminated()) {
+      this.popScopeWithDestroy();
+    } else {
+      this.scopeStack.pop();
+    }
+  }
+
   private lowerStatement(stmt: Statement): void {
     // If current block is already terminated, skip
     if (this.isBlockTerminated()) return;
@@ -326,15 +387,17 @@ export class KirLowerer {
         this.lowerExprStmt(stmt);
         break;
       case "BlockStmt":
-        this.lowerBlock(stmt);
+        this.lowerScopedBlock(stmt);
         break;
       case "BreakStmt":
         if (this.loopBreakTarget) {
+          this.emitAllScopeDestroys();
           this.setTerminator({ kind: "jump", target: this.loopBreakTarget });
         }
         break;
       case "ContinueStmt":
         if (this.loopContinueTarget) {
+          this.emitAllScopeDestroys();
           this.setTerminator({ kind: "jump", target: this.loopContinueTarget });
         }
         break;
@@ -348,7 +411,7 @@ export class KirLowerer {
         // Defer is not yet implemented in KIR
         break;
       case "UnsafeBlock":
-        this.lowerBlock(stmt.body);
+        this.lowerScopedBlock(stmt.body);
         break;
     }
   }
@@ -363,11 +426,23 @@ export class KirLowerer {
     // Evaluate initializer
     const valueId = this.lowerExpr(stmt.initializer);
 
+    // Emit oncopy if this is a copy of a struct with __oncopy (not a move)
+    if (stmt.initializer.kind !== "MoveExpr") {
+      const checkerType = this.checkResult.typeMap.get(stmt.initializer);
+      const lifecycle = this.getStructLifecycle(checkerType);
+      if (lifecycle?.hasOncopy) {
+        this.emit({ kind: "oncopy", value: valueId, structName: lifecycle.structName });
+      }
+    }
+
     // store
     this.emit({ kind: "store", ptr: ptrId, value: valueId });
 
     // Map variable name to its stack pointer
     this.varMap.set(stmt.name, ptrId);
+
+    // Track for scope-exit destroy
+    this.trackScopeVar(stmt.name, ptrId, stmt.initializer);
   }
 
   private lowerConstStmt(stmt: ConstStmt): void {
@@ -379,8 +454,12 @@ export class KirLowerer {
   private lowerReturnStmt(stmt: ReturnStmt): void {
     if (stmt.value) {
       const valueId = this.lowerExpr(stmt.value);
+      // Emit destroys for all scope variables, but skip the returned variable
+      const returnedVarName = stmt.value.kind === "Identifier" ? stmt.value.name : null;
+      this.emitAllScopeDestroysExceptNamed(returnedVarName);
       this.setTerminator({ kind: "ret", value: valueId });
     } else {
+      this.emitAllScopeDestroys();
       this.setTerminator({ kind: "ret_void" });
     }
   }
@@ -699,6 +778,8 @@ export class KirLowerer {
         return this.lowerIncrementExpr(expr);
       case "DecrementExpr":
         return this.lowerDecrementExpr(expr);
+      case "MoveExpr":
+        return this.lowerMoveExpr(expr);
       default:
         // Unhandled expression types return a placeholder
         return this.emitConstInt(0);
@@ -938,14 +1019,45 @@ export class KirLowerer {
             return result;
           }
         }
+
+        // For simple assignment to struct with lifecycle: destroy old, store new, oncopy new
+        const checkerType = this.checkResult.typeMap.get(expr.target);
+        const lifecycle = this.getStructLifecycle(checkerType);
+        if (lifecycle?.hasDestroy) {
+          // Load old value and destroy it
+          const oldVal = this.freshVar();
+          const type = this.getExprKirType(expr.target);
+          this.emit({ kind: "load", dest: oldVal, ptr: ptrId, type });
+          this.emit({ kind: "destroy", value: oldVal, structName: lifecycle.structName });
+        }
+
         this.emit({ kind: "store", ptr: ptrId, value: valueId });
+
+        // Oncopy the new value (unless it's a move)
+        if (lifecycle?.hasOncopy && expr.value.kind !== "MoveExpr") {
+          this.emit({ kind: "oncopy", value: valueId, structName: lifecycle.structName });
+        }
       }
     } else if (expr.target.kind === "MemberExpr") {
       const baseId = this.lowerExpr(expr.target.object);
       const ptrDest = this.freshVar();
       const fieldType = this.getExprKirType(expr.target);
       this.emit({ kind: "field_ptr", dest: ptrDest, base: baseId, field: expr.target.property, type: fieldType });
+
+      // Destroy old field value if it has lifecycle hooks
+      const checkerType = this.checkResult.typeMap.get(expr.target);
+      const lifecycle = this.getStructLifecycle(checkerType);
+      if (lifecycle?.hasDestroy) {
+        const oldVal = this.freshVar();
+        this.emit({ kind: "load", dest: oldVal, ptr: ptrDest, type: fieldType });
+        this.emit({ kind: "destroy", value: oldVal, structName: lifecycle.structName });
+      }
+
       this.emit({ kind: "store", ptr: ptrDest, value: valueId });
+
+      if (lifecycle?.hasOncopy && expr.value.kind !== "MoveExpr") {
+        this.emit({ kind: "oncopy", value: valueId, structName: lifecycle.structName });
+      }
     } else if (expr.target.kind === "IndexExpr") {
       const baseId = this.lowerExpr(expr.target.object);
       const indexId = this.lowerExpr(expr.target.index);
@@ -1063,6 +1175,20 @@ export class KirLowerer {
     return this.emitConstInt(0);
   }
 
+  private lowerMoveExpr(expr: MoveExpr): VarId {
+    const sourceId = this.lowerExpr(expr.operand);
+    const dest = this.freshVar();
+    const type = this.getExprKirType(expr.operand);
+    this.emit({ kind: "move", dest, source: sourceId, type });
+
+    // Mark the source variable as moved so it won't be destroyed at scope exit
+    if (expr.operand.kind === "Identifier") {
+      this.movedVars.add(expr.operand.name);
+    }
+
+    return dest;
+  }
+
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
   private freshVar(): VarId {
@@ -1137,6 +1263,93 @@ export class KirLowerer {
       if (inst.kind === "stack_alloc" && inst.dest === varId) return true;
     }
     return false;
+  }
+
+  // ─── Lifecycle Helpers ───────────────────────────────────────────────────
+
+  /** Check if a checker Type is a struct that has __destroy or __oncopy methods */
+  private getStructLifecycle(checkerType: Type | undefined): { hasDestroy: boolean; hasOncopy: boolean; structName: string } | null {
+    if (!checkerType) return null;
+    if (checkerType.kind !== "struct") return null;
+
+    const cached = this.structLifecycleCache.get(checkerType.name);
+    if (cached) return { ...cached, structName: checkerType.name };
+
+    const hasDestroy = checkerType.methods.has("__destroy");
+    const hasOncopy = checkerType.methods.has("__oncopy");
+
+    this.structLifecycleCache.set(checkerType.name, { hasDestroy, hasOncopy });
+
+    if (!hasDestroy && !hasOncopy) return null;
+    return { hasDestroy, hasOncopy, structName: checkerType.name };
+  }
+
+  /** Push a new scope for lifecycle tracking */
+  private pushScope(): void {
+    this.scopeStack.push([]);
+  }
+
+  /** Pop scope and emit destroy for all live variables in reverse declaration order */
+  private popScopeWithDestroy(): void {
+    const scope = this.scopeStack.pop();
+    if (!scope) return;
+    this.emitScopeDestroys(scope);
+  }
+
+  /** Emit destroys for scope variables in reverse order, skipping moved vars */
+  private emitScopeDestroys(scope: ScopeVar[]): void {
+    for (let i = scope.length - 1; i >= 0; i--) {
+      const sv = scope[i];
+      if (this.movedVars.has(sv.name)) continue;
+      this.emit({ kind: "destroy", value: sv.varId, structName: sv.structName });
+    }
+  }
+
+  /** Emit destroys for all scopes (for early return) without popping */
+  private emitAllScopeDestroys(): void {
+    for (let i = this.scopeStack.length - 1; i >= 0; i--) {
+      this.emitScopeDestroys(this.scopeStack[i]);
+    }
+  }
+
+  /** Emit destroys for all scopes, but skip a named variable (the returned value) */
+  private emitAllScopeDestroysExceptNamed(skipName: string | null): void {
+    for (let i = this.scopeStack.length - 1; i >= 0; i--) {
+      const scope = this.scopeStack[i];
+      for (let j = scope.length - 1; j >= 0; j--) {
+        const sv = scope[j];
+        if (this.movedVars.has(sv.name)) continue;
+        if (skipName !== null && sv.name === skipName) continue;
+        this.emit({ kind: "destroy", value: sv.varId, structName: sv.structName });
+      }
+    }
+  }
+
+  /** Track a variable in the current scope if it has lifecycle hooks */
+  private trackScopeVar(name: string, varId: VarId, expr: Expression): void {
+    if (this.scopeStack.length === 0) return;
+    const checkerType = this.checkResult.typeMap.get(expr);
+    const lifecycle = this.getStructLifecycle(checkerType);
+    if (lifecycle?.hasDestroy) {
+      this.scopeStack[this.scopeStack.length - 1].push({
+        name,
+        varId,
+        structName: lifecycle.structName,
+      });
+    }
+  }
+
+  /** Track a variable by its checker type directly */
+  private trackScopeVarByType(name: string, varId: VarId, checkerType: Type | undefined): void {
+    if (this.scopeStack.length === 0) return;
+    const lifecycle = this.getStructLifecycle(checkerType);
+    if (lifecycle?.hasDestroy) {
+      this.scopeStack[this.scopeStack.length - 1].push({
+        name,
+        varId,
+        structName: lifecycle.structName,
+      });
+    }
   }
 
   // ─── Type Conversions ────────────────────────────────────────────────────
@@ -1239,6 +1452,14 @@ export class KirLowerer {
       return this.lowerTypeNode(param.typeAnnotation);
     }
     return { kind: "int", bits: 32, signed: true };
+  }
+
+  private resolveParamCheckerType(decl: FunctionDecl, paramName: string): Type | undefined {
+    const param = decl.params.find((p) => p.name === paramName);
+    if (param) {
+      return this.nameToCheckerType(param.typeAnnotation.name) as Type;
+    }
+    return undefined;
   }
 
   private getFunctionReturnType(decl: FunctionDecl): Type {

@@ -500,6 +500,12 @@ function renameVariables(
         return { ...inst, cond: resolveValue(inst.cond) };
       case "require_check":
         return { ...inst, cond: resolveValue(inst.cond) };
+      case "destroy":
+        return { ...inst, value: resolveValue(inst.value) };
+      case "oncopy":
+        return { ...inst, value: resolveValue(inst.value) };
+      case "move":
+        return { ...inst, source: resolveValue(inst.source) };
       default:
         return inst;
     }
@@ -631,6 +637,12 @@ function rewriteAllUses(inst: KirInst, from: VarId, to: VarId): KirInst {
       return { ...inst, cond: r(inst.cond) };
     case "require_check":
       return { ...inst, cond: r(inst.cond) };
+    case "destroy":
+      return { ...inst, value: r(inst.value) };
+    case "oncopy":
+      return { ...inst, value: r(inst.value) };
+    case "move":
+      return { ...inst, source: r(inst.source) };
     default:
       return inst;
   }

@@ -312,6 +312,7 @@ function getInstDest(inst: KirInst): VarId | null {
     case "call_extern":
     case "cast":
     case "sizeof":
+    case "move":
       return inst.dest;
     default:
       return null;
@@ -354,6 +355,8 @@ function getInstType(inst: KirInst): KirType | null {
       return inst.targetType;
     case "sizeof":
       return { kind: "int", bits: 64, signed: false };
+    case "move":
+      return inst.type;
     default:
       return null;
   }
@@ -450,6 +453,12 @@ function emitInst(inst: KirInst): string {
       return `kei_assert(${varName(inst.cond)}, ${cStringLiteral(inst.message)});`;
     case "require_check":
       return `kei_require(${varName(inst.cond)}, ${cStringLiteral(inst.message)});`;
+    case "destroy":
+      return `${sanitizeName(inst.structName)}___destroy(${varName(inst.value)});`;
+    case "oncopy":
+      return `${varName(inst.value)} = ${sanitizeName(inst.structName)}___oncopy(${varName(inst.value)});`;
+    case "move":
+      return `${varName(inst.dest)} = ${varName(inst.source)};`;
   }
 }
 

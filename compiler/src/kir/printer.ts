@@ -174,6 +174,12 @@ function printInst(inst: KirInst): string {
       return `assert_check ${inst.cond}, "${inst.message}"`;
     case "require_check":
       return `require_check ${inst.cond}, "${inst.message}"`;
+    case "destroy":
+      return `destroy ${inst.value}`;
+    case "oncopy":
+      return `oncopy ${inst.value}`;
+    case "move":
+      return `${inst.dest} = move ${inst.source}`;
   }
 }
 
