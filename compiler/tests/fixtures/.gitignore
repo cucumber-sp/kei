@@ -1,2 +1,6 @@
 *.c
 hello
+arrays_e2e
+arrays_len
+arrays_oob
+*.c
