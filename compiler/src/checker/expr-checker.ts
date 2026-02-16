@@ -26,6 +26,7 @@ import type {
   StructLiteral,
   ThrowExpr,
   UnaryExpr,
+  UnsafeExpr,
 } from "../ast/nodes.ts";
 import type { Checker } from "./checker.ts";
 import { SymbolKind } from "./symbols.ts";
@@ -119,6 +120,8 @@ export class ExpressionChecker {
         return this.checkDecrementExpression(expr);
       case "RangeExpr":
         return this.checkRangeExpression(expr);
+      case "UnsafeExpr":
+        return this.checkUnsafeExpression(expr);
     }
   }
 
@@ -1119,5 +1122,22 @@ export class ExpressionChecker {
     }
 
     return rangeType(startType);
+  }
+
+  private checkUnsafeExpression(expr: UnsafeExpr): Type {
+    this.checker.pushScope({ isUnsafe: true });
+    let lastType: Type = VOID_TYPE;
+
+    for (const stmt of expr.body.statements) {
+      if (stmt.kind === "ExprStmt") {
+        lastType = this.checker.checkExpression(stmt.expression);
+      } else {
+        this.checker.checkStatement(stmt);
+        lastType = VOID_TYPE;
+      }
+    }
+
+    this.checker.popScope();
+    return lastType;
   }
 }

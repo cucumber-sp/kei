@@ -177,4 +177,37 @@ describe("Checker — Unsafe", () => {
       }
     `);
   });
+
+  test("unsafe expression: let x = unsafe { alloc(size) }", () => {
+    checkOk(`
+      fn main() -> int {
+        let size = 1024;
+        let p = unsafe { alloc(size) };
+        unsafe { free(p); }
+        return 0;
+      }
+    `);
+  });
+
+  test("unsafe expression: address-of", () => {
+    checkOk(`
+      fn main() -> int {
+        let x = 42;
+        let addr = unsafe { &x };
+        return 0;
+      }
+    `);
+  });
+
+  test("unsafe expression does not leak unsafe to outer scope", () => {
+    checkError(
+      `fn main() -> int {
+        let x = 42;
+        let addr = unsafe { &x };
+        let addr2 = &x;
+        return 0;
+      }`,
+      "requires unsafe block"
+    );
+  });
 });

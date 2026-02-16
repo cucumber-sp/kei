@@ -29,8 +29,10 @@ pub struct Point {
     }
 
     fn translate(self: ptr<Point>, dx: f64, dy: f64) {
-        self.*.x = self.*.x + dx;
-        self.*.y = self.*.y + dy;
+        unsafe {
+            self.*.x = self.*.x + dx;
+            self.*.y = self.*.y + dy;
+        }
     }
 }
 
@@ -133,7 +135,7 @@ fn main() -> int {
     x++;
     y--;
 
-    let addr = &x;
+    let addr = unsafe { &x };
     let bits = ~x;
     let neg = -x;
     let not_flag = !flag;

@@ -47,6 +47,7 @@ import type {
   TypeAlias,
   UnaryExpr,
   UnsafeBlock,
+  UnsafeExpr,
   UnsafeStructDecl,
   WhileStmt,
 } from "./nodes.ts";
@@ -104,4 +105,5 @@ export interface AstVisitor<T = void> {
   visitIncrementExpr(node: IncrementExpr): T;
   visitDecrementExpr(node: DecrementExpr): T;
   visitRangeExpr(node: RangeExpr): T;
+  visitUnsafeExpr(node: UnsafeExpr): T;
 }

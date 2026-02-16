@@ -275,4 +275,33 @@ describe("Parser — Expressions", () => {
     expect(expr.name).toBe("NotFound");
     expect(expr.fields).toHaveLength(0);
   });
+
+  test("unsafe expression", () => {
+    const expr = parseExpr("unsafe { alloc(1024) }");
+    expect(expr.kind).toBe("UnsafeExpr");
+    if (expr.kind !== "UnsafeExpr") return;
+    expect(expr.body.statements).toHaveLength(1);
+    const inner = expr.body.statements[0]!;
+    expect(inner.kind).toBe("ExprStmt");
+    if (inner.kind !== "ExprStmt") return;
+    expect(inner.expression.kind).toBe("CallExpr");
+  });
+
+  test("unsafe expression with address-of", () => {
+    const expr = parseExpr("unsafe { &x }");
+    expect(expr.kind).toBe("UnsafeExpr");
+    if (expr.kind !== "UnsafeExpr") return;
+    expect(expr.body.statements).toHaveLength(1);
+    const inner = expr.body.statements[0]!;
+    if (inner.kind !== "ExprStmt") return;
+    expect(inner.expression.kind).toBe("UnaryExpr");
+  });
+
+  test("deref then member: a.*.x", () => {
+    const expr = parseExpr("a.*.x");
+    expect(expr.kind).toBe("MemberExpr");
+    if (expr.kind !== "MemberExpr") return;
+    expect(expr.property).toBe("x");
+    expect(expr.object.kind).toBe("DerefExpr");
+  });
 });

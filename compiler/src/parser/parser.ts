@@ -1102,6 +1102,11 @@ export class Parser {
       return this.parseIfExpression();
     }
 
+    // unsafe { expr } expression
+    if (token.kind === TokenKind.Unsafe) {
+      return this.parseUnsafeExpression();
+    }
+
     return this.parsePrimaryExpression();
   }
 
@@ -1367,6 +1372,17 @@ export class Parser {
       thenBlock,
       elseBlock,
       span: { start: start.span.start, end: elseBlock.span.end },
+    };
+  }
+
+  private parseUnsafeExpression(): Expression {
+    const start = this.expect(TokenKind.Unsafe);
+    const body = this.parseExpressionBlock();
+
+    return {
+      kind: "UnsafeExpr",
+      body,
+      span: { start: start.span.start, end: body.span.end },
     };
   }
 
