@@ -1,4 +1,6 @@
 import { Checker } from "./checker/checker.ts";
+import { lowerToKir } from "./kir/lowering.ts";
+import { printKir } from "./kir/printer.ts";
 import { Lexer } from "./lexer/index.ts";
 import { Parser } from "./parser/index.ts";
 import { SourceFile } from "./utils/source.ts";
@@ -6,7 +8,7 @@ import { SourceFile } from "./utils/source.ts";
 const filePath = process.argv[2];
 
 if (!filePath) {
-  console.error("Usage: bun run src/cli.ts <file.kei> [--ast | --ast-json | --check]");
+  console.error("Usage: bun run src/cli.ts <file.kei> [--ast | --ast-json | --check | --kir]");
   process.exit(1);
 }
 
@@ -14,6 +16,7 @@ const flags = new Set(process.argv.slice(3));
 const showAst = flags.has("--ast");
 const showAstJson = flags.has("--ast-json");
 const runCheck = flags.has("--check");
+const showKir = flags.has("--kir");
 
 const content = await Bun.file(filePath).text();
 const source = new SourceFile(filePath, content);
@@ -30,7 +33,7 @@ if (lexerDiagnostics.length > 0) {
   }
 }
 
-if (showAst || showAstJson || runCheck) {
+if (showAst || showAstJson || runCheck || showKir) {
   const parser = new Parser(tokens);
   const program = parser.parse();
 
@@ -44,7 +47,21 @@ if (showAst || showAstJson || runCheck) {
     }
   }
 
-  if (runCheck) {
+  if (showKir) {
+    const checker = new Checker(program, source);
+    const result = checker.check();
+    const errors = result.diagnostics.filter((d) => d.severity === "error");
+    if (errors.length > 0) {
+      for (const diag of errors) {
+        console.error(
+          `${diag.severity}: ${diag.message} at ${diag.location.file}:${diag.location.line}:${diag.location.column}`
+        );
+      }
+      process.exit(1);
+    }
+    const kirModule = lowerToKir(program, result);
+    console.log(printKir(kirModule));
+  } else if (runCheck) {
     const checker = new Checker(program, source);
     const result = checker.check();
     if (result.diagnostics.length > 0) {
