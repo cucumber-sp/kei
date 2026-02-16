@@ -277,6 +277,11 @@ function collectVarDecls(fn: KirFunction): Map<string, KirType> {
 
   for (const block of fn.blocks) {
     for (const inst of block.instructions) {
+      // For stack_alloc, also declare backing storage variable
+      if (inst.kind === "stack_alloc") {
+        const allocName = `${varName(inst.dest)}_alloc`;
+        decls.set(allocName, inst.type);
+      }
       const dest = getInstDest(inst);
       const type = getInstType(inst);
       if (dest && type && !paramNames.has(varName(dest))) {
@@ -320,9 +325,9 @@ function getInstType(inst: KirInst): KirType | null {
     case "load":
       return inst.type;
     case "field_ptr":
-      return inst.type;
+      return { kind: "ptr", pointee: inst.type };
     case "index_ptr":
-      return inst.type;
+      return { kind: "ptr", pointee: inst.type };
     case "bin_op":
       return inst.type;
     case "neg":
@@ -386,10 +391,9 @@ function cStringLiteral(s: string): string {
 function emitInst(inst: KirInst): string {
   switch (inst.kind) {
     case "stack_alloc": {
-      // Allocate local — declare as a local variable, dest is a pointer to it
-      // We declare the variable as the pointee type, and the "pointer" is its address
-      // Variable is already declared at the top, so just zero-init
-      return `/* stack_alloc ${varName(inst.dest)} */`;
+      // Allocate local — backing storage is declared at the top as _vN_alloc,
+      // and the pointer variable _vN is set to its address
+      return `${varName(inst.dest)} = &${varName(inst.dest)}_alloc;`;
     }
     case "load":
       return `${varName(inst.dest)} = *${varName(inst.ptr)};`;

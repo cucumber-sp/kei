@@ -131,6 +131,11 @@ export class KirLowerer {
       case "StructDecl":
       case "UnsafeStructDecl":
         this.typeDecls.push(this.lowerStructDecl(decl));
+        // Lower methods as top-level functions with mangled names
+        for (const method of decl.methods) {
+          const mangledName = `${decl.name}_${method.name}`;
+          this.functions.push(this.lowerMethod(method, mangledName, decl.name));
+        }
         break;
       case "EnumDecl":
         this.typeDecls.push(this.lowerEnumDecl(decl));
@@ -178,6 +183,51 @@ export class KirLowerer {
 
     return {
       name: decl.name,
+      params,
+      returnType,
+      blocks: this.blocks,
+      localCount: this.varCounter,
+    };
+  }
+
+  private lowerMethod(decl: FunctionDecl, mangledName: string, structName: string): KirFunction {
+    // Reset per-function state
+    this.blocks = [];
+    this.currentInsts = [];
+    this.varCounter = 0;
+    this.blockCounter = 0;
+    this.varMap = new Map();
+    this.currentBlockId = "entry";
+    this.loopBreakTarget = null;
+    this.loopContinueTarget = null;
+
+    const params: KirParam[] = decl.params.map((p) => {
+      const type = this.resolveParamType(decl, p.name);
+      // The self parameter is passed as a pointer to the struct
+      const paramType: KirType =
+        p.name === "self" || type.kind === "struct"
+          ? { kind: "ptr", pointee: type }
+          : type;
+      const varId = `%${p.name}`;
+      this.varMap.set(p.name, varId);
+      return { name: p.name, type: paramType };
+    });
+
+    const returnType = this.lowerCheckerType(
+      this.getFunctionReturnType(decl)
+    );
+
+    // Lower body
+    this.lowerBlock(decl.body);
+
+    // Ensure the last block has a terminator
+    this.ensureTerminator(returnType);
+
+    // Seal last block
+    this.sealCurrentBlock();
+
+    return {
+      name: mangledName,
       params,
       returnType,
       blocks: this.blocks,
@@ -810,9 +860,17 @@ export class KirLowerer {
     if (expr.callee.kind === "Identifier") {
       funcName = expr.callee.name;
     } else if (expr.callee.kind === "MemberExpr") {
-      // Method call: obj.method(args) → method(obj, args)
+      // Method call: obj.method(args) → StructName_method(obj, args)
       const objId = this.lowerExpr(expr.callee.object);
-      funcName = expr.callee.property;
+      const methodName = expr.callee.property;
+
+      // Resolve the object's type to get the struct name for mangling
+      const objType = this.checkResult.typeMap.get(expr.callee.object);
+      if (objType?.kind === "struct") {
+        funcName = `${objType.name}_${methodName}`;
+      } else {
+        funcName = methodName;
+      }
 
       if (isVoid) {
         this.emit({ kind: "call_void", func: funcName, args: [objId, ...args] });
