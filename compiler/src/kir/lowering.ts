@@ -57,6 +57,7 @@ import type {
   MoveExpr,
   CatchExpr,
   ThrowExpr,
+  CastExpr,
 } from "../ast/nodes.ts";
 import type {
   KirModule,
@@ -912,6 +913,8 @@ export class KirLowerer {
         return this.lowerThrowExpr(expr);
       case "CatchExpr":
         return this.lowerCatchExpr(expr);
+      case "CastExpr":
+        return this.lowerCastExpr(expr);
       default:
         // Unhandled expression types return a placeholder
         return this.emitConstInt(0);
@@ -1367,6 +1370,14 @@ export class KirLowerer {
       this.movedVars.add(expr.operand.name);
     }
 
+    return dest;
+  }
+
+  private lowerCastExpr(expr: CastExpr): VarId {
+    const value = this.lowerExpr(expr.operand);
+    const targetType = this.getExprKirType(expr);
+    const dest = this.freshVar();
+    this.emit({ kind: "cast", dest, value, targetType });
     return dest;
   }
 

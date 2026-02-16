@@ -7,6 +7,7 @@ import type {
   AssignExpr,
   BlockStmt,
   BreakStmt,
+  CastExpr,
   CatchClause,
   CatchExpr,
   ConstStmt,
@@ -1196,6 +1197,12 @@ export class Parser {
         continue;
       }
 
+      // cast: expr as Type
+      if (this.check(TokenKind.As)) {
+        left = this.parseCastExpression(left);
+        continue;
+      }
+
       // catch
       if (this.check(TokenKind.Catch)) {
         left = this.parseCatchExpression(left);
@@ -1261,6 +1268,17 @@ export class Parser {
       typeArgs: [],
       fields,
       span: { start: ident.span.start, end: end.span.end },
+    };
+  }
+
+  private parseCastExpression(operand: Expression): CastExpr {
+    this.expect(TokenKind.As);
+    const targetType = this.parseType();
+    return {
+      kind: "CastExpr",
+      operand,
+      targetType,
+      span: { start: operand.span.start, end: targetType.span.end },
     };
   }
 

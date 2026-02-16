@@ -304,6 +304,7 @@ export enum ExprKind {
   Decrement = "DecrementExpr",
   Range = "RangeExpr",
   Unsafe = "UnsafeExpr",
+  Cast = "CastExpr",
 }
 
 export interface BinaryExpr extends BaseNode {
@@ -450,6 +451,12 @@ export interface UnsafeExpr extends BaseNode {
   body: BlockStmt;
 }
 
+export interface CastExpr extends BaseNode {
+  kind: "CastExpr";
+  operand: Expression;
+  targetType: TypeNode;
+}
+
 export type Expression =
   | BinaryExpr
   | UnaryExpr
@@ -473,4 +480,5 @@ export type Expression =
   | IncrementExpr
   | DecrementExpr
   | RangeExpr
-  | UnsafeExpr;
+  | UnsafeExpr
+  | CastExpr;

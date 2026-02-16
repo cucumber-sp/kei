@@ -7,6 +7,7 @@ export type {
   BoolLiteral,
   BreakStmt,
   CallExpr,
+  CastExpr,
   CatchClause,
   CatchExpr,
   ConstStmt,

@@ -21,6 +21,7 @@ export enum TokenKind {
   Identifier = "Identifier",
 
   // Keywords — core language
+  As = "as",
   Assert = "assert",
   Bool = "bool",
   Break = "break",
@@ -183,6 +184,7 @@ export interface Token {
 
 // Active keywords — identifiers that map to a specific TokenKind
 const KEYWORD_MAP: ReadonlyMap<string, TokenKind> = new Map([
+  ["as", TokenKind.As],
   ["assert", TokenKind.Assert],
   ["bool", TokenKind.Bool],
   ["break", TokenKind.Break],

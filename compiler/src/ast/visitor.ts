@@ -10,6 +10,7 @@ import type {
   BoolLiteral,
   BreakStmt,
   CallExpr,
+  CastExpr,
   CatchExpr,
   ConstStmt,
   ContinueStmt,
@@ -106,4 +107,5 @@ export interface AstVisitor<T = void> {
   visitDecrementExpr(node: DecrementExpr): T;
   visitRangeExpr(node: RangeExpr): T;
   visitUnsafeExpr(node: UnsafeExpr): T;
+  visitCastExpr(node: CastExpr): T;
 }

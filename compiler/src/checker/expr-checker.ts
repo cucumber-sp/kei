@@ -7,6 +7,7 @@ import type {
   BinaryExpr,
   BoolLiteral,
   CallExpr,
+  CastExpr,
   CatchExpr,
   DecrementExpr,
   DerefExpr,
@@ -40,11 +41,14 @@ import {
   I32_TYPE,
   I64_TYPE,
   isAssignableTo,
+  isBoolType,
   isErrorType,
+  isFloatType,
   isIntegerType,
   isLiteralAssignableTo,
   isNumericType,
   isPtrType,
+  isStructType,
   NULL_TYPE,
   ptrType,
   rangeType,
@@ -126,6 +130,8 @@ export class ExpressionChecker {
         return this.checkRangeExpression(expr);
       case "UnsafeExpr":
         return this.checkUnsafeExpression(expr);
+      case "CastExpr":
+        return this.checkCastExpression(expr);
     }
   }
 
@@ -1333,5 +1339,37 @@ export class ExpressionChecker {
 
     this.checker.popScope();
     return lastType;
+  }
+
+  private checkCastExpression(expr: CastExpr): Type {
+    const operandType = this.checkExpression(expr.operand);
+    if (isErrorType(operandType)) return ERROR_TYPE;
+
+    const targetType = this.checker.resolveType(expr.targetType);
+    if (isErrorType(targetType)) return ERROR_TYPE;
+
+    // Same type → no-op, always allowed
+    if (typesEqual(operandType, targetType)) return targetType;
+
+    // numeric → numeric (int↔float, int↔int, float↔float)
+    if (isNumericType(operandType) && isNumericType(targetType)) return targetType;
+
+    // bool → int
+    if (isBoolType(operandType) && isIntegerType(targetType)) return targetType;
+
+    // ptr → ptr (unsafe only)
+    if (isPtrType(operandType) && isPtrType(targetType)) {
+      if (!this.checker.currentScope.isInsideUnsafe()) {
+        this.checker.error("pointer cast requires unsafe block", expr.span);
+        return ERROR_TYPE;
+      }
+      return targetType;
+    }
+
+    this.checker.error(
+      `cannot cast '${typeToString(operandType)}' to '${typeToString(targetType)}'`,
+      expr.span
+    );
+    return ERROR_TYPE;
   }
 }
