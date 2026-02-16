@@ -415,13 +415,15 @@ function emitInst(inst: KirInst): string {
     case "bit_not":
       return `${varName(inst.dest)} = ~${varName(inst.operand)};`;
     case "const_int": {
-      // For unsigned types or values that might overflow signed range, cast explicitly
       const val = inst.value;
       const cType = emitCType(inst.type);
-      if (!inst.type.signed || val > 2147483647 || val < -2147483648) {
-        return `${varName(inst.dest)} = (${cType})${val}${val > 2147483647 ? "ULL" : "LL"};`;
+      // Small signed values that fit in a plain int literal need no suffix
+      if (inst.type.signed && val >= -2147483648 && val <= 2147483647) {
+        return `${varName(inst.dest)} = ${val};`;
       }
-      return `${varName(inst.dest)} = ${val};`;
+      // Large or unsigned values: use LL/ULL suffix with explicit cast
+      const suffix = inst.type.signed ? "LL" : "ULL";
+      return `${varName(inst.dest)} = (${cType})${val}${suffix};`;
     }
     case "const_float":
       return `${varName(inst.dest)} = ${inst.value};`;

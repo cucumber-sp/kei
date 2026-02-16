@@ -36,6 +36,7 @@ import {
   ERROR_TYPE,
   F64_TYPE,
   I32_TYPE,
+  I64_TYPE,
   isAssignableTo,
   isErrorType,
   isIntegerType,
@@ -125,8 +126,12 @@ export class ExpressionChecker {
     }
   }
 
-  private checkIntLiteral(_expr: IntLiteral): Type {
-    return I32_TYPE;
+  private checkIntLiteral(expr: IntLiteral): Type {
+    const v = expr.value;
+    if (v >= -2147483648 && v <= 2147483647) {
+      return I32_TYPE;
+    }
+    return I64_TYPE;
   }
 
   private checkFloatLiteral(_expr: FloatLiteral): Type {
