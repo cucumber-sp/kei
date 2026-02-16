@@ -395,7 +395,7 @@ function emitInst(inst: KirInst): string {
     case "index_ptr":
       return `${varName(inst.dest)} = &${varName(inst.base)}[${varName(inst.index)}];`;
     case "bin_op":
-      return emitBinOp(inst.dest, inst.op, inst.lhs, inst.rhs);
+      return emitBinOp(inst.dest, inst.op, inst.lhs, inst.rhs, inst.type, inst.operandType);
     case "neg":
       return `${varName(inst.dest)} = -${varName(inst.operand)};`;
     case "not":
@@ -418,7 +418,7 @@ function emitInst(inst: KirInst): string {
     case "const_bool":
       return `${varName(inst.dest)} = ${inst.value ? "true" : "false"};`;
     case "const_string":
-      return `${varName(inst.dest)} = ${cStringLiteral(inst.value)};`;
+      return `${varName(inst.dest)} = kei_string_literal(${cStringLiteral(inst.value)});`;
     case "const_null":
       return `${varName(inst.dest)} = NULL;`;
     case "call":
@@ -461,10 +461,22 @@ function emitCallTarget(func: string): string {
   return sanitizeName(func);
 }
 
-function emitBinOp(dest: VarId, op: BinOp, lhs: VarId, rhs: VarId): string {
+function emitBinOp(dest: VarId, op: BinOp, lhs: VarId, rhs: VarId, type: KirType, operandType?: KirType): string {
   const d = varName(dest);
   const l = varName(lhs);
   const r = varName(rhs);
+
+  // String concatenation: + on strings
+  if (op === "add" && type.kind === "string") {
+    return `${d} = kei_string_concat(${l}, ${r});`;
+  }
+
+  // String equality/inequality
+  const opType = operandType ?? type;
+  if (opType.kind === "string") {
+    if (op === "eq") return `${d} = kei_string_eq(${l}, ${r});`;
+    if (op === "neq") return `${d} = !kei_string_eq(${l}, ${r});`;
+  }
 
   const cOp = binOpToC(op);
   return `${d} = ${l} ${cOp} ${r};`;

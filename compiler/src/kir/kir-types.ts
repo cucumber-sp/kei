@@ -244,6 +244,8 @@ export interface KirBinOp {
   lhs: VarId;
   rhs: VarId;
   type: KirType;
+  /** Operand type when it differs from result type (e.g. string eq → bool result) */
+  operandType?: KirType;
 }
 
 export interface KirNeg {

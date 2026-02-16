@@ -996,7 +996,13 @@ export class KirLowerer {
     const op = this.mapBinOp(expr.operator);
     if (op) {
       const type = this.getExprKirType(expr);
-      this.emit({ kind: "bin_op", op, dest, lhs, rhs, type });
+      // For string equality/inequality, pass operandType so the C emitter knows
+      const leftCheckerType = this.checkResult.typeMap.get(expr.left);
+      if (leftCheckerType?.kind === "string" && (op === "eq" || op === "neq")) {
+        this.emit({ kind: "bin_op", op, dest, lhs, rhs, type, operandType: { kind: "string" } });
+      } else {
+        this.emit({ kind: "bin_op", op, dest, lhs, rhs, type });
+      }
       return dest;
     }
 
@@ -1896,8 +1902,10 @@ export class KirLowerer {
       case "i16": case "u16": return 2;
       case "i32": case "u32": case "int": case "f32": case "float": return 4;
       case "i64": case "u64": case "f64": case "double":
-      case "usize": case "isize": case "string":
+      case "usize": case "isize":
         return 8;
+      case "string":
+        return 32; // kei_string struct: data(8) + len(8) + cap(8) + ref(8)
       default: {
         // Look up struct in program declarations
         for (const decl of this.program.declarations) {
@@ -1920,7 +1928,8 @@ export class KirLowerer {
       case "bool": return 1;
       case "int": return t.bits / 8;
       case "float": return t.bits / 8;
-      case "string": case "ptr": return 8;
+      case "string": return 32; // kei_string struct: data(8) + len(8) + cap(8) + ref(8)
+      case "ptr": return 8;
       case "struct": {
         let size = 0;
         for (const [, fieldType] of t.fields) {
