@@ -1,27 +1,32 @@
 // std/io.kei — Standard I/O module
-// print is an intrinsic — the C emitter recognizes io_print_* calls
-// and emits the appropriate kei_print_* C helpers.
 
 extern fn putchar(c: i32) -> i32;
 extern fn getchar() -> i32;
 
+extern fn kei_print_i32(v: i32);
+extern fn kei_print_i64(v: i64);
+extern fn kei_print_f64(v: f64);
+extern fn kei_print_f32(v: f32);
+extern fn kei_print_string(s: string);
+extern fn kei_print_bool(v: bool);
+
 /// Print a string to stdout with a newline
-pub fn print(value: string) {}
+pub fn print(value: string) { unsafe { kei_print_string(value); } }
 
 /// Print an i32 to stdout with a newline
-pub fn print(value: i32) {}
+pub fn print(value: i32) { unsafe { kei_print_i32(value); } }
 
 /// Print an i64 to stdout with a newline
-pub fn print(value: i64) {}
+pub fn print(value: i64) { unsafe { kei_print_i64(value); } }
 
 /// Print an f64 to stdout with a newline
-pub fn print(value: f64) {}
+pub fn print(value: f64) { unsafe { kei_print_f64(value); } }
 
 /// Print an f32 to stdout with a newline
-pub fn print(value: f32) {}
+pub fn print(value: f32) { unsafe { kei_print_f32(value); } }
 
 /// Print a bool to stdout with a newline
-pub fn print(value: bool) {}
+pub fn print(value: bool) { unsafe { kei_print_bool(value); } }
 
 /// Print a single character to stdout
 pub fn putc(c: i32) {

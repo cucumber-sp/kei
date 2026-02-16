@@ -1,17 +1,23 @@
 // std/mem.kei — Memory management module
-// alloc and free are intrinsics — the checker special-cases them
-// when imported from the mem module.
 
+extern fn malloc(size: usize) -> ptr<u8>;
+extern fn free(p: ptr<void>);
 extern fn memcpy(dest: ptr<u8>, src: ptr<u8>, n: usize) -> ptr<u8>;
 extern fn memset(dest: ptr<u8>, c: i32, n: usize) -> ptr<u8>;
 
 /// Allocate memory for count bytes. Requires unsafe.
 pub fn alloc(count: usize) -> ptr<u8> {
-    return null;
+    unsafe {
+        return malloc(count);
+    }
 }
 
 /// Free allocated memory. Requires unsafe.
-pub fn free(p: ptr<u8>) {}
+pub fn dealloc(p: ptr<void>) {
+    unsafe {
+        free(p);
+    }
+}
 
 /// Copy n bytes from src to dest
 pub fn copy(dest: ptr<u8>, src: ptr<u8>, n: usize) {

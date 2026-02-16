@@ -977,6 +977,15 @@ export class KirLowerer {
   }
 
   private lowerCallExpr(expr: CallExpr): VarId {
+    // Compile-time sizeof resolution
+    if (expr.callee.kind === "Identifier" && expr.callee.name === "sizeof" && expr.args.length === 1) {
+      const arg = expr.args[0];
+      const size = this.resolveSizeofArg(arg);
+      const dest = this.freshVar();
+      this.emit({ kind: "const_int", dest, type: { kind: "int", bits: 64, signed: false }, value: size });
+      return dest;
+    }
+
     const args = expr.args.map((a) => this.lowerExpr(a));
     const resultType = this.getExprKirType(expr);
     const isVoid = resultType.kind === "void";
@@ -1343,6 +1352,64 @@ export class KirLowerer {
       if (inst.kind === "stack_alloc" && inst.dest === varId) return true;
     }
     return false;
+  }
+
+  // ─── Sizeof Resolution ─────────────────────────────────────────────────
+
+  /** Resolve the byte size of a sizeof argument at compile time. */
+  private resolveSizeofArg(arg: Expression): number {
+    if (arg.kind === "Identifier") {
+      return this.sizeofTypeName(arg.name);
+    }
+    // For non-identifier args, use the checker type
+    const checkerType = this.checkResult.typeMap.get(arg);
+    if (checkerType) {
+      return this.sizeofCheckerType(checkerType);
+    }
+    return 0;
+  }
+
+  /** Get size from a type name string. */
+  private sizeofTypeName(name: string): number {
+    switch (name) {
+      case "i8": case "u8": case "bool": return 1;
+      case "i16": case "u16": return 2;
+      case "i32": case "u32": case "int": case "f32": case "float": return 4;
+      case "i64": case "u64": case "f64": case "double":
+      case "usize": case "isize": case "string":
+        return 8;
+      default: {
+        // Look up struct in program declarations
+        for (const decl of this.program.declarations) {
+          if ((decl.kind === "StructDecl" || decl.kind === "UnsafeStructDecl") && decl.name === name) {
+            let size = 0;
+            for (const field of decl.fields) {
+              size += this.sizeofTypeName(field.typeAnnotation.name);
+            }
+            return size;
+          }
+        }
+        return 0;
+      }
+    }
+  }
+
+  /** Get size from a checker Type. */
+  private sizeofCheckerType(t: Type): number {
+    switch (t.kind) {
+      case "bool": return 1;
+      case "int": return t.bits / 8;
+      case "float": return t.bits / 8;
+      case "string": case "ptr": return 8;
+      case "struct": {
+        let size = 0;
+        for (const [, fieldType] of t.fields) {
+          size += this.sizeofCheckerType(fieldType);
+        }
+        return size;
+      }
+      default: return 8;
+    }
   }
 
   // ─── Lifecycle Helpers ───────────────────────────────────────────────────

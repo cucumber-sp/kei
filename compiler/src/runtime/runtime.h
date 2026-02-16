@@ -22,11 +22,19 @@ static void kei_print_string(kei_string s) {
     printf("%s\n", s);
 }
 
-static void kei_print_int(int64_t v) {
+static void kei_print_i32(int32_t v) {
+    printf("%d\n", (int)v);
+}
+
+static void kei_print_i64(int64_t v) {
     printf("%lld\n", (long long)v);
 }
 
-static void kei_print_float(double v) {
+static void kei_print_f32(float v) {
+    printf("%g\n", (double)v);
+}
+
+static void kei_print_f64(double v) {
     printf("%g\n", v);
 }
 
