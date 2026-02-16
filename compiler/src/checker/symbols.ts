@@ -25,12 +25,19 @@ export interface VariableSymbol {
   isMoved: boolean;
 }
 
+export interface FunctionOverload {
+  type: FunctionType;
+  isExtern: boolean;
+  declaration: FunctionDecl | null;
+}
+
 export interface FunctionSymbol {
   kind: typeof SymbolKind.Function;
   name: string;
   type: FunctionType;
   isExtern: boolean;
   declaration: FunctionDecl | null;
+  overloads: FunctionOverload[];
 }
 
 export interface TypeSymbol {
@@ -59,7 +66,14 @@ export function functionSymbol(
   isExtern: boolean,
   declaration: FunctionDecl | null = null
 ): FunctionSymbol {
-  return { kind: SymbolKind.Function, name, type, isExtern, declaration };
+  return {
+    kind: SymbolKind.Function,
+    name,
+    type,
+    isExtern,
+    declaration,
+    overloads: [{ type, isExtern, declaration }],
+  };
 }
 
 export function typeSymbol(

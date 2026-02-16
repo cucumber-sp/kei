@@ -105,7 +105,7 @@ export class DeclarationChecker {
     const funcType = this.buildFunctionType(decl);
     const sym = functionSymbol(decl.name, funcType, false, decl);
     if (!this.checker.currentScope.define(sym)) {
-      this.checker.error(`duplicate declaration '${decl.name}'`, decl.span);
+      this.checker.error(`duplicate declaration '${decl.name}' (same parameter signature)`, decl.span);
     }
   }
 
@@ -250,7 +250,9 @@ export class DeclarationChecker {
     const funcSym = this.checker.currentScope.lookupFunction(decl.name);
     if (!funcSym || funcSym.kind !== "function") return;
 
-    const funcType = funcSym.type;
+    // Find the overload matching this specific declaration
+    const overload = funcSym.overloads.find((o) => o.declaration === decl);
+    const funcType = overload ? overload.type : funcSym.type;
 
     // Create function scope
     this.checker.pushScope({ functionContext: funcType });

@@ -132,16 +132,53 @@ export function registerBuiltins(scope: Scope): void {
     )
   );
 
-  // print(value: string) -> void — safe
+  // print — overloaded for all common types
   scope.define(
     functionSymbol(
       "print",
       functionType(
         [{ name: "value", type: STRING_TYPE, isMut: false, isMove: false }],
-        VOID_TYPE,
-        [],
-        [],
-        false
+        VOID_TYPE, [], [], false
+      ),
+      false
+    )
+  );
+  scope.define(
+    functionSymbol(
+      "print",
+      functionType(
+        [{ name: "value", type: I32_TYPE, isMut: false, isMove: false }],
+        VOID_TYPE, [], [], false
+      ),
+      false
+    )
+  );
+  scope.define(
+    functionSymbol(
+      "print",
+      functionType(
+        [{ name: "value", type: I64_TYPE, isMut: false, isMove: false }],
+        VOID_TYPE, [], [], false
+      ),
+      false
+    )
+  );
+  scope.define(
+    functionSymbol(
+      "print",
+      functionType(
+        [{ name: "value", type: F64_TYPE, isMut: false, isMove: false }],
+        VOID_TYPE, [], [], false
+      ),
+      false
+    )
+  );
+  scope.define(
+    functionSymbol(
+      "print",
+      functionType(
+        [{ name: "value", type: BOOL_TYPE, isMut: false, isMove: false }],
+        VOID_TYPE, [], [], false
       ),
       false
     )

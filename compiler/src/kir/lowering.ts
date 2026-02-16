@@ -14,7 +14,7 @@ import type {
   EnumType,
   FunctionType,
 } from "../checker/types.ts";
-import { TypeKind, I32_TYPE, typeToString } from "../checker/types.ts";
+import { TypeKind, I32_TYPE, typeToString, typesEqual } from "../checker/types.ts";
 import type {
   Program,
   Declaration,
@@ -117,12 +117,28 @@ export class KirLowerer {
   private typeDecls: KirTypeDecl[] = [];
   private globals: KirGlobal[] = [];
 
+  // Track which function names are overloaded (name → count of declarations)
+  private overloadedNames: Set<string> = new Set();
+
   constructor(program: Program, checkResult: CheckResult) {
     this.program = program;
     this.checkResult = checkResult;
   }
 
   lower(): KirModule {
+    // Detect which function names are overloaded
+    const funcNameCounts = new Map<string, number>();
+    for (const decl of this.program.declarations) {
+      if (decl.kind === "FunctionDecl") {
+        funcNameCounts.set(decl.name, (funcNameCounts.get(decl.name) ?? 0) + 1);
+      }
+    }
+    for (const [name, count] of funcNameCounts) {
+      if (count > 1) this.overloadedNames.add(name);
+    }
+    // Built-in overloaded names
+    this.overloadedNames.add("print");
+
     for (const decl of this.program.declarations) {
       this.lowerDeclaration(decl);
     }
@@ -217,8 +233,13 @@ export class KirLowerer {
     // Seal last block
     this.sealCurrentBlock();
 
+    // Use mangled name for overloaded functions
+    const funcName = this.overloadedNames.has(decl.name)
+      ? this.mangleFunctionName(decl.name, decl)
+      : decl.name;
+
     return {
-      name: decl.name,
+      name: funcName,
       params,
       returnType,
       blocks: this.blocks,
@@ -939,7 +960,18 @@ export class KirLowerer {
     // Get the function name
     let funcName: string;
     if (expr.callee.kind === "Identifier") {
-      funcName = expr.callee.name;
+      const baseName = expr.callee.name;
+      // Mangle overloaded function calls using the resolved callee type
+      if (this.overloadedNames.has(baseName)) {
+        const calleeType = this.checkResult.typeMap.get(expr.callee);
+        if (calleeType && calleeType.kind === "function") {
+          funcName = this.mangleFunctionNameFromType(baseName, calleeType as FunctionType);
+        } else {
+          funcName = baseName;
+        }
+      } else {
+        funcName = baseName;
+      }
     } else if (expr.callee.kind === "MemberExpr") {
       // Method call: obj.method(args) → StructName_method(obj, args)
       const objId = this.lowerExpr(expr.callee.object);
@@ -1499,6 +1531,64 @@ export class KirLowerer {
       "&&": "and", "||": "or",
     };
     return map[op] ?? null;
+  }
+
+  /** Build a mangled function name from a FunctionDecl (for overloaded definitions). */
+  private mangleFunctionName(baseName: string, decl: FunctionDecl): string {
+    const paramSuffixes = decl.params.map((p) => this.typeNameSuffix(p.typeAnnotation.name));
+    return `${baseName}_${paramSuffixes.join("_")}`;
+  }
+
+  /** Build a mangled function name from a resolved FunctionType (for overloaded calls). */
+  private mangleFunctionNameFromType(baseName: string, funcType: FunctionType): string {
+    const paramSuffixes = funcType.params.map((p) => this.checkerTypeSuffix(p.type));
+    return `${baseName}_${paramSuffixes.join("_")}`;
+  }
+
+  /** Convert a type annotation name to a short suffix for mangling. */
+  private typeNameSuffix(name: string): string {
+    switch (name) {
+      case "int": case "i32": return "i32";
+      case "i8": return "i8";
+      case "i16": return "i16";
+      case "i64": case "long": return "i64";
+      case "u8": case "byte": return "u8";
+      case "u16": return "u16";
+      case "u32": return "u32";
+      case "u64": return "u64";
+      case "isize": return "isize";
+      case "usize": return "usize";
+      case "f32": case "float": return "f32";
+      case "f64": case "double": return "f64";
+      case "bool": return "bool";
+      case "string": return "string";
+      case "void": return "void";
+      default: return name;
+    }
+  }
+
+  /** Convert a checker Type to a short suffix for mangling. */
+  private checkerTypeSuffix(t: Type): string {
+    switch (t.kind) {
+      case "int":
+        return `${t.signed ? "i" : "u"}${t.bits}`;
+      case "float":
+        return `f${t.bits}`;
+      case "bool":
+        return "bool";
+      case "string":
+        return "string";
+      case "void":
+        return "void";
+      case "ptr":
+        return `ptr_${this.checkerTypeSuffix(t.pointee)}`;
+      case "struct":
+        return t.name;
+      case "enum":
+        return t.name;
+      default:
+        return t.kind;
+    }
   }
 
   private mapCompoundAssignOp(op: string): BinOp | null {

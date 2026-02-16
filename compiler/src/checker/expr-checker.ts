@@ -29,6 +29,7 @@ import type {
   UnsafeExpr,
 } from "../ast/nodes.ts";
 import type { Checker } from "./checker.ts";
+import type { FunctionOverload } from "./symbols.ts";
 import { SymbolKind } from "./symbols.ts";
 import type { ArrayType, FunctionType, PtrType, RangeType, SliceType, StructType, Type } from "./types.ts";
 import {
@@ -400,6 +401,14 @@ export class ExpressionChecker {
       }
     }
 
+    // Check for overloaded function call by identifier
+    if (expr.callee.kind === "Identifier") {
+      const sym = this.checker.currentScope.lookup(expr.callee.name);
+      if (sym && sym.kind === SymbolKind.Function && sym.overloads.length > 1) {
+        return this.resolveOverloadedCall(sym.overloads, expr);
+      }
+    }
+
     // Check for static method call: Type.method(args)
     if (expr.callee.kind === "MemberExpr") {
       const memberExpr = expr.callee;
@@ -450,6 +459,117 @@ export class ExpressionChecker {
       `expression of type '${typeToString(calleeType)}' is not callable`,
       expr.span
     );
+    return ERROR_TYPE;
+  }
+
+  /** Resolve an overloaded function call by matching argument types exactly. */
+  private resolveOverloadedCall(
+    overloads: FunctionOverload[],
+    expr: CallExpr
+  ): Type {
+    // First, type-check all arguments
+    const argTypes: Type[] = [];
+    for (const arg of expr.args) {
+      argTypes.push(this.checkExpression(arg));
+    }
+
+    // If any arg is error type, bail early
+    if (argTypes.some((t) => isErrorType(t))) return ERROR_TYPE;
+
+    // Find exact matches: same arity and exact type match on each param
+    const matches: FunctionOverload[] = [];
+    for (const overload of overloads) {
+      const params = overload.type.params;
+      if (params.length !== argTypes.length) continue;
+
+      let allMatch = true;
+      for (let i = 0; i < params.length; i++) {
+        const paramType = params[i]?.type;
+        const argType = argTypes[i];
+        if (!paramType || !argType || !typesEqual(paramType, argType)) {
+          allMatch = false;
+          break;
+        }
+      }
+      if (allMatch) matches.push(overload);
+    }
+
+    if (matches.length === 1) {
+      const matched = matches[0]!;
+      // Store the resolved overload type on the callee expression
+      this.checker.setExprType(expr.callee, matched.type);
+
+      // Handle move params
+      for (let i = 0; i < expr.args.length; i++) {
+        const arg = expr.args[i];
+        if (matched.type.params[i]?.isMove && arg?.kind === "MoveExpr") {
+          const moveExpr = arg as MoveExpr;
+          if (moveExpr.operand.kind === "Identifier") {
+            this.checker.markVariableMoved(moveExpr.operand.name);
+          }
+        }
+      }
+
+      // Check throws
+      if (matched.type.throwsTypes.length > 0) {
+        this.checker.flagThrowsCall(expr, matched.type);
+      }
+
+      return matched.type.returnType;
+    }
+
+    if (matches.length > 1) {
+      this.checker.error("ambiguous call — multiple overloads match", expr.span);
+      return ERROR_TYPE;
+    }
+
+    // No exact match — try with assignability (widening)
+    const wideMatches: FunctionOverload[] = [];
+    for (const overload of overloads) {
+      const params = overload.type.params;
+      if (params.length !== argTypes.length) continue;
+
+      let allAssignable = true;
+      for (let i = 0; i < params.length; i++) {
+        const paramType = params[i]?.type;
+        const argType = argTypes[i];
+        if (!paramType || !argType || !isAssignableTo(argType, paramType)) {
+          allAssignable = false;
+          break;
+        }
+      }
+      if (allAssignable) wideMatches.push(overload);
+    }
+
+    if (wideMatches.length === 1) {
+      const matched = wideMatches[0]!;
+      this.checker.setExprType(expr.callee, matched.type);
+
+      for (let i = 0; i < expr.args.length; i++) {
+        const arg = expr.args[i];
+        if (matched.type.params[i]?.isMove && arg?.kind === "MoveExpr") {
+          const moveExpr = arg as MoveExpr;
+          if (moveExpr.operand.kind === "Identifier") {
+            this.checker.markVariableMoved(moveExpr.operand.name);
+          }
+        }
+      }
+
+      if (matched.type.throwsTypes.length > 0) {
+        this.checker.flagThrowsCall(expr, matched.type);
+      }
+
+      return matched.type.returnType;
+    }
+
+    if (wideMatches.length > 1) {
+      this.checker.error("ambiguous call — multiple overloads match", expr.span);
+      return ERROR_TYPE;
+    }
+
+    // No match at all
+    const argStr = argTypes.map((t) => typeToString(t)).join(", ");
+    this.checker.error(`no matching overload for call with arguments (${argStr})`, expr.span);
     return ERROR_TYPE;
   }
 

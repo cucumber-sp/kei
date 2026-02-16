@@ -3,7 +3,7 @@
  * Implements nested lexical scopes with symbol lookup.
  */
 
-import type { ScopeSymbol } from "./symbols.ts";
+import type { FunctionOverload, FunctionSymbol, ScopeSymbol } from "./symbols.ts";
 import { SymbolKind } from "./symbols.ts";
 import type { FunctionType } from "./types.ts";
 
@@ -25,13 +25,70 @@ export class Scope {
     this.functionContext = options.functionContext ?? parent?.functionContext ?? null;
   }
 
-  /** Define a symbol in this scope. Returns false if already defined in THIS scope. */
+  /** Define a symbol in this scope. Returns false if already defined in THIS scope.
+   *  For function symbols, allows overloading: adds to the existing overload set
+   *  if the name already maps to a function. Returns false only for exact signature duplicates
+   *  or name collisions with non-function symbols. */
   define(symbol: ScopeSymbol): boolean {
-    if (this.symbols.has(symbol.name)) {
+    const existing = this.symbols.get(symbol.name);
+    if (existing) {
+      // Allow function overloading: same name, different param signatures
+      if (existing.kind === SymbolKind.Function && symbol.kind === SymbolKind.Function) {
+        return this.addOverload(existing, symbol);
+      }
       return false;
     }
     this.symbols.set(symbol.name, symbol);
     return true;
+  }
+
+  /** Add an overload to an existing function symbol. Returns false if exact signature already exists. */
+  private addOverload(existing: FunctionSymbol, newSym: FunctionSymbol): boolean {
+    const newOverload = newSym.overloads[0];
+    if (!newOverload) return false;
+
+    // Check for duplicate signature (same param count and exact param types)
+    for (const overload of existing.overloads) {
+      if (this.signaturesMatch(overload.type, newOverload.type)) {
+        return false; // Exact same signature — duplicate
+      }
+    }
+
+    existing.overloads.push(newOverload);
+    return true;
+  }
+
+  /** Check if two function signatures have the same param types (ignoring return type). */
+  private signaturesMatch(a: FunctionType, b: FunctionType): boolean {
+    if (a.params.length !== b.params.length) return false;
+    for (let i = 0; i < a.params.length; i++) {
+      const ap = a.params[i];
+      const bp = b.params[i];
+      if (!ap || !bp) return false;
+      if (!this.typesEqualForOverload(ap.type, bp.type)) return false;
+    }
+    return true;
+  }
+
+  /** Structural type equality check for overload resolution. */
+  private typesEqualForOverload(a: import("./types.ts").Type, b: import("./types.ts").Type): boolean {
+    if (a.kind !== b.kind) return false;
+    switch (a.kind) {
+      case "int":
+        return a.bits === (b as any).bits && a.signed === (b as any).signed;
+      case "float":
+        return a.bits === (b as any).bits;
+      case "bool": case "void": case "string": case "null": case "error": case "c_char":
+        return true;
+      case "struct":
+        return a.name === (b as any).name;
+      case "enum":
+        return a.name === (b as any).name;
+      case "type_param":
+        return a.name === (b as any).name;
+      default:
+        return a.kind === b.kind;
+    }
   }
 
   /** Look up a symbol by name, searching up through parent scopes. */

@@ -465,11 +465,13 @@ function emitInst(inst: KirInst): string {
 }
 
 function emitCallTarget(func: string): string {
-  // Map built-in print to our runtime
-  if (func === "print") return "kei_print_string";
-  if (func === "print_int") return "kei_print_int";
-  if (func === "print_float") return "kei_print_float";
+  // Map built-in print overloads to C runtime functions
+  if (func === "print_string") return "kei_print_string";
+  if (func === "print_i32" || func === "print_i64") return "kei_print_int";
+  if (func === "print_f64") return "kei_print_float";
   if (func === "print_bool") return "kei_print_bool";
+  // Legacy: unmangled print (backward compatibility)
+  if (func === "print") return "kei_print_string";
   return sanitizeName(func);
 }
 
