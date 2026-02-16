@@ -977,12 +977,17 @@ export class KirLowerer {
   }
 
   private lowerCallExpr(expr: CallExpr): VarId {
-    // Compile-time sizeof resolution
+    // sizeof(Type) → KIR sizeof instruction (resolved by backend)
     if (expr.callee.kind === "Identifier" && expr.callee.name === "sizeof" && expr.args.length === 1) {
       const arg = expr.args[0];
-      const size = this.resolveSizeofArg(arg);
+      let kirType: import("./kir-types.ts").KirType;
+      if (arg && arg.kind === "Identifier") {
+        kirType = this.lowerTypeNode({ kind: "NamedType", name: arg.name, span: arg.span });
+      } else {
+        kirType = { kind: "int", bits: 32, signed: true };
+      }
       const dest = this.freshVar();
-      this.emit({ kind: "const_int", dest, type: { kind: "int", bits: 64, signed: false }, value: size });
+      this.emit({ kind: "sizeof", dest, type: kirType });
       return dest;
     }
 
