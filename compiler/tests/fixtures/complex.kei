@@ -1,0 +1,150 @@
+// Complex Kei program exercising all major syntax features
+
+import math;
+import { HashMap, List } from collections;
+
+static MAX_USERS = 1000;
+pub static VERSION = 1;
+
+pub type UserId = int;
+
+pub enum Color : u8 {
+    Red = 0,
+    Green = 1,
+    Blue = 2
+}
+
+enum Shape {
+    Circle(radius: f64),
+    Rectangle(width: f64, height: f64),
+    Point
+}
+
+pub struct Point {
+    x: f64;
+    y: f64;
+
+    fn length(self: Point) -> f64 {
+        return self.x * self.x + self.y * self.y;
+    }
+
+    fn translate(self: ptr<Point>, dx: f64, dy: f64) {
+        self.*.x = self.*.x + dx;
+        self.*.y = self.*.y + dy;
+    }
+}
+
+struct Pair<A, B> {
+    first: A;
+    second: B;
+}
+
+pub unsafe struct Buffer {
+    data: ptr<u8>;
+    size: usize;
+
+    fn __destroy(self: Buffer) {
+        unsafe {
+            free(self.data);
+        }
+    }
+
+    fn __oncopy(self: Buffer) -> Buffer {
+        let new_data = malloc(self.size);
+        return Buffer{ data: new_data, size: self.size };
+    }
+}
+
+struct NotFound {}
+struct DbError {
+    message: string;
+    code: int;
+}
+
+extern fn malloc(size: usize) -> ptr<u8>;
+extern fn free(p: ptr<u8>);
+
+pub fn add(a: int, b: int) -> int {
+    return a + b;
+}
+
+fn identity<T>(x: T) -> T {
+    return x;
+}
+
+fn getUser(id: int) -> int throws NotFound, DbError {
+    if id < 0 {
+        throw NotFound{};
+    }
+    return id;
+}
+
+fn main() -> int {
+    let x = 42;
+    let y: int = 10;
+    const PI = 3.14159;
+
+    let sum = x + y * 2;
+    let flag = x > 0 && y < 100;
+
+    let result = if x > y { x } else { y };
+
+    let p = Point{ x: 1.0, y: 2.0 };
+    let len = p.length();
+
+    let user = getUser(10) catch {
+        NotFound: return -1;
+        DbError e: return -2;
+    };
+
+    let safe = getUser(5) catch panic;
+
+    for i in 0..10 {
+        assert(i >= 0);
+    }
+
+    let count = 0;
+    while count < 10 {
+        count = count + 1;
+        if count == 5 {
+            continue;
+        }
+        if count == 8 {
+            break;
+        }
+    }
+
+    switch count {
+        case 1: x = 10;
+        case 2, 3: x = 20;
+        default: x = 0;
+    }
+
+    require(x >= 0, "x must be non-negative");
+
+    defer cleanup();
+
+    unsafe {
+        let raw = malloc(1024);
+        free(raw);
+    }
+
+    let moved = move p;
+
+    x++;
+    y--;
+
+    let addr = &x;
+    let bits = ~x;
+    let neg = -x;
+    let not_flag = !flag;
+
+    x += 10;
+    x -= 5;
+    x <<= 2;
+
+    return 0;
+}
+
+fn cleanup() {
+}

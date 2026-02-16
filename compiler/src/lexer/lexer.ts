@@ -220,8 +220,8 @@ export class Lexer {
     // Decimal number
     this.consumeDigits(isDigit);
 
-    // Check for float
-    if (this.peek() === "." && this.peek(1) !== "*") {
+    // Check for float (but not range `..` or deref `.*`)
+    if (this.peek() === "." && this.peek(1) !== "*" && this.peek(1) !== ".") {
       // Could be float or just integer followed by dot
       const nextAfterDot = this.peek(1);
       if (
@@ -551,6 +551,14 @@ export class Lexer {
       case "~":
         return this.makeToken(TokenKind.Tilde, start, this.pos);
       case ".":
+        if (this.peek() === ".") {
+          this.pos++;
+          if (this.peek() === "=") {
+            this.pos++;
+            return this.makeToken(TokenKind.DotDotEqual, start, this.pos);
+          }
+          return this.makeToken(TokenKind.DotDot, start, this.pos);
+        }
         if (this.peek() === "*") {
           this.pos++;
           return this.makeToken(TokenKind.DotStar, start, this.pos);

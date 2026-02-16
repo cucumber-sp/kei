@@ -154,6 +154,8 @@ export enum TokenKind {
 
   // Other operators
   Dot = ".",
+  DotDot = "..",
+  DotDotEqual = "..=",
   Arrow = "->",
   FatArrow = "=>",
   DotStar = ".*",
