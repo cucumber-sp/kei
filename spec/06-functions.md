@@ -131,17 +131,31 @@ fn factorial(n: int) -> int {
 External C functions are declared with `extern`:
 
 ```kei
-extern fn malloc(size: usize) -> ptr<u8>;
-extern fn free(ptr: ptr<u8>);
+extern fn strlen(s: ptr<c_char>) -> usize;
+extern fn memcpy(dest: ptr<u8>, src: ptr<u8>, n: usize) -> ptr<u8>;
+extern fn sqlite3_open(filename: ptr<c_char>, db: ptr<ptr<void>>) -> int;
+```
+
+### Calling extern functions requires `unsafe`
+
+The compiler cannot verify safety of foreign code, so all `extern fn` calls must be inside an `unsafe` block:
+
+```kei
 extern fn strlen(s: ptr<c_char>) -> usize;
 
-// Kei wrapper for safer usage
-fn allocateBytes(count: usize) -> ptr<u8> {
-    let ptr = malloc(count);
-    if ptr == null {
-        panic("allocation failed");
-    }
-    return ptr;
+fn stringLength(s: ptr<c_char>) -> usize {
+    return unsafe { strlen(s) };  // must be in unsafe block
+}
+```
+
+This is intentional — calling into C is inherently unsafe (no bounds checking, no lifetime guarantees, possible UB). Safe wrappers expose a safe API:
+
+```kei
+extern fn c_abs(x: i32) -> i32;
+
+// Safe wrapper — users call this without unsafe
+pub fn abs(x: i32) -> i32 {
+    return unsafe { c_abs(x) };
 }
 ```
 

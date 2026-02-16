@@ -193,23 +193,61 @@ createUser(name, 25, &user);
 - No unnecessary `__oncopy`/`__destroy` calls
 - Direct construction at the destination
 
-## `unsafe` blocks
+## Built-in memory functions
 
-For scenarios requiring manual memory management, use `unsafe` blocks:
+Kei provides built-in functions for heap allocation. These are part of the language (not extern), but require `unsafe` because manual memory management bypasses safety guarantees:
+
+### `alloc<T>(count: usize) -> ptr<T>`
+
+Allocates `count * sizeof(T)` bytes of heap memory and returns a typed pointer. Memory is uninitialized.
 
 ```kei
 unsafe {
-    let raw: ptr<u8> = c_malloc(1024);
-    // raw pointer arithmetic allowed
-    let offset_ptr = raw + 512;
-    c_free(raw);
+    let data = alloc<u8>(1024);       // allocate 1024 bytes
+    let users = alloc<User>(10);      // allocate space for 10 Users
 }
 ```
 
-**Allowed in unsafe blocks:**
+### `free<T>(p: ptr<T>)`
+
+Frees memory previously allocated with `alloc`. Does not call `__destroy` on pointed-to values — the programmer is responsible for cleanup.
+
+```kei
+unsafe {
+    let data = alloc<u8>(1024);
+    // ... use data ...
+    free(data);
+}
+```
+
+**Why built-in, not extern?** `alloc`/`free` are aware of the Kei runtime (type sizes via `sizeof`, alignment). They compile down to C `malloc`/`free` but provide a typed interface. The compiler knows about them and can emit diagnostics (e.g., warning on double-free patterns).
+
+### `sizeof(T) -> usize`
+
+Returns the size in bytes of a type. Compile-time constant:
+
+```kei
+let size = sizeof(int);        // 4
+let user_size = sizeof(User);  // depends on fields
+```
+
+## `unsafe` blocks
+
+`unsafe` blocks allow operations that bypass the compiler's safety guarantees:
+
+```kei
+unsafe {
+    let raw = alloc<u8>(1024);
+    // raw pointer arithmetic
+    let offset_ptr = raw + 512;
+    free(raw);
+}
+```
+
+**Allowed only in unsafe blocks:**
+- Calling `alloc`/`free`
+- Calling `extern fn` functions
 - Raw pointer arithmetic
-- Manual allocation/deallocation
-- External function calls
 - Pointer type casts
 - Direct memory access without bounds checking
 
@@ -277,8 +315,8 @@ unsafe struct string {
     fn __destroy(self: string) {
         self.count.decrement();
         if (self.count.value == 0) {
-            c_free(self.ptr);
-            c_free(self.count);
+            free(self.ptr);
+            free(self.count);
         }
     }
 }
@@ -302,8 +340,8 @@ unsafe struct Shared<T> {
         self.count.decrement();
         if (self.count.value == 0) {
             self.ptr.destroy();
-            c_free(self.ptr);
-            c_free(self.count);
+            free(self.ptr);
+            free(self.count);
         }
     }
 }
@@ -328,8 +366,8 @@ unsafe struct array<T> {
             for i in 0..self.len {
                 self.data[i].__destroy();
             }
-            c_free(self.data);
-            c_free(self.count);
+            free(self.data);
+            free(self.count);
         }
     }
 
@@ -354,7 +392,7 @@ unsafe struct List<T> {
 
     fn __oncopy(self: List<T>) -> List<T> {
         // Deep copy — allocates new buffer, copies all elements
-        let new_data = c_malloc(self.cap * sizeof(T));
+        let new_data = alloc<T>(self.cap);
         for i in 0..self.len {
             new_data[i] = self.data[i];
             new_data[i].__oncopy();
@@ -366,7 +404,7 @@ unsafe struct List<T> {
         for i in 0..self.len {
             self.data[i].__destroy();
         }
-        c_free(self.data);
+        free(self.data);
     }
 }
 ```

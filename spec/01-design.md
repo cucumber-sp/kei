@@ -56,8 +56,8 @@ fn parseJson(input: string) -> Data throws ParseError {
     // Implementation
 }
 
-// External C function - explicit 'extern'
-extern fn malloc(size: usize) -> ptr<u8>;
+// External C function - requires unsafe to call
+extern fn sqlite3_open(filename: ptr<c_char>, db: ptr<ptr<void>>) -> int;
 ```
 
 ## Two worlds of data
@@ -109,13 +109,13 @@ unsafe struct RawBuffer {
 
     fn __destroy(self: RawBuffer) {
         if (self.data != null) {
-            c_free(self.data);
+            free(self.data);
         }
     }
 
     fn __oncopy(self: RawBuffer) -> RawBuffer {
-        let new_data = c_malloc(self.size);
-        c_memcpy(new_data, self.data, self.size);
+        let new_data = alloc<u8>(self.size);
+        memcpy(new_data, self.data, self.size);
         return RawBuffer{ data: new_data, size: self.size };
     }
 }

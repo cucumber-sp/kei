@@ -50,7 +50,7 @@ pub unsafe struct Buffer {
     }
 
     fn __oncopy(self: Buffer) -> Buffer {
-        let new_data = unsafe { malloc(self.size) };
+        let new_data = unsafe { alloc(self.size) };
         return Buffer{ data: new_data, size: self.size };
     }
 }
@@ -61,8 +61,7 @@ struct DbError {
     code: int;
 }
 
-extern fn malloc(size: usize) -> ptr<u8>;
-extern fn free(p: ptr<u8>);
+extern fn puts(s: ptr<c_char>) -> int;
 
 pub fn add(a: int, b: int) -> int {
     return a + b;
@@ -125,7 +124,7 @@ fn main() -> int {
     defer cleanup();
 
     unsafe {
-        let raw = malloc(1024);
+        let raw = alloc(1024);
         free(raw);
     }
 

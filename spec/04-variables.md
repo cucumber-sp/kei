@@ -41,7 +41,7 @@ static PAGE_SIZE = 4096;
 static PI = 3.14159;
 
 fn allocatePage() -> ptr<u8> {
-    return malloc(PAGE_SIZE);  // inlined as malloc(4096)
+    return unsafe { alloc<u8>(PAGE_SIZE) };  // inlined as alloc<u8>(4096)
 }
 ```
 

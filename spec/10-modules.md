@@ -150,11 +150,7 @@ Kei can interface with C libraries through external function declarations and un
 Declare C functions using `extern fn`:
 
 ```kei
-extern fn malloc(size: usize) -> ptr<void>;
-extern fn free(ptr: ptr<void>);
 extern fn printf(fmt: ptr<c_char>, ...) -> int;
-
-// C string functions
 extern fn strlen(s: ptr<c_char>) -> usize;
 extern fn strcpy(dest: ptr<c_char>, src: ptr<c_char>) -> ptr<c_char>;
 ```
@@ -164,6 +160,17 @@ extern fn strcpy(dest: ptr<c_char>, src: ptr<c_char>) -> ptr<c_char>;
 - Uses C calling convention
 - May use `ptr<T>` freely (FFI boundary)
 - Supports variadic arguments (`...`)
+- **Calling requires `unsafe` block** — compiler cannot verify foreign code safety
+
+```kei
+extern fn strlen(s: ptr<c_char>) -> usize;
+
+fn safeStrlen(s: ptr<c_char>) -> usize {
+    return unsafe { strlen(s) };
+}
+```
+
+**Note:** For heap allocation, use Kei's built-in `alloc<T>`/`free` instead of C `malloc`/`free`. See the Memory Model section.
 
 ### Safe C library wrappers
 
@@ -290,7 +297,8 @@ fn printString(message: string) {
 - Kei manages Kei-allocated memory
 - C manages C-allocated memory  
 - Use `unsafe struct` wrappers to manage C resources
-- Always pair C allocation functions (malloc/free, open/close, etc.)
+- Always pair C resource functions (fopen/fclose, open/close, etc.)
+- Use Kei's `alloc`/`free` for Kei-managed heap memory
 
 ```kei
 extern fn fopen(filename: ptr<c_char>, mode: ptr<c_char>) -> ptr<void>;

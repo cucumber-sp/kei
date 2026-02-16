@@ -109,7 +109,7 @@ unsafe struct FileHandle {
 
     fn __destroy(self: FileHandle) {
         if (self.buffer != null) {
-            c_free(self.buffer);
+            free(self.buffer);
         }
         if (self.fd >= 0) {
             close_fd(self.fd);
@@ -117,8 +117,8 @@ unsafe struct FileHandle {
     }
 
     fn __oncopy(self: FileHandle) -> FileHandle {
-        let new_buf = c_malloc(self.buf_size);
-        c_memcpy(new_buf, self.buffer, self.buf_size);
+        let new_buf = alloc<u8>(self.buf_size);
+        memcpy(new_buf, self.buffer, self.buf_size);
         return FileHandle{
             fd: dup(self.fd),
             buffer: new_buf,
@@ -146,7 +146,7 @@ unsafe struct FileHandle {
 ### When hooks are called
 
 ```kei
-let a = FileHandle{ fd: 5, buffer: malloc(1024), buf_size: 1024 };
+let a = FileHandle{ fd: 5, buffer: alloc<u8>(1024), buf_size: 1024 };
 let b = a;              // __oncopy called
 b = other_handle;       // __destroy on old b, __oncopy on new value
 ```
@@ -172,7 +172,7 @@ user.name = "new name";
 Use the `move` keyword to transfer ownership without calling `__oncopy`:
 
 ```kei
-let a = FileHandle{ fd: 5, buffer: malloc(1024), buf_size: 1024 };
+let a = FileHandle{ fd: 5, buffer: alloc<u8>(1024), buf_size: 1024 };
 let b = move a;     // no __oncopy, a becomes invalid
 // a.fd              // ERROR - a was moved
 ```
@@ -193,8 +193,8 @@ unsafe struct Shared<T> {
         self.count.decrement();
         if (self.count.value == 0) {
             self.ptr.destroy();
-            c_free(self.ptr);
-            c_free(self.count);
+            free(self.ptr);
+            free(self.count);
         }
     }
 }
@@ -275,7 +275,7 @@ let user = User{
 // Unsafe struct
 let handle = FileHandle{
     fd: open_file("data.txt"),
-    buffer: malloc(4096),
+    buffer: alloc<u8>(4096),
     buf_size: 4096
 };
 ```

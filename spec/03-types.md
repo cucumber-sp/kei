@@ -118,8 +118,8 @@ unsafe struct Shared<T> {
         self.count.decrement();
         if (self.count.value == 0) {
             self.ptr.destroy();
-            c_free(self.ptr);
-            c_free(self.count);
+            free(self.ptr);
+            free(self.count);
         }
     }
 }
