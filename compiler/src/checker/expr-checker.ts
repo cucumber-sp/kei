@@ -71,6 +71,21 @@ const BITWISE_OPS = new Set(["&", "|", "^", "<<", ">>"]);
 const COMPOUND_ASSIGN_OPS = new Set(["+=", "-=", "*=", "/=", "%="]);
 const COMPOUND_BITWISE_OPS = new Set(["&=", "|=", "^=", "<<=", ">>="]);
 
+/** Maps binary operators to their corresponding operator method names on structs. */
+const BINARY_OP_METHODS: Record<string, string> = {
+  "+": "op_add",
+  "-": "op_sub",
+  "*": "op_mul",
+  "/": "op_div",
+  "%": "op_mod",
+  "==": "op_eq",
+  "!=": "op_neq",
+  "<": "op_lt",
+  ">": "op_gt",
+  "<=": "op_le",
+  ">=": "op_ge",
+};
+
 export class ExpressionChecker {
   private checker: Checker;
 
@@ -208,6 +223,15 @@ export class ExpressionChecker {
       return STRING_TYPE;
     }
 
+    // Operator overloading: if left operand is a struct, look for operator method
+    const opMethodName = BINARY_OP_METHODS[op];
+    if (opMethodName && left.kind === TypeKind.Struct) {
+      const method = left.methods.get(opMethodName);
+      if (method) {
+        return this.resolveOperatorMethod(expr, left, method, opMethodName, right);
+      }
+    }
+
     // Arithmetic operators
     if (ARITHMETIC_OPS.has(op)) {
       if (!isNumericType(left)) {
@@ -311,6 +335,27 @@ export class ExpressionChecker {
 
     switch (expr.operator) {
       case "-":
+        // Operator overloading: unary minus on struct → op_neg
+        if (operand.kind === TypeKind.Struct) {
+          const method = operand.methods.get("op_neg");
+          if (method) {
+            // op_neg takes only self, no extra args
+            if (method.params.length !== 1) {
+              this.checker.error(
+                `'op_neg' method must take exactly 1 parameter (self), got ${method.params.length}`,
+                expr.span
+              );
+              return ERROR_TYPE;
+            }
+            this.checker.operatorMethods.set(expr, { methodName: "op_neg", structType: operand });
+            return method.returnType;
+          }
+          this.checker.error(
+            `unary '-' requires numeric operand, got '${typeToString(operand)}'`,
+            expr.span
+          );
+          return ERROR_TYPE;
+        }
         if (!isNumericType(operand)) {
           this.checker.error(
             `unary '-' requires numeric operand, got '${typeToString(operand)}'`,
@@ -907,6 +952,31 @@ export class ExpressionChecker {
 
     if (isErrorType(objectType) || isErrorType(indexType)) return ERROR_TYPE;
 
+    // Operator overloading: struct with op_index
+    if (objectType.kind === TypeKind.Struct) {
+      const method = objectType.methods.get("op_index");
+      if (method) {
+        // op_index takes self + index param
+        if (method.params.length !== 2) {
+          this.checker.error(
+            `'op_index' method must take exactly 2 parameters (self, index), got ${method.params.length}`,
+            expr.span
+          );
+          return ERROR_TYPE;
+        }
+        const indexParam = method.params[1]!;
+        if (!isAssignableTo(indexType, indexParam.type)) {
+          this.checker.error(
+            `index type mismatch: expected '${typeToString(indexParam.type)}', got '${typeToString(indexType)}'`,
+            expr.span
+          );
+          return ERROR_TYPE;
+        }
+        this.checker.operatorMethods.set(expr, { methodName: "op_index", structType: objectType });
+        return method.returnType;
+      }
+    }
+
     if (
       objectType.kind !== TypeKind.Array &&
       objectType.kind !== TypeKind.Slice &&
@@ -960,6 +1030,44 @@ export class ExpressionChecker {
     const op = expr.operator;
 
     if (op === "=") {
+      // Operator overloading: a[i] = v → op_index_set(self, index, value)
+      if (expr.target.kind === "IndexExpr") {
+        const indexExpr = expr.target;
+        const objectType = this.checker.typeMap.get(indexExpr.object);
+        if (objectType && objectType.kind === TypeKind.Struct) {
+          const method = objectType.methods.get("op_index_set");
+          if (method) {
+            // op_index_set takes self + index + value (3 params)
+            if (method.params.length !== 3) {
+              this.checker.error(
+                `'op_index_set' method must take exactly 3 parameters (self, index, value), got ${method.params.length}`,
+                expr.span
+              );
+              return ERROR_TYPE;
+            }
+            const indexType = this.checker.typeMap.get(indexExpr.index);
+            const indexParam = method.params[1]!;
+            if (indexType && !isAssignableTo(indexType, indexParam.type)) {
+              this.checker.error(
+                `index type mismatch: expected '${typeToString(indexParam.type)}', got '${typeToString(indexType)}'`,
+                expr.span
+              );
+              return ERROR_TYPE;
+            }
+            const valueParam = method.params[2]!;
+            if (!isAssignableTo(valueType, valueParam.type)) {
+              this.checker.error(
+                `value type mismatch: expected '${typeToString(valueParam.type)}', got '${typeToString(valueType)}'`,
+                expr.span
+              );
+              return ERROR_TYPE;
+            }
+            this.checker.operatorMethods.set(expr, { methodName: "op_index_set", structType: objectType });
+            return method.returnType;
+          }
+        }
+      }
+
       if (!isAssignableTo(valueType, targetType)) {
         // Check if this is a literal that can be implicitly converted
         const litInfo = extractLiteralInfo(expr.value);
@@ -1149,19 +1257,32 @@ export class ExpressionChecker {
       concreteFields.set(fieldName, substituteType(fieldType, typeMap));
     }
 
-    const concreteMethods = new Map<string, FunctionType>();
-    for (const [methodName, methodType] of baseStruct.methods) {
-      concreteMethods.set(methodName, substituteFunctionType(methodType, typeMap));
-    }
-
+    // Create concrete struct first (methods added after so self-references resolve)
     const concreteStruct: StructType = {
       kind: TypeKind.Struct,
       name: mangledName,
       fields: concreteFields,
-      methods: concreteMethods,
+      methods: new Map(),
       isUnsafe: baseStruct.isUnsafe,
       genericParams: [],
     };
+
+    // Substitute method types, replacing self-referential struct types with the concrete struct
+    const isSelfRef = (t: Type) =>
+      t.kind === TypeKind.Struct &&
+      (t.name === baseStruct.name || t.name.startsWith(baseStruct.name + "_"));
+    for (const [methodName, methodType] of baseStruct.methods) {
+      const subbed = substituteFunctionType(methodType, typeMap);
+      const fixedParams = subbed.params.map((p) =>
+        isSelfRef(p.type) ? { ...p, type: concreteStruct } : p
+      );
+      const fixedReturn = isSelfRef(subbed.returnType) ? concreteStruct : subbed.returnType;
+      concreteStruct.methods.set(methodName, {
+        ...subbed,
+        params: fixedParams,
+        returnType: fixedReturn,
+      });
+    }
 
     this.checker.registerMonomorphizedStruct(mangledName, {
       original: baseStruct,
@@ -1227,25 +1348,37 @@ export class ExpressionChecker {
       const cached = this.checker.getMonomorphizedStruct(mangledName);
       if (cached) return cached.concrete;
 
-      // Create concrete struct type
+      // Create concrete struct type (methods added after so self-references resolve)
       const newFields = new Map<string, Type>();
       for (const [fieldName, fieldType] of structType.fields) {
         newFields.set(fieldName, substituteType(fieldType, subs));
-      }
-
-      const concreteMethods = new Map<string, FunctionType>();
-      for (const [methodName, methodType] of structType.methods) {
-        concreteMethods.set(methodName, substituteFunctionType(methodType, subs));
       }
 
       const concreteStruct: StructType = {
         kind: TypeKind.Struct,
         name: mangledName,
         fields: newFields,
-        methods: concreteMethods,
+        methods: new Map(),
         isUnsafe: structType.isUnsafe,
         genericParams: [],
       };
+
+      // Substitute method types, replacing self-referential struct types with the concrete struct
+      const isSelfRef = (t: Type) =>
+        t.kind === TypeKind.Struct &&
+        (t.name === structType.name || t.name.startsWith(structType.name + "_"));
+      for (const [methodName, methodType] of structType.methods) {
+        const subbed = substituteFunctionType(methodType, subs);
+        const fixedParams = subbed.params.map((p) =>
+          isSelfRef(p.type) ? { ...p, type: concreteStruct } : p
+        );
+        const fixedReturn = isSelfRef(subbed.returnType) ? concreteStruct : subbed.returnType;
+        concreteStruct.methods.set(methodName, {
+          ...subbed,
+          params: fixedParams,
+          returnType: fixedReturn,
+        });
+      }
 
       this.checker.registerMonomorphizedStruct(mangledName, {
         original: structType,
@@ -1660,5 +1793,39 @@ export class ExpressionChecker {
     }
 
     return arrayType(firstType, expr.elements.length);
+  }
+
+  /**
+   * Resolve a binary operator overload method call on a struct.
+   * Validates the right operand against the method's second parameter,
+   * records the resolution in operatorMethods, and returns the method's return type.
+   */
+  private resolveOperatorMethod(
+    expr: Expression,
+    structType: StructType,
+    method: FunctionType,
+    methodName: string,
+    rightType: Type
+  ): Type {
+    // Operator method should have exactly 2 params: self + rhs
+    if (method.params.length !== 2) {
+      this.checker.error(
+        `'${methodName}' method must take exactly 2 parameters (self, rhs), got ${method.params.length}`,
+        expr.span
+      );
+      return ERROR_TYPE;
+    }
+
+    const rhsParam = method.params[1]!;
+    if (!isAssignableTo(rightType, rhsParam.type)) {
+      this.checker.error(
+        `operator method '${methodName}': expected '${typeToString(rhsParam.type)}' for right operand, got '${typeToString(rightType)}'`,
+        expr.span
+      );
+      return ERROR_TYPE;
+    }
+
+    this.checker.operatorMethods.set(expr, { methodName, structType });
+    return method.returnType;
   }
 }

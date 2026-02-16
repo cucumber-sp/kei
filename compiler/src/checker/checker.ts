@@ -31,6 +31,7 @@ import { TypeKind, typeToString } from "./types.ts";
 export interface CheckResult {
   diagnostics: Diagnostic[];
   typeMap: Map<Expression, Type>;
+  operatorMethods: Map<Expression, { methodName: string; structType: StructType }>;
 }
 
 /** Info about a module to check in multi-module mode */
@@ -51,6 +52,8 @@ export interface MultiModuleCheckResult {
   diagnostics: Diagnostic[];
   /** Public symbols exported by each module */
   moduleExports: Map<string, Map<string, ScopeSymbol>>;
+  /** Combined operator method resolution info */
+  operatorMethods: Map<Expression, { methodName: string; structType: StructType }>;
 }
 
 export class Checker {
@@ -75,6 +78,9 @@ export class Checker {
 
   /** Cache of monomorphized function types, keyed by mangled name */
   private monomorphizedFunctions: Map<string, MonomorphizedFunction> = new Map();
+
+  /** Operator overload resolution info: maps expression nodes to their resolved operator method */
+  operatorMethods: Map<Expression, { methodName: string; structType: StructType }> = new Map();
 
   constructor(program: Program, source: SourceFile) {
     this.program = program;
@@ -176,6 +182,7 @@ export class Checker {
     return {
       diagnostics: this.diagnostics,
       typeMap: this.typeMap,
+      operatorMethods: this.operatorMethods,
     };
   }
 
@@ -188,6 +195,7 @@ export class Checker {
     const allResults = new Map<string, CheckResult>();
     const combinedTypeMap = new Map<Expression, Type>();
     const combinedDiags: Diagnostic[] = [];
+    const combinedOpMethods = new Map<Expression, { methodName: string; structType: StructType }>();
 
     for (const mod of modules) {
       const checker = new Checker(mod.program, mod.source);
@@ -196,9 +204,12 @@ export class Checker {
       const result = checker.check();
       allResults.set(mod.name, result);
 
-      // Merge type maps and diagnostics
+      // Merge type maps, diagnostics, and operator methods
       for (const [expr, type] of result.typeMap) {
         combinedTypeMap.set(expr, type);
+      }
+      for (const [expr, info] of result.operatorMethods) {
+        combinedOpMethods.set(expr, info);
       }
       combinedDiags.push(...result.diagnostics);
 
@@ -212,6 +223,7 @@ export class Checker {
       typeMap: combinedTypeMap,
       diagnostics: combinedDiags,
       moduleExports,
+      operatorMethods: combinedOpMethods,
     };
   }
 
