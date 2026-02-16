@@ -68,6 +68,11 @@ function emitCTypeForDecl(t: KirType, varName: string): string {
   if (t.kind === "array") {
     return `${emitCType(t.element)} ${varName}[${t.length}]`;
   }
+  // Special case: error union buffer for catch expressions
+  if (t.kind === "struct" && t.name.startsWith("__err_union_")) {
+    const members = t.fields.map(f => `${emitCType(f.type)} ${sanitizeName(f.name)};`).join(" ");
+    return `union { ${members} } ${varName}`;
+  }
   return `${emitCType(t)} ${varName}`;
 }
 
@@ -180,6 +185,7 @@ function emitGlobal(g: KirGlobal): string {
 
 function emitFunctionPrototype(fn: KirFunction): string {
   const name = fn.name === "main" ? "main" : sanitizeName(fn.name);
+  const isThrows = fn.throwsTypes && fn.throwsTypes.length > 0;
   const retType = fn.name === "main" ? "int" : emitCType(fn.returnType);
   const params =
     fn.params.length === 0
@@ -231,17 +237,40 @@ function collectVarDecls(fn: KirFunction): Map<string, KirType> {
   // Don't re-declare params
   const paramNames = new Set(fn.params.map((p) => varName(p.name)));
 
+  // Track errPtr → error types mapping from call_throws for proper sizing
+  const errPtrErrorTypes = new Map<string, KirType[]>();
+  for (const block of fn.blocks) {
+    for (const inst of block.instructions) {
+      if (inst.kind === "call_throws") {
+        errPtrErrorTypes.set(varName(inst.errPtr), inst.errorTypes);
+      }
+    }
+  }
+
   for (const block of fn.blocks) {
     for (const inst of block.instructions) {
       // For stack_alloc, also declare backing storage variable
       if (inst.kind === "stack_alloc") {
         const allocName = `${varName(inst.dest)}_alloc`;
-        decls.set(allocName, inst.type);
+        const vn = varName(inst.dest);
+        // Check if this alloc is an error buffer for a call_throws
+        const errorTypes = errPtrErrorTypes.get(vn);
+        if (errorTypes && errorTypes.length > 0) {
+          // Use a special "err_union" struct type that will be emitted as a union
+          decls.set(allocName, { kind: "struct", name: `__err_union_${allocName}`, fields: errorTypes.map((t, i) => ({ name: `e${i}`, type: t })) });
+        } else {
+          decls.set(allocName, inst.type);
+        }
       }
       const dest = getInstDest(inst);
       const type = getInstType(inst);
       if (dest && type && !paramNames.has(varName(dest))) {
-        decls.set(varName(dest), type);
+        // Override errPtr pointer type to void* for clean casting
+        if (inst.kind === "stack_alloc" && errPtrErrorTypes.has(varName(inst.dest))) {
+          decls.set(varName(inst.dest), { kind: "ptr", pointee: { kind: "void" } });
+        } else {
+          decls.set(varName(dest), type);
+        }
       }
     }
   }
@@ -269,6 +298,7 @@ function getInstDest(inst: KirInst): VarId | null {
     case "cast":
     case "sizeof":
     case "move":
+    case "call_throws":
       return inst.dest;
     default:
       return null;
@@ -313,6 +343,8 @@ function getInstType(inst: KirInst): KirType | null {
       return { kind: "int", bits: 64, signed: false };
     case "move":
       return inst.type;
+    case "call_throws":
+      return { kind: "int", bits: 32, signed: true }; // tag
     default:
       return null;
   }
@@ -417,6 +449,11 @@ function emitInst(inst: KirInst): string {
       return `${varName(inst.value)} = ${sanitizeName(inst.structName)}___oncopy(${varName(inst.value)});`;
     case "move":
       return `${varName(inst.dest)} = ${varName(inst.source)};`;
+    case "call_throws": {
+      // Call a throws function: pass original args + out ptr + err ptr
+      const allArgs = [...inst.args.map(varName), varName(inst.outPtr), varName(inst.errPtr)];
+      return `${varName(inst.dest)} = ${emitCallTarget(inst.func)}(${allArgs.join(", ")});`;
+    }
   }
 }
 
@@ -469,13 +506,15 @@ function emitTerminator(term: KirTerminator): string {
     case "br":
       return `if (${varName(term.cond)}) goto ${sanitizeName(term.thenBlock)}; else goto ${sanitizeName(term.elseBlock)};`;
     case "switch": {
-      const lines = [`switch (${varName(term.value)}) {`];
-      for (const c of term.cases) {
-        lines.push(`        case ${varName(c.value)}: goto ${sanitizeName(c.target)};`);
+      // Emit as if/else chain (case values may not be compile-time constants)
+      const lines: string[] = [];
+      for (let i = 0; i < term.cases.length; i++) {
+        const c = term.cases[i];
+        const prefix = i === 0 ? "if" : "else if";
+        lines.push(`${prefix} (${varName(term.value)} == ${varName(c.value)}) goto ${sanitizeName(c.target)};`);
       }
-      lines.push(`        default: goto ${sanitizeName(term.defaultBlock)};`);
-      lines.push("    }");
-      return lines.join("\n");
+      lines.push(`else goto ${sanitizeName(term.defaultBlock)};`);
+      return lines.join("\n    ");
     }
     case "unreachable":
       return `__builtin_unreachable();`;

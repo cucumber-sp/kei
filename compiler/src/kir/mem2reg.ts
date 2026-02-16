@@ -245,6 +245,10 @@ function findPromotableAllocas(fn: KirFunction): Map<VarId, AllocaInfo> {
         if (allocas.has(inst.base)) addressTaken.add(inst.base);
       } else if (inst.kind === "index_ptr") {
         if (allocas.has(inst.base)) addressTaken.add(inst.base);
+      } else if (inst.kind === "call_throws") {
+        // outPtr and errPtr are passed by address — not promotable
+        if (allocas.has(inst.outPtr)) addressTaken.add(inst.outPtr);
+        if (allocas.has(inst.errPtr)) addressTaken.add(inst.errPtr);
       }
     }
   }
@@ -506,6 +510,8 @@ function renameVariables(
         return { ...inst, value: resolveValue(inst.value) };
       case "move":
         return { ...inst, source: resolveValue(inst.source) };
+      case "call_throws":
+        return { ...inst, args: inst.args.map(resolveValue), outPtr: resolveValue(inst.outPtr), errPtr: resolveValue(inst.errPtr) };
       default:
         return inst;
     }
@@ -643,6 +649,8 @@ function rewriteAllUses(inst: KirInst, from: VarId, to: VarId): KirInst {
       return { ...inst, value: r(inst.value) };
     case "move":
       return { ...inst, source: r(inst.source) };
+    case "call_throws":
+      return { ...inst, args: inst.args.map(r), outPtr: r(inst.outPtr), errPtr: r(inst.errPtr) };
     default:
       return inst;
   }

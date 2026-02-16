@@ -123,6 +123,9 @@ export interface KirFunction {
   returnType: KirType;
   blocks: KirBlock[];
   localCount: number;
+  /** If non-empty, this function uses the throws protocol:
+   *  actual return type is i32 (tag), with __out and __err out-pointers appended to params */
+  throwsTypes?: KirType[];
 }
 
 export interface KirParam {
@@ -174,6 +177,7 @@ export type KirInst =
   | KirCallVoid
   | KirCallExtern
   | KirCallExternVoid
+  | KirCallThrows
   // Type ops
   | KirCast
   | KirSizeof
@@ -324,6 +328,19 @@ export interface KirCallExternVoid {
   kind: "call_extern_void";
   func: string;
   args: VarId[];
+}
+
+/** Call a function that uses the throws protocol.
+ *  The callee returns i32 tag; __out and __err pointers are appended to args by the emitter. */
+export interface KirCallThrows {
+  kind: "call_throws";
+  dest: VarId;          // receives the i32 tag
+  func: string;
+  args: VarId[];        // original args (before __out/__err)
+  outPtr: VarId;        // caller-allocated buffer for success value
+  errPtr: VarId;        // caller-allocated buffer for error value
+  successType: KirType; // type of the success value
+  errorTypes: KirType[]; // types of possible errors (for sizing the err buffer)
 }
 
 // ── Type operations ──────────────────────────────────────────────────────────

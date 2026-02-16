@@ -160,6 +160,8 @@ function printInst(inst: KirInst): string {
       return `${inst.dest} = call_extern ${inst.func}(${inst.args.join(", ")})`;
     case "call_extern_void":
       return `call_extern_void ${inst.func}(${inst.args.join(", ")})`;
+    case "call_throws":
+      return `${inst.dest} = call_throws ${inst.func}(${inst.args.join(", ")}) out=${inst.outPtr} err=${inst.errPtr}`;
     case "cast":
       return `${inst.dest} = cast ${inst.value}, ${printType(inst.targetType)}`;
     case "sizeof":
