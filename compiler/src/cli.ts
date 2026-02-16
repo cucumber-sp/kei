@@ -2,6 +2,8 @@ import { Checker } from "./checker/checker.ts";
 import { lowerToKir } from "./kir/lowering.ts";
 import { printKir } from "./kir/printer.ts";
 import { runMem2Reg } from "./kir/mem2reg.ts";
+import { runDeSsa } from "./backend/de-ssa.ts";
+import { emitC } from "./backend/c-emitter.ts";
 import { Lexer } from "./lexer/index.ts";
 import { Parser } from "./parser/index.ts";
 import { SourceFile } from "./utils/source.ts";
@@ -9,7 +11,7 @@ import { SourceFile } from "./utils/source.ts";
 const filePath = process.argv[2];
 
 if (!filePath) {
-  console.error("Usage: bun run src/cli.ts <file.kei> [--ast | --ast-json | --check | --kir | --kir-opt]");
+  console.error("Usage: bun run src/cli.ts <file.kei> [--ast | --ast-json | --check | --kir | --kir-opt | --emit-c | --build | --run]");
   process.exit(1);
 }
 
@@ -19,6 +21,9 @@ const showAstJson = flags.has("--ast-json");
 const runCheck = flags.has("--check");
 const showKir = flags.has("--kir");
 const showKirOpt = flags.has("--kir-opt");
+const emitCFlag = flags.has("--emit-c");
+const buildFlag = flags.has("--build");
+const runFlag = flags.has("--run");
 
 const content = await Bun.file(filePath).text();
 const source = new SourceFile(filePath, content);
@@ -35,7 +40,7 @@ if (lexerDiagnostics.length > 0) {
   }
 }
 
-if (showAst || showAstJson || runCheck || showKir || showKirOpt) {
+if (showAst || showAstJson || runCheck || showKir || showKirOpt || emitCFlag || buildFlag || runFlag) {
   const parser = new Parser(tokens);
   const program = parser.parse();
 
@@ -49,7 +54,76 @@ if (showAst || showAstJson || runCheck || showKir || showKirOpt) {
     }
   }
 
-  if (showKir || showKirOpt) {
+  if (emitCFlag || buildFlag || runFlag) {
+    const checker = new Checker(program, source);
+    const result = checker.check();
+    const errors = result.diagnostics.filter((d) => d.severity === "error");
+    if (errors.length > 0) {
+      for (const diag of errors) {
+        console.error(
+          `${diag.severity}: ${diag.message} at ${diag.location.file}:${diag.location.line}:${diag.location.column}`
+        );
+      }
+      process.exit(1);
+    }
+    let kirModule = lowerToKir(program, result);
+    kirModule = runMem2Reg(kirModule);
+    kirModule = runDeSsa(kirModule);
+    const cCode = emitC(kirModule);
+
+    if (emitCFlag) {
+      console.log(cCode);
+    } else {
+      // --build or --run: write to .c file and compile
+      const outBase = filePath.replace(/\.kei$/, "");
+      const cPath = `${outBase}.c`;
+      const binPath = outBase;
+      await Bun.write(cPath, cCode);
+
+      // Find a C compiler
+      const compilers = ["cc", "gcc", "clang"];
+      let compiler: string | null = null;
+      for (const cc of compilers) {
+        try {
+          const which = Bun.spawnSync({ cmd: ["which", cc] });
+          if (which.exitCode === 0) {
+            compiler = cc;
+            break;
+          }
+        } catch {
+          // try next
+        }
+      }
+
+      if (!compiler) {
+        console.error("No C compiler found (tried cc, gcc, clang)");
+        process.exit(1);
+      }
+
+      const compile = Bun.spawnSync({
+        cmd: [compiler, "-o", binPath, cPath, "-lm"],
+        stderr: "pipe",
+      });
+
+      if (compile.exitCode !== 0) {
+        console.error(`Compilation failed:\n${compile.stderr.toString()}`);
+        process.exit(1);
+      }
+
+      if (buildFlag) {
+        console.log(`Compiled: ${binPath}`);
+      }
+
+      if (runFlag) {
+        const run = Bun.spawnSync({
+          cmd: [binPath],
+          stdout: "inherit",
+          stderr: "inherit",
+        });
+        process.exit(run.exitCode);
+      }
+    }
+  } else if (showKir || showKirOpt) {
     const checker = new Checker(program, source);
     const result = checker.check();
     const errors = result.diagnostics.filter((d) => d.severity === "error");
