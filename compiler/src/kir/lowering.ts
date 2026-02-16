@@ -396,6 +396,9 @@ export class KirLowerer {
       this.getFunctionReturnType(decl)
     );
 
+    // Set current function return type so lowerReturnStmt can add struct loads
+    this.currentFunctionOrigReturnType = returnType;
+
     // Lower body
     this.lowerBlock(decl.body);
 
@@ -662,25 +665,35 @@ export class KirLowerer {
 
   private lowerLetStmt(stmt: LetStmt): void {
     const type = this.getExprKirType(stmt.initializer);
-    const ptrId = this.freshVar();
 
-    // stack_alloc
-    this.emit({ kind: "stack_alloc", dest: ptrId, type });
-
-    // Evaluate initializer
+    // Evaluate initializer first
     const valueId = this.lowerExpr(stmt.initializer);
 
-    // Emit oncopy if this is a copy of a struct with __oncopy (not a move)
-    if (stmt.initializer.kind !== "MoveExpr") {
-      const checkerType = this.checkResult.typeMap.get(stmt.initializer);
-      const lifecycle = this.getStructLifecycle(checkerType);
-      if (lifecycle?.hasOncopy) {
-        this.emit({ kind: "oncopy", value: valueId, structName: lifecycle.structName });
-      }
-    }
+    // For struct literals and expressions that return alloc pointers,
+    // we can directly alias the variable to the alloc pointer (no extra copy needed).
+    // This avoids the pointer-store-into-alloc problem.
+    const isStructAlloc = type.kind === "struct" && this.isStackAllocVar(valueId);
+    
+    let ptrId: VarId;
+    if (isStructAlloc) {
+      // Directly alias — the struct literal's alloc becomes this variable's alloc
+      ptrId = valueId;
+    } else {
+      // Regular path: alloc + store
+      ptrId = this.freshVar();
+      this.emit({ kind: "stack_alloc", dest: ptrId, type });
 
-    // store
-    this.emit({ kind: "store", ptr: ptrId, value: valueId });
+      // Emit oncopy if this is a copy of a struct with __oncopy (not a move)
+      if (stmt.initializer.kind !== "MoveExpr") {
+        const checkerType = this.checkResult.typeMap.get(stmt.initializer);
+        const lifecycle = this.getStructLifecycle(checkerType);
+        if (lifecycle?.hasOncopy) {
+          this.emit({ kind: "oncopy", value: valueId, structName: lifecycle.structName });
+        }
+      }
+
+      this.emit({ kind: "store", ptr: ptrId, value: valueId });
+    }
 
     // Map variable name to its stack pointer
     this.varMap.set(stmt.name, ptrId);
@@ -714,10 +727,18 @@ export class KirLowerer {
       this.setTerminator({ kind: "ret", value: zeroTag });
     } else {
       if (stmt.value) {
-        const valueId = this.lowerExpr(stmt.value);
+        let valueId = this.lowerExpr(stmt.value);
         // Emit destroys for all scope variables, but skip the returned variable
         const returnedVarName = stmt.value.kind === "Identifier" ? stmt.value.name : null;
         this.emitAllScopeDestroysExceptNamed(returnedVarName);
+        // If returning a struct value and the function returns by value,
+        // we need to load from the pointer (structs are always stack_alloc'd as pointers in KIR)
+        const retType = this.currentFunctionOrigReturnType;
+        if (retType.kind === "struct") {
+          const loaded = this.freshVar();
+          this.emit({ kind: "load", dest: loaded, ptr: valueId, type: retType });
+          valueId = loaded;
+        }
         this.setTerminator({ kind: "ret", value: valueId });
       } else {
         this.emitAllScopeDestroys();
@@ -1096,6 +1117,34 @@ export class KirLowerer {
     return dest;
   }
 
+  /**
+   * Lower an expression but return a pointer (alloc) instead of loading.
+   * Used for struct field access where we need the base pointer for field_ptr.
+   */
+  private lowerExprAsPtr(expr: Expression): VarId {
+    if (expr.kind === "Identifier") {
+      const varId = this.varMap.get(expr.name);
+      if (varId) {
+        if (this.isStackAllocVar(varId)) {
+          return varId; // Return the alloc pointer directly
+        }
+        // For params (like self) that are already pointers to structs, return directly
+        return varId;
+      }
+    }
+    // For complex expressions like (a + b).x, lower the expression and wrap in alloc if needed
+    const valueId = this.lowerExpr(expr);
+    const exprType = this.checkResult.typeMap.get(expr);
+    if (exprType?.kind === "struct") {
+      const kirType = this.lowerCheckerType(exprType);
+      const alloc = this.freshVar();
+      this.emit({ kind: "stack_alloc", dest: alloc, type: kirType });
+      this.emit({ kind: "store", ptr: alloc, value: valueId });
+      return alloc;
+    }
+    return valueId;
+  }
+
   private lowerIdentifier(expr: Identifier): VarId {
     const varId = this.varMap.get(expr.name);
     if (!varId) {
@@ -1219,6 +1268,45 @@ export class KirLowerer {
     }
   }
 
+  /**
+   * Emit a method call for an overloaded operator.
+   * Lowers `self` and `args`, then emits: call StructName_methodName(self, ...args)
+   */
+  private lowerOperatorMethodCall(
+    selfExpr: Expression,
+    methodName: string,
+    structType: StructType,
+    argExprs: Expression[],
+  ): VarId {
+    // Methods take self and args as pointers, so get alloc pointers, not loaded values
+    const selfId = this.lowerExprAsPtr(selfExpr);
+    const args = argExprs.map(a => {
+      const argType = this.checkResult.typeMap.get(a);
+      if (argType?.kind === "struct") {
+        return this.lowerExprAsPtr(a);
+      }
+      return this.lowerExpr(a);
+    });
+
+    const funcName = `${structType.name}_${methodName}`;
+
+    // Look up the method's return type
+    const method = structType.methods.get(methodName);
+    if (method && method.returnType.kind !== "void") {
+      const resultType = this.lowerCheckerType(method.returnType);
+      const dest = this.freshVar();
+      this.emit({ kind: "call", dest, func: funcName, args: [selfId, ...args], type: resultType });
+
+      // Struct return values are handled by the caller (variable assignment stores into alloc)
+
+      return dest;
+    }
+
+    // Void return
+    this.emit({ kind: "call_void", func: funcName, args: [selfId, ...args] });
+    return selfId;
+  }
+
   private lowerCallExpr(expr: CallExpr): VarId {
     // sizeof(Type) → KIR sizeof instruction (resolved by backend)
     if (expr.callee.kind === "Identifier" && expr.callee.name === "sizeof" && expr.args.length === 1) {
@@ -1338,7 +1426,26 @@ export class KirLowerer {
       }
     }
 
-    const baseId = this.lowerExpr(expr.object);
+    // For struct field access, use the alloc pointer directly (not a loaded value).
+    // This ensures the alloc is address-taken and won't be incorrectly promoted by mem2reg.
+    let baseId: VarId;
+    const objectType = this.checkResult.typeMap.get(expr.object);
+    if (expr.object.kind === "Identifier" && objectType?.kind === "struct") {
+      const varId = this.varMap.get(expr.object.name);
+      if (varId && this.isStackAllocVar(varId)) {
+        baseId = varId; // Use alloc pointer directly
+      } else if (varId) {
+        baseId = varId; // Param pointer
+      } else {
+        baseId = this.lowerExpr(expr.object);
+      }
+    } else if (expr.object.kind === "MemberExpr") {
+      // Nested member access: first get the outer field as a pointer
+      baseId = this.lowerExpr(expr.object);
+    } else {
+      baseId = this.lowerExpr(expr.object);
+    }
+
     const dest = this.freshVar();
     const resultType = this.getExprKirType(expr);
 
@@ -1350,6 +1457,12 @@ export class KirLowerer {
   }
 
   private lowerIndexExpr(expr: IndexExpr): VarId {
+    // Check for operator overloading (e.g., obj[i] → obj.op_index(i))
+    const opMethod = this.checkResult.operatorMethods.get(expr);
+    if (opMethod) {
+      return this.lowerOperatorMethodCall(expr.object, opMethod.methodName, opMethod.structType, [expr.index]);
+    }
+
     const baseId = this.lowerExpr(expr.object);
     const indexId = this.lowerExpr(expr.index);
     const resultType = this.getExprKirType(expr);
@@ -1371,6 +1484,17 @@ export class KirLowerer {
   }
 
   private lowerAssignExpr(expr: AssignExpr): VarId {
+    // Check for operator overloading: obj[i] = v → obj.op_index_set(i, v)
+    const opMethod = this.checkResult.operatorMethods.get(expr);
+    if (opMethod && expr.target.kind === "IndexExpr") {
+      return this.lowerOperatorMethodCall(
+        expr.target.object,
+        opMethod.methodName,
+        opMethod.structType,
+        [expr.target.index, expr.value],
+      );
+    }
+
     const valueId = this.lowerExpr(expr.value);
 
     if (expr.target.kind === "Identifier") {
@@ -2347,7 +2471,13 @@ export class KirLowerer {
     // The function decl itself isn't in typeMap, but we can derive from return type annotation
     if (decl.returnType) {
       const name = decl.returnType.name;
-      return this.nameToCheckerType(name);
+      const checkerType = this.nameToCheckerType(name);
+      // If nameToCheckerType didn't recognize it (returns void for struct names),
+      // treat it as a struct type so lowerMethod gets the correct KIR return type
+      if (checkerType.kind === "void" && name !== "void") {
+        return { kind: "struct" as const, name, fields: new Map(), methods: new Map(), isUnsafe: false, genericParams: [] };
+      }
+      return checkerType;
     }
     return { kind: "void" as const };
   }
