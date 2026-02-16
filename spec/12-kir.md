@@ -149,6 +149,10 @@ Every instruction produces at most one value (assigned to `dest`). Instructions 
 |---|---|
 | `call dest, func, args[]` | Function call |
 | `call_void func, args[]` | Void function call (no dest) |
+| `call_extern dest, func, args[]` | Extern function call (unsafe) |
+| `call_extern_void func, args[]` | Extern void call (unsafe) |
+
+Extern calls are separate instructions so optimization passes can distinguish safe vs unsafe code boundaries. Only emitted inside `unsafe` blocks.
 
 #### Lifecycle
 | Instruction | Description |
@@ -156,6 +160,14 @@ Every instruction produces at most one value (assigned to `dest`). Instructions 
 | `destroy value` | Call `__destroy` on value |
 | `oncopy value` | Call `__oncopy` on value |
 | `move dest, source` | Move ownership (no lifecycle ops) |
+
+#### Memory (heap)
+| Instruction | Description |
+|---|---|
+| `heap_alloc dest, type, count` | Allocate `count * sizeof(type)` bytes, return `ptr<type>` |
+| `heap_free ptr` | Free heap memory at `ptr` |
+
+Both are unsafe — only emitted inside `unsafe` blocks. Compile to `malloc`/`free` in C backend.
 
 #### Type operations
 | Instruction | Description |
@@ -262,8 +274,123 @@ These transformations happen during AST → KIR lowering:
 | Generic type usage | Monomorphized to concrete type |
 | `assert(cond, msg)` | `assert_check` (debug only) |
 | `require(cond, msg)` | `require_check` (always) |
-| `throws`/`catch` | Branch-based error paths |
+| `throws`/`catch` | See error handling lowering below |
 | Array access `a[i]` | `bounds_check` (debug) + `index_ptr` + `load` |
+| `alloc<T>(n)` | `heap_alloc` (unsafe only) |
+| `free(ptr)` | `heap_free` (unsafe only) |
+| `extern fn` call | `call_extern` / `call_extern_void` (unsafe only) |
+
+## Error Handling Lowering
+
+Functions with `throws` are lowered to return a tagged result — an error discriminant + value/error payload. No exceptions, no unwinding — pure branch-based control flow.
+
+### Throwing function signature
+
+```kei
+fn getUser(id: int) -> User throws NotFound, DbError { ... }
+```
+
+Lowered to:
+
+```
+fn getUser(id: i32, __out: ptr<User>, __err: ptr<ErrorUnion>): i32 {
+  // returns 0 = success, 1 = NotFound, 2 = DbError
+  // on success: value written to __out
+  // on error: error payload written to __err
+}
+```
+
+The error discriminant is an `i32` return value. Each error type gets a unique tag (1-indexed, 0 = success).
+
+### `throw` statement
+
+```kei
+throw NotFound{};
+```
+
+Lowers to:
+
+```
+  %err = const_struct NotFound {}
+  store __err, %err
+  ret const_int i32 1          // NotFound = tag 1
+```
+
+### `catch` expression
+
+```kei
+let user = getUser(10) catch {
+    NotFound: return -1;
+    DbError e: return -2;
+};
+```
+
+Lowers to:
+
+```
+  %out = stack_alloc User
+  %err = stack_alloc ErrorUnion
+  %tag = call getUser(const_int i32 10, %out, %err)
+  switch %tag, [
+    0 → catch.ok,
+    1 → catch.NotFound,
+    2 → catch.DbError
+  ], default: unreachable
+
+catch.ok:
+  %user = load %out
+  jump catch.merge
+
+catch.NotFound:
+  destroy %out
+  ret const_int i32 -1
+
+catch.DbError:
+  %e = load %err           // as DbError
+  destroy %out
+  ret const_int i32 -2
+
+catch.merge:
+  // %user available here
+```
+
+### `catch panic`
+
+```kei
+let user = getUser(10) catch panic;
+```
+
+Lowers to a branch that panics on any non-zero tag:
+
+```
+  %tag = call getUser(const_int i32 10, %out, %err)
+  %failed = neq %tag, const_int i32 0
+  br %failed, catch.panic, catch.ok
+
+catch.panic:
+  call_void kei_panic("unhandled error in getUser")
+  unreachable
+
+catch.ok:
+  %user = load %out
+```
+
+### `catch throw`
+
+Re-throws the error to the caller (current function must also declare `throws` with compatible error types):
+
+```
+  %tag = call getUser(const_int i32 10, %out, %err)
+  %failed = neq %tag, const_int i32 0
+  br %failed, catch.rethrow, catch.ok
+
+catch.rethrow:
+  store __err_outer, load %err
+  ret %tag                    // propagate same tag
+
+catch.ok:
+  %user = load %out
+```
 
 ## Optimization Passes
 
