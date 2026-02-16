@@ -1,3 +1,4 @@
+import { Checker } from "./checker/checker.ts";
 import { Lexer } from "./lexer/index.ts";
 import { Parser } from "./parser/index.ts";
 import { SourceFile } from "./utils/source.ts";
@@ -5,13 +6,14 @@ import { SourceFile } from "./utils/source.ts";
 const filePath = process.argv[2];
 
 if (!filePath) {
-  console.error("Usage: bun run src/cli.ts <file.kei> [--ast | --ast-json]");
+  console.error("Usage: bun run src/cli.ts <file.kei> [--ast | --ast-json | --check]");
   process.exit(1);
 }
 
 const flags = new Set(process.argv.slice(3));
 const showAst = flags.has("--ast");
 const showAstJson = flags.has("--ast-json");
+const runCheck = flags.has("--check");
 
 const content = await Bun.file(filePath).text();
 const source = new SourceFile(filePath, content);
@@ -28,7 +30,7 @@ if (lexerDiagnostics.length > 0) {
   }
 }
 
-if (showAst || showAstJson) {
+if (showAst || showAstJson || runCheck) {
   const parser = new Parser(tokens);
   const program = parser.parse();
 
@@ -42,7 +44,23 @@ if (showAst || showAstJson) {
     }
   }
 
-  if (showAstJson) {
+  if (runCheck) {
+    const checker = new Checker(program, source);
+    const result = checker.check();
+    if (result.diagnostics.length > 0) {
+      for (const diag of result.diagnostics) {
+        console.error(
+          `${diag.severity}: ${diag.message} at ${diag.location.file}:${diag.location.line}:${diag.location.column}`
+        );
+      }
+      const errorCount = result.diagnostics.filter((d) => d.severity === "error").length;
+      if (errorCount > 0) {
+        process.exit(1);
+      }
+    } else {
+      console.log("Check passed: no errors.");
+    }
+  } else if (showAstJson) {
     console.log(JSON.stringify(program, null, 2));
   } else {
     printAst(program, 0);
