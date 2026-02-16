@@ -22,9 +22,10 @@ import { ExpressionChecker } from "./expr-checker.ts";
 import { Scope } from "./scope.ts";
 import { StatementChecker } from "./stmt-checker.ts";
 import type { ScopeSymbol } from "./symbols.ts";
-import { SymbolKind, moduleSymbol, variableSymbol } from "./symbols.ts";
+import { SymbolKind, moduleSymbol, typeSymbol, variableSymbol } from "./symbols.ts";
 import { TypeResolver } from "./type-resolver.ts";
-import type { FunctionType, ModuleType, Type } from "./types.ts";
+import type { MonomorphizedFunction, MonomorphizedStruct } from "./generics.ts";
+import type { FunctionType, ModuleType, StructType, Type } from "./types.ts";
 import { TypeKind, typeToString } from "./types.ts";
 
 export interface CheckResult {
@@ -68,6 +69,12 @@ export class Checker {
 
   /** Module exports available for import resolution (set externally for multi-module) */
   private moduleExports: Map<string, Map<string, ScopeSymbol>> = new Map();
+
+  /** Cache of monomorphized struct types, keyed by mangled name */
+  private monomorphizedStructs: Map<string, MonomorphizedStruct> = new Map();
+
+  /** Cache of monomorphized function types, keyed by mangled name */
+  private monomorphizedFunctions: Map<string, MonomorphizedFunction> = new Map();
 
   constructor(program: Program, source: SourceFile) {
     this.program = program;
@@ -331,6 +338,35 @@ export class Checker {
       }
     }
     return null;
+  }
+
+  // ─── Monomorphization Cache ─────────────────────────────────────────
+
+  getMonomorphizedStruct(mangledName: string): MonomorphizedStruct | undefined {
+    return this.monomorphizedStructs.get(mangledName);
+  }
+
+  registerMonomorphizedStruct(mangledName: string, info: MonomorphizedStruct): void {
+    this.monomorphizedStructs.set(mangledName, info);
+    // Also register the concrete struct as a type in the current scope so KIR can find it
+    const sym = typeSymbol(mangledName, info.concrete);
+    this.currentScope.define(sym);
+  }
+
+  getMonomorphizedFunction(mangledName: string): MonomorphizedFunction | undefined {
+    return this.monomorphizedFunctions.get(mangledName);
+  }
+
+  registerMonomorphizedFunction(mangledName: string, info: MonomorphizedFunction): void {
+    this.monomorphizedFunctions.set(mangledName, info);
+  }
+
+  getAllMonomorphizedStructs(): Map<string, MonomorphizedStruct> {
+    return this.monomorphizedStructs;
+  }
+
+  getAllMonomorphizedFunctions(): Map<string, MonomorphizedFunction> {
+    return this.monomorphizedFunctions;
   }
 
   // ─── Diagnostics ──────────────────────────────────────────────────────

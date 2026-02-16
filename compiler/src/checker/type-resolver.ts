@@ -6,9 +6,10 @@
 import type { TypeNode } from "../ast/nodes.ts";
 import type { Span } from "../lexer/token.ts";
 import { lookupPrimitiveType } from "./builtins.ts";
+import { mangleGenericName, substituteType as substituteTypeGeneric, substituteFunctionType } from "./generics.ts";
 import type { Scope } from "./scope.ts";
 import { SymbolKind } from "./symbols.ts";
-import type { Type } from "./types.ts";
+import type { FunctionType, Type } from "./types.ts";
 import {
   arrayType,
   ERROR_TYPE,
@@ -142,6 +143,7 @@ export class TypeResolver {
     scope: Scope
   ): Type {
     const subs = new Map<string, Type>();
+    const resolvedTypeArgs: Type[] = [];
     for (let i = 0; i < base.genericParams.length; i++) {
       const typeArg = typeArgs[i];
       if (!typeArg) continue;
@@ -149,40 +151,26 @@ export class TypeResolver {
       if (!paramName) continue;
       const resolvedArg = this.resolve(typeArg, scope);
       subs.set(paramName, resolvedArg);
+      resolvedTypeArgs.push(resolvedArg);
     }
+
+    const mangledName = mangleGenericName(base.name, resolvedTypeArgs);
 
     // Substitute field types
     const newFields = new Map<string, Type>();
     for (const [fieldName, fieldType] of base.fields) {
-      newFields.set(fieldName, this.substituteType(fieldType, subs));
+      newFields.set(fieldName, substituteTypeGeneric(fieldType, subs));
     }
 
     // Substitute method types
-    const newMethods = new Map<string, import("./types.ts").FunctionType>();
+    const newMethods = new Map<string, FunctionType>();
     for (const [methodName, methodType] of base.methods) {
-      const newParams = methodType.params.map((p) => ({
-        ...p,
-        type: this.substituteType(p.type, subs),
-      }));
-      newMethods.set(methodName, {
-        ...methodType,
-        params: newParams,
-        returnType: this.substituteType(methodType.returnType, subs),
-      });
+      newMethods.set(methodName, substituteFunctionType(methodType, subs));
     }
-
-    const typeArgStrs = typeArgs.map((_, i) => {
-      const paramName = base.genericParams[i];
-      if (!paramName) return "unknown";
-      const resolved = subs.get(paramName);
-      if (!resolved) return "unknown";
-      return typeToString(resolved);
-    });
-    const instantiatedName = `${base.name}<${typeArgStrs.join(", ")}>`;
 
     return {
       kind: TypeKind.Struct,
-      name: instantiatedName,
+      name: mangledName,
       fields: newFields,
       methods: newMethods,
       isUnsafe: base.isUnsafe,
@@ -192,32 +180,7 @@ export class TypeResolver {
 
   /** Substitute type parameters in a type. */
   substituteType(type: Type, subs: Map<string, Type>): Type {
-    switch (type.kind) {
-      case TypeKind.TypeParam: {
-        const sub = subs.get(type.name);
-        return sub ?? type;
-      }
-      case TypeKind.Ptr:
-        return ptrType(this.substituteType(type.pointee, subs));
-      case TypeKind.Array:
-        return arrayType(this.substituteType(type.element, subs));
-      case TypeKind.Slice:
-        return sliceType(this.substituteType(type.element, subs));
-      case TypeKind.Struct: {
-        // If struct has generic params that match our subs, substitute
-        const hasSubstitutable = Array.from(type.fields.values()).some(
-          (ft) => ft.kind === TypeKind.TypeParam && subs.has(ft.name)
-        );
-        if (!hasSubstitutable) return type;
-        const newFields = new Map<string, Type>();
-        for (const [fn, ft] of type.fields) {
-          newFields.set(fn, this.substituteType(ft, subs));
-        }
-        return { ...type, fields: newFields };
-      }
-      default:
-        return type;
-    }
+    return substituteTypeGeneric(type, subs);
   }
 
   private addError(message: string, span: Span): void {

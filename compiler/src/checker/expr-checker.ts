@@ -31,6 +31,7 @@ import type {
   UnsafeExpr,
 } from "../ast/nodes.ts";
 import type { Checker } from "./checker.ts";
+import { mangleGenericName, substituteType, substituteFunctionType } from "./generics.ts";
 import type { FunctionOverload } from "./symbols.ts";
 import { SymbolKind } from "./symbols.ts";
 import type { ArrayType, FunctionType, PtrType, RangeType, SliceType, StructType, Type } from "./types.ts";
@@ -418,6 +419,23 @@ export class ExpressionChecker {
       }
     }
 
+    // Check for generic function call with explicit type args: func<T>(args)
+    if (expr.callee.kind === "Identifier" && expr.typeArgs.length > 0) {
+      return this.checkGenericFunctionCall(expr);
+    }
+
+    // Check for generic function call with inferred type args
+    if (expr.callee.kind === "Identifier") {
+      const sym = this.checker.currentScope.lookup(expr.callee.name);
+      if (sym && sym.kind === SymbolKind.Function) {
+        // Check if any overload is generic
+        const genericOverload = sym.overloads.find((o) => o.type.genericParams.length > 0);
+        if (genericOverload && sym.overloads.length === 1) {
+          return this.checkGenericFunctionCallInferred(genericOverload.type, expr);
+        }
+      }
+    }
+
     // Check for overloaded function call by identifier
     if (expr.callee.kind === "Identifier") {
       const sym = this.checker.currentScope.lookup(expr.callee.name);
@@ -681,6 +699,146 @@ export class ExpressionChecker {
     return funcType.returnType;
   }
 
+  /** Handle generic function call with explicit type args: max<i32>(a, b) */
+  private checkGenericFunctionCall(expr: CallExpr): Type {
+    if (expr.callee.kind !== "Identifier") return ERROR_TYPE;
+    const name = expr.callee.name;
+
+    const sym = this.checker.currentScope.lookup(name);
+    if (!sym || sym.kind !== SymbolKind.Function) {
+      this.checker.error(`undeclared function '${name}'`, expr.span);
+      return ERROR_TYPE;
+    }
+
+    // Find the generic overload
+    const genericOverload = sym.overloads.find((o) => o.type.genericParams.length > 0);
+    if (!genericOverload) {
+      this.checker.error(`function '${name}' is not generic`, expr.span);
+      return ERROR_TYPE;
+    }
+
+    const funcType = genericOverload.type;
+    if (expr.typeArgs.length !== funcType.genericParams.length) {
+      this.checker.error(
+        `function '${name}' expects ${funcType.genericParams.length} type argument(s), got ${expr.typeArgs.length}`,
+        expr.span
+      );
+      return ERROR_TYPE;
+    }
+
+    // Resolve type args
+    const resolvedTypeArgs: Type[] = [];
+    const typeMap = new Map<string, Type>();
+    for (let i = 0; i < expr.typeArgs.length; i++) {
+      const typeArg = expr.typeArgs[i]!;
+      const resolved = this.checker.resolveType(typeArg);
+      if (isErrorType(resolved)) return ERROR_TYPE;
+      resolvedTypeArgs.push(resolved);
+      typeMap.set(funcType.genericParams[i]!, resolved);
+    }
+
+    // Create concrete function type
+    const concreteType = substituteFunctionType(funcType, typeMap);
+    const mangledName = mangleGenericName(name, resolvedTypeArgs);
+
+    // Cache the monomorphized function
+    if (!this.checker.getMonomorphizedFunction(mangledName)) {
+      this.checker.registerMonomorphizedFunction(mangledName, {
+        originalName: name,
+        typeArgs: resolvedTypeArgs,
+        concrete: concreteType,
+        mangledName,
+      });
+    }
+
+    // Store the concrete type on the callee
+    this.checker.setExprType(expr.callee, concreteType);
+
+    return this.checkFunctionCallArgs(concreteType, expr.args, expr, false);
+  }
+
+  /** Handle generic function call with inferred type args: max(10, 20) → infer T=i32 */
+  private checkGenericFunctionCallInferred(funcType: FunctionType, expr: CallExpr): Type {
+    // First, type-check all arguments
+    const argTypes: Type[] = [];
+    for (const arg of expr.args) {
+      argTypes.push(this.checkExpression(arg));
+    }
+    if (argTypes.some((t) => isErrorType(t))) return ERROR_TYPE;
+
+    // Check arity (skip self for methods)
+    const paramOffset = 0;
+    const expectedParams = funcType.params.slice(paramOffset);
+    if (argTypes.length !== expectedParams.length) {
+      this.checker.error(
+        `expected ${expectedParams.length} argument(s), got ${argTypes.length}`,
+        expr.span
+      );
+      return ERROR_TYPE;
+    }
+
+    // Infer type params from arguments
+    const subs = new Map<string, Type>();
+    for (let i = 0; i < expectedParams.length; i++) {
+      const paramType = expectedParams[i]!.type;
+      const argType = argTypes[i]!;
+      this.extractTypeParamSubs(paramType, argType, subs);
+    }
+
+    // Check that all type params were inferred
+    for (const gp of funcType.genericParams) {
+      if (!subs.has(gp)) {
+        this.checker.error(
+          `cannot infer type parameter '${gp}' — provide explicit type arguments`,
+          expr.span
+        );
+        return ERROR_TYPE;
+      }
+    }
+
+    // Create concrete function type
+    const concreteType = substituteFunctionType(funcType, subs);
+    const resolvedTypeArgs = funcType.genericParams.map((gp) => subs.get(gp)!);
+    const name = (expr.callee as { name: string }).name;
+    const mangledName = mangleGenericName(name, resolvedTypeArgs);
+
+    // Cache
+    if (!this.checker.getMonomorphizedFunction(mangledName)) {
+      this.checker.registerMonomorphizedFunction(mangledName, {
+        originalName: name,
+        typeArgs: resolvedTypeArgs,
+        concrete: concreteType,
+        mangledName,
+      });
+    }
+
+    // Store the concrete type on the callee
+    this.checker.setExprType(expr.callee, concreteType);
+
+    // Validate args against concrete param types
+    for (let i = 0; i < argTypes.length; i++) {
+      const argType = argTypes[i]!;
+      const paramType = concreteType.params[i]!.type;
+      if (!isAssignableTo(argType, paramType)) {
+        const litInfo = extractLiteralInfo(expr.args[i]!);
+        const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, paramType);
+        if (!isLiteralOk) {
+          this.checker.error(
+            `argument ${i + 1}: expected '${typeToString(paramType)}', got '${typeToString(argType)}'`,
+            expr.args[i]!.span
+          );
+        }
+      }
+    }
+
+    // Handle throws
+    if (concreteType.throwsTypes.length > 0) {
+      this.checker.flagThrowsCall(expr, concreteType);
+    }
+
+    return concreteType.returnType;
+  }
+
   private checkMemberExpression(expr: MemberExpr): Type {
     const objectType = this.checkExpression(expr.object);
     if (isErrorType(objectType)) return ERROR_TYPE;
@@ -890,17 +1048,17 @@ export class ExpressionChecker {
     let structType = sym.type;
 
     // Handle generic struct instantiation with explicit type args
-    if (
-      structType.kind === TypeKind.Struct &&
-      structType.genericParams.length > 0 &&
-      expr.typeArgs.length > 0
-    ) {
-      structType = this.checker.resolveType({
-        kind: "GenericType",
-        name: expr.name,
-        typeArgs: expr.typeArgs,
-        span: expr.span,
-      });
+    if (structType.kind === TypeKind.Struct && expr.typeArgs.length > 0) {
+      if (structType.genericParams.length === 0) {
+        this.checker.error(
+          `type '${expr.name}' expects 0 type argument(s), got ${expr.typeArgs.length}`,
+          expr.span
+        );
+        return ERROR_TYPE;
+      }
+      const result = this.instantiateGenericStruct(structType, expr);
+      if (isErrorType(result)) return ERROR_TYPE;
+      structType = result;
     }
 
     if (structType.kind !== TypeKind.Struct) {
@@ -955,6 +1113,65 @@ export class ExpressionChecker {
     return structType;
   }
 
+  /** Instantiate a generic struct with explicit type args, using the monomorphization cache. */
+  private instantiateGenericStruct(
+    baseStruct: StructType,
+    expr: StructLiteral
+  ): Type {
+    if (expr.typeArgs.length !== baseStruct.genericParams.length) {
+      this.checker.error(
+        `type '${baseStruct.name}' expects ${baseStruct.genericParams.length} type argument(s), got ${expr.typeArgs.length}`,
+        expr.span
+      );
+      return ERROR_TYPE;
+    }
+
+    // Resolve type args
+    const resolvedTypeArgs: Type[] = [];
+    const typeMap = new Map<string, Type>();
+    for (let i = 0; i < expr.typeArgs.length; i++) {
+      const typeArg = expr.typeArgs[i]!;
+      const resolved = this.checker.resolveType(typeArg);
+      if (isErrorType(resolved)) return ERROR_TYPE;
+      resolvedTypeArgs.push(resolved);
+      typeMap.set(baseStruct.genericParams[i]!, resolved);
+    }
+
+    const mangledName = mangleGenericName(baseStruct.name, resolvedTypeArgs);
+
+    // Check cache first
+    const cached = this.checker.getMonomorphizedStruct(mangledName);
+    if (cached) return cached.concrete;
+
+    // Create concrete struct type
+    const concreteFields = new Map<string, Type>();
+    for (const [fieldName, fieldType] of baseStruct.fields) {
+      concreteFields.set(fieldName, substituteType(fieldType, typeMap));
+    }
+
+    const concreteMethods = new Map<string, FunctionType>();
+    for (const [methodName, methodType] of baseStruct.methods) {
+      concreteMethods.set(methodName, substituteFunctionType(methodType, typeMap));
+    }
+
+    const concreteStruct: StructType = {
+      kind: TypeKind.Struct,
+      name: mangledName,
+      fields: concreteFields,
+      methods: concreteMethods,
+      isUnsafe: baseStruct.isUnsafe,
+      genericParams: [],
+    };
+
+    this.checker.registerMonomorphizedStruct(mangledName, {
+      original: baseStruct,
+      typeArgs: resolvedTypeArgs,
+      concrete: concreteStruct,
+    });
+
+    return concreteStruct;
+  }
+
   /** Handle generic struct literal where type params are inferred from field values. */
   private checkGenericStructLiteralInferred(
     structType: StructType,
@@ -999,10 +1216,50 @@ export class ExpressionChecker {
       }
     }
 
-    // Build instantiated struct type with recursive substitution
+    // Build resolved type args from inferred subs
+    const resolvedTypeArgs = structType.genericParams.map((gp) => subs.get(gp)!);
+    const allInferred = resolvedTypeArgs.every((t) => t !== undefined);
+
+    if (allInferred) {
+      const mangledName = mangleGenericName(structType.name, resolvedTypeArgs);
+
+      // Check cache
+      const cached = this.checker.getMonomorphizedStruct(mangledName);
+      if (cached) return cached.concrete;
+
+      // Create concrete struct type
+      const newFields = new Map<string, Type>();
+      for (const [fieldName, fieldType] of structType.fields) {
+        newFields.set(fieldName, substituteType(fieldType, subs));
+      }
+
+      const concreteMethods = new Map<string, FunctionType>();
+      for (const [methodName, methodType] of structType.methods) {
+        concreteMethods.set(methodName, substituteFunctionType(methodType, subs));
+      }
+
+      const concreteStruct: StructType = {
+        kind: TypeKind.Struct,
+        name: mangledName,
+        fields: newFields,
+        methods: concreteMethods,
+        isUnsafe: structType.isUnsafe,
+        genericParams: [],
+      };
+
+      this.checker.registerMonomorphizedStruct(mangledName, {
+        original: structType,
+        typeArgs: resolvedTypeArgs,
+        concrete: concreteStruct,
+      });
+
+      return concreteStruct;
+    }
+
+    // Fallback: could not fully infer all type params
     const newFields = new Map<string, Type>();
     for (const [fieldName, fieldType] of structType.fields) {
-      newFields.set(fieldName, this.substituteTypeParams(fieldType, subs));
+      newFields.set(fieldName, substituteType(fieldType, subs));
     }
 
     const typeArgStrs = structType.genericParams.map((gp) => {

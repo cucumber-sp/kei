@@ -288,6 +288,9 @@ export class DeclarationChecker {
   // ─── Full Checking (Pass 2) ─────────────────────────────────────────────
 
   private checkFunction(decl: FunctionDecl): void {
+    // Skip body checking for generic functions — they are checked when instantiated
+    if (decl.genericParams.length > 0) return;
+
     const funcSym = this.checker.currentScope.lookupFunction(decl.name);
     if (!funcSym || funcSym.kind !== "function") return;
 
@@ -297,11 +300,6 @@ export class DeclarationChecker {
 
     // Create function scope
     this.checker.pushScope({ functionContext: funcType });
-
-    // Add generic type params to scope
-    for (const gp of decl.genericParams) {
-      this.checker.currentScope.define(typeSymbol(gp, { kind: TypeKind.TypeParam, name: gp }));
-    }
 
     // Add params to scope
     for (const param of decl.params) {
@@ -328,6 +326,9 @@ export class DeclarationChecker {
   }
 
   private checkStruct(decl: StructDecl | UnsafeStructDecl, isUnsafe: boolean): void {
+    // Skip body checking for generic structs — methods are checked when instantiated
+    if (decl.genericParams.length > 0) return;
+
     // Check unsafe struct lifecycle rules
     if (isUnsafe) {
       const hasPtrField = decl.fields.some((f) => {

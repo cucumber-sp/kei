@@ -1,5 +1,7 @@
 export type { CheckResult } from "./checker.ts";
 export { Checker } from "./checker.ts";
+export type { MonomorphizedFunction, MonomorphizedStruct } from "./generics.ts";
+export { mangleGenericName, substituteType, substituteFunctionType } from "./generics.ts";
 export type {
   ArrayType,
   BoolType,
