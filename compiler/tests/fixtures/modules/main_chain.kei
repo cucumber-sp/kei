@@ -1,0 +1,9 @@
+// Main module that imports utils, which is independent
+import { negate } from utils;
+import { add } from math;
+
+fn main() -> i32 {
+    let x = add(1, 2);
+    let y = negate(x);
+    return y;
+}

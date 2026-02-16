@@ -14,8 +14,9 @@ import type {
   UnsafeStructDecl,
 } from "../ast/nodes.ts";
 import type { Checker } from "./checker.ts";
-import { functionSymbol, typeSymbol, variableSymbol } from "./symbols.ts";
-import type { EnumVariantInfo, FunctionType, ParamInfo, StructType, Type } from "./types.ts";
+import { functionSymbol, moduleSymbol, typeSymbol, variableSymbol } from "./symbols.ts";
+import type { ScopeSymbol } from "./symbols.ts";
+import type { EnumVariantInfo, FunctionType, ModuleType, ParamInfo, StructType, Type } from "./types.ts";
 import {
   ERROR_TYPE,
   functionType,
@@ -223,25 +224,65 @@ export class DeclarationChecker {
   }
 
   private registerImport(decl: ImportDecl): void {
-    // For v0.0.1, just register the import names as known
-    // No actual module resolution
-    if (decl.items.length > 0) {
-      for (const item of decl.items) {
-        // Register as a type symbol placeholder
-        this.checker.currentScope.define(
-          typeSymbol(item, {
-            kind: TypeKind.Struct,
-            name: item,
-            fields: new Map(),
-            methods: new Map(),
-            isUnsafe: false,
-            genericParams: [],
-          })
-        );
+    const moduleExports = this.checker.getModuleExports();
+    const exportedSymbols = moduleExports.get(decl.path);
+
+    if (!exportedSymbols) {
+      // No module exports available — may be single-file mode or unresolved
+      // Register placeholders for selective imports (backward compat)
+      if (decl.items.length > 0) {
+        for (const item of decl.items) {
+          this.checker.currentScope.define(
+            typeSymbol(item, {
+              kind: TypeKind.Struct,
+              name: item,
+              fields: new Map(),
+              methods: new Map(),
+              isUnsafe: false,
+              genericParams: [],
+            })
+          );
+        }
       }
+      return;
     }
-    // For simple imports (import math), register the module name
-    // This is a no-op for now — no module system in v0.0.1
+
+    if (decl.items.length > 0) {
+      // Selective import: import { add, multiply } from math;
+      // Bring only the named items directly into scope
+      for (const item of decl.items) {
+        const sym = exportedSymbols.get(item);
+        if (sym) {
+          this.checker.currentScope.define(sym);
+        } else {
+          this.checker.error(
+            `'${item}' is not exported by module '${decl.path}'`,
+            decl.span
+          );
+        }
+      }
+    } else {
+      // Whole-module import: import math;
+      // Register as a module symbol for qualified access: math.add()
+      const modExports = new Map<string, Type>();
+      for (const [name, sym] of exportedSymbols) {
+        modExports.set(name, sym.type);
+      }
+
+      // Use the last part of the dotted path as the local name
+      const parts = decl.path.split(".");
+      const localName = parts[parts.length - 1];
+
+      const modType: ModuleType = {
+        kind: TypeKind.Module,
+        name: decl.path,
+        exports: modExports,
+      };
+
+      this.checker.currentScope.define(
+        moduleSymbol(localName, modType, exportedSymbols)
+      );
+    }
   }
 
   // ─── Full Checking (Pass 2) ─────────────────────────────────────────────

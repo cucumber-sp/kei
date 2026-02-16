@@ -5,7 +5,7 @@
  * Uses simple per-block variable tracking (no phi nodes / full SSA yet).
  */
 
-import type { CheckResult } from "../checker/checker.ts";
+import type { CheckResult, MultiModuleCheckResult, ModuleCheckInfo } from "../checker/checker.ts";
 import type {
   Type,
   IntType,
@@ -120,9 +120,17 @@ export class KirLowerer {
   // Track which function names are overloaded (name → count of declarations)
   private overloadedNames: Set<string> = new Set();
 
-  constructor(program: Program, checkResult: CheckResult) {
+  /** Module prefix for name mangling in multi-module builds (e.g. "math" → "math_add") */
+  private modulePrefix: string = "";
+
+  /** Map of imported function names → their mangled names (e.g. "add" → "math_add") */
+  private importedNames: Map<string, string> = new Map();
+
+  constructor(program: Program, checkResult: CheckResult, modulePrefix: string = "", importedNames?: Map<string, string>) {
     this.program = program;
     this.checkResult = checkResult;
+    this.modulePrefix = modulePrefix;
+    if (importedNames) this.importedNames = importedNames;
   }
 
   lower(): KirModule {
@@ -167,7 +175,8 @@ export class KirLowerer {
         this.typeDecls.push(this.lowerStructDecl(decl));
         // Lower methods as top-level functions with mangled names
         for (const method of decl.methods) {
-          const mangledName = `${decl.name}_${method.name}`;
+          const structPrefix = this.modulePrefix ? `${this.modulePrefix}_${decl.name}` : decl.name;
+          const mangledName = `${structPrefix}_${method.name}`;
           this.functions.push(this.lowerMethod(method, mangledName, decl.name));
         }
         break;
@@ -233,10 +242,18 @@ export class KirLowerer {
     // Seal last block
     this.sealCurrentBlock();
 
-    // Use mangled name for overloaded functions
-    const funcName = this.overloadedNames.has(decl.name)
-      ? this.mangleFunctionName(decl.name, decl)
-      : decl.name;
+    // Use mangled name for overloaded functions, and apply module prefix
+    let funcName: string;
+    if (this.overloadedNames.has(decl.name)) {
+      const baseName = this.modulePrefix
+        ? `${this.modulePrefix}_${decl.name}`
+        : decl.name;
+      funcName = this.mangleFunctionName(baseName, decl);
+    } else if (this.modulePrefix && decl.name !== "main") {
+      funcName = `${this.modulePrefix}_${decl.name}`;
+    } else {
+      funcName = decl.name;
+    }
 
     return {
       name: funcName,
@@ -961,38 +978,62 @@ export class KirLowerer {
     let funcName: string;
     if (expr.callee.kind === "Identifier") {
       const baseName = expr.callee.name;
+      // Check if this is an imported function that needs module-prefixed name
+      const importedName = this.importedNames.get(baseName);
+      const resolvedBase = importedName ?? baseName;
+
       // Mangle overloaded function calls using the resolved callee type
       if (this.overloadedNames.has(baseName)) {
         const calleeType = this.checkResult.typeMap.get(expr.callee);
         if (calleeType && calleeType.kind === "function") {
-          funcName = this.mangleFunctionNameFromType(baseName, calleeType as FunctionType);
+          funcName = this.mangleFunctionNameFromType(resolvedBase, calleeType as FunctionType);
         } else {
-          funcName = baseName;
+          funcName = resolvedBase;
         }
       } else {
-        funcName = baseName;
+        funcName = resolvedBase;
       }
     } else if (expr.callee.kind === "MemberExpr") {
-      // Method call: obj.method(args) → StructName_method(obj, args)
-      const objId = this.lowerExpr(expr.callee.object);
-      const methodName = expr.callee.property;
-
-      // Resolve the object's type to get the struct name for mangling
+      // Check if this is a module-qualified call: module.function(args)
       const objType = this.checkResult.typeMap.get(expr.callee.object);
-      if (objType?.kind === "struct") {
-        funcName = `${objType.name}_${methodName}`;
+      if (objType?.kind === "module") {
+        // Module-qualified call: math.add(args) → math_add(args)
+        const modulePath = objType.name; // e.g., "math" or "net.http"
+        const modulePrefix = modulePath.replace(/\./g, "_");
+        const callName = expr.callee.property;
+        const baseMangledName = `${modulePrefix}_${callName}`;
+
+        // Check if the function is overloaded
+        const calleeResolvedType = this.checkResult.typeMap.get(expr.callee);
+        if (calleeResolvedType && calleeResolvedType.kind === "function") {
+          if (this.overloadedNames.has(callName)) {
+            funcName = this.mangleFunctionNameFromType(baseMangledName, calleeResolvedType as FunctionType);
+          } else {
+            funcName = baseMangledName;
+          }
+        } else {
+          funcName = baseMangledName;
+        }
       } else {
-        funcName = methodName;
-      }
+        // Instance method call: obj.method(args) → StructName_method(obj, args)
+        const objId = this.lowerExpr(expr.callee.object);
+        const methodName = expr.callee.property;
 
-      if (isVoid) {
-        this.emit({ kind: "call_void", func: funcName, args: [objId, ...args] });
-        return objId; // void calls return nothing meaningful
-      }
+        if (objType?.kind === "struct") {
+          funcName = `${objType.name}_${methodName}`;
+        } else {
+          funcName = methodName;
+        }
 
-      const dest = this.freshVar();
-      this.emit({ kind: "call", dest, func: funcName, args: [objId, ...args], type: resultType });
-      return dest;
+        if (isVoid) {
+          this.emit({ kind: "call_void", func: funcName, args: [objId, ...args] });
+          return objId; // void calls return nothing meaningful
+        }
+
+        const dest = this.freshVar();
+        this.emit({ kind: "call", dest, func: funcName, args: [objId, ...args], type: resultType });
+        return dest;
+      }
     } else {
       funcName = "<unknown>";
     }
@@ -1605,4 +1646,65 @@ export class KirLowerer {
 export function lowerToKir(program: Program, checkResult: CheckResult): KirModule {
   const lowerer = new KirLowerer(program, checkResult);
   return lowerer.lower();
+}
+
+/**
+ * Lower multiple modules into a single KirModule.
+ * Modules must be in topological order (dependencies first).
+ * The last module in the list is the main module (its "main" function is the entry point).
+ */
+export function lowerModulesToKir(
+  modules: ModuleCheckInfo[],
+  multiResult: MultiModuleCheckResult
+): KirModule {
+  const combined: KirModule = {
+    name: "main",
+    globals: [],
+    functions: [],
+    types: [],
+    externs: [],
+  };
+
+  // Track extern names to avoid duplicates across modules
+  const seenExterns = new Set<string>();
+
+  for (const mod of modules) {
+    const result = multiResult.results.get(mod.name);
+    if (!result) continue;
+
+    // The last module (main) gets no prefix, others get their module name as prefix
+    const isMainModule = mod === modules[modules.length - 1];
+    const modulePrefix = isMainModule ? "" : mod.name.replace(/\./g, "_");
+
+    // Build importedNames map: for selective imports, map local name → mangled name
+    const importedNames = new Map<string, string>();
+    for (const importDecl of mod.importDecls) {
+      const importModulePrefix = importDecl.path.replace(/\./g, "_");
+      if (importDecl.items.length > 0) {
+        // Selective import: import { add } from math → add → math_add
+        for (const item of importDecl.items) {
+          importedNames.set(item, `${importModulePrefix}_${item}`);
+        }
+      }
+      // Whole-module imports are handled via MemberExpr in lowerCallExpr
+    }
+
+    const lowerer = new KirLowerer(mod.program, result, modulePrefix, importedNames);
+    const kirModule = lowerer.lower();
+
+    // Merge globals, functions, types, externs
+    combined.globals.push(...kirModule.globals);
+    combined.functions.push(...kirModule.functions);
+    combined.types.push(...kirModule.types);
+
+    // Deduplicate externs (e.g., printf might be declared in multiple modules)
+    for (const ext of kirModule.externs) {
+      if (!seenExterns.has(ext.name)) {
+        seenExterns.add(ext.name);
+        combined.externs.push(ext);
+      }
+    }
+  }
+
+  return combined;
 }

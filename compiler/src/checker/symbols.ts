@@ -4,7 +4,7 @@
  */
 
 import type { EnumDecl, FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes.ts";
-import type { EnumType, FunctionType, StructType, Type } from "./types.ts";
+import type { EnumType, FunctionType, ModuleType, StructType, Type } from "./types.ts";
 
 // ─── Symbol Kind Constants ──────────────────────────────────────────────────
 
@@ -12,6 +12,7 @@ export const SymbolKind = {
   Variable: "variable",
   Function: "function",
   Type: "type",
+  Module: "module",
 } as const;
 
 // ─── Symbol Definitions ─────────────────────────────────────────────────────
@@ -47,7 +48,15 @@ export interface TypeSymbol {
   declaration: StructDecl | UnsafeStructDecl | EnumDecl | null;
 }
 
-export type ScopeSymbol = VariableSymbol | FunctionSymbol | TypeSymbol;
+export interface ModuleSymbol {
+  kind: typeof SymbolKind.Module;
+  name: string;
+  type: ModuleType;
+  /** All public symbols from this module, keyed by name */
+  symbols: Map<string, ScopeSymbol>;
+}
+
+export type ScopeSymbol = VariableSymbol | FunctionSymbol | TypeSymbol | ModuleSymbol;
 
 // ─── Symbol Constructors ────────────────────────────────────────────────────
 
@@ -82,4 +91,12 @@ export function typeSymbol(
   declaration: StructDecl | UnsafeStructDecl | EnumDecl | null = null
 ): TypeSymbol {
   return { kind: SymbolKind.Type, name, type, declaration };
+}
+
+export function moduleSymbol(
+  name: string,
+  moduleType: ModuleType,
+  symbols: Map<string, ScopeSymbol>
+): ModuleSymbol {
+  return { kind: SymbolKind.Module, name, type: moduleType, symbols };
 }

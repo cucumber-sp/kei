@@ -1,0 +1,7 @@
+// Main module using whole-module import
+import math;
+
+fn main() -> i32 {
+    let result = math.add(3, 4);
+    return result;
+}

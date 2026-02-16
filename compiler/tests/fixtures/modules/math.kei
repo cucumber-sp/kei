@@ -1,0 +1,18 @@
+// A simple math module for testing
+
+pub fn add(a: i32, b: i32) -> i32 {
+    return a + b;
+}
+
+pub fn multiply(a: i32, b: i32) -> i32 {
+    return a * b;
+}
+
+fn helper() -> i32 {
+    return 42;
+}
+
+pub struct Point {
+    x: f64;
+    y: f64;
+}

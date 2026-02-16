@@ -10,6 +10,7 @@ export type {
   FloatType,
   FunctionType,
   IntType,
+  ModuleType,
   NullType,
   ParamInfo,
   PtrType,

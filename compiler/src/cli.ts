@@ -1,5 +1,7 @@
 import { Checker } from "./checker/checker.ts";
-import { lowerToKir } from "./kir/lowering.ts";
+import type { CheckResult, ModuleCheckInfo } from "./checker/checker.ts";
+import { lowerToKir, lowerModulesToKir } from "./kir/lowering.ts";
+import type { KirModule } from "./kir/kir-types.ts";
 import { printKir } from "./kir/printer.ts";
 import { runMem2Reg } from "./kir/mem2reg.ts";
 import { runDeSsa } from "./backend/de-ssa.ts";
@@ -7,6 +9,8 @@ import { emitC } from "./backend/c-emitter.ts";
 import { Lexer } from "./lexer/index.ts";
 import { Parser } from "./parser/index.ts";
 import { SourceFile } from "./utils/source.ts";
+import { ModuleResolver } from "./modules/index.ts";
+import type { Program } from "./ast/nodes.ts";
 
 const filePath = process.argv[2];
 
@@ -55,18 +59,19 @@ if (showAst || showAstJson || runCheck || showKir || showKirOpt || emitCFlag || 
   }
 
   if (emitCFlag || buildFlag || runFlag) {
-    const checker = new Checker(program, source);
-    const result = checker.check();
-    const errors = result.diagnostics.filter((d) => d.severity === "error");
-    if (errors.length > 0) {
-      for (const diag of errors) {
-        console.error(
-          `${diag.severity}: ${diag.message} at ${diag.location.file}:${diag.location.line}:${diag.location.column}`
-        );
-      }
-      process.exit(1);
+    let kirModule: KirModule;
+
+    // Check if this program has imports — if so, use multi-module pipeline
+    const hasImports = program.declarations.some((d) => d.kind === "ImportDecl");
+    if (hasImports) {
+      kirModule = buildMultiModule(filePath, program, source);
+    } else {
+      const checker = new Checker(program, source);
+      const result = checker.check();
+      if (exitOnErrors(result.diagnostics)) process.exit(1);
+      kirModule = lowerToKir(program, result);
     }
-    let kirModule = lowerToKir(program, result);
+
     kirModule = runMem2Reg(kirModule);
     kirModule = runDeSsa(kirModule);
     const cCode = emitC(kirModule);
@@ -124,37 +129,65 @@ if (showAst || showAstJson || runCheck || showKir || showKirOpt || emitCFlag || 
       }
     }
   } else if (showKir || showKirOpt) {
-    const checker = new Checker(program, source);
-    const result = checker.check();
-    const errors = result.diagnostics.filter((d) => d.severity === "error");
-    if (errors.length > 0) {
-      for (const diag of errors) {
-        console.error(
-          `${diag.severity}: ${diag.message} at ${diag.location.file}:${diag.location.line}:${diag.location.column}`
-        );
-      }
-      process.exit(1);
+    let kirModule: KirModule;
+
+    const hasImports = program.declarations.some((d) => d.kind === "ImportDecl");
+    if (hasImports) {
+      kirModule = buildMultiModule(filePath, program, source);
+    } else {
+      const checker = new Checker(program, source);
+      const result = checker.check();
+      if (exitOnErrors(result.diagnostics)) process.exit(1);
+      kirModule = lowerToKir(program, result);
     }
-    let kirModule = lowerToKir(program, result);
+
     if (showKirOpt) {
       kirModule = runMem2Reg(kirModule);
     }
     console.log(printKir(kirModule));
   } else if (runCheck) {
-    const checker = new Checker(program, source);
-    const result = checker.check();
-    if (result.diagnostics.length > 0) {
-      for (const diag of result.diagnostics) {
-        console.error(
-          `${diag.severity}: ${diag.message} at ${diag.location.file}:${diag.location.line}:${diag.location.column}`
-        );
-      }
-      const errorCount = result.diagnostics.filter((d) => d.severity === "error").length;
-      if (errorCount > 0) {
+    const hasImports = program.declarations.some((d) => d.kind === "ImportDecl");
+    if (hasImports) {
+      const resolver = new ModuleResolver(filePath);
+      const resolverResult = resolver.resolve(filePath);
+      if (resolverResult.errors.length > 0) {
+        for (const err of resolverResult.errors) {
+          console.error(`error: ${err}`);
+        }
         process.exit(1);
       }
+      const moduleInfos: ModuleCheckInfo[] = resolverResult.modules.map((m) => ({
+        name: m.name,
+        program: m.program,
+        source: m.source,
+        importDecls: m.importDecls,
+      }));
+      const multiResult = Checker.checkModules(moduleInfos);
+      if (multiResult.diagnostics.length > 0) {
+        for (const diag of multiResult.diagnostics) {
+          console.error(
+            `${diag.severity}: ${diag.message} at ${diag.location.file}:${diag.location.line}:${diag.location.column}`
+          );
+        }
+        const errorCount = multiResult.diagnostics.filter((d) => d.severity === "error").length;
+        if (errorCount > 0) process.exit(1);
+      } else {
+        console.log("Check passed: no errors.");
+      }
     } else {
-      console.log("Check passed: no errors.");
+      const checker = new Checker(program, source);
+      const result = checker.check();
+      if (result.diagnostics.length > 0) {
+        for (const diag of result.diagnostics) {
+          console.error(
+            `${diag.severity}: ${diag.message} at ${diag.location.file}:${diag.location.line}:${diag.location.column}`
+          );
+        }
+        const errorCount = result.diagnostics.filter((d) => d.severity === "error").length;
+        if (errorCount > 0) process.exit(1);
+      } else {
+        console.log("Check passed: no errors.");
+      }
     }
   } else if (showAstJson) {
     console.log(JSON.stringify(program, null, 2));
@@ -165,6 +198,45 @@ if (showAst || showAstJson || runCheck || showKir || showKirOpt || emitCFlag || 
   for (const token of tokens) {
     console.log(`${token.kind}\t${token.lexeme}\t${token.line}:${token.column}`);
   }
+}
+
+/** Print errors and return true if there are any errors */
+function exitOnErrors(diagnostics: { severity: string; message: string; location: { file: string; line: number; column: number } }[]): boolean {
+  const errors = diagnostics.filter((d) => d.severity === "error");
+  if (errors.length > 0) {
+    for (const diag of errors) {
+      console.error(
+        `${diag.severity}: ${diag.message} at ${diag.location.file}:${diag.location.line}:${diag.location.column}`
+      );
+    }
+    return true;
+  }
+  return false;
+}
+
+/** Build a KIR module from a multi-file project with imports */
+function buildMultiModule(mainFilePath: string, mainProgram: Program, mainSource: SourceFile): KirModule {
+  const resolver = new ModuleResolver(mainFilePath);
+  const resolverResult = resolver.resolve(mainFilePath);
+
+  if (resolverResult.errors.length > 0) {
+    for (const err of resolverResult.errors) {
+      console.error(`error: ${err}`);
+    }
+    process.exit(1);
+  }
+
+  const moduleInfos: ModuleCheckInfo[] = resolverResult.modules.map((m) => ({
+    name: m.name,
+    program: m.program,
+    source: m.source,
+    importDecls: m.importDecls,
+  }));
+
+  const multiResult = Checker.checkModules(moduleInfos);
+  if (exitOnErrors(multiResult.diagnostics)) process.exit(1);
+
+  return lowerModulesToKir(moduleInfos, multiResult);
 }
 
 function printAst(node: Record<string, unknown>, indent: number): void {

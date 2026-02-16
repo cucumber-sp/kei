@@ -5,7 +5,9 @@
 import type {
   BlockStmt,
   CallExpr,
+  Declaration,
   Expression,
+  ImportDecl,
   Program,
   Statement,
   TypeNode,
@@ -19,14 +21,35 @@ import { DeclarationChecker } from "./decl-checker.ts";
 import { ExpressionChecker } from "./expr-checker.ts";
 import { Scope } from "./scope.ts";
 import { StatementChecker } from "./stmt-checker.ts";
-import { SymbolKind, variableSymbol } from "./symbols.ts";
+import type { ScopeSymbol } from "./symbols.ts";
+import { SymbolKind, moduleSymbol, variableSymbol } from "./symbols.ts";
 import { TypeResolver } from "./type-resolver.ts";
-import type { FunctionType, Type } from "./types.ts";
+import type { FunctionType, ModuleType, Type } from "./types.ts";
 import { TypeKind, typeToString } from "./types.ts";
 
 export interface CheckResult {
   diagnostics: Diagnostic[];
   typeMap: Map<Expression, Type>;
+}
+
+/** Info about a module to check in multi-module mode */
+export interface ModuleCheckInfo {
+  name: string;
+  program: Program;
+  source: SourceFile;
+  importDecls: ImportDecl[];
+}
+
+/** Result of multi-module checking */
+export interface MultiModuleCheckResult {
+  /** Per-module check results, keyed by module name */
+  results: Map<string, CheckResult>;
+  /** Combined type map across all modules */
+  typeMap: Map<Expression, Type>;
+  /** Combined diagnostics across all modules */
+  diagnostics: Diagnostic[];
+  /** Public symbols exported by each module */
+  moduleExports: Map<string, Map<string, ScopeSymbol>>;
 }
 
 export class Checker {
@@ -43,6 +66,9 @@ export class Checker {
   /** Tracks function calls that throw but haven't been wrapped in catch */
   private pendingThrowsCalls: Map<CallExpr, FunctionType> = new Map();
 
+  /** Module exports available for import resolution (set externally for multi-module) */
+  private moduleExports: Map<string, Map<string, ScopeSymbol>> = new Map();
+
   constructor(program: Program, source: SourceFile) {
     this.program = program;
     this.source = source;
@@ -55,6 +81,71 @@ export class Checker {
     const globalScope = new Scope();
     registerBuiltins(globalScope);
     this.scopeStack.push(globalScope);
+  }
+
+  /** Set available module exports for import resolution */
+  setModuleExports(exports: Map<string, Map<string, ScopeSymbol>>): void {
+    this.moduleExports = exports;
+  }
+
+  /** Get module exports (used by decl-checker) */
+  getModuleExports(): Map<string, Map<string, ScopeSymbol>> {
+    return this.moduleExports;
+  }
+
+  /**
+   * Collect public symbols from this checker's program after checking.
+   * Returns a map of public symbol name → ScopeSymbol.
+   */
+  collectPublicSymbols(): Map<string, ScopeSymbol> {
+    const pubSymbols = new Map<string, ScopeSymbol>();
+    for (const decl of this.program.declarations) {
+      this.collectDeclPublicSymbol(decl, pubSymbols);
+    }
+    return pubSymbols;
+  }
+
+  private collectDeclPublicSymbol(decl: Declaration, out: Map<string, ScopeSymbol>): void {
+    switch (decl.kind) {
+      case "FunctionDecl":
+        if (decl.isPublic) {
+          const sym = this.currentScope.lookup(decl.name);
+          if (sym) out.set(decl.name, sym);
+        }
+        break;
+      case "StructDecl":
+      case "UnsafeStructDecl":
+        if (decl.isPublic) {
+          const sym = this.currentScope.lookupType(decl.name);
+          if (sym) out.set(decl.name, sym);
+        }
+        break;
+      case "EnumDecl":
+        if (decl.isPublic) {
+          const sym = this.currentScope.lookupType(decl.name);
+          if (sym) out.set(decl.name, sym);
+        }
+        break;
+      case "TypeAlias":
+        if (decl.isPublic) {
+          const sym = this.currentScope.lookupType(decl.name);
+          if (sym) out.set(decl.name, sym);
+        }
+        break;
+      case "StaticDecl":
+        if (decl.isPublic) {
+          const sym = this.currentScope.lookup(decl.name);
+          if (sym) out.set(decl.name, sym);
+        }
+        break;
+      case "ExternFunctionDecl":
+        // Extern functions are always accessible (they don't have pub yet)
+        // In multi-module, they won't be exported unless the module re-exports them
+        break;
+      case "ImportDecl":
+        // Imports are not re-exported
+        break;
+    }
   }
 
   /** Main entry point — check entire program. */
@@ -78,6 +169,42 @@ export class Checker {
     return {
       diagnostics: this.diagnostics,
       typeMap: this.typeMap,
+    };
+  }
+
+  /**
+   * Check multiple modules in topological order (dependencies first).
+   * Returns combined results for all modules.
+   */
+  static checkModules(modules: ModuleCheckInfo[]): MultiModuleCheckResult {
+    const moduleExports = new Map<string, Map<string, ScopeSymbol>>();
+    const allResults = new Map<string, CheckResult>();
+    const combinedTypeMap = new Map<Expression, Type>();
+    const combinedDiags: Diagnostic[] = [];
+
+    for (const mod of modules) {
+      const checker = new Checker(mod.program, mod.source);
+      checker.setModuleExports(moduleExports);
+
+      const result = checker.check();
+      allResults.set(mod.name, result);
+
+      // Merge type maps and diagnostics
+      for (const [expr, type] of result.typeMap) {
+        combinedTypeMap.set(expr, type);
+      }
+      combinedDiags.push(...result.diagnostics);
+
+      // Collect this module's public symbols for use by later modules
+      const pubSymbols = checker.collectPublicSymbols();
+      moduleExports.set(mod.name, pubSymbols);
+    }
+
+    return {
+      results: allResults,
+      typeMap: combinedTypeMap,
+      diagnostics: combinedDiags,
+      moduleExports,
     };
   }
 

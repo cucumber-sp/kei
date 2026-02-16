@@ -1,0 +1,8 @@
+// Main module that imports from math
+import { add, multiply } from math;
+
+fn main() -> i32 {
+    let result = add(3, 4);
+    let product = multiply(5, 6);
+    return result + product;
+}

@@ -1,0 +1,20 @@
+// std/mem.kei — Memory management module
+// alloc and free are available as built-ins.
+// This module provides additional memory utilities.
+
+extern fn memcpy(dest: ptr<u8>, src: ptr<u8>, n: usize) -> ptr<u8>;
+extern fn memset(dest: ptr<u8>, c: i32, n: usize) -> ptr<u8>;
+
+/// Copy n bytes from src to dest
+pub fn copy(dest: ptr<u8>, src: ptr<u8>, n: usize) {
+    unsafe {
+        memcpy(dest, src, n);
+    }
+}
+
+/// Set n bytes at dest to value c
+pub fn set(dest: ptr<u8>, c: i32, n: usize) {
+    unsafe {
+        memset(dest, c, n);
+    }
+}

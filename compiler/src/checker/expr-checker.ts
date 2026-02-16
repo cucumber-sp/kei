@@ -177,6 +177,10 @@ export class ExpressionChecker {
       return sym.type;
     }
 
+    if (sym.kind === SymbolKind.Module) {
+      return sym.type;
+    }
+
     return ERROR_TYPE;
   }
 
@@ -411,10 +415,37 @@ export class ExpressionChecker {
       }
     }
 
-    // Check for static method call: Type.method(args)
+    // Check for module-qualified call or static method call: mod.func(args) or Type.method(args)
     if (expr.callee.kind === "MemberExpr") {
       const memberExpr = expr.callee;
       if (memberExpr.object.kind === "Identifier") {
+        // Check module-qualified call: module.function(args)
+        const modSym = this.checker.currentScope.lookup(memberExpr.object.name);
+        if (modSym && modSym.kind === SymbolKind.Module) {
+          // Store the module type in typeMap so the lowerer can detect module-qualified calls
+          this.checker.setExprType(memberExpr.object, modSym.type);
+          const exportedSym = modSym.symbols.get(memberExpr.property);
+          if (exportedSym && exportedSym.kind === SymbolKind.Function) {
+            // Handle overloaded module functions
+            if (exportedSym.overloads.length > 1) {
+              return this.resolveOverloadedCall(exportedSym.overloads, expr);
+            }
+            this.checker.setExprType(expr.callee, exportedSym.type);
+            return this.checkFunctionCallArgs(exportedSym.type, expr.args, expr, false);
+          }
+          if (exportedSym && exportedSym.kind === SymbolKind.Type && exportedSym.type.kind === TypeKind.Struct) {
+            // Module-qualified static method: module.Struct.method() — handled below via normal MemberExpr flow
+          }
+          if (!exportedSym) {
+            this.checker.error(
+              `module '${modSym.name}' has no exported member '${memberExpr.property}'`,
+              expr.span
+            );
+            return ERROR_TYPE;
+          }
+        }
+
+        // Check static method call: Type.method(args)
         const typeSym = this.checker.currentScope.lookupType(memberExpr.object.name);
         if (typeSym && typeSym.kind === SymbolKind.Type && typeSym.type.kind === TypeKind.Struct) {
           const structType = typeSym.type;
@@ -642,6 +673,18 @@ export class ExpressionChecker {
   private checkMemberExpression(expr: MemberExpr): Type {
     const objectType = this.checkExpression(expr.object);
     if (isErrorType(objectType)) return ERROR_TYPE;
+
+    // Module-qualified access: math.add, net.http.Server
+    if (objectType.kind === TypeKind.Module) {
+      const exportedType = objectType.exports.get(expr.property);
+      if (exportedType) return exportedType;
+
+      this.checker.error(
+        `module '${objectType.name}' has no exported member '${expr.property}'`,
+        expr.span
+      );
+      return ERROR_TYPE;
+    }
 
     if (objectType.kind === TypeKind.Struct) {
       // Check fields first

@@ -1,0 +1,27 @@
+// std/io.kei — Standard I/O module
+// The built-in `print` function is always available without import.
+// This module provides additional I/O utilities.
+
+extern fn putchar(c: i32) -> i32;
+extern fn getchar() -> i32;
+
+/// Print a single character to stdout
+pub fn putc(c: i32) {
+    unsafe {
+        putchar(c);
+    }
+}
+
+/// Read a single character from stdin
+pub fn getc() -> i32 {
+    unsafe {
+        return getchar();
+    }
+}
+
+/// Print a newline
+pub fn newline() {
+    unsafe {
+        putchar(10);
+    }
+}

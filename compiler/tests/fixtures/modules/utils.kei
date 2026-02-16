@@ -1,0 +1,9 @@
+// Utility functions
+
+pub fn twice(n: i32) -> i32 {
+    return n * 2;
+}
+
+pub fn negate(n: i32) -> i32 {
+    return 0 - n;
+}

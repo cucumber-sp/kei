@@ -22,6 +22,7 @@ export const TypeKind = {
   Range: "range",
   CChar: "c_char",
   TypeParam: "type_param",
+  Module: "module",
 } as const;
 
 export type TypeKindValue = (typeof TypeKind)[keyof typeof TypeKind];
@@ -131,6 +132,13 @@ export interface TypeParamType {
   name: string;
 }
 
+export interface ModuleType {
+  kind: typeof TypeKind.Module;
+  name: string;
+  /** Public symbols exported by this module */
+  exports: Map<string, Type>;
+}
+
 export type Type =
   | IntType
   | FloatType
@@ -147,7 +155,8 @@ export type Type =
   | NullType
   | ErrorType
   | RangeType
-  | TypeParamType;
+  | TypeParamType
+  | ModuleType;
 
 // ─── Type Constructors ──────────────────────────────────────────────────────
 
@@ -302,6 +311,8 @@ export function typesEqual(a: Type, b: Type): boolean {
     }
     case TypeKind.TypeParam:
       return a.name === (b as TypeParamType).name;
+    case TypeKind.Module:
+      return a.name === (b as ModuleType).name;
     default:
       return false;
   }
@@ -461,5 +472,7 @@ export function typeToString(t: Type): string {
       return "<error>";
     case TypeKind.TypeParam:
       return t.name;
+    case TypeKind.Module:
+      return `module(${t.name})`;
   }
 }

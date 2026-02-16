@@ -60,6 +60,6 @@ export type {
   KirUnreachable,
 } from "./kir-types.ts";
 
-export { KirLowerer, lowerToKir } from "./lowering.ts";
+export { KirLowerer, lowerToKir, lowerModulesToKir } from "./lowering.ts";
 export { printKir, printType } from "./printer.ts";
 export { runMem2Reg } from "./mem2reg.ts";

@@ -1,0 +1,6 @@
+// Module B that imports A (creates cycle with cycle_a)
+import { hello } from cycle_a;
+
+pub fn greet() -> i32 {
+    return 2;
+}
