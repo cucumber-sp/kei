@@ -7,6 +7,7 @@ import type {
   CallExpr,
   Declaration,
   Expression,
+  FunctionDecl,
   ImportDecl,
   Program,
   Statement,
@@ -32,6 +33,10 @@ export interface CheckResult {
   diagnostics: Diagnostic[];
   typeMap: Map<Expression, Type>;
   operatorMethods: Map<Expression, { methodName: string; structType: StructType }>;
+  monomorphizedStructs: Map<string, MonomorphizedStruct>;
+  monomorphizedFunctions: Map<string, MonomorphizedFunction>;
+  /** Maps generic call/struct literal expressions to their resolved mangled names */
+  genericResolutions: Map<Expression, string>;
 }
 
 /** Info about a module to check in multi-module mode */
@@ -54,6 +59,12 @@ export interface MultiModuleCheckResult {
   moduleExports: Map<string, Map<string, ScopeSymbol>>;
   /** Combined operator method resolution info */
   operatorMethods: Map<Expression, { methodName: string; structType: StructType }>;
+  /** Combined monomorphized structs */
+  monomorphizedStructs: Map<string, MonomorphizedStruct>;
+  /** Combined monomorphized functions */
+  monomorphizedFunctions: Map<string, MonomorphizedFunction>;
+  /** Combined generic resolution info */
+  genericResolutions: Map<Expression, string>;
 }
 
 export class Checker {
@@ -81,6 +92,9 @@ export class Checker {
 
   /** Operator overload resolution info: maps expression nodes to their resolved operator method */
   operatorMethods: Map<Expression, { methodName: string; structType: StructType }> = new Map();
+
+  /** Maps generic call/struct literal expressions to their resolved mangled names */
+  genericResolutions: Map<Expression, string> = new Map();
 
   constructor(program: Program, source: SourceFile) {
     this.program = program;
@@ -179,11 +193,68 @@ export class Checker {
       this.error(`call to function that throws (${throwNames}) must use 'catch'`, callExpr.span);
     }
 
+    // Pass 3: Check bodies of monomorphized generic functions
+    this.checkMonomorphizedBodies();
+
     return {
       diagnostics: this.diagnostics,
       typeMap: this.typeMap,
       operatorMethods: this.operatorMethods,
+      monomorphizedStructs: this.monomorphizedStructs,
+      monomorphizedFunctions: this.monomorphizedFunctions,
+      genericResolutions: this.genericResolutions,
     };
+  }
+
+  /**
+   * Check the bodies of monomorphized generic functions so that all expressions
+   * inside them get entries in the typeMap (needed for KIR lowering).
+   */
+  private checkMonomorphizedBodies(): void {
+    for (const [_mangledName, monoFunc] of this.monomorphizedFunctions) {
+      if (!monoFunc.declaration) {
+        // Try to find the declaration from the program
+        for (const decl of this.program.declarations) {
+          if (decl.kind === "FunctionDecl" && decl.name === monoFunc.originalName && decl.genericParams.length > 0) {
+            monoFunc.declaration = decl;
+            break;
+          }
+        }
+      }
+      if (!monoFunc.declaration) continue;
+
+      const decl = monoFunc.declaration;
+      const concreteType = monoFunc.concrete;
+
+      // Push a function scope with concrete param types
+      this.pushScope({ functionContext: concreteType });
+
+      for (let i = 0; i < decl.params.length; i++) {
+        const param = decl.params[i]!;
+        const paramType = concreteType.params[i]?.type ?? { kind: TypeKind.Void } as Type;
+        this.defineVariable(param.name, paramType, param.isMut, false, param.span);
+      }
+
+      // Check body statements — this populates typeMap for all expressions
+      for (const stmt of decl.body.statements) {
+        this.checkStatement(stmt);
+      }
+
+      this.popScope();
+    }
+
+    // Also store struct declarations in MonomorphizedStruct
+    for (const [_mangledName, monoStruct] of this.monomorphizedStructs) {
+      if (!monoStruct.originalDecl) {
+        for (const decl of this.program.declarations) {
+          if ((decl.kind === "StructDecl" || decl.kind === "UnsafeStructDecl") &&
+              decl.name === monoStruct.original.name && decl.genericParams.length > 0) {
+            monoStruct.originalDecl = decl;
+            break;
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -196,6 +267,9 @@ export class Checker {
     const combinedTypeMap = new Map<Expression, Type>();
     const combinedDiags: Diagnostic[] = [];
     const combinedOpMethods = new Map<Expression, { methodName: string; structType: StructType }>();
+    const combinedMonoStructs = new Map<string, MonomorphizedStruct>();
+    const combinedMonoFuncs = new Map<string, MonomorphizedFunction>();
+    const combinedGenericResolutions = new Map<Expression, string>();
 
     for (const mod of modules) {
       const checker = new Checker(mod.program, mod.source);
@@ -204,12 +278,21 @@ export class Checker {
       const result = checker.check();
       allResults.set(mod.name, result);
 
-      // Merge type maps, diagnostics, and operator methods
+      // Merge type maps, diagnostics, operator methods, and monomorphized maps
       for (const [expr, type] of result.typeMap) {
         combinedTypeMap.set(expr, type);
       }
       for (const [expr, info] of result.operatorMethods) {
         combinedOpMethods.set(expr, info);
+      }
+      for (const [name, mono] of result.monomorphizedStructs) {
+        combinedMonoStructs.set(name, mono);
+      }
+      for (const [name, mono] of result.monomorphizedFunctions) {
+        combinedMonoFuncs.set(name, mono);
+      }
+      for (const [expr, name] of result.genericResolutions) {
+        combinedGenericResolutions.set(expr, name);
       }
       combinedDiags.push(...result.diagnostics);
 
@@ -224,6 +307,9 @@ export class Checker {
       diagnostics: combinedDiags,
       moduleExports,
       operatorMethods: combinedOpMethods,
+      monomorphizedStructs: combinedMonoStructs,
+      monomorphizedFunctions: combinedMonoFuncs,
+      genericResolutions: combinedGenericResolutions,
     };
   }
 

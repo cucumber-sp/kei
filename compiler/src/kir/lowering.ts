@@ -6,6 +6,8 @@
  */
 
 import type { CheckResult, MultiModuleCheckResult, ModuleCheckInfo } from "../checker/checker.ts";
+import type { MonomorphizedFunction, MonomorphizedStruct } from "../checker/generics.ts";
+import { mangleGenericName } from "../checker/generics.ts";
 import type {
   Type,
   IntType,
@@ -191,6 +193,26 @@ export class KirLowerer {
       this.lowerDeclaration(decl);
     }
 
+    // Emit monomorphized struct definitions from generics
+    for (const [mangledName, monoStruct] of this.checkResult.monomorphizedStructs) {
+      this.typeDecls.push(this.lowerMonomorphizedStruct(mangledName, monoStruct));
+      // Lower methods for monomorphized structs
+      if (monoStruct.originalDecl) {
+        for (const method of monoStruct.originalDecl.methods) {
+          const structPrefix = this.modulePrefix ? `${this.modulePrefix}_${mangledName}` : mangledName;
+          const methodMangledName = `${structPrefix}_${method.name}`;
+          this.functions.push(this.lowerMethod(method, methodMangledName, mangledName));
+        }
+      }
+    }
+
+    // Emit monomorphized function definitions from generics
+    for (const [_mangledName, monoFunc] of this.checkResult.monomorphizedFunctions) {
+      if (monoFunc.declaration) {
+        this.functions.push(this.lowerMonomorphizedFunction(monoFunc));
+      }
+    }
+
     return {
       name: "main",
       globals: this.globals,
@@ -205,6 +227,8 @@ export class KirLowerer {
   private lowerDeclaration(decl: Declaration): void {
     switch (decl.kind) {
       case "FunctionDecl":
+        // Skip generic function templates — they are instantiated via monomorphization
+        if (decl.genericParams.length > 0) break;
         this.functions.push(this.lowerFunction(decl));
         break;
       case "ExternFunctionDecl":
@@ -212,6 +236,8 @@ export class KirLowerer {
         break;
       case "StructDecl":
       case "UnsafeStructDecl":
+        // Skip generic struct templates — they are instantiated via monomorphization
+        if (decl.genericParams.length > 0) break;
         this.typeDecls.push(this.lowerStructDecl(decl));
         // Lower methods as top-level functions with mangled names
         for (const method of decl.methods) {
@@ -417,6 +443,112 @@ export class KirLowerer {
     return {
       name: decl.name,
       type: { kind: "struct", name: decl.name, fields },
+    };
+  }
+
+  private lowerMonomorphizedStruct(mangledName: string, monoStruct: MonomorphizedStruct): KirTypeDecl {
+    const concrete = monoStruct.concrete;
+    const fields = Array.from(concrete.fields.entries()).map(([name, fieldType]) => ({
+      name,
+      type: this.lowerCheckerType(fieldType),
+    }));
+    return {
+      name: mangledName,
+      type: { kind: "struct", name: mangledName, fields },
+    };
+  }
+
+  private lowerMonomorphizedFunction(monoFunc: MonomorphizedFunction): KirFunction {
+    const decl = monoFunc.declaration!;
+    const concreteType = monoFunc.concrete;
+
+    // Reset per-function state
+    this.blocks = [];
+    this.currentInsts = [];
+    this.varCounter = 0;
+    this.blockCounter = 0;
+    this.varMap = new Map();
+    this.currentBlockId = "entry";
+    this.loopBreakTarget = null;
+    this.loopContinueTarget = null;
+    this.scopeStack = [];
+    this.movedVars = new Set();
+
+    // Detect throws function
+    const isThrows = concreteType.throwsTypes.length > 0;
+    const throwsKirTypes = isThrows ? concreteType.throwsTypes.map(t => this.lowerCheckerType(t)) : [];
+
+    const originalReturnType = this.lowerCheckerType(concreteType.returnType);
+
+    // Set current function throws state
+    this.currentFunctionThrowsTypes = throwsKirTypes;
+    this.currentFunctionOrigReturnType = originalReturnType;
+
+    // Push function-level scope
+    this.pushScope();
+
+    const params: KirParam[] = [];
+    for (let i = 0; i < decl.params.length; i++) {
+      const p = decl.params[i]!;
+      const type = this.lowerCheckerType(concreteType.params[i]!.type);
+      const varId: VarId = `%${p.name}`;
+      this.varMap.set(p.name, varId);
+      params.push({ name: p.name, type });
+    }
+
+    // For throws functions: add __out and __err pointer params
+    if (isThrows) {
+      const outParamId: VarId = `%__out`;
+      const errParamId: VarId = `%__err`;
+      this.varMap.set("__out", outParamId);
+      this.varMap.set("__err", errParamId);
+      params.push({ name: "__out", type: { kind: "ptr", pointee: originalReturnType.kind === "void" ? { kind: "int", bits: 8, signed: false } : originalReturnType } });
+      params.push({ name: "__err", type: { kind: "ptr", pointee: { kind: "void" } } });
+    }
+
+    // For throws functions, the actual return type is i32 (tag)
+    const returnType = isThrows ? { kind: "int" as const, bits: 32 as const, signed: true } : originalReturnType;
+
+    // Lower body
+    this.lowerBlock(decl.body);
+
+    // Emit destroy for function-scope variables before implicit return
+    if (!this.isBlockTerminated()) {
+      this.popScopeWithDestroy();
+    } else {
+      this.scopeStack.pop();
+    }
+
+    // Ensure the last block has a terminator
+    if (isThrows) {
+      if (!this.isBlockTerminated()) {
+        const zeroTag = this.emitConstInt(0);
+        this.setTerminator({ kind: "ret", value: zeroTag });
+      }
+    } else {
+      this.ensureTerminator(returnType);
+    }
+
+    // Seal last block
+    this.sealCurrentBlock();
+
+    // Clear throws state
+    this.currentFunctionThrowsTypes = [];
+    this.currentFunctionOrigReturnType = { kind: "void" };
+
+    // Apply module prefix if needed
+    let funcName = monoFunc.mangledName;
+    if (this.modulePrefix) {
+      funcName = `${this.modulePrefix}_${funcName}`;
+    }
+
+    return {
+      name: funcName,
+      params,
+      returnType,
+      blocks: this.blocks,
+      localCount: this.varCounter,
+      throwsTypes: isThrows ? throwsKirTypes : undefined,
     };
   }
 
@@ -984,6 +1116,12 @@ export class KirLowerer {
   }
 
   private lowerBinaryExpr(expr: BinaryExpr): VarId {
+    // Check for operator overloading
+    const opMethod = this.checkResult.operatorMethods.get(expr);
+    if (opMethod) {
+      return this.lowerOperatorMethodCall(expr.left, opMethod.methodName, opMethod.structType, [expr.right]);
+    }
+
     // Short-circuit for logical AND/OR
     if (expr.operator === "&&") {
       return this.lowerShortCircuitAnd(expr);
@@ -1053,6 +1191,12 @@ export class KirLowerer {
   }
 
   private lowerUnaryExpr(expr: UnaryExpr): VarId {
+    // Check for operator overloading (e.g., -a → a.op_neg())
+    const opMethod = this.checkResult.operatorMethods.get(expr);
+    if (opMethod) {
+      return this.lowerOperatorMethodCall(expr.operand, opMethod.methodName, opMethod.structType, []);
+    }
+
     const operand = this.lowerExpr(expr.operand);
     const dest = this.freshVar();
 
@@ -1096,7 +1240,12 @@ export class KirLowerer {
 
     // Get the function name
     let funcName: string;
-    if (expr.callee.kind === "Identifier") {
+
+    // Check for generic call resolution (e.g. max<i32>(a, b) → max_i32)
+    const genericName = this.checkResult.genericResolutions.get(expr);
+    if (genericName) {
+      funcName = this.modulePrefix ? `${this.modulePrefix}_${genericName}` : genericName;
+    } else if (expr.callee.kind === "Identifier") {
       const baseName = expr.callee.name;
       // Check if this is an imported function that needs module-prefixed name
       const importedName = this.importedNames.get(baseName);

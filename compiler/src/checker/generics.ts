@@ -2,6 +2,7 @@
  * Generic type substitution and monomorphization utilities.
  */
 
+import type { FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes.ts";
 import type { FunctionType, StructType, Type } from "./types.ts";
 import { arrayType, functionType, ptrType, rangeType, sliceType, TypeKind, typeToString } from "./types.ts";
 
@@ -115,6 +116,8 @@ export interface MonomorphizedStruct {
   original: StructType;
   typeArgs: Type[];
   concrete: StructType;
+  /** Original AST declaration (needed for lowering methods) */
+  originalDecl?: StructDecl | UnsafeStructDecl;
 }
 
 /** Info about a monomorphized function instance. */
@@ -123,4 +126,6 @@ export interface MonomorphizedFunction {
   typeArgs: Type[];
   concrete: FunctionType;
   mangledName: string;
+  /** Original AST declaration (needed for lowering the body) */
+  declaration?: FunctionDecl;
 }

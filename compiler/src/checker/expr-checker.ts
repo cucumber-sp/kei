@@ -793,11 +793,13 @@ export class ExpressionChecker {
         typeArgs: resolvedTypeArgs,
         concrete: concreteType,
         mangledName,
+        declaration: genericOverload.declaration ?? undefined,
       });
     }
 
-    // Store the concrete type on the callee
+    // Store the concrete type on the callee and the mangled name resolution
     this.checker.setExprType(expr.callee, concreteType);
+    this.checker.genericResolutions.set(expr, mangledName);
 
     return this.checkFunctionCallArgs(concreteType, expr.args, expr, false);
   }
@@ -857,8 +859,9 @@ export class ExpressionChecker {
       });
     }
 
-    // Store the concrete type on the callee
+    // Store the concrete type on the callee and the mangled name resolution
     this.checker.setExprType(expr.callee, concreteType);
+    this.checker.genericResolutions.set(expr, mangledName);
 
     // Validate args against concrete param types
     for (let i = 0; i < argTypes.length; i++) {
@@ -1288,7 +1291,11 @@ export class ExpressionChecker {
       original: baseStruct,
       typeArgs: resolvedTypeArgs,
       concrete: concreteStruct,
+      // originalDecl will be resolved later in checkMonomorphizedBodies
     });
+
+    // Store generic resolution for the struct literal
+    this.checker.genericResolutions.set(expr, mangledName);
 
     return concreteStruct;
   }
@@ -1385,6 +1392,9 @@ export class ExpressionChecker {
         typeArgs: resolvedTypeArgs,
         concrete: concreteStruct,
       });
+
+      // Store generic resolution for the struct literal
+      this.checker.genericResolutions.set(expr, mangledName);
 
       return concreteStruct;
     }
