@@ -29,7 +29,7 @@ import type {
 } from "../ast/nodes.ts";
 import type { Checker } from "./checker.ts";
 import { SymbolKind } from "./symbols.ts";
-import type { FunctionType, Type } from "./types.ts";
+import type { ArrayType, FunctionType, PtrType, RangeType, SliceType, StructType, Type } from "./types.ts";
 import {
   BOOL_TYPE,
   ERROR_TYPE,
@@ -750,7 +750,7 @@ export class ExpressionChecker {
 
   /** Handle generic struct literal where type params are inferred from field values. */
   private checkGenericStructLiteralInferred(
-    structType: import("./types.ts").StructType,
+    structType: StructType,
     expr: StructLiteral
   ): Type {
     // First, check all field values to get their types
@@ -783,26 +783,19 @@ export class ExpressionChecker {
       }
     }
 
-    // Infer type param substitutions from field types
+    // Infer type param substitutions from field types (recursive)
     const subs = new Map<string, Type>();
     for (const [fieldName, fieldType] of structType.fields) {
-      if (fieldType.kind === TypeKind.TypeParam) {
-        const valueType = fieldValueTypes.get(fieldName);
-        if (valueType && !isErrorType(valueType)) {
-          subs.set(fieldType.name, valueType);
-        }
+      const valueType = fieldValueTypes.get(fieldName);
+      if (valueType && !isErrorType(valueType)) {
+        this.extractTypeParamSubs(fieldType, valueType, subs);
       }
     }
 
-    // Build instantiated struct type
+    // Build instantiated struct type with recursive substitution
     const newFields = new Map<string, Type>();
     for (const [fieldName, fieldType] of structType.fields) {
-      if (fieldType.kind === TypeKind.TypeParam) {
-        const sub = subs.get(fieldType.name);
-        newFields.set(fieldName, sub ?? fieldType);
-      } else {
-        newFields.set(fieldName, fieldType);
-      }
+      newFields.set(fieldName, this.substituteTypeParams(fieldType, subs));
     }
 
     const typeArgStrs = structType.genericParams.map((gp) => {
@@ -818,6 +811,62 @@ export class ExpressionChecker {
       isUnsafe: structType.isUnsafe,
       genericParams: [],
     };
+  }
+
+  /** Recursively extract TypeParam→concrete type mappings by walking declared and concrete types. */
+  private extractTypeParamSubs(declared: Type, concrete: Type, subs: Map<string, Type>): void {
+    if (declared.kind === TypeKind.TypeParam) {
+      if (!subs.has(declared.name)) {
+        subs.set(declared.name, concrete);
+      }
+      return;
+    }
+    if (declared.kind !== concrete.kind) return;
+    switch (declared.kind) {
+      case TypeKind.Ptr:
+        this.extractTypeParamSubs(declared.pointee, (concrete as PtrType).pointee, subs);
+        break;
+      case TypeKind.Array:
+        this.extractTypeParamSubs(declared.element, (concrete as ArrayType).element, subs);
+        break;
+      case TypeKind.Slice:
+        this.extractTypeParamSubs(declared.element, (concrete as SliceType).element, subs);
+        break;
+      case TypeKind.Range:
+        this.extractTypeParamSubs(declared.element, (concrete as RangeType).element, subs);
+        break;
+      case TypeKind.Struct: {
+        const concreteStruct = concrete as StructType;
+        for (const [fieldName, fieldType] of declared.fields) {
+          const concreteField = concreteStruct.fields.get(fieldName);
+          if (concreteField) {
+            this.extractTypeParamSubs(fieldType, concreteField, subs);
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  /** Recursively substitute TypeParam types using the given substitution map. */
+  private substituteTypeParams(type: Type, subs: Map<string, Type>): Type {
+    if (subs.size === 0) return type;
+    switch (type.kind) {
+      case TypeKind.TypeParam: {
+        const sub = subs.get(type.name);
+        return sub ?? type;
+      }
+      case TypeKind.Ptr:
+        return ptrType(this.substituteTypeParams(type.pointee, subs));
+      case TypeKind.Array:
+        return { kind: TypeKind.Array, element: this.substituteTypeParams(type.element, subs) };
+      case TypeKind.Slice:
+        return { kind: TypeKind.Slice, element: this.substituteTypeParams(type.element, subs) };
+      case TypeKind.Range:
+        return rangeType(this.substituteTypeParams(type.element, subs));
+      default:
+        return type;
+    }
   }
 
   private checkIfExpression(expr: IfExpr): Type {

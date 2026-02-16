@@ -219,8 +219,13 @@ export class StatementChecker {
     }
 
     this.checker.pushScope({ isLoop: true });
+    let bodyDiverges = false;
     for (const s of stmt.body.statements) {
-      this.checkStatement(s);
+      if (bodyDiverges) {
+        this.checker.warning("unreachable code after return", s.span);
+        break;
+      }
+      bodyDiverges = this.checkStatement(s);
     }
     this.checker.popScope();
 
@@ -256,8 +261,13 @@ export class StatementChecker {
       }
     }
 
+    let bodyDiverges = false;
     for (const s of stmt.body.statements) {
-      this.checkStatement(s);
+      if (bodyDiverges) {
+        this.checker.warning("unreachable code after return", s.span);
+        break;
+      }
+      bodyDiverges = this.checkStatement(s);
     }
     this.checker.popScope();
 
@@ -353,14 +363,14 @@ export class StatementChecker {
     if (!this.checker.currentScope.isInsideLoop()) {
       this.checker.error("'break' used outside of a loop", stmt.span);
     }
-    return false;
+    return true;
   }
 
   private checkContinueStatement(stmt: ContinueStmt): boolean {
     if (!this.checker.currentScope.isInsideLoop()) {
       this.checker.error("'continue' used outside of a loop", stmt.span);
     }
-    return false;
+    return true;
   }
 
   private checkExpressionStatement(stmt: ExprStmt): boolean {

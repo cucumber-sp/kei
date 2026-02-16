@@ -200,10 +200,6 @@ export class DeclarationChecker {
       return;
     }
 
-    // Register enum variants as variables in scope so they can be used as identifiers
-    for (const variant of variants) {
-      this.checker.currentScope.define(variableSymbol(variant.name, enumType, false, true));
-    }
   }
 
   private registerTypeAlias(decl: TypeAlias): void {

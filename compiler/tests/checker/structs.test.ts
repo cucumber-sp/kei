@@ -233,4 +233,27 @@ describe("Checker — Structs", () => {
       "undeclared type 'FooBar'"
     );
   });
+
+  test("generic struct with nested type param in ptr → infers ok", () => {
+    checkOk(`
+      struct PtrHolder<T> { data: ptr<T>; }
+      fn main() -> int {
+        let x = 42;
+        unsafe {
+          let p = PtrHolder{ data: &x };
+        }
+        return 0;
+      }
+    `);
+  });
+
+  test("generic struct direct type param still infers", () => {
+    checkOk(`
+      struct Box<T> { value: T; }
+      fn main() -> int {
+        let b = Box{ value: 42 };
+        return 0;
+      }
+    `);
+  });
 });

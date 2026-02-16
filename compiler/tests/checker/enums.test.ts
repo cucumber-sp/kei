@@ -71,7 +71,7 @@ describe("Checker — Enums", () => {
     checkOk(`
       enum Color : u8 { Red = 0, Green = 1, Blue = 2 }
       fn main() -> int {
-        let c: Color = Red;
+        let c: Color = Color.Red;
         return 0;
       }
     `);
@@ -122,7 +122,7 @@ describe("Checker — Enums", () => {
       `
         enum Color : u8 { Red = 0, Green = 1, Blue = 2 }
         fn main() -> int {
-          let c: Color = Red;
+          let c: Color = Color.Red;
           switch c {
             case Red: return 1;
             case Green: return 2;
@@ -150,10 +150,53 @@ describe("Checker — Enums", () => {
   test("enum forward reference → ok", () => {
     checkOk(`
       fn main() -> int {
-        let c: Color = Red;
+        let c: Color = Color.Red;
         return 0;
       }
       enum Color : u8 { Red = 0, Green = 1, Blue = 2 }
+    `);
+  });
+
+  test("two enums with same variant name → no conflict", () => {
+    checkOk(`
+      enum Color : u8 { Red = 0, Green = 1, Blue = 2 }
+      enum Priority : u8 { Red = 0, Yellow = 1, Green = 2 }
+      fn main() -> int { return 0; }
+    `);
+  });
+
+  test("enum variant accessed via qualified name → ok", () => {
+    checkOk(`
+      enum Color : u8 { Red = 0, Green = 1, Blue = 2 }
+      fn main() -> int {
+        let c: Color = Color.Green;
+        return 0;
+      }
+    `);
+  });
+
+  test("bare enum variant outside switch → error", () => {
+    checkError(
+      `
+        enum Color : u8 { Red = 0, Green = 1, Blue = 2 }
+        fn main() -> int {
+          let c: Color = Red;
+          return 0;
+        }
+      `,
+      "undeclared variable 'Red'"
+    );
+  });
+
+  test("two enums same variant name: qualified access works", () => {
+    checkOk(`
+      enum Color : u8 { Red = 0, Blue = 1 }
+      enum Alert : u8 { Red = 0, Yellow = 1 }
+      fn main() -> int {
+        let c: Color = Color.Red;
+        let a: Alert = Alert.Red;
+        return 0;
+      }
     `);
   });
 });

@@ -179,4 +179,46 @@ describe("Checker — Control Flow", () => {
       }
     `);
   });
+
+  test("unreachable code after break → warning", () => {
+    checkWarning(
+      `
+        fn main() -> int {
+          while true {
+            break;
+            let x = 42;
+          }
+          return 0;
+        }
+      `,
+      "unreachable code after return"
+    );
+  });
+
+  test("unreachable code after continue → warning", () => {
+    checkWarning(
+      `
+        fn main() -> int {
+          for i in 0..10 {
+            continue;
+            let x = 42;
+          }
+          return 0;
+        }
+      `,
+      "unreachable code after return"
+    );
+  });
+
+  test("break in if branch does not make outer code unreachable", () => {
+    checkOk(`
+      fn main() -> int {
+        while true {
+          if true { break; }
+          let x = 1;
+        }
+        return 0;
+      }
+    `);
+  });
 });
