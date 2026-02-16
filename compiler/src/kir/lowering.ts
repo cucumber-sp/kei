@@ -1470,7 +1470,7 @@ export class KirLowerer {
       case "u32": return { kind: "int", bits: 32, signed: false };
       case "u64": case "usize": return { kind: "int", bits: 64, signed: false };
       case "f32": return { kind: "float", bits: 32 };
-      case "f64": case "float": return { kind: "float", bits: 64 };
+      case "f64": case "float": case "double": return { kind: "float", bits: 64 };
       case "bool": return { kind: "bool" };
       case "void": return { kind: "void" };
       case "string": return { kind: "string" };

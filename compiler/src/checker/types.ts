@@ -338,6 +338,68 @@ export function isAssignableTo(source: Type, target: Type): boolean {
   return false;
 }
 
+/**
+ * Extract literal info from an expression, handling unary negation.
+ * Returns { kind, value } if the expression is a literal (or -literal), else null.
+ */
+export function extractLiteralInfo(
+  expr: { kind: string; value?: number; operator?: string; operand?: { kind: string; value?: number } }
+): { kind: "IntLiteral" | "FloatLiteral"; value: number } | null {
+  if (expr.kind === "IntLiteral" || expr.kind === "FloatLiteral") {
+    return { kind: expr.kind, value: expr.value as number };
+  }
+  // Handle unary minus: -(IntLiteral) or -(FloatLiteral)
+  if (expr.kind === "UnaryExpr" && expr.operator === "-" && expr.operand) {
+    if (expr.operand.kind === "IntLiteral") {
+      return { kind: "IntLiteral", value: -(expr.operand.value as number) };
+    }
+    if (expr.operand.kind === "FloatLiteral") {
+      return { kind: "FloatLiteral", value: -(expr.operand.value as number) };
+    }
+  }
+  return null;
+}
+
+/**
+ * Check if a literal value can be implicitly converted to the target type.
+ * - Int literal → any int type if the value fits in the range
+ * - Int literal → any float type (always ok)
+ * - Float literal → f32 (always ok, precision loss acceptable)
+ */
+export function isLiteralAssignableTo(
+  literalKind: "IntLiteral" | "FloatLiteral",
+  literalValue: number,
+  target: Type
+): boolean {
+  if (literalKind === "IntLiteral") {
+    // Int literal → any int type if value fits
+    if (target.kind === TypeKind.Int) {
+      const { bits, signed } = target;
+      if (signed) {
+        const min = -(2 ** (bits - 1));
+        const max = 2 ** (bits - 1) - 1;
+        return literalValue >= min && literalValue <= max;
+      } else {
+        const max = 2 ** bits - 1;
+        return literalValue >= 0 && literalValue <= max;
+      }
+    }
+    // Int literal → any float type (always ok)
+    if (target.kind === TypeKind.Float) {
+      return true;
+    }
+  }
+
+  if (literalKind === "FloatLiteral") {
+    // Float literal → f32 (always ok)
+    if (target.kind === TypeKind.Float) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /** Format a Type as a human-readable string */
 export function typeToString(t: Type): string {
   switch (t.kind) {

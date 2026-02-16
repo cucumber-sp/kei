@@ -35,12 +35,14 @@ import type { ArrayType, FunctionType, PtrType, RangeType, SliceType, StructType
 import {
   BOOL_TYPE,
   ERROR_TYPE,
+  extractLiteralInfo,
   F64_TYPE,
   I32_TYPE,
   I64_TYPE,
   isAssignableTo,
   isErrorType,
   isIntegerType,
+  isLiteralAssignableTo,
   isNumericType,
   isPtrType,
   NULL_TYPE,
@@ -523,7 +525,7 @@ export class ExpressionChecker {
       return ERROR_TYPE;
     }
 
-    // No exact match — try with assignability (widening)
+    // No exact match — try with assignability (widening + literal conversions)
     const wideMatches: FunctionOverload[] = [];
     for (const overload of overloads) {
       const params = overload.type.params;
@@ -533,9 +535,19 @@ export class ExpressionChecker {
       for (let i = 0; i < params.length; i++) {
         const paramType = params[i]?.type;
         const argType = argTypes[i];
-        if (!paramType || !argType || !isAssignableTo(argType, paramType)) {
+        if (!paramType || !argType) {
           allAssignable = false;
           break;
+        }
+        if (!isAssignableTo(argType, paramType)) {
+          // Check literal assignability
+          const arg = expr.args[i];
+          const litInfo = arg ? extractLiteralInfo(arg) : null;
+          const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, paramType);
+          if (!isLiteralOk) {
+            allAssignable = false;
+            break;
+          }
         }
       }
       if (allAssignable) wideMatches.push(overload);
@@ -596,8 +608,11 @@ export class ExpressionChecker {
       const paramType = expectedParams[i]?.type;
 
       if (!isErrorType(argType) && !isAssignableTo(argType, paramType)) {
+        // Check if this is a literal that can be implicitly converted
+        const litInfo = extractLiteralInfo(currentArg);
+        const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, paramType);
         // Skip type param checks (generic functions)
-        if (paramType.kind !== TypeKind.TypeParam) {
+        if (!isLiteralOk && paramType.kind !== TypeKind.TypeParam) {
           this.checker.error(
             `argument ${i + 1}: expected '${typeToString(paramType)}', got '${typeToString(argType)}'`,
             currentArg.span
@@ -734,11 +749,16 @@ export class ExpressionChecker {
 
     if (op === "=") {
       if (!isAssignableTo(valueType, targetType)) {
-        this.checker.error(
-          `type mismatch: expected '${typeToString(targetType)}', got '${typeToString(valueType)}'`,
-          expr.span
-        );
-        return ERROR_TYPE;
+        // Check if this is a literal that can be implicitly converted
+        const litInfo = extractLiteralInfo(expr.value);
+        const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, targetType);
+        if (!isLiteralOk) {
+          this.checker.error(
+            `type mismatch: expected '${typeToString(targetType)}', got '${typeToString(valueType)}'`,
+            expr.span
+          );
+          return ERROR_TYPE;
+        }
       }
       return targetType;
     }
@@ -856,10 +876,15 @@ export class ExpressionChecker {
 
       const valueType = this.checkExpression(field.value);
       if (!isErrorType(valueType) && !isAssignableTo(valueType, expectedType)) {
-        this.checker.error(
-          `field '${field.name}': expected '${typeToString(expectedType)}', got '${typeToString(valueType)}'`,
-          field.span
-        );
+        // Check if this is a literal that can be implicitly converted
+        const litInfo = extractLiteralInfo(field.value);
+        const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, expectedType);
+        if (!isLiteralOk) {
+          this.checker.error(
+            `field '${field.name}': expected '${typeToString(expectedType)}', got '${typeToString(valueType)}'`,
+            field.span
+          );
+        }
       }
     }
 

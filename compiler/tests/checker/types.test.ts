@@ -173,12 +173,24 @@ describe("Checker — Types", () => {
     );
   });
 
+  test("struct literal with int literals for f64 fields → ok (implicit conversion)", () => {
+    checkOk(
+      `
+        struct Point { x: f64; y: f64; }
+        fn main() -> int {
+          let p = Point{ x: 1, y: 2 };
+          return 0;
+        }
+      `
+    );
+  });
+
   test("struct literal with wrong field type → error", () => {
     checkError(
       `
         struct Point { x: f64; y: f64; }
         fn main() -> int {
-          let p = Point{ x: 1, y: 2 };
+          let p = Point{ x: "hello", y: 2 };
           return 0;
         }
       `,

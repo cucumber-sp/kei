@@ -24,9 +24,11 @@ import type { Checker } from "./checker.ts";
 import type { Type } from "./types.ts";
 import {
   ERROR_TYPE,
+  extractLiteralInfo,
   I32_TYPE,
   isAssignableTo,
   isErrorType,
+  isLiteralAssignableTo,
   TypeKind,
   typeToString,
 } from "./types.ts";
@@ -98,10 +100,15 @@ export class StatementChecker {
         !isErrorType(annotatedType) &&
         !isAssignableTo(initType, annotatedType)
       ) {
-        this.checker.error(
-          `type mismatch: expected '${typeToString(annotatedType)}', got '${typeToString(initType)}'`,
-          stmt.span
-        );
+        // Check if this is a literal that can be implicitly converted
+        const litInfo = extractLiteralInfo(stmt.initializer);
+        const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, annotatedType);
+        if (!isLiteralOk) {
+          this.checker.error(
+            `type mismatch: expected '${typeToString(annotatedType)}', got '${typeToString(initType)}'`,
+            stmt.span
+          );
+        }
       }
       this.checker.defineVariable(stmt.name, annotatedType, true, false, stmt.span);
     } else {
@@ -122,10 +129,15 @@ export class StatementChecker {
         !isErrorType(annotatedType) &&
         !isAssignableTo(initType, annotatedType)
       ) {
-        this.checker.error(
-          `type mismatch: expected '${typeToString(annotatedType)}', got '${typeToString(initType)}'`,
-          stmt.span
-        );
+        // Check if this is a literal that can be implicitly converted
+        const litInfo = extractLiteralInfo(stmt.initializer);
+        const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, annotatedType);
+        if (!isLiteralOk) {
+          this.checker.error(
+            `type mismatch: expected '${typeToString(annotatedType)}', got '${typeToString(initType)}'`,
+            stmt.span
+          );
+        }
       }
       this.checker.defineVariable(stmt.name, annotatedType, false, true, stmt.span);
     } else {
@@ -152,10 +164,15 @@ export class StatementChecker {
             stmt.span
           );
         } else if (!isAssignableTo(valueType, enclosingFn.returnType)) {
-          this.checker.error(
-            `return type mismatch: expected '${typeToString(enclosingFn.returnType)}', got '${typeToString(valueType)}'`,
-            stmt.span
-          );
+          // Check if this is a literal that can be implicitly converted
+          const litInfo = extractLiteralInfo(stmt.value);
+          const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, enclosingFn.returnType);
+          if (!isLiteralOk) {
+            this.checker.error(
+              `return type mismatch: expected '${typeToString(enclosingFn.returnType)}', got '${typeToString(valueType)}'`,
+              stmt.span
+            );
+          }
         }
       }
     } else if (enclosingFn.returnType.kind !== TypeKind.Void) {
