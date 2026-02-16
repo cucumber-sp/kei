@@ -62,3 +62,4 @@ export type {
 
 export { KirLowerer, lowerToKir } from "./lowering.ts";
 export { printKir, printType } from "./printer.ts";
+export { runMem2Reg } from "./mem2reg.ts";
