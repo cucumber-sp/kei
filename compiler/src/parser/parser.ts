@@ -1156,6 +1156,51 @@ export class Parser {
         continue;
       }
 
+      // Generic type args: foo<i32, string>( or Pair<i32, bool>{
+      // Use speculative parsing since < is also comparison operator
+      if (
+        this.check(TokenKind.Less) &&
+        (left.kind === "Identifier" || left.kind === "MemberExpr")
+      ) {
+        const typeArgsResult = this.tryParseTypeArgs();
+        if (typeArgsResult !== null) {
+          // Generic call: foo<i32>(args)
+          if (this.check(TokenKind.LeftParen)) {
+            this.advance();
+            const args: Expression[] = [];
+            if (!this.check(TokenKind.RightParen)) {
+              args.push(this.parseExpression());
+              while (this.match(TokenKind.Comma)) {
+                args.push(this.parseExpression());
+              }
+            }
+            const end = this.expect(TokenKind.RightParen);
+            left = {
+              kind: "CallExpr",
+              callee: left,
+              typeArgs: typeArgsResult,
+              args,
+              span: { start: left.span.start, end: end.span.end },
+            };
+            continue;
+          }
+
+          // Generic struct literal: Pair<i32, bool>{ first: 1, second: true }
+          if (left.kind === "Identifier" && this.check(TokenKind.LeftBrace)) {
+            if (this.isStructLiteral()) {
+              left = this.parseStructLiteralFromIdentifier(
+                left,
+                typeArgsResult,
+              );
+              continue;
+            }
+          }
+
+          // Type args parsed but not followed by ( or { — this shouldn't
+          // happen with correct speculative parsing, but treat as error
+        }
+      }
+
       // Call: (args)
       if (this.check(TokenKind.LeftParen)) {
         this.advance();
@@ -1170,6 +1215,7 @@ export class Parser {
         left = {
           kind: "CallExpr",
           callee: left,
+          typeArgs: [],
           args,
           span: { start: left.span.start, end: end.span.end },
         };
@@ -1215,7 +1261,7 @@ export class Parser {
       if (left.kind === "Identifier" && this.check(TokenKind.LeftBrace)) {
         // Look ahead to distinguish struct literal from block
         if (this.isStructLiteral()) {
-          left = this.parseStructLiteralFromIdentifier(left);
+          left = this.parseStructLiteralFromIdentifier(left, []);
           continue;
         }
       }
@@ -1223,6 +1269,46 @@ export class Parser {
       break;
     }
     return left;
+  }
+
+  /**
+   * Speculatively try to parse `<Type, Type, ...>` as generic type arguments.
+   * Returns the parsed TypeNode[] if successful and followed by `(` or `{`,
+   * otherwise backtracks and returns null.
+   */
+  private tryParseTypeArgs(): TypeNode[] | null {
+    const saved = this.pos;
+    const savedDiagnostics = this.diagnostics.length;
+
+    try {
+      this.advance(); // consume <
+      const typeArgs: TypeNode[] = [this.parseType()];
+      while (this.match(TokenKind.Comma)) {
+        typeArgs.push(this.parseType());
+      }
+      if (!this.check(TokenKind.Greater)) {
+        // Not a valid type arg list
+        this.pos = saved;
+        this.diagnostics.length = savedDiagnostics;
+        return null;
+      }
+      this.advance(); // consume >
+
+      // Only commit if followed by ( or {
+      if (this.check(TokenKind.LeftParen) || this.check(TokenKind.LeftBrace)) {
+        return typeArgs;
+      }
+
+      // Not followed by ( or { — backtrack
+      this.pos = saved;
+      this.diagnostics.length = savedDiagnostics;
+      return null;
+    } catch {
+      // parseType threw — backtrack
+      this.pos = saved;
+      this.diagnostics.length = savedDiagnostics;
+      return null;
+    }
   }
 
   private isStructLiteral(): boolean {
@@ -1243,7 +1329,10 @@ export class Parser {
     return isStruct;
   }
 
-  private parseStructLiteralFromIdentifier(ident: Expression & { kind: "Identifier" }): Expression {
+  private parseStructLiteralFromIdentifier(
+    ident: Expression & { kind: "Identifier" },
+    typeArgs: TypeNode[],
+  ): Expression {
     this.advance(); // skip {
     const fields: FieldInit[] = [];
 
@@ -1266,7 +1355,7 @@ export class Parser {
     return {
       kind: "StructLiteral",
       name: ident.name,
-      typeArgs: [],
+      typeArgs,
       fields,
       span: { start: ident.span.start, end: end.span.end },
     };

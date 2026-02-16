@@ -324,6 +324,7 @@ export interface UnaryExpr extends BaseNode {
 export interface CallExpr extends BaseNode {
   kind: "CallExpr";
   callee: Expression;
+  typeArgs: TypeNode[];
   args: Expression[];
 }
 
