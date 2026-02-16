@@ -17,9 +17,7 @@ import {
   I32_TYPE,
   I64_TYPE,
   ISIZE_TYPE,
-  ptrType,
   STRING_TYPE,
-  typeParamType,
   U8_TYPE,
   U16_TYPE,
   U32_TYPE,
@@ -72,36 +70,6 @@ export function registerBuiltins(scope: Scope): void {
 
   // Register built-in functions
 
-  // alloc<T>(count: usize) -> ptr<T> — requires unsafe
-  scope.define(
-    functionSymbol(
-      "alloc",
-      functionType(
-        [{ name: "count", type: USIZE_TYPE, isMut: false, isMove: false }],
-        ptrType(typeParamType("T")),
-        [],
-        ["T"],
-        false
-      ),
-      false
-    )
-  );
-
-  // free<T>(p: ptr<T>) -> void — requires unsafe
-  scope.define(
-    functionSymbol(
-      "free",
-      functionType(
-        [{ name: "p", type: ptrType(typeParamType("T")), isMut: false, isMove: false }],
-        VOID_TYPE,
-        [],
-        ["T"],
-        false
-      ),
-      false
-    )
-  );
-
   // sizeof(T) -> usize — safe, takes a type not a value (special-cased)
   scope.define(
     functionSymbol(
@@ -127,58 +95,6 @@ export function registerBuiltins(scope: Scope): void {
         [],
         [],
         false
-      ),
-      false
-    )
-  );
-
-  // print — overloaded for all common types
-  scope.define(
-    functionSymbol(
-      "print",
-      functionType(
-        [{ name: "value", type: STRING_TYPE, isMut: false, isMove: false }],
-        VOID_TYPE, [], [], false
-      ),
-      false
-    )
-  );
-  scope.define(
-    functionSymbol(
-      "print",
-      functionType(
-        [{ name: "value", type: I32_TYPE, isMut: false, isMove: false }],
-        VOID_TYPE, [], [], false
-      ),
-      false
-    )
-  );
-  scope.define(
-    functionSymbol(
-      "print",
-      functionType(
-        [{ name: "value", type: I64_TYPE, isMut: false, isMove: false }],
-        VOID_TYPE, [], [], false
-      ),
-      false
-    )
-  );
-  scope.define(
-    functionSymbol(
-      "print",
-      functionType(
-        [{ name: "value", type: F64_TYPE, isMut: false, isMove: false }],
-        VOID_TYPE, [], [], false
-      ),
-      false
-    )
-  );
-  scope.define(
-    functionSymbol(
-      "print",
-      functionType(
-        [{ name: "value", type: BOOL_TYPE, isMut: false, isMove: false }],
-        VOID_TYPE, [], [], false
       ),
       false
     )

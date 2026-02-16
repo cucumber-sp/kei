@@ -36,22 +36,6 @@ static void kei_panic(const char* msg) {
     exit(1);
 }
 
-static void kei_print_string(kei_string s) {
-    printf("%s\\n", s);
-}
-
-static void kei_print_int(int64_t v) {
-    printf("%lld\\n", (long long)v);
-}
-
-static void kei_print_float(double v) {
-    printf("%g\\n", v);
-}
-
-static void kei_print_bool(bool v) {
-    printf("%s\\n", v ? "true" : "false");
-}
-
 static void kei_bounds_check(int64_t index, int64_t length) {
     if (index < 0 || index >= length) {
         fprintf(stderr, "panic: index out of bounds: index %lld, length %lld\\n",
@@ -78,6 +62,23 @@ static void kei_require(bool cond, const char* msg) {
         fprintf(stderr, "requirement failed: %s\\n", msg);
         exit(1);
     }
+}
+`;
+
+const IO_PRINT_HELPERS = `static void kei_print_string(kei_string s) {
+    printf("%s\\n", s);
+}
+
+static void kei_print_int(int64_t v) {
+    printf("%lld\\n", (long long)v);
+}
+
+static void kei_print_float(double v) {
+    printf("%g\\n", v);
+}
+
+static void kei_print_bool(bool v) {
+    printf("%s\\n", v ? "true" : "false");
 }
 `;
 
@@ -138,10 +139,51 @@ function varName(v: VarId): string {
 
 // ─── Main emitter ───────────────────────────────────────────────────────────
 
+/** Check if a function name is a std module intrinsic stub (no C definition needed) */
+function isStdModuleStub(name: string): boolean {
+  // io module print stubs
+  if (name === "io_print_string" || name === "io_print_i32" || name === "io_print_i64"
+    || name === "io_print_f64" || name === "io_print_f32" || name === "io_print_bool") return true;
+  // mem module alloc/free stubs
+  if (name === "mem_alloc" || name === "mem_free") return true;
+  return false;
+}
+
+// Backward compat alias
+const isIoPrintStub = isStdModuleStub;
+
+/** Check if any function in the module calls an io_print_* intrinsic */
+function usesIoPrint(module: KirModule): boolean {
+  for (const fn of module.functions) {
+    for (const block of fn.blocks) {
+      for (const inst of block.instructions) {
+        if ((inst.kind === "call" || inst.kind === "call_void") && isPrintIntrinsic(inst.func)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/** Check if a call target is an io module print intrinsic */
+function isPrintIntrinsic(func: string): boolean {
+  return func === "io_print_string" || func === "io_print_i32" || func === "io_print_i64"
+    || func === "io_print_f64" || func === "io_print_f32" || func === "io_print_bool"
+    // Also match direct-import forms (no io_ prefix, but mangled)
+    || func === "print_string" || func === "print_i32" || func === "print_i64"
+    || func === "print_f64" || func === "print_f32" || func === "print_bool";
+}
+
 export function emitC(module: KirModule): string {
   const out: string[] = [];
 
   out.push(RUNTIME_HEADER);
+
+  // Emit print helpers only when io module print is used
+  if (usesIoPrint(module)) {
+    out.push(IO_PRINT_HELPERS);
+  }
 
   // Forward-declare structs
   for (const td of module.types) {
@@ -163,8 +205,9 @@ export function emitC(module: KirModule): string {
   }
   if (module.externs.length > 0) out.push("");
 
-  // Forward-declare all functions
+  // Forward-declare all functions (skip io module print stubs)
   for (const fn of module.functions) {
+    if (isIoPrintStub(fn.name)) continue;
     out.push(emitFunctionPrototype(fn) + ";");
   }
   if (module.functions.length > 0) out.push("");
@@ -175,8 +218,9 @@ export function emitC(module: KirModule): string {
   }
   if (module.globals.length > 0) out.push("");
 
-  // Function definitions
+  // Function definitions (skip io module print stubs — they are intrinsics)
   for (const fn of module.functions) {
+    if (isIoPrintStub(fn.name)) continue;
     out.push(emitFunction(fn));
     out.push("");
   }
@@ -465,13 +509,17 @@ function emitInst(inst: KirInst): string {
 }
 
 function emitCallTarget(func: string): string {
-  // Map built-in print overloads to C runtime functions
-  if (func === "print_string") return "kei_print_string";
-  if (func === "print_i32" || func === "print_i64") return "kei_print_int";
-  if (func === "print_f64") return "kei_print_float";
-  if (func === "print_bool") return "kei_print_bool";
-  // Legacy: unmangled print (backward compatibility)
-  if (func === "print") return "kei_print_string";
+  // Map io module print intrinsics to C runtime functions
+  // Handles both io_print_* (whole-module import) and print_* (selective import)
+  if (func === "io_print_string" || func === "print_string") return "kei_print_string";
+  if (func === "io_print_i32" || func === "print_i32") return "kei_print_int";
+  if (func === "io_print_i64" || func === "print_i64") return "kei_print_int";
+  if (func === "io_print_f64" || func === "print_f64") return "kei_print_float";
+  if (func === "io_print_f32" || func === "print_f32") return "kei_print_float";
+  if (func === "io_print_bool" || func === "print_bool") return "kei_print_bool";
+  // mem module alloc/free intrinsics
+  if (func === "mem_alloc" || func === "alloc") return "malloc";
+  if (func === "mem_free" || func === "free") return "free";
   return sanitizeName(func);
 }
 

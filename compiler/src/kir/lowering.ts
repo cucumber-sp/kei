@@ -126,11 +126,15 @@ export class KirLowerer {
   /** Map of imported function names → their mangled names (e.g. "add" → "math_add") */
   private importedNames: Map<string, string> = new Map();
 
-  constructor(program: Program, checkResult: CheckResult, modulePrefix: string = "", importedNames?: Map<string, string>) {
+  /** Set of imported function names that are overloaded in their source module */
+  private importedOverloads: Set<string> = new Set();
+
+  constructor(program: Program, checkResult: CheckResult, modulePrefix: string = "", importedNames?: Map<string, string>, importedOverloads?: Set<string>) {
     this.program = program;
     this.checkResult = checkResult;
     this.modulePrefix = modulePrefix;
     if (importedNames) this.importedNames = importedNames;
+    if (importedOverloads) this.importedOverloads = importedOverloads;
   }
 
   lower(): KirModule {
@@ -144,8 +148,11 @@ export class KirLowerer {
     for (const [name, count] of funcNameCounts) {
       if (count > 1) this.overloadedNames.add(name);
     }
-    // Built-in overloaded names
-    this.overloadedNames.add("print");
+
+    // Also mark imported overloaded names (e.g. print from io module)
+    for (const name of this.importedOverloads) {
+      this.overloadedNames.add(name);
+    }
 
     for (const decl of this.program.declarations) {
       this.lowerDeclaration(decl);
@@ -1678,6 +1685,7 @@ export function lowerModulesToKir(
 
     // Build importedNames map: for selective imports, map local name → mangled name
     const importedNames = new Map<string, string>();
+    const importedOverloads = new Set<string>();
     for (const importDecl of mod.importDecls) {
       const importModulePrefix = importDecl.path.replace(/\./g, "_");
       if (importDecl.items.length > 0) {
@@ -1687,9 +1695,26 @@ export function lowerModulesToKir(
         }
       }
       // Whole-module imports are handled via MemberExpr in lowerCallExpr
+
+      // Detect overloaded exports: check if the source module has multiple
+      // FunctionDecls with the same name
+      const importedMod = modules.find((m) => m.name === importDecl.path);
+      if (importedMod) {
+        const funcCounts = new Map<string, number>();
+        for (const decl of importedMod.program.declarations) {
+          if (decl.kind === "FunctionDecl") {
+            funcCounts.set(decl.name, (funcCounts.get(decl.name) ?? 0) + 1);
+          }
+        }
+        for (const [name, count] of funcCounts) {
+          if (count > 1) {
+            importedOverloads.add(name);
+          }
+        }
+      }
     }
 
-    const lowerer = new KirLowerer(mod.program, result, modulePrefix, importedNames);
+    const lowerer = new KirLowerer(mod.program, result, modulePrefix, importedNames, importedOverloads);
     const kirModule = lowerer.lower();
 
     // Merge globals, functions, types, externs

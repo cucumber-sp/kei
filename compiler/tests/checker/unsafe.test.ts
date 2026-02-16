@@ -1,24 +1,32 @@
 import { describe, test } from "bun:test";
 import { checkError, checkOk } from "./helpers.ts";
 
+// Stub declarations for alloc/free (normally imported from mem module)
+const MEM_STUBS = `
+  fn alloc(count: usize) -> ptr<u8> { return null; }
+  fn free(p: ptr<u8>) {}
+`;
+
 describe("Checker — Unsafe", () => {
   test("unsafe block enters unsafe scope", () => {
     checkOk(`fn main() -> int { unsafe { let x = 1; } return 0; }`);
   });
 
   test("alloc inside unsafe → ok", () => {
-    checkOk(`fn main() -> int { unsafe { let p = alloc(1024); free(p); } return 0; }`);
+    checkOk(`${MEM_STUBS}
+      fn main() -> int { unsafe { let p = alloc(1024); free(p); } return 0; }`);
   });
 
   test("alloc outside unsafe → error", () => {
     checkError(
-      `fn main() -> int { let p = alloc(1024); return 0; }`,
+      `${MEM_STUBS}
+      fn main() -> int { let p = alloc(1024); return 0; }`,
       "cannot call 'alloc' outside unsafe block"
     );
   });
 
   test("free inside unsafe → ok", () => {
-    checkOk(`
+    checkOk(`${MEM_STUBS}
       fn main() -> int {
         unsafe {
           let p = alloc(1024);
@@ -31,7 +39,8 @@ describe("Checker — Unsafe", () => {
 
   test("free outside unsafe → error", () => {
     checkError(
-      `fn main() -> int { let p: ptr<int> = null; free(p); return 0; }`,
+      `${MEM_STUBS}
+      fn main() -> int { let p: ptr<int> = null; free(p); return 0; }`,
       "cannot call 'free' outside unsafe block"
     );
   });
@@ -85,7 +94,7 @@ describe("Checker — Unsafe", () => {
   });
 
   test("nested unsafe blocks", () => {
-    checkOk(`
+    checkOk(`${MEM_STUBS}
       fn main() -> int {
         unsafe {
           let p = alloc(100);
@@ -122,7 +131,7 @@ describe("Checker — Unsafe", () => {
   });
 
   test("unsafe struct with both hooks and ptr<T> → ok", () => {
-    checkOk(`
+    checkOk(`${MEM_STUBS}
       unsafe struct Buffer {
         data: ptr<u8>;
         size: usize;
@@ -156,18 +165,20 @@ describe("Checker — Unsafe", () => {
   });
 
   test("free with non-pointer → error", () => {
-    checkError(`fn main() -> int { unsafe { free(42); } return 0; }`, "expects a pointer argument");
+    checkError(`${MEM_STUBS}
+      fn main() -> int { unsafe { free(42); } return 0; }`, "expects a pointer argument");
   });
 
   test("alloc with wrong number of args → error", () => {
     checkError(
-      `fn main() -> int { unsafe { let p = alloc(1, 2); } return 0; }`,
+      `${MEM_STUBS}
+      fn main() -> int { unsafe { let p = alloc(1, 2); } return 0; }`,
       "expects exactly 1 argument"
     );
   });
 
   test("unsafe block with return → ok", () => {
-    checkOk(`
+    checkOk(`${MEM_STUBS}
       fn main() -> int {
         unsafe {
           let p = alloc(100);
@@ -179,7 +190,7 @@ describe("Checker — Unsafe", () => {
   });
 
   test("unsafe expression: let x = unsafe { alloc(size) }", () => {
-    checkOk(`
+    checkOk(`${MEM_STUBS}
       fn main() -> int {
         let size = 1024;
         let p = unsafe { alloc(size) };

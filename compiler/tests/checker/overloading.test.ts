@@ -67,41 +67,63 @@ describe("Checker — Function Overloading", () => {
     );
   });
 
-  // ─── Built-in print overloads ──────────────────────────────────────────
+  // ─── User-defined multi-type overloads ──────────────────────────────────
 
-  test("print(i32) → ok", () => {
-    checkOk(`fn main() -> int { print(42); return 0; }`);
-  });
-
-  test("print(string) → ok", () => {
-    checkOk(`fn main() -> int { print("hello"); return 0; }`);
-  });
-
-  test("print(f64) → ok", () => {
-    checkOk(`fn main() -> int { print(3.14); return 0; }`);
-  });
-
-  test("print(bool) → ok", () => {
-    checkOk(`fn main() -> int { print(true); return 0; }`);
-  });
-
-  test("print(i64) → ok", () => {
+  test("overload with i32 → ok", () => {
     checkOk(`
+      fn log(value: i32) {}
+      fn log(value: string) {}
+      fn main() -> int { log(42); return 0; }
+    `);
+  });
+
+  test("overload with string → ok", () => {
+    checkOk(`
+      fn log(value: i32) {}
+      fn log(value: string) {}
+      fn main() -> int { log("hello"); return 0; }
+    `);
+  });
+
+  test("overload with f64 → ok", () => {
+    checkOk(`
+      fn log(value: f64) {}
+      fn log(value: string) {}
+      fn main() -> int { log(3.14); return 0; }
+    `);
+  });
+
+  test("overload with bool → ok", () => {
+    checkOk(`
+      fn log(value: bool) {}
+      fn log(value: string) {}
+      fn main() -> int { log(true); return 0; }
+    `);
+  });
+
+  test("overload with i64 → ok", () => {
+    checkOk(`
+      fn log(value: i64) {}
+      fn log(value: string) {}
       fn main() -> int {
         let x: i64 = 100;
-        print(x);
+        log(x);
         return 0;
       }
     `);
   });
 
-  test("print with all types in one function → ok", () => {
+  test("overload with all types in one function → ok", () => {
     checkOk(`
+      fn log(value: i32) {}
+      fn log(value: string) {}
+      fn log(value: f64) {}
+      fn log(value: bool) {}
       fn main() -> int {
-        print(42);
-        print("hello");
-        print(3.14);
-        print(true);
+        log(42);
+        log("hello");
+        log(3.14);
+        log(true);
         return 0;
       }
     `);

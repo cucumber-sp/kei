@@ -2,6 +2,7 @@
 
 import math;
 import { HashMap, List } from collections;
+import { alloc, free } from mem;
 
 static MAX_USERS = 1000;
 pub static VERSION = 1;

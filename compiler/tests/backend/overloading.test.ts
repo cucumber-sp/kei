@@ -13,42 +13,6 @@ function compileToC(source: string): string {
 }
 
 describe("C Emitter — Function Overloading", () => {
-  test("print(i32) maps to kei_print_int", () => {
-    const c = compileToC(`fn main() -> int { print(42); return 0; }`);
-    expect(c).toContain("kei_print_int");
-  });
-
-  test("print(string) maps to kei_print_string", () => {
-    const c = compileToC(`fn main() -> int { print("hello"); return 0; }`);
-    expect(c).toContain("kei_print_string");
-  });
-
-  test("print(f64) maps to kei_print_float", () => {
-    const c = compileToC(`fn main() -> int { print(3.14); return 0; }`);
-    expect(c).toContain("kei_print_float");
-  });
-
-  test("print(bool) maps to kei_print_bool", () => {
-    const c = compileToC(`fn main() -> int { print(true); return 0; }`);
-    expect(c).toContain("kei_print_bool");
-  });
-
-  test("all print types in one function emit correct C calls", () => {
-    const c = compileToC(`
-      fn main() -> int {
-        print(42);
-        print("hello");
-        print(3.14);
-        print(true);
-        return 0;
-      }
-    `);
-    expect(c).toContain("kei_print_int");
-    expect(c).toContain("kei_print_string");
-    expect(c).toContain("kei_print_float");
-    expect(c).toContain("kei_print_bool");
-  });
-
   test("user-defined overloaded functions get separate C definitions", () => {
     const c = compileToC(`
       fn greet(x: i32) -> i32 { return x; }
@@ -58,5 +22,25 @@ describe("C Emitter — Function Overloading", () => {
     // Should have two separate function definitions
     expect(c).toContain("greet_i32");
     expect(c).toContain("greet_string");
+  });
+
+  test("overloaded functions with multiple types get correct C calls", () => {
+    const c = compileToC(`
+      fn log(value: i32) {}
+      fn log(value: string) {}
+      fn log(value: f64) {}
+      fn log(value: bool) {}
+      fn main() -> int {
+        log(42);
+        log("hello");
+        log(3.14);
+        log(true);
+        return 0;
+      }
+    `);
+    expect(c).toContain("log_i32");
+    expect(c).toContain("log_string");
+    expect(c).toContain("log_f64");
+    expect(c).toContain("log_bool");
   });
 });

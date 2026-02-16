@@ -1,9 +1,27 @@
 // std/io.kei — Standard I/O module
-// The built-in `print` function is always available without import.
-// This module provides additional I/O utilities.
+// print is an intrinsic — the C emitter recognizes io_print_* calls
+// and emits the appropriate kei_print_* C helpers.
 
 extern fn putchar(c: i32) -> i32;
 extern fn getchar() -> i32;
+
+/// Print a string to stdout with a newline
+pub fn print(value: string) {}
+
+/// Print an i32 to stdout with a newline
+pub fn print(value: i32) {}
+
+/// Print an i64 to stdout with a newline
+pub fn print(value: i64) {}
+
+/// Print an f64 to stdout with a newline
+pub fn print(value: f64) {}
+
+/// Print an f32 to stdout with a newline
+pub fn print(value: f32) {}
+
+/// Print a bool to stdout with a newline
+pub fn print(value: bool) {}
 
 /// Print a single character to stdout
 pub fn putc(c: i32) {

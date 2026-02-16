@@ -366,9 +366,10 @@ export class ExpressionChecker {
     }
 
     // Special case: alloc<T>(count) and free(ptr) — require unsafe
+    // Only applies when the function is in scope (imported from mem module)
     if (expr.callee.kind === "Identifier") {
       const name = expr.callee.name;
-      if (name === "alloc" || name === "free") {
+      if ((name === "alloc" || name === "free") && this.checker.currentScope.lookup(name)) {
         if (!this.checker.currentScope.isInsideUnsafe()) {
           this.checker.error(`cannot call '${name}' outside unsafe block`, expr.span);
           return ERROR_TYPE;

@@ -162,6 +162,9 @@ describe("Checker — Integration", () => {
       import math;
       import { HashMap } from collections;
 
+      fn alloc(count: usize) -> ptr<u8> { return null; }
+      fn free(p: ptr<u8>) {}
+
       static MAX_USERS = 1000;
       pub static VERSION = 1;
 

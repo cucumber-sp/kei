@@ -1,13 +1,15 @@
 // Simple Kei program for testing the lexer
+import { print } from io;
+
 fn main() -> int {
     let msg: string = "Hello, World!";
     let count: int = 42;
     let pi: f64 = 3.14159;
     let is_valid: bool = true;
-    
+
     /* Multi-line comment
        with some details */
-    
+
     if is_valid {
         print(msg);
         count += 1;

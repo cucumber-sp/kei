@@ -50,13 +50,17 @@ describe("KIR — Function Overloading", () => {
     expect(calls).toContain("process_string");
   });
 
-  test("print overloads use mangled names in KIR", () => {
+  test("user-defined overloads use mangled names in KIR", () => {
     const mod = lower(`
+      fn log(value: i32) {}
+      fn log(value: string) {}
+      fn log(value: f64) {}
+      fn log(value: bool) {}
       fn main() -> int {
-        print(42);
-        print("hello");
-        print(3.14);
-        print(true);
+        log(42);
+        log("hello");
+        log(3.14);
+        log(true);
         return 0;
       }
     `);
@@ -73,9 +77,9 @@ describe("KIR — Function Overloading", () => {
       }
     }
 
-    expect(calls).toContain("print_i32");
-    expect(calls).toContain("print_string");
-    expect(calls).toContain("print_f64");
-    expect(calls).toContain("print_bool");
+    expect(calls).toContain("log_i32");
+    expect(calls).toContain("log_string");
+    expect(calls).toContain("log_f64");
+    expect(calls).toContain("log_bool");
   });
 });
