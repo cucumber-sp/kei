@@ -75,13 +75,13 @@ export function lowerStatement(this: KirLowerer, stmt: Statement): void {
       break;
     case "BreakStmt":
       if (this.loopBreakTarget) {
-        this.emitAllScopeDestroys();
+        this.emitLoopScopeDestroys();
         this.setTerminator({ kind: "jump", target: this.loopBreakTarget });
       }
       break;
     case "ContinueStmt":
       if (this.loopContinueTarget) {
-        this.emitAllScopeDestroys();
+        this.emitLoopScopeDestroys();
         this.setTerminator({ kind: "jump", target: this.loopContinueTarget });
       }
       break;
@@ -248,13 +248,16 @@ export function lowerWhileStmt(this: KirLowerer, stmt: WhileStmt): void {
 
   const prevBreak = this.loopBreakTarget;
   const prevContinue = this.loopContinueTarget;
+  const prevScopeDepth = this.loopScopeDepth;
   this.loopBreakTarget = endLabel;
   this.loopContinueTarget = headerLabel;
+  this.loopScopeDepth = this.scopeStack.length;
 
   this.lowerBlock(stmt.body);
 
   this.loopBreakTarget = prevBreak;
   this.loopContinueTarget = prevContinue;
+  this.loopScopeDepth = prevScopeDepth;
 
   if (!this.isBlockTerminated()) {
     this.setTerminator({ kind: "jump", target: headerLabel });
@@ -330,13 +333,16 @@ export function lowerForStmt(this: KirLowerer, stmt: ForStmt): void {
 
     const prevBreak = this.loopBreakTarget;
     const prevContinue = this.loopContinueTarget;
+    const prevScopeDepth = this.loopScopeDepth;
     this.loopBreakTarget = endLabel;
     this.loopContinueTarget = latchLabel;
+    this.loopScopeDepth = this.scopeStack.length;
 
     this.lowerBlock(stmt.body);
 
     this.loopBreakTarget = prevBreak;
     this.loopContinueTarget = prevContinue;
+    this.loopScopeDepth = prevScopeDepth;
 
     if (!this.isBlockTerminated()) {
       this.setTerminator({ kind: "jump", target: latchLabel });

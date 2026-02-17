@@ -70,6 +70,8 @@ export class KirLowerer {
   // Track break/continue targets for loops
   loopBreakTarget: BlockId | null = null;
   loopContinueTarget: BlockId | null = null;
+  /** Scope stack depth at loop entry — break/continue only destroy scopes from this depth onward */
+  loopScopeDepth: number = 0;
 
   // Scope stack for lifecycle tracking: each scope has a list of vars needing destroy
   scopeStack: ScopeVar[][] = [];
@@ -284,6 +286,7 @@ export class KirLowerer {
   declare popScopeWithDestroy: typeof scopeMethods.popScopeWithDestroy;
   declare emitScopeDestroys: typeof scopeMethods.emitScopeDestroys;
   declare emitAllScopeDestroys: typeof scopeMethods.emitAllScopeDestroys;
+  declare emitLoopScopeDestroys: typeof scopeMethods.emitLoopScopeDestroys;
   declare emitAllScopeDestroysExceptNamed: typeof scopeMethods.emitAllScopeDestroysExceptNamed;
   declare trackScopeVar: typeof scopeMethods.trackScopeVar;
   declare trackScopeVarByType: typeof scopeMethods.trackScopeVarByType;
@@ -396,6 +399,7 @@ KirLowerer.prototype.pushScope = scopeMethods.pushScope;
 KirLowerer.prototype.popScopeWithDestroy = scopeMethods.popScopeWithDestroy;
 KirLowerer.prototype.emitScopeDestroys = scopeMethods.emitScopeDestroys;
 KirLowerer.prototype.emitAllScopeDestroys = scopeMethods.emitAllScopeDestroys;
+KirLowerer.prototype.emitLoopScopeDestroys = scopeMethods.emitLoopScopeDestroys;
 KirLowerer.prototype.emitAllScopeDestroysExceptNamed = scopeMethods.emitAllScopeDestroysExceptNamed;
 KirLowerer.prototype.trackScopeVar = scopeMethods.trackScopeVar;
 KirLowerer.prototype.trackScopeVarByType = scopeMethods.trackScopeVarByType;

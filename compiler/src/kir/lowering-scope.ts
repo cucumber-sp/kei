@@ -63,6 +63,13 @@ export function emitAllScopeDestroys(this: KirLowerer): void {
   }
 }
 
+/** Emit destroys only for scopes inside the current loop (from loopScopeDepth onward) */
+export function emitLoopScopeDestroys(this: KirLowerer): void {
+  for (let i = this.scopeStack.length - 1; i >= this.loopScopeDepth; i--) {
+    this.emitScopeDestroys(this.scopeStack[i]);
+  }
+}
+
 /** Emit destroys for all scopes, but skip a named variable (the returned value) */
 export function emitAllScopeDestroysExceptNamed(this: KirLowerer, skipName: string | null): void {
   for (let i = this.scopeStack.length - 1; i >= 0; i--) {
