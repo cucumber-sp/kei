@@ -3,6 +3,11 @@
  *
  * Takes a type-checked AST (Program + CheckResult) and produces a KirModule.
  * Uses simple per-block variable tracking (no phi nodes / full SSA yet).
+ *
+ * Method implementations are split across:
+ *   - lowering-decl.ts  (declaration lowering)
+ *   - lowering-stmt.ts  (statement lowering)
+ *   - lowering-expr.ts  (expression lowering)
  */
 
 import type { CheckResult, MultiModuleCheckResult, ModuleCheckInfo } from "../checker/checker.ts";
@@ -80,6 +85,11 @@ import type {
   KirFloatType,
 } from "./kir-types.ts";
 
+// Import extracted method implementations
+import * as declMethods from "./lowering-decl.ts";
+import * as stmtMethods from "./lowering-stmt.ts";
+import * as exprMethods from "./lowering-expr.ts";
+
 // ─── Scope variable tracking for lifecycle ───────────────────────────────────
 
 interface ScopeVar {
@@ -91,57 +101,57 @@ interface ScopeVar {
 // ─── Lowerer ─────────────────────────────────────────────────────────────────
 
 export class KirLowerer {
-  private program: Program;
-  private checkResult: CheckResult;
+  program: Program;
+  checkResult: CheckResult;
 
   // Current function state
-  private blocks: KirBlock[] = [];
-  private currentBlockId: BlockId = "entry";
-  private currentInsts: KirInst[] = [];
-  private varCounter = 0;
-  private blockCounter = 0;
+  blocks: KirBlock[] = [];
+  currentBlockId: BlockId = "entry";
+  currentInsts: KirInst[] = [];
+  varCounter = 0;
+  blockCounter = 0;
 
   // Variable name → current SSA VarId mapping per scope
-  private varMap: Map<string, VarId> = new Map();
+  varMap: Map<string, VarId> = new Map();
 
   // Track break/continue targets for loops
-  private loopBreakTarget: BlockId | null = null;
-  private loopContinueTarget: BlockId | null = null;
+  loopBreakTarget: BlockId | null = null;
+  loopContinueTarget: BlockId | null = null;
 
   // Scope stack for lifecycle tracking: each scope has a list of vars needing destroy
-  private scopeStack: ScopeVar[][] = [];
+  scopeStack: ScopeVar[][] = [];
 
   // Set of variable names that have been moved (no destroy on scope exit)
-  private movedVars: Set<string> = new Set();
+  movedVars: Set<string> = new Set();
 
   // Map from struct name → whether it has __destroy/__oncopy methods
   private structLifecycleCache: Map<string, { hasDestroy: boolean; hasOncopy: boolean }> = new Map();
 
   // Collected module-level items
-  private functions: KirFunction[] = [];
-  private externs: KirExtern[] = [];
-  private typeDecls: KirTypeDecl[] = [];
-  private globals: KirGlobal[] = [];
+  functions: KirFunction[] = [];
+  externs: KirExtern[] = [];
+  typeDecls: KirTypeDecl[] = [];
+  globals: KirGlobal[] = [];
 
   // Track which function names are overloaded (name → count of declarations)
-  private overloadedNames: Set<string> = new Set();
+  overloadedNames: Set<string> = new Set();
 
   /** Module prefix for name mangling in multi-module builds (e.g. "math" → "math_add") */
-  private modulePrefix: string = "";
+  modulePrefix: string = "";
 
   /** Map of imported function names → their mangled names (e.g. "add" → "math_add") */
-  private importedNames: Map<string, string> = new Map();
+  importedNames: Map<string, string> = new Map();
 
   /** Set of imported function names that are overloaded in their source module */
   private importedOverloads: Set<string> = new Set();
 
   /** Throws types for the current function being lowered (empty = non-throwing) */
-  private currentFunctionThrowsTypes: KirType[] = [];
+  currentFunctionThrowsTypes: KirType[] = [];
   /** Original return type for throws functions (before transformation to i32 tag) */
-  private currentFunctionOrigReturnType: KirType = { kind: "void" };
+  currentFunctionOrigReturnType: KirType = { kind: "void" };
 
   /** Set of function names known to use the throws protocol */
-  private throwsFunctions: Map<string, { throwsTypes: KirType[]; returnType: KirType }> = new Map();
+  throwsFunctions: Map<string, { throwsTypes: KirType[]; returnType: KirType }> = new Map();
 
   constructor(program: Program, checkResult: CheckResult, modulePrefix: string = "", importedNames?: Map<string, string>, importedOverloads?: Set<string>) {
     this.program = program;
@@ -222,1948 +232,95 @@ export class KirLowerer {
     };
   }
 
-  // ─── Declarations ────────────────────────────────────────────────────────
-
-  private lowerDeclaration(decl: Declaration): void {
-    switch (decl.kind) {
-      case "FunctionDecl":
-        // Skip generic function templates — they are instantiated via monomorphization
-        if (decl.genericParams.length > 0) break;
-        this.functions.push(this.lowerFunction(decl));
-        break;
-      case "ExternFunctionDecl":
-        this.externs.push(this.lowerExternFunction(decl));
-        break;
-      case "StructDecl":
-      case "UnsafeStructDecl":
-        // Skip generic struct templates — they are instantiated via monomorphization
-        if (decl.genericParams.length > 0) break;
-        this.typeDecls.push(this.lowerStructDecl(decl));
-        // Lower methods as top-level functions with mangled names
-        for (const method of decl.methods) {
-          const structPrefix = this.modulePrefix ? `${this.modulePrefix}_${decl.name}` : decl.name;
-          const mangledName = `${structPrefix}_${method.name}`;
-          this.functions.push(this.lowerMethod(method, mangledName, decl.name));
-        }
-        break;
-      case "EnumDecl":
-        this.typeDecls.push(this.lowerEnumDecl(decl));
-        break;
-      case "StaticDecl":
-        this.globals.push(this.lowerStaticDecl(decl));
-        break;
-      case "TypeAlias":
-      case "ImportDecl":
-        // No KIR output needed
-        break;
-    }
-  }
-
-  private lowerFunction(decl: FunctionDecl): KirFunction {
-    // Reset per-function state
-    this.blocks = [];
-    this.currentInsts = [];
-    this.varCounter = 0;
-    this.blockCounter = 0;
-    this.varMap = new Map();
-    this.currentBlockId = "entry";
-    this.loopBreakTarget = null;
-    this.loopContinueTarget = null;
-    this.scopeStack = [];
-    this.movedVars = new Set();
-
-    // Detect throws function
-    const isThrows = decl.throwsTypes.length > 0;
-    const throwsKirTypes = isThrows ? decl.throwsTypes.map(t => this.lowerTypeNode(t)) : [];
-
-    const originalReturnType = this.lowerCheckerType(
-      this.getFunctionReturnType(decl)
-    );
-
-    // Set current function throws state
-    this.currentFunctionThrowsTypes = throwsKirTypes;
-    this.currentFunctionOrigReturnType = originalReturnType;
-
-    // Push function-level scope
-    this.pushScope();
-
-    const params: KirParam[] = decl.params.map((p) => {
-      const type = this.resolveParamType(decl, p.name);
-      const varId = `%${p.name}`;
-      this.varMap.set(p.name, varId);
-      return { name: p.name, type };
-    });
-
-    // For throws functions: add __out and __err pointer params
-    if (isThrows) {
-      const outParamId = `%__out`;
-      const errParamId = `%__err`;
-      this.varMap.set("__out", outParamId);
-      this.varMap.set("__err", errParamId);
-      params.push({ name: "__out", type: { kind: "ptr", pointee: originalReturnType.kind === "void" ? { kind: "int", bits: 8, signed: false } : originalReturnType } });
-      params.push({ name: "__err", type: { kind: "ptr", pointee: { kind: "void" } } });
-    }
-
-    // Track params with lifecycle hooks for destroy on function exit
-    for (const p of decl.params) {
-      const checkerType = this.resolveParamCheckerType(decl, p.name);
-      this.trackScopeVarByType(p.name, `%${p.name}`, checkerType);
-    }
-
-    // For throws functions, the actual return type is i32 (tag)
-    const returnType = isThrows ? { kind: "int" as const, bits: 32 as const, signed: true } : originalReturnType;
-
-    // Lower body
-    this.lowerBlock(decl.body);
-
-    // Emit destroy for function-scope variables before implicit return
-    if (!this.isBlockTerminated()) {
-      this.popScopeWithDestroy();
-    } else {
-      this.scopeStack.pop(); // discard without emitting (already returned)
-    }
-
-    // Ensure the last block has a terminator
-    if (isThrows) {
-      // For throws functions, implicit return = success (tag 0)
-      if (!this.isBlockTerminated()) {
-        const zeroTag = this.emitConstInt(0);
-        this.setTerminator({ kind: "ret", value: zeroTag });
-      }
-    } else {
-      this.ensureTerminator(returnType);
-    }
-
-    // Seal last block
-    this.sealCurrentBlock();
-
-    // Clear throws state
-    this.currentFunctionThrowsTypes = [];
-    this.currentFunctionOrigReturnType = { kind: "void" };
-
-    // Use mangled name for overloaded functions, and apply module prefix
-    let funcName: string;
-    if (this.overloadedNames.has(decl.name)) {
-      const baseName = this.modulePrefix
-        ? `${this.modulePrefix}_${decl.name}`
-        : decl.name;
-      funcName = this.mangleFunctionName(baseName, decl);
-    } else if (this.modulePrefix && decl.name !== "main") {
-      funcName = `${this.modulePrefix}_${decl.name}`;
-    } else {
-      funcName = decl.name;
-    }
-
-    return {
-      name: funcName,
-      params,
-      returnType,
-      blocks: this.blocks,
-      localCount: this.varCounter,
-      throwsTypes: isThrows ? throwsKirTypes : undefined,
-    };
-  }
-
-  private lowerMethod(decl: FunctionDecl, mangledName: string, structName: string): KirFunction {
-    // Reset per-function state
-    this.blocks = [];
-    this.currentInsts = [];
-    this.varCounter = 0;
-    this.blockCounter = 0;
-    this.varMap = new Map();
-    this.currentBlockId = "entry";
-    this.loopBreakTarget = null;
-    this.loopContinueTarget = null;
-    this.scopeStack = [];
-    this.movedVars = new Set();
-
-    // Push function-level scope
-    this.pushScope();
-
-    const params: KirParam[] = decl.params.map((p) => {
-      const type = this.resolveParamType(decl, p.name);
-      // The self parameter is passed as a pointer to the struct
-      const paramType: KirType =
-        p.name === "self" || type.kind === "struct"
-          ? { kind: "ptr", pointee: type }
-          : type;
-      const varId = `%${p.name}`;
-      this.varMap.set(p.name, varId);
-      return { name: p.name, type: paramType };
-    });
-
-    const returnType = this.lowerCheckerType(
-      this.getFunctionReturnType(decl)
-    );
-
-    // Set current function return type so lowerReturnStmt can add struct loads
-    this.currentFunctionOrigReturnType = returnType;
-
-    // Lower body
-    this.lowerBlock(decl.body);
-
-    // Emit destroy for function-scope variables before implicit return
-    if (!this.isBlockTerminated()) {
-      this.popScopeWithDestroy();
-    } else {
-      this.scopeStack.pop();
-    }
-
-    // Ensure the last block has a terminator
-    this.ensureTerminator(returnType);
-
-    // Seal last block
-    this.sealCurrentBlock();
-
-    return {
-      name: mangledName,
-      params,
-      returnType,
-      blocks: this.blocks,
-      localCount: this.varCounter,
-    };
-  }
-
-  private lowerExternFunction(decl: ExternFunctionDecl): KirExtern {
-    const params: KirParam[] = decl.params.map((p) => ({
-      name: p.name,
-      type: this.lowerTypeNode(p.typeAnnotation),
-    }));
-
-    const returnType = decl.returnType
-      ? this.lowerTypeNode(decl.returnType)
-      : ({ kind: "void" } as KirType);
-
-    return { name: decl.name, params, returnType };
-  }
-
-  private lowerStructDecl(decl: StructDecl | UnsafeStructDecl): KirTypeDecl {
-    const fields = decl.fields.map((f) => ({
-      name: f.name,
-      type: this.lowerTypeNode(f.typeAnnotation),
-    }));
-
-    return {
-      name: decl.name,
-      type: { kind: "struct", name: decl.name, fields },
-    };
-  }
-
-  private lowerMonomorphizedStruct(mangledName: string, monoStruct: MonomorphizedStruct): KirTypeDecl {
-    const concrete = monoStruct.concrete;
-    const fields = Array.from(concrete.fields.entries()).map(([name, fieldType]) => ({
-      name,
-      type: this.lowerCheckerType(fieldType),
-    }));
-    return {
-      name: mangledName,
-      type: { kind: "struct", name: mangledName, fields },
-    };
-  }
-
-  private lowerMonomorphizedFunction(monoFunc: MonomorphizedFunction): KirFunction {
-    const decl = monoFunc.declaration!;
-    const concreteType = monoFunc.concrete;
-
-    // Reset per-function state
-    this.blocks = [];
-    this.currentInsts = [];
-    this.varCounter = 0;
-    this.blockCounter = 0;
-    this.varMap = new Map();
-    this.currentBlockId = "entry";
-    this.loopBreakTarget = null;
-    this.loopContinueTarget = null;
-    this.scopeStack = [];
-    this.movedVars = new Set();
-
-    // Detect throws function
-    const isThrows = concreteType.throwsTypes.length > 0;
-    const throwsKirTypes = isThrows ? concreteType.throwsTypes.map(t => this.lowerCheckerType(t)) : [];
-
-    const originalReturnType = this.lowerCheckerType(concreteType.returnType);
-
-    // Set current function throws state
-    this.currentFunctionThrowsTypes = throwsKirTypes;
-    this.currentFunctionOrigReturnType = originalReturnType;
-
-    // Push function-level scope
-    this.pushScope();
-
-    const params: KirParam[] = [];
-    for (let i = 0; i < decl.params.length; i++) {
-      const p = decl.params[i]!;
-      const type = this.lowerCheckerType(concreteType.params[i]!.type);
-      const varId: VarId = `%${p.name}`;
-      this.varMap.set(p.name, varId);
-      params.push({ name: p.name, type });
-    }
-
-    // For throws functions: add __out and __err pointer params
-    if (isThrows) {
-      const outParamId: VarId = `%__out`;
-      const errParamId: VarId = `%__err`;
-      this.varMap.set("__out", outParamId);
-      this.varMap.set("__err", errParamId);
-      params.push({ name: "__out", type: { kind: "ptr", pointee: originalReturnType.kind === "void" ? { kind: "int", bits: 8, signed: false } : originalReturnType } });
-      params.push({ name: "__err", type: { kind: "ptr", pointee: { kind: "void" } } });
-    }
-
-    // For throws functions, the actual return type is i32 (tag)
-    const returnType = isThrows ? { kind: "int" as const, bits: 32 as const, signed: true } : originalReturnType;
-
-    // Lower body
-    this.lowerBlock(decl.body);
-
-    // Emit destroy for function-scope variables before implicit return
-    if (!this.isBlockTerminated()) {
-      this.popScopeWithDestroy();
-    } else {
-      this.scopeStack.pop();
-    }
-
-    // Ensure the last block has a terminator
-    if (isThrows) {
-      if (!this.isBlockTerminated()) {
-        const zeroTag = this.emitConstInt(0);
-        this.setTerminator({ kind: "ret", value: zeroTag });
-      }
-    } else {
-      this.ensureTerminator(returnType);
-    }
-
-    // Seal last block
-    this.sealCurrentBlock();
-
-    // Clear throws state
-    this.currentFunctionThrowsTypes = [];
-    this.currentFunctionOrigReturnType = { kind: "void" };
-
-    // Apply module prefix if needed
-    let funcName = monoFunc.mangledName;
-    if (this.modulePrefix) {
-      funcName = `${this.modulePrefix}_${funcName}`;
-    }
-
-    return {
-      name: funcName,
-      params,
-      returnType,
-      blocks: this.blocks,
-      localCount: this.varCounter,
-      throwsTypes: isThrows ? throwsKirTypes : undefined,
-    };
-  }
-
-  private lowerEnumDecl(decl: EnumDecl): KirTypeDecl {
-    const variants = decl.variants.map((v) => ({
-      name: v.name,
-      fields: v.fields.map((f) => ({
-        name: f.name,
-        type: this.lowerTypeNode(f.typeAnnotation),
-      })),
-      value: v.value?.kind === "IntLiteral" ? v.value.value : null,
-    }));
-
-    return {
-      name: decl.name,
-      type: { kind: "enum", name: decl.name, variants },
-    };
-  }
-
-  private lowerStaticDecl(decl: StaticDecl): KirGlobal {
-    const type = decl.typeAnnotation
-      ? this.lowerTypeNode(decl.typeAnnotation)
-      : this.getExprKirType(decl.initializer);
-
-    return {
-      name: decl.name,
-      type,
-      initializer: null,
-    };
-  }
-
-  // ─── Statements ──────────────────────────────────────────────────────────
-
-  private lowerBlock(block: BlockStmt): void {
-    for (const stmt of block.statements) {
-      this.lowerStatement(stmt);
-    }
-  }
-
-  /** Lower a block statement that introduces its own scope (e.g., nested { } blocks) */
-  private lowerScopedBlock(block: BlockStmt): void {
-    this.pushScope();
-    for (const stmt of block.statements) {
-      this.lowerStatement(stmt);
-    }
-    if (!this.isBlockTerminated()) {
-      this.popScopeWithDestroy();
-    } else {
-      this.scopeStack.pop();
-    }
-  }
-
-  private lowerStatement(stmt: Statement): void {
-    // If current block is already terminated, skip
-    if (this.isBlockTerminated()) return;
-
-    switch (stmt.kind) {
-      case "LetStmt":
-        this.lowerLetStmt(stmt);
-        break;
-      case "ConstStmt":
-        this.lowerConstStmt(stmt);
-        break;
-      case "ReturnStmt":
-        this.lowerReturnStmt(stmt);
-        break;
-      case "IfStmt":
-        this.lowerIfStmt(stmt);
-        break;
-      case "WhileStmt":
-        this.lowerWhileStmt(stmt);
-        break;
-      case "ForStmt":
-        this.lowerForStmt(stmt);
-        break;
-      case "SwitchStmt":
-        this.lowerSwitchStmt(stmt);
-        break;
-      case "ExprStmt":
-        this.lowerExprStmt(stmt);
-        break;
-      case "BlockStmt":
-        this.lowerScopedBlock(stmt);
-        break;
-      case "BreakStmt":
-        if (this.loopBreakTarget) {
-          this.emitAllScopeDestroys();
-          this.setTerminator({ kind: "jump", target: this.loopBreakTarget });
-        }
-        break;
-      case "ContinueStmt":
-        if (this.loopContinueTarget) {
-          this.emitAllScopeDestroys();
-          this.setTerminator({ kind: "jump", target: this.loopContinueTarget });
-        }
-        break;
-      case "AssertStmt":
-        this.lowerAssertStmt(stmt);
-        break;
-      case "RequireStmt":
-        this.lowerRequireStmt(stmt);
-        break;
-      case "DeferStmt":
-        // Defer is not yet implemented in KIR
-        break;
-      case "UnsafeBlock":
-        this.lowerScopedBlock(stmt.body);
-        break;
-    }
-  }
-
-  private lowerLetStmt(stmt: LetStmt): void {
-    const type = this.getExprKirType(stmt.initializer);
-
-    // Evaluate initializer first
-    const valueId = this.lowerExpr(stmt.initializer);
-
-    // For struct literals and expressions that return alloc pointers,
-    // we can directly alias the variable to the alloc pointer (no extra copy needed).
-    // This avoids the pointer-store-into-alloc problem.
-    const isStructAlloc = type.kind === "struct" && this.isStackAllocVar(valueId);
-    
-    let ptrId: VarId;
-    if (isStructAlloc) {
-      // Directly alias — the struct literal's alloc becomes this variable's alloc
-      ptrId = valueId;
-    } else {
-      // Regular path: alloc + store
-      ptrId = this.freshVar();
-      this.emit({ kind: "stack_alloc", dest: ptrId, type });
-
-      // Emit oncopy if this is a copy of a struct with __oncopy (not a move)
-      if (stmt.initializer.kind !== "MoveExpr") {
-        const checkerType = this.checkResult.typeMap.get(stmt.initializer);
-        const lifecycle = this.getStructLifecycle(checkerType);
-        if (lifecycle?.hasOncopy) {
-          this.emit({ kind: "oncopy", value: valueId, structName: lifecycle.structName });
-        }
-      }
-
-      this.emit({ kind: "store", ptr: ptrId, value: valueId });
-    }
-
-    // Map variable name to its stack pointer
-    this.varMap.set(stmt.name, ptrId);
-
-    // Track for scope-exit destroy
-    this.trackScopeVar(stmt.name, ptrId, stmt.initializer);
-  }
-
-  private lowerConstStmt(stmt: ConstStmt): void {
-    // Const is just like let but immutable — same lowering
-    const valueId = this.lowerExpr(stmt.initializer);
-    this.varMap.set(stmt.name, valueId);
-  }
-
-  private lowerReturnStmt(stmt: ReturnStmt): void {
-    if (this.currentFunctionThrowsTypes.length > 0) {
-      // In a throws function: store value to __out pointer, return tag 0 (success)
-      if (stmt.value) {
-        const valueId = this.lowerExpr(stmt.value);
-        const returnedVarName = stmt.value.kind === "Identifier" ? stmt.value.name : null;
-        this.emitAllScopeDestroysExceptNamed(returnedVarName);
-        // Store success value through __out pointer
-        if (this.currentFunctionOrigReturnType.kind !== "void") {
-          const outPtr = this.varMap.get("__out")!;
-          this.emit({ kind: "store", ptr: outPtr, value: valueId });
-        }
-      } else {
-        this.emitAllScopeDestroys();
-      }
-      const zeroTag = this.emitConstInt(0);
-      this.setTerminator({ kind: "ret", value: zeroTag });
-    } else {
-      if (stmt.value) {
-        let valueId = this.lowerExpr(stmt.value);
-        // Emit destroys for all scope variables, but skip the returned variable
-        const returnedVarName = stmt.value.kind === "Identifier" ? stmt.value.name : null;
-        this.emitAllScopeDestroysExceptNamed(returnedVarName);
-        // If returning a struct value and the function returns by value,
-        // we need to load from the pointer (structs are always stack_alloc'd as pointers in KIR)
-        const retType = this.currentFunctionOrigReturnType;
-        if (retType.kind === "struct") {
-          const loaded = this.freshVar();
-          this.emit({ kind: "load", dest: loaded, ptr: valueId, type: retType });
-          valueId = loaded;
-        }
-        this.setTerminator({ kind: "ret", value: valueId });
-      } else {
-        this.emitAllScopeDestroys();
-        this.setTerminator({ kind: "ret_void" });
-      }
-    }
-  }
-
-  private lowerIfStmt(stmt: IfStmt): void {
-    const condId = this.lowerExpr(stmt.condition);
-    const thenLabel = this.freshBlockId("if.then");
-    const elseLabel = stmt.elseBlock
-      ? this.freshBlockId("if.else")
-      : this.freshBlockId("if.end");
-    const endLabel = stmt.elseBlock
-      ? this.freshBlockId("if.end")
-      : elseLabel;
-
-    this.setTerminator({
-      kind: "br",
-      cond: condId,
-      thenBlock: thenLabel,
-      elseBlock: stmt.elseBlock ? elseLabel : endLabel,
-    });
-
-    // Then block
-    this.sealCurrentBlock();
-    this.startBlock(thenLabel);
-    this.lowerBlock(stmt.thenBlock);
-    if (!this.isBlockTerminated()) {
-      this.setTerminator({ kind: "jump", target: endLabel });
-    }
-
-    // Else block
-    if (stmt.elseBlock) {
-      this.sealCurrentBlock();
-      this.startBlock(elseLabel);
-      if (stmt.elseBlock.kind === "IfStmt") {
-        this.lowerIfStmt(stmt.elseBlock);
-      } else {
-        this.lowerBlock(stmt.elseBlock);
-      }
-      if (!this.isBlockTerminated()) {
-        this.setTerminator({ kind: "jump", target: endLabel });
-      }
-    }
-
-    // End block
-    this.sealCurrentBlock();
-    this.startBlock(endLabel);
-  }
-
-  private lowerWhileStmt(stmt: WhileStmt): void {
-    const headerLabel = this.freshBlockId("while.header");
-    const bodyLabel = this.freshBlockId("while.body");
-    const endLabel = this.freshBlockId("while.end");
-
-    this.setTerminator({ kind: "jump", target: headerLabel });
-
-    // Header: evaluate condition
-    this.sealCurrentBlock();
-    this.startBlock(headerLabel);
-    const condId = this.lowerExpr(stmt.condition);
-    this.setTerminator({
-      kind: "br",
-      cond: condId,
-      thenBlock: bodyLabel,
-      elseBlock: endLabel,
-    });
-
-    // Body
-    this.sealCurrentBlock();
-    this.startBlock(bodyLabel);
-
-    const prevBreak = this.loopBreakTarget;
-    const prevContinue = this.loopContinueTarget;
-    this.loopBreakTarget = endLabel;
-    this.loopContinueTarget = headerLabel;
-
-    this.lowerBlock(stmt.body);
-
-    this.loopBreakTarget = prevBreak;
-    this.loopContinueTarget = prevContinue;
-
-    if (!this.isBlockTerminated()) {
-      this.setTerminator({ kind: "jump", target: headerLabel });
-    }
-
-    // End
-    this.sealCurrentBlock();
-    this.startBlock(endLabel);
-  }
-
-  private lowerForStmt(stmt: ForStmt): void {
-    // For loops over ranges: for x in start..end { body }
-    // Lower as: init → header (condition) → body → latch (increment) → header
-    const initLabel = this.freshBlockId("for.init");
-    const headerLabel = this.freshBlockId("for.header");
-    const bodyLabel = this.freshBlockId("for.body");
-    const latchLabel = this.freshBlockId("for.latch");
-    const endLabel = this.freshBlockId("for.end");
-
-    this.setTerminator({ kind: "jump", target: initLabel });
-
-    // Init: evaluate iterable (range), set up loop var
-    this.sealCurrentBlock();
-    this.startBlock(initLabel);
-
-    const iterableType = this.getExprKirType(stmt.iterable);
-
-    // For range-based: iterable is a RangeExpr, we extract start/end
-    if (stmt.iterable.kind === "RangeExpr") {
-      const startId = this.lowerExpr(stmt.iterable.start);
-      const endId = this.lowerExpr(stmt.iterable.end);
-
-      // Allocate loop variable
-      const loopVarType: KirType = { kind: "int", bits: 32, signed: true };
-      const loopVarPtr = this.freshVar();
-      this.emit({ kind: "stack_alloc", dest: loopVarPtr, type: loopVarType });
-      this.emit({ kind: "store", ptr: loopVarPtr, value: startId });
-      this.varMap.set(stmt.variable, loopVarPtr);
-
-      // Index variable if present
-      if (stmt.index) {
-        const indexPtr = this.freshVar();
-        const zeroId = this.freshVar();
-        this.emit({ kind: "stack_alloc", dest: indexPtr, type: loopVarType });
-        this.emit({ kind: "const_int", dest: zeroId, type: { kind: "int", bits: 32, signed: true }, value: 0 });
-        this.emit({ kind: "store", ptr: indexPtr, value: zeroId });
-        this.varMap.set(stmt.index, indexPtr);
-      }
-
-      this.setTerminator({ kind: "jump", target: headerLabel });
-
-      // Header: check condition
-      this.sealCurrentBlock();
-      this.startBlock(headerLabel);
-      const curVal = this.freshVar();
-      this.emit({ kind: "load", dest: curVal, ptr: loopVarPtr, type: loopVarType });
-      const condId = this.freshVar();
-      this.emit({
-        kind: "bin_op", op: "lt", dest: condId,
-        lhs: curVal, rhs: endId,
-        type: { kind: "bool" },
-      });
-      this.setTerminator({
-        kind: "br",
-        cond: condId,
-        thenBlock: bodyLabel,
-        elseBlock: endLabel,
-      });
-
-      // Body
-      this.sealCurrentBlock();
-      this.startBlock(bodyLabel);
-
-      const prevBreak = this.loopBreakTarget;
-      const prevContinue = this.loopContinueTarget;
-      this.loopBreakTarget = endLabel;
-      this.loopContinueTarget = latchLabel;
-
-      this.lowerBlock(stmt.body);
-
-      this.loopBreakTarget = prevBreak;
-      this.loopContinueTarget = prevContinue;
-
-      if (!this.isBlockTerminated()) {
-        this.setTerminator({ kind: "jump", target: latchLabel });
-      }
-
-      // Latch: increment loop var
-      this.sealCurrentBlock();
-      this.startBlock(latchLabel);
-      const curVal2 = this.freshVar();
-      this.emit({ kind: "load", dest: curVal2, ptr: loopVarPtr, type: loopVarType });
-      const oneId = this.freshVar();
-      this.emit({ kind: "const_int", dest: oneId, type: { kind: "int", bits: 32, signed: true }, value: 1 });
-      const nextVal = this.freshVar();
-      this.emit({
-        kind: "bin_op", op: "add", dest: nextVal,
-        lhs: curVal2, rhs: oneId,
-        type: loopVarType,
-      });
-      this.emit({ kind: "store", ptr: loopVarPtr, value: nextVal });
-
-      // Increment index if present
-      if (stmt.index) {
-        const indexPtr = this.varMap.get(stmt.index)!;
-        const idxVal = this.freshVar();
-        this.emit({ kind: "load", dest: idxVal, ptr: indexPtr, type: loopVarType });
-        const oneId2 = this.freshVar();
-        this.emit({ kind: "const_int", dest: oneId2, type: { kind: "int", bits: 32, signed: true }, value: 1 });
-        const nextIdx = this.freshVar();
-        this.emit({
-          kind: "bin_op", op: "add", dest: nextIdx,
-          lhs: idxVal, rhs: oneId2,
-          type: loopVarType,
-        });
-        this.emit({ kind: "store", ptr: indexPtr, value: nextIdx });
-      }
-
-      this.setTerminator({ kind: "jump", target: headerLabel });
-    } else {
-      // Fallback: just treat as a while-like loop with the iterable
-      // This handles array/slice iteration in the future
-      this.setTerminator({ kind: "jump", target: headerLabel });
-      this.sealCurrentBlock();
-      this.startBlock(headerLabel);
-      this.setTerminator({ kind: "jump", target: endLabel });
-    }
-
-    // End
-    this.sealCurrentBlock();
-    this.startBlock(endLabel);
-  }
-
-  private lowerSwitchStmt(stmt: SwitchStmt): void {
-    const subjectId = this.lowerExpr(stmt.subject);
-    const endLabel = this.freshBlockId("switch.end");
-
-    const caseLabels: { value: VarId; target: BlockId }[] = [];
-    let defaultLabel = endLabel;
-    const caseBlocks: { label: BlockId; stmts: Statement[]; isDefault: boolean }[] = [];
-
-    for (const c of stmt.cases) {
-      const label = c.isDefault
-        ? this.freshBlockId("switch.default")
-        : this.freshBlockId("switch.case");
-
-      if (c.isDefault) {
-        defaultLabel = label;
-      }
-
-      for (const val of c.values) {
-        const valId = this.lowerExpr(val);
-        caseLabels.push({ value: valId, target: label });
-      }
-
-      caseBlocks.push({ label, stmts: c.body, isDefault: c.isDefault });
-    }
-
-    this.setTerminator({
-      kind: "switch",
-      value: subjectId,
-      cases: caseLabels,
-      defaultBlock: defaultLabel,
-    });
-
-    // Emit case blocks
-    for (const cb of caseBlocks) {
-      this.sealCurrentBlock();
-      this.startBlock(cb.label);
-      for (const s of cb.stmts) {
-        this.lowerStatement(s);
-      }
-      if (!this.isBlockTerminated()) {
-        this.setTerminator({ kind: "jump", target: endLabel });
-      }
-    }
-
-    this.sealCurrentBlock();
-    this.startBlock(endLabel);
-  }
-
-  private lowerExprStmt(stmt: ExprStmt): void {
-    this.lowerExpr(stmt.expression);
-  }
-
-  private lowerAssertStmt(stmt: AssertStmt): void {
-    const condId = this.lowerExpr(stmt.condition);
-    const msg = stmt.message?.kind === "StringLiteral"
-      ? stmt.message.value
-      : "assertion failed";
-    this.emit({ kind: "assert_check", cond: condId, message: msg });
-  }
-
-  private lowerRequireStmt(stmt: RequireStmt): void {
-    const condId = this.lowerExpr(stmt.condition);
-    const msg = stmt.message?.kind === "StringLiteral"
-      ? stmt.message.value
-      : "requirement failed";
-    this.emit({ kind: "require_check", cond: condId, message: msg });
-  }
-
-  // ─── Expressions ─────────────────────────────────────────────────────────
-
-  private lowerExpr(expr: Expression): VarId {
-    switch (expr.kind) {
-      case "IntLiteral":
-        return this.lowerIntLiteral(expr);
-      case "FloatLiteral":
-        return this.lowerFloatLiteral(expr);
-      case "StringLiteral":
-        return this.lowerStringLiteral(expr);
-      case "BoolLiteral":
-        return this.lowerBoolLiteral(expr);
-      case "NullLiteral":
-        return this.lowerNullLiteral();
-      case "Identifier":
-        return this.lowerIdentifier(expr);
-      case "BinaryExpr":
-        return this.lowerBinaryExpr(expr);
-      case "UnaryExpr":
-        return this.lowerUnaryExpr(expr);
-      case "CallExpr":
-        return this.lowerCallExpr(expr);
-      case "MemberExpr":
-        return this.lowerMemberExpr(expr);
-      case "IndexExpr":
-        return this.lowerIndexExpr(expr);
-      case "AssignExpr":
-        return this.lowerAssignExpr(expr);
-      case "StructLiteral":
-        return this.lowerStructLiteral(expr);
-      case "IfExpr":
-        return this.lowerIfExpr(expr);
-      case "GroupExpr":
-        return this.lowerExpr(expr.expression);
-      case "IncrementExpr":
-        return this.lowerIncrementExpr(expr);
-      case "DecrementExpr":
-        return this.lowerDecrementExpr(expr);
-      case "MoveExpr":
-        return this.lowerMoveExpr(expr);
-      case "ThrowExpr":
-        return this.lowerThrowExpr(expr);
-      case "CatchExpr":
-        return this.lowerCatchExpr(expr);
-      case "CastExpr":
-        return this.lowerCastExpr(expr);
-      case "ArrayLiteral":
-        return this.lowerArrayLiteral(expr);
-      default:
-        // Unhandled expression types return a placeholder
-        return this.emitConstInt(0);
-    }
-  }
-
-  private lowerIntLiteral(expr: IntLiteral): VarId {
-    const dest = this.freshVar();
-    const checkerType = this.checkResult.typeMap.get(expr);
-    let type: KirIntType = { kind: "int", bits: 32, signed: true };
-    if (checkerType?.kind === "int") {
-      type = { kind: "int", bits: checkerType.bits, signed: checkerType.signed };
-    }
-    this.emit({ kind: "const_int", dest, type, value: expr.value });
-    return dest;
-  }
-
-  private lowerFloatLiteral(expr: FloatLiteral): VarId {
-    const dest = this.freshVar();
-    const checkerType = this.checkResult.typeMap.get(expr);
-    let type: KirFloatType = { kind: "float", bits: 64 };
-    if (checkerType?.kind === "float") {
-      type = { kind: "float", bits: checkerType.bits };
-    }
-    this.emit({ kind: "const_float", dest, type, value: expr.value });
-    return dest;
-  }
-
-  private lowerStringLiteral(expr: StringLiteral): VarId {
-    const dest = this.freshVar();
-    this.emit({ kind: "const_string", dest, value: expr.value });
-    return dest;
-  }
-
-  private lowerBoolLiteral(expr: BoolLiteral): VarId {
-    const dest = this.freshVar();
-    this.emit({ kind: "const_bool", dest, value: expr.value });
-    return dest;
-  }
-
-  private lowerNullLiteral(): VarId {
-    const dest = this.freshVar();
-    this.emit({ kind: "const_null", dest, type: { kind: "ptr", pointee: { kind: "void" } } });
-    return dest;
-  }
-
-  /**
-   * Lower an expression but return a pointer (alloc) instead of loading.
-   * Used for struct field access where we need the base pointer for field_ptr.
-   */
-  private lowerExprAsPtr(expr: Expression): VarId {
-    if (expr.kind === "Identifier") {
-      const varId = this.varMap.get(expr.name);
-      if (varId) {
-        if (this.isStackAllocVar(varId)) {
-          return varId; // Return the alloc pointer directly
-        }
-        // For params (like self) that are already pointers to structs, return directly
-        return varId;
-      }
-    }
-    // For complex expressions like (a + b).x, lower the expression and wrap in alloc if needed
-    const valueId = this.lowerExpr(expr);
-    const exprType = this.checkResult.typeMap.get(expr);
-    if (exprType?.kind === "struct") {
-      const kirType = this.lowerCheckerType(exprType);
-      const alloc = this.freshVar();
-      this.emit({ kind: "stack_alloc", dest: alloc, type: kirType });
-      this.emit({ kind: "store", ptr: alloc, value: valueId });
-      return alloc;
-    }
-    return valueId;
-  }
-
-  private lowerIdentifier(expr: Identifier): VarId {
-    const varId = this.varMap.get(expr.name);
-    if (!varId) {
-      // Could be a function name or unknown — just return a symbolic reference
-      return `%${expr.name}`;
-    }
-
-    // If the var is a stack_alloc pointer, load it
-    // Check if it's a param (params don't need loading)
-    if (varId.startsWith("%") && this.isStackAllocVar(varId)) {
-      const dest = this.freshVar();
-      const type = this.getExprKirType(expr);
-      this.emit({ kind: "load", dest, ptr: varId, type });
-      return dest;
-    }
-
-    return varId;
-  }
-
-  private lowerBinaryExpr(expr: BinaryExpr): VarId {
-    // Check for operator overloading
-    const opMethod = this.checkResult.operatorMethods.get(expr);
-    if (opMethod) {
-      return this.lowerOperatorMethodCall(expr.left, opMethod.methodName, opMethod.structType, [expr.right]);
-    }
-
-    // Short-circuit for logical AND/OR
-    if (expr.operator === "&&") {
-      return this.lowerShortCircuitAnd(expr);
-    }
-    if (expr.operator === "||") {
-      return this.lowerShortCircuitOr(expr);
-    }
-
-    const lhs = this.lowerExpr(expr.left);
-    const rhs = this.lowerExpr(expr.right);
-    const dest = this.freshVar();
-
-    const op = this.mapBinOp(expr.operator);
-    if (op) {
-      const type = this.getExprKirType(expr);
-      // For string equality/inequality, pass operandType so the C emitter knows
-      const leftCheckerType = this.checkResult.typeMap.get(expr.left);
-      if (leftCheckerType?.kind === "string" && (op === "eq" || op === "neq")) {
-        this.emit({ kind: "bin_op", op, dest, lhs, rhs, type, operandType: { kind: "string" } });
-      } else {
-        this.emit({ kind: "bin_op", op, dest, lhs, rhs, type });
-      }
-      return dest;
-    }
-
-    // Fallback
-    return lhs;
-  }
-
-  private lowerShortCircuitAnd(expr: BinaryExpr): VarId {
-    const lhs = this.lowerExpr(expr.left);
-    const rhsLabel = this.freshBlockId("and.rhs");
-    const endLabel = this.freshBlockId("and.end");
-
-    this.setTerminator({ kind: "br", cond: lhs, thenBlock: rhsLabel, elseBlock: endLabel });
-
-    this.sealCurrentBlock();
-    this.startBlock(rhsLabel);
-    const rhs = this.lowerExpr(expr.right);
-    this.setTerminator({ kind: "jump", target: endLabel });
-
-    this.sealCurrentBlock();
-    this.startBlock(endLabel);
-
-    // Without phi nodes, we use a stack_alloc + stores approach
-    // For simplicity, just return rhs (correct when both paths converge)
-    // In full SSA this would be a phi node
-    return rhs;
-  }
-
-  private lowerShortCircuitOr(expr: BinaryExpr): VarId {
-    const lhs = this.lowerExpr(expr.left);
-    const rhsLabel = this.freshBlockId("or.rhs");
-    const endLabel = this.freshBlockId("or.end");
-
-    this.setTerminator({ kind: "br", cond: lhs, thenBlock: endLabel, elseBlock: rhsLabel });
-
-    this.sealCurrentBlock();
-    this.startBlock(rhsLabel);
-    const rhs = this.lowerExpr(expr.right);
-    this.setTerminator({ kind: "jump", target: endLabel });
-
-    this.sealCurrentBlock();
-    this.startBlock(endLabel);
-
-    return lhs;
-  }
-
-  private lowerUnaryExpr(expr: UnaryExpr): VarId {
-    // Check for operator overloading (e.g., -a → a.op_neg())
-    const opMethod = this.checkResult.operatorMethods.get(expr);
-    if (opMethod) {
-      return this.lowerOperatorMethodCall(expr.operand, opMethod.methodName, opMethod.structType, []);
-    }
-
-    const operand = this.lowerExpr(expr.operand);
-    const dest = this.freshVar();
-
-    switch (expr.operator) {
-      case "-": {
-        const type = this.getExprKirType(expr);
-        this.emit({ kind: "neg", dest, operand, type });
-        return dest;
-      }
-      case "!":
-        this.emit({ kind: "not", dest, operand });
-        return dest;
-      case "~": {
-        const type = this.getExprKirType(expr);
-        this.emit({ kind: "bit_not", dest, operand, type });
-        return dest;
-      }
-      default:
-        return operand;
-    }
-  }
-
-  /**
-   * Emit a method call for an overloaded operator.
-   * Lowers `self` and `args`, then emits: call StructName_methodName(self, ...args)
-   */
-  private lowerOperatorMethodCall(
-    selfExpr: Expression,
-    methodName: string,
-    structType: StructType,
-    argExprs: Expression[],
-  ): VarId {
-    // Methods take self and args as pointers, so get alloc pointers, not loaded values
-    const selfId = this.lowerExprAsPtr(selfExpr);
-    const args = argExprs.map(a => {
-      const argType = this.checkResult.typeMap.get(a);
-      if (argType?.kind === "struct") {
-        return this.lowerExprAsPtr(a);
-      }
-      return this.lowerExpr(a);
-    });
-
-    const funcName = `${structType.name}_${methodName}`;
-
-    // Look up the method's return type
-    const method = structType.methods.get(methodName);
-    if (method && method.returnType.kind !== "void") {
-      const resultType = this.lowerCheckerType(method.returnType);
-      const dest = this.freshVar();
-      this.emit({ kind: "call", dest, func: funcName, args: [selfId, ...args], type: resultType });
-
-      // Struct return values are handled by the caller (variable assignment stores into alloc)
-
-      return dest;
-    }
-
-    // Void return
-    this.emit({ kind: "call_void", func: funcName, args: [selfId, ...args] });
-    return selfId;
-  }
-
-  private lowerCallExpr(expr: CallExpr): VarId {
-    // sizeof(Type) → KIR sizeof instruction (resolved by backend)
-    if (expr.callee.kind === "Identifier" && expr.callee.name === "sizeof" && expr.args.length === 1) {
-      const arg = expr.args[0];
-      let kirType: import("./kir-types.ts").KirType;
-      if (arg && arg.kind === "Identifier") {
-        kirType = this.lowerTypeNode({ kind: "NamedType", name: arg.name, span: arg.span });
-      } else {
-        kirType = { kind: "int", bits: 32, signed: true };
-      }
-      const dest = this.freshVar();
-      this.emit({ kind: "sizeof", dest, type: kirType });
-      return dest;
-    }
-
-    const args = expr.args.map((a) => this.lowerExpr(a));
-    const resultType = this.getExprKirType(expr);
-    const isVoid = resultType.kind === "void";
-
-    // Get the function name
-    let funcName: string;
-
-    // Check for generic call resolution (e.g. max<i32>(a, b) → max_i32)
-    const genericName = this.checkResult.genericResolutions.get(expr);
-    if (genericName) {
-      funcName = this.modulePrefix ? `${this.modulePrefix}_${genericName}` : genericName;
-    } else if (expr.callee.kind === "Identifier") {
-      const baseName = expr.callee.name;
-      // Check if this is an imported function that needs module-prefixed name
-      const importedName = this.importedNames.get(baseName);
-      const resolvedBase = importedName ?? baseName;
-
-      // Mangle overloaded function calls using the resolved callee type
-      if (this.overloadedNames.has(baseName)) {
-        const calleeType = this.checkResult.typeMap.get(expr.callee);
-        if (calleeType && calleeType.kind === "function") {
-          funcName = this.mangleFunctionNameFromType(resolvedBase, calleeType as FunctionType);
-        } else {
-          funcName = resolvedBase;
-        }
-      } else {
-        funcName = resolvedBase;
-      }
-    } else if (expr.callee.kind === "MemberExpr") {
-      // Check if this is a module-qualified call: module.function(args)
-      const objType = this.checkResult.typeMap.get(expr.callee.object);
-      if (objType?.kind === "module") {
-        // Module-qualified call: math.add(args) → math_add(args)
-        const modulePath = objType.name; // e.g., "math" or "net.http"
-        const modulePrefix = modulePath.replace(/\./g, "_");
-        const callName = expr.callee.property;
-        const baseMangledName = `${modulePrefix}_${callName}`;
-
-        // Check if the function is overloaded
-        const calleeResolvedType = this.checkResult.typeMap.get(expr.callee);
-        if (calleeResolvedType && calleeResolvedType.kind === "function") {
-          if (this.overloadedNames.has(callName)) {
-            funcName = this.mangleFunctionNameFromType(baseMangledName, calleeResolvedType as FunctionType);
-          } else {
-            funcName = baseMangledName;
-          }
-        } else {
-          funcName = baseMangledName;
-        }
-      } else {
-        // Instance method call: obj.method(args) → StructName_method(obj, args)
-        const objId = this.lowerExpr(expr.callee.object);
-        const methodName = expr.callee.property;
-
-        if (objType?.kind === "struct") {
-          funcName = `${objType.name}_${methodName}`;
-        } else {
-          funcName = methodName;
-        }
-
-        if (isVoid) {
-          this.emit({ kind: "call_void", func: funcName, args: [objId, ...args] });
-          return objId; // void calls return nothing meaningful
-        }
-
-        const dest = this.freshVar();
-        this.emit({ kind: "call", dest, func: funcName, args: [objId, ...args], type: resultType });
-        return dest;
-      }
-    } else {
-      funcName = "<unknown>";
-    }
-
-    if (isVoid) {
-      this.emit({ kind: "call_void", func: funcName, args });
-      return this.emitConstInt(0); // void calls; return a dummy
-    }
-
-    const dest = this.freshVar();
-    this.emit({ kind: "call", dest, func: funcName, args, type: resultType });
-    return dest;
-  }
-
-  private lowerMemberExpr(expr: MemberExpr): VarId {
-    // Handle .len on arrays — emit compile-time constant
-    if (expr.property === "len") {
-      const objectType = this.checkResult.typeMap.get(expr.object);
-      if (objectType?.kind === "array" && objectType.length != null) {
-        const dest = this.freshVar();
-        this.emit({ kind: "const_int", dest, type: { kind: "int", bits: 64, signed: false }, value: objectType.length });
-        return dest;
-      }
-      // For strings, .len is a field access on the kei_string struct
-      if (objectType?.kind === "string") {
-        const baseId = this.lowerExpr(expr.object);
-        const dest = this.freshVar();
-        const resultType = this.getExprKirType(expr);
-        const ptrDest = this.freshVar();
-        this.emit({ kind: "field_ptr", dest: ptrDest, base: baseId, field: "len", type: resultType });
-        this.emit({ kind: "load", dest, ptr: ptrDest, type: resultType });
-        return dest;
-      }
-    }
-
-    // For struct field access, use the alloc pointer directly (not a loaded value).
-    // This ensures the alloc is address-taken and won't be incorrectly promoted by mem2reg.
-    let baseId: VarId;
-    const objectType = this.checkResult.typeMap.get(expr.object);
-    if (expr.object.kind === "Identifier" && objectType?.kind === "struct") {
-      const varId = this.varMap.get(expr.object.name);
-      if (varId && this.isStackAllocVar(varId)) {
-        baseId = varId; // Use alloc pointer directly
-      } else if (varId) {
-        baseId = varId; // Param pointer
-      } else {
-        baseId = this.lowerExpr(expr.object);
-      }
-    } else if (expr.object.kind === "MemberExpr") {
-      // Nested member access: first get the outer field as a pointer
-      baseId = this.lowerExpr(expr.object);
-    } else {
-      baseId = this.lowerExpr(expr.object);
-    }
-
-    const dest = this.freshVar();
-    const resultType = this.getExprKirType(expr);
-
-    // Get pointer to field, then load
-    const ptrDest = this.freshVar();
-    this.emit({ kind: "field_ptr", dest: ptrDest, base: baseId, field: expr.property, type: resultType });
-    this.emit({ kind: "load", dest, ptr: ptrDest, type: resultType });
-    return dest;
-  }
-
-  private lowerIndexExpr(expr: IndexExpr): VarId {
-    // Check for operator overloading (e.g., obj[i] → obj.op_index(i))
-    const opMethod = this.checkResult.operatorMethods.get(expr);
-    if (opMethod) {
-      return this.lowerOperatorMethodCall(expr.object, opMethod.methodName, opMethod.structType, [expr.index]);
-    }
-
-    const baseId = this.lowerExpr(expr.object);
-    const indexId = this.lowerExpr(expr.index);
-    const resultType = this.getExprKirType(expr);
-
-    // Emit bounds check for arrays with known length
-    const objectType = this.checkResult.typeMap.get(expr.object);
-    if (objectType?.kind === "array" && objectType.length != null) {
-      const lenId = this.freshVar();
-      this.emit({ kind: "const_int", dest: lenId, type: { kind: "int", bits: 64, signed: false }, value: objectType.length });
-      this.emit({ kind: "bounds_check", index: indexId, length: lenId });
-    }
-
-    const ptrDest = this.freshVar();
-    this.emit({ kind: "index_ptr", dest: ptrDest, base: baseId, index: indexId, type: resultType });
-
-    const dest = this.freshVar();
-    this.emit({ kind: "load", dest, ptr: ptrDest, type: resultType });
-    return dest;
-  }
-
-  private lowerAssignExpr(expr: AssignExpr): VarId {
-    // Check for operator overloading: obj[i] = v → obj.op_index_set(i, v)
-    const opMethod = this.checkResult.operatorMethods.get(expr);
-    if (opMethod && expr.target.kind === "IndexExpr") {
-      return this.lowerOperatorMethodCall(
-        expr.target.object,
-        opMethod.methodName,
-        opMethod.structType,
-        [expr.target.index, expr.value],
-      );
-    }
-
-    const valueId = this.lowerExpr(expr.value);
-
-    if (expr.target.kind === "Identifier") {
-      const ptrId = this.varMap.get(expr.target.name);
-      if (ptrId) {
-        // Handle compound assignment operators
-        if (expr.operator !== "=") {
-          const op = this.mapCompoundAssignOp(expr.operator);
-          if (op) {
-            const currentVal = this.freshVar();
-            const type = this.getExprKirType(expr.target);
-            this.emit({ kind: "load", dest: currentVal, ptr: ptrId, type });
-            const result = this.freshVar();
-            this.emit({ kind: "bin_op", op, dest: result, lhs: currentVal, rhs: valueId, type });
-            this.emit({ kind: "store", ptr: ptrId, value: result });
-            return result;
-          }
-        }
-
-        // For simple assignment to struct with lifecycle: destroy old, store new, oncopy new
-        const checkerType = this.checkResult.typeMap.get(expr.target);
-        const lifecycle = this.getStructLifecycle(checkerType);
-        if (lifecycle?.hasDestroy) {
-          // Load old value and destroy it
-          const oldVal = this.freshVar();
-          const type = this.getExprKirType(expr.target);
-          this.emit({ kind: "load", dest: oldVal, ptr: ptrId, type });
-          this.emit({ kind: "destroy", value: oldVal, structName: lifecycle.structName });
-        }
-
-        this.emit({ kind: "store", ptr: ptrId, value: valueId });
-
-        // Oncopy the new value (unless it's a move)
-        if (lifecycle?.hasOncopy && expr.value.kind !== "MoveExpr") {
-          this.emit({ kind: "oncopy", value: valueId, structName: lifecycle.structName });
-        }
-      }
-    } else if (expr.target.kind === "MemberExpr") {
-      const baseId = this.lowerExpr(expr.target.object);
-      const ptrDest = this.freshVar();
-      const fieldType = this.getExprKirType(expr.target);
-      this.emit({ kind: "field_ptr", dest: ptrDest, base: baseId, field: expr.target.property, type: fieldType });
-
-      // Destroy old field value if it has lifecycle hooks
-      const checkerType = this.checkResult.typeMap.get(expr.target);
-      const lifecycle = this.getStructLifecycle(checkerType);
-      if (lifecycle?.hasDestroy) {
-        const oldVal = this.freshVar();
-        this.emit({ kind: "load", dest: oldVal, ptr: ptrDest, type: fieldType });
-        this.emit({ kind: "destroy", value: oldVal, structName: lifecycle.structName });
-      }
-
-      this.emit({ kind: "store", ptr: ptrDest, value: valueId });
-
-      if (lifecycle?.hasOncopy && expr.value.kind !== "MoveExpr") {
-        this.emit({ kind: "oncopy", value: valueId, structName: lifecycle.structName });
-      }
-    } else if (expr.target.kind === "IndexExpr") {
-      const baseId = this.lowerExpr(expr.target.object);
-      const indexId = this.lowerExpr(expr.target.index);
-      const elemType = this.getExprKirType(expr.target);
-      const ptrDest = this.freshVar();
-      this.emit({ kind: "index_ptr", dest: ptrDest, base: baseId, index: indexId, type: elemType });
-      this.emit({ kind: "store", ptr: ptrDest, value: valueId });
-    }
-
-    return valueId;
-  }
-
-  private lowerStructLiteral(expr: StructLiteral): VarId {
-    const type = this.getExprKirType(expr);
-    const ptrId = this.freshVar();
-    this.emit({ kind: "stack_alloc", dest: ptrId, type });
-
-    for (const field of expr.fields) {
-      const valueId = this.lowerExpr(field.value);
-      const fieldPtrId = this.freshVar();
-      const fieldType = this.getExprKirType(field.value);
-      this.emit({ kind: "field_ptr", dest: fieldPtrId, base: ptrId, field: field.name, type: fieldType });
-      this.emit({ kind: "store", ptr: fieldPtrId, value: valueId });
-    }
-
-    return ptrId;
-  }
-
-  private lowerArrayLiteral(expr: ArrayLiteral): VarId {
-    const checkerType = this.checkResult.typeMap.get(expr);
-    let elemType: KirType = { kind: "int", bits: 32, signed: true };
-    if (checkerType?.kind === "array") {
-      elemType = this.lowerCheckerType(checkerType.element);
-    }
-
-    const arrType: KirType = { kind: "array", element: elemType, length: expr.elements.length };
-    const ptrId = this.freshVar();
-    this.emit({ kind: "stack_alloc", dest: ptrId, type: arrType });
-
-    // Store each element at its index
-    for (let i = 0; i < expr.elements.length; i++) {
-      const valueId = this.lowerExpr(expr.elements[i]!);
-      const idxId = this.freshVar();
-      this.emit({ kind: "const_int", dest: idxId, type: { kind: "int", bits: 64, signed: false }, value: i });
-      const elemPtrId = this.freshVar();
-      this.emit({ kind: "index_ptr", dest: elemPtrId, base: ptrId, index: idxId, type: elemType });
-      this.emit({ kind: "store", ptr: elemPtrId, value: valueId });
-    }
-
-    return ptrId;
-  }
-
-  private lowerIfExpr(expr: IfExpr): VarId {
-    const condId = this.lowerExpr(expr.condition);
-    const resultType = this.getExprKirType(expr);
-
-    const thenLabel = this.freshBlockId("ifexpr.then");
-    const elseLabel = this.freshBlockId("ifexpr.else");
-    const endLabel = this.freshBlockId("ifexpr.end");
-
-    // Allocate result on stack
-    const resultPtr = this.freshVar();
-    this.emit({ kind: "stack_alloc", dest: resultPtr, type: resultType });
-
-    this.setTerminator({ kind: "br", cond: condId, thenBlock: thenLabel, elseBlock: elseLabel });
-
-    // Then
-    this.sealCurrentBlock();
-    this.startBlock(thenLabel);
-    const thenStmts = expr.thenBlock.statements;
-    for (const s of thenStmts) {
-      if (s.kind === "ExprStmt") {
-        const val = this.lowerExpr(s.expression);
-        this.emit({ kind: "store", ptr: resultPtr, value: val });
-      } else {
-        this.lowerStatement(s);
-      }
-    }
-    if (!this.isBlockTerminated()) {
-      this.setTerminator({ kind: "jump", target: endLabel });
-    }
-
-    // Else
-    this.sealCurrentBlock();
-    this.startBlock(elseLabel);
-    const elseStmts = expr.elseBlock.statements;
-    for (const s of elseStmts) {
-      if (s.kind === "ExprStmt") {
-        const val = this.lowerExpr(s.expression);
-        this.emit({ kind: "store", ptr: resultPtr, value: val });
-      } else {
-        this.lowerStatement(s);
-      }
-    }
-    if (!this.isBlockTerminated()) {
-      this.setTerminator({ kind: "jump", target: endLabel });
-    }
-
-    // End
-    this.sealCurrentBlock();
-    this.startBlock(endLabel);
-
-    const dest = this.freshVar();
-    this.emit({ kind: "load", dest, ptr: resultPtr, type: resultType });
-    return dest;
-  }
-
-  private lowerIncrementExpr(expr: IncrementExpr): VarId {
-    if (expr.operand.kind === "Identifier") {
-      const ptrId = this.varMap.get(expr.operand.name);
-      if (ptrId) {
-        const type = this.getExprKirType(expr.operand);
-        const currentVal = this.freshVar();
-        this.emit({ kind: "load", dest: currentVal, ptr: ptrId, type });
-        const oneId = this.emitConstInt(1);
-        const result = this.freshVar();
-        this.emit({ kind: "bin_op", op: "add", dest: result, lhs: currentVal, rhs: oneId, type });
-        this.emit({ kind: "store", ptr: ptrId, value: result });
-        return currentVal; // post-increment: return old value
-      }
-    }
-    return this.emitConstInt(0);
-  }
-
-  private lowerDecrementExpr(expr: DecrementExpr): VarId {
-    if (expr.operand.kind === "Identifier") {
-      const ptrId = this.varMap.get(expr.operand.name);
-      if (ptrId) {
-        const type = this.getExprKirType(expr.operand);
-        const currentVal = this.freshVar();
-        this.emit({ kind: "load", dest: currentVal, ptr: ptrId, type });
-        const oneId = this.emitConstInt(1);
-        const result = this.freshVar();
-        this.emit({ kind: "bin_op", op: "sub", dest: result, lhs: currentVal, rhs: oneId, type });
-        this.emit({ kind: "store", ptr: ptrId, value: result });
-        return currentVal; // post-decrement: return old value
-      }
-    }
-    return this.emitConstInt(0);
-  }
-
-  private lowerMoveExpr(expr: MoveExpr): VarId {
-    const sourceId = this.lowerExpr(expr.operand);
-    const dest = this.freshVar();
-    const type = this.getExprKirType(expr.operand);
-    this.emit({ kind: "move", dest, source: sourceId, type });
-
-    // Mark the source variable as moved so it won't be destroyed at scope exit
-    if (expr.operand.kind === "Identifier") {
-      this.movedVars.add(expr.operand.name);
-    }
-
-    return dest;
-  }
-
-  private lowerCastExpr(expr: CastExpr): VarId {
-    const value = this.lowerExpr(expr.operand);
-    const targetType = this.getExprKirType(expr);
-    const dest = this.freshVar();
-    this.emit({ kind: "cast", dest, value, targetType });
-    return dest;
-  }
-
-  private lowerThrowExpr(expr: ThrowExpr): VarId {
-    // throw ErrorType{} → cast __err to typed pointer, store error value, return error tag
-    const valueId = this.lowerExpr(expr.value);
-    const errPtr = this.varMap.get("__err")!;
-
-    // Determine the error type for casting
-    const errorKirType = this.getExprKirType(expr.value);
-
-    // Only copy error data if the struct has fields (skip for empty structs)
-    const hasFields = errorKirType.kind === "struct" && errorKirType.fields.length > 0;
-    if (hasFields) {
-      // Cast __err (void*) to the specific error struct pointer type
-      const typedErrPtr = this.freshVar();
-      this.emit({ kind: "cast", dest: typedErrPtr, value: errPtr, targetType: { kind: "ptr", pointee: errorKirType } });
-
-      // The struct literal returns a pointer; load the actual struct value from it
-      const structVal = this.freshVar();
-      this.emit({ kind: "load", dest: structVal, ptr: valueId, type: errorKirType });
-
-      // Store the struct value through the typed error pointer
-      this.emit({ kind: "store", ptr: typedErrPtr, value: structVal });
-    }
-
-    // Determine the tag for this error type
-    const checkerType = this.checkResult.typeMap.get(expr.value);
-    let tag = 1; // default
-    if (checkerType && checkerType.kind === "struct") {
-      const idx = this.currentFunctionThrowsTypes.findIndex(
-        t => t.kind === "struct" && t.name === checkerType.name
-      );
-      if (idx >= 0) tag = idx + 1;
-    }
-
-    this.emitAllScopeDestroys();
-    const tagVal = this.emitConstInt(tag);
-    this.setTerminator({ kind: "ret", value: tagVal });
-    return tagVal;
-  }
-
-  private lowerCatchExpr(expr: CatchExpr): VarId {
-    // The operand must be a function call to a throws function
-    // We need to resolve the callee's throws info to generate the right code
-
-    // Resolve the function name and its throws info
-    const callExpr = expr.operand;
-    const throwsInfo = this.resolveCallThrowsInfo(callExpr);
-    if (!throwsInfo) {
-      // Fallback: just lower the operand normally
-      return this.lowerExpr(expr.operand);
-    }
-
-    const { funcName, args: callArgs, throwsTypes, returnType: successType } = throwsInfo;
-
-    // Allocate buffers for out value and error value
-    const outPtr = this.freshVar();
-    const errPtr = this.freshVar();
-    const outType = successType.kind === "void"
-      ? { kind: "int" as const, bits: 8 as const, signed: false as const }
-      : successType;
-    this.emit({ kind: "stack_alloc", dest: outPtr, type: outType });
-    // err buffer: use u8 placeholder (C backend will emit union-sized buffer)
-    this.emit({ kind: "stack_alloc", dest: errPtr, type: { kind: "int", bits: 8, signed: false } });
-
-    // Call the throws function — dest receives the i32 tag
-    const tagVar = this.freshVar();
-    this.emit({
-      kind: "call_throws",
-      dest: tagVar,
-      func: funcName,
-      args: callArgs,
-      outPtr,
-      errPtr,
-      successType,
-      errorTypes: throwsTypes,
-    });
-
-    if (expr.catchType === "panic") {
-      // catch panic: if tag != 0 → kei_panic
-      const zeroConst = this.emitConstInt(0);
-      const isOk = this.freshVar();
-      this.emit({ kind: "bin_op", op: "eq", dest: isOk, lhs: tagVar, rhs: zeroConst, type: { kind: "bool" } });
-      const okLabel = this.freshBlockId("catch.ok");
-      const panicLabel = this.freshBlockId("catch.panic");
-      this.setTerminator({ kind: "br", cond: isOk, thenBlock: okLabel, elseBlock: panicLabel });
-
-      this.sealCurrentBlock();
-      this.startBlock(panicLabel);
-      // Call kei_panic
-      const panicMsg = this.freshVar();
-      this.emit({ kind: "const_string", dest: panicMsg, value: "unhandled error" });
-      this.emit({ kind: "call_extern_void", func: "kei_panic", args: [panicMsg] });
-      this.setTerminator({ kind: "unreachable" });
-
-      this.sealCurrentBlock();
-      this.startBlock(okLabel);
-
-      // Load and return the success value
-      if (successType.kind === "void") {
-        return this.emitConstInt(0);
-      }
-      const resultVal = this.freshVar();
-      this.emit({ kind: "load", dest: resultVal, ptr: outPtr, type: successType });
-      return resultVal;
-    }
-
-    if (expr.catchType === "throw") {
-      // catch throw: pass caller's __err directly so callee writes to it
-      // Re-emit the call with the caller's __err pointer
-      // Remove the previous call_throws (it was the last emitted instruction)
-      this.currentInsts.pop(); // remove the call_throws we just emitted
-
-      const callerErrPtr = this.varMap.get("__err")!;
-      this.emit({
-        kind: "call_throws",
-        dest: tagVar,
-        func: funcName,
-        args: callArgs,
-        outPtr,
-        errPtr: callerErrPtr, // pass caller's err buffer directly
-        successType,
-        errorTypes: throwsTypes,
-      });
-
-      const zeroConst = this.emitConstInt(0);
-      const isOk = this.freshVar();
-      this.emit({ kind: "bin_op", op: "eq", dest: isOk, lhs: tagVar, rhs: zeroConst, type: { kind: "bool" } });
-      const okLabel = this.freshBlockId("catch.ok");
-      const propagateLabel = this.freshBlockId("catch.throw");
-      this.setTerminator({ kind: "br", cond: isOk, thenBlock: okLabel, elseBlock: propagateLabel });
-
-      this.sealCurrentBlock();
-      this.startBlock(propagateLabel);
-
-      // Remap tags from callee to caller's tag space and propagate
-      this.lowerCatchThrowPropagation(throwsTypes, tagVar, callerErrPtr);
-
-      this.sealCurrentBlock();
-      this.startBlock(okLabel);
-
-      if (successType.kind === "void") {
-        return this.emitConstInt(0);
-      }
-      const resultVal = this.freshVar();
-      this.emit({ kind: "load", dest: resultVal, ptr: outPtr, type: successType });
-      return resultVal;
-    }
-
-    // catch { clauses } — block catch with per-error-type handling
-    const zeroConst = this.emitConstInt(0);
-    const isOk = this.freshVar();
-    this.emit({ kind: "bin_op", op: "eq", dest: isOk, lhs: tagVar, rhs: zeroConst, type: { kind: "bool" } });
-
-    const okLabel = this.freshBlockId("catch.ok");
-    const switchLabel = this.freshBlockId("catch.switch");
-    const endLabel = this.freshBlockId("catch.end");
-    this.setTerminator({ kind: "br", cond: isOk, thenBlock: okLabel, elseBlock: switchLabel });
-
-    // Allocate result storage (the catch expr produces a value)
-    const resultType = this.getExprKirType(expr);
-    const resultPtr = this.freshVar();
-    this.emit({ kind: "stack_alloc", dest: resultPtr, type: resultType });
-
-    // Switch block: branch on tag value
-    this.sealCurrentBlock();
-    this.startBlock(switchLabel);
-
-    // Build case blocks for each clause
-    const caseInfos: { tagConst: VarId; label: BlockId }[] = [];
-
-    for (const clause of expr.clauses) {
-      if (clause.isDefault) continue; // handle default separately
-
-      // Find the tag for this error type
-      const errorTag = throwsTypes.findIndex(
-        t => t.kind === "struct" && t.name === clause.errorType
-      ) + 1;
-
-      const clauseLabel = this.freshBlockId(`catch.clause.${clause.errorType}`);
-      const tagConstVar = this.emitConstInt(errorTag);
-      caseInfos.push({ tagConst: tagConstVar, label: clauseLabel });
-    }
-
-    // Default block (unreachable or user default clause)
-    const defaultClause = expr.clauses.find(c => c.isDefault);
-    const defaultLabel = defaultClause
-      ? this.freshBlockId("catch.default")
-      : this.freshBlockId("catch.unreachable");
-
-    this.setTerminator({
-      kind: "switch",
-      value: tagVar,
-      cases: caseInfos.map(ci => ({ value: ci.tagConst, target: ci.label })),
-      defaultBlock: defaultLabel,
-    });
-
-    // Emit each clause block
-    for (const clause of expr.clauses) {
-      if (clause.isDefault) continue;
-
-      const errorTag = throwsTypes.findIndex(
-        t => t.kind === "struct" && t.name === clause.errorType
-      ) + 1;
-      const clauseLabel = caseInfos.find(ci => {
-        // Match by tag value
-        const inst = this.findConstIntInst(ci.tagConst);
-        return inst?.value === errorTag;
-      })?.label;
-      if (!clauseLabel) continue;
-
-      this.sealCurrentBlock();
-      this.startBlock(clauseLabel);
-
-      // If clause has a variable name, bind it to the error value in the err buffer
-      if (clause.varName) {
-        const errType = throwsTypes[errorTag - 1];
-        // Cast errPtr to typed pointer — this becomes the variable's storage
-        const typedErrPtr = this.freshVar();
-        this.emit({ kind: "cast", dest: typedErrPtr, value: errPtr, targetType: { kind: "ptr", pointee: errType } });
-        this.varMap.set(clause.varName, typedErrPtr);
-      }
-
-      // Lower clause body statements
-      for (const stmt of clause.body) {
-        this.lowerStatement(stmt);
-      }
-
-      if (!this.isBlockTerminated()) {
-        this.setTerminator({ kind: "jump", target: endLabel });
-      }
-    }
-
-    // Default clause block
-    this.sealCurrentBlock();
-    this.startBlock(defaultLabel);
-    if (defaultClause) {
-      if (defaultClause.varName) {
-        // Bind the error variable to a typed pointer into the err buffer
-        const firstErrType = throwsTypes[0] || { kind: "int" as const, bits: 8 as const, signed: false as const };
-        const typedErrPtr = this.freshVar();
-        this.emit({ kind: "cast", dest: typedErrPtr, value: errPtr, targetType: { kind: "ptr", pointee: firstErrType } });
-        this.varMap.set(defaultClause.varName, typedErrPtr);
-      }
-      for (const stmt of defaultClause.body) {
-        this.lowerStatement(stmt);
-      }
-    }
-    if (!this.isBlockTerminated()) {
-      this.setTerminator({ kind: "jump", target: endLabel });
-    }
-
-    // OK path: load success value
-    this.sealCurrentBlock();
-    this.startBlock(okLabel);
-    if (successType.kind !== "void") {
-      const successVal = this.freshVar();
-      this.emit({ kind: "load", dest: successVal, ptr: outPtr, type: successType });
-      this.emit({ kind: "store", ptr: resultPtr, value: successVal });
-    }
-    this.setTerminator({ kind: "jump", target: endLabel });
-
-    // End block
-    this.sealCurrentBlock();
-    this.startBlock(endLabel);
-
-    if (resultType.kind === "void") {
-      return this.emitConstInt(0);
-    }
-    const finalResult = this.freshVar();
-    this.emit({ kind: "load", dest: finalResult, ptr: resultPtr, type: resultType });
-    return finalResult;
-  }
-
-  /** Resolve the function name, args, and throws info for a call expression used in catch */
-  private resolveCallThrowsInfo(callExpr: Expression): {
-    funcName: string;
-    args: VarId[];
-    throwsTypes: KirType[];
-    returnType: KirType;
-  } | null {
-    if (callExpr.kind !== "CallExpr") return null;
-
-    const args = callExpr.args.map(a => this.lowerExpr(a));
-    const resultType = this.getExprKirType(callExpr);
-
-    // Resolve function name (same logic as lowerCallExpr)
-    let funcName: string;
-    if (callExpr.callee.kind === "Identifier") {
-      const baseName = callExpr.callee.name;
-      const importedName = this.importedNames.get(baseName);
-      const resolvedBase = importedName ?? baseName;
-
-      if (this.overloadedNames.has(baseName)) {
-        const calleeType = this.checkResult.typeMap.get(callExpr.callee);
-        if (calleeType && calleeType.kind === "function") {
-          funcName = this.mangleFunctionNameFromType(resolvedBase, calleeType as FunctionType);
-        } else {
-          funcName = resolvedBase;
-        }
-      } else {
-        funcName = resolvedBase;
-      }
-    } else if (callExpr.callee.kind === "MemberExpr") {
-      const objType = this.checkResult.typeMap.get(callExpr.callee.object);
-      if (objType?.kind === "module") {
-        const modulePrefix = objType.name.replace(/\./g, "_");
-        funcName = `${modulePrefix}_${callExpr.callee.property}`;
-      } else {
-        funcName = callExpr.callee.property;
-      }
-    } else {
-      return null;
-    }
-
-    // Look up throws info from pre-registered throws functions
-    const throwsInfo = this.throwsFunctions.get(funcName);
-    if (throwsInfo) {
-      return {
-        funcName,
-        args,
-        throwsTypes: throwsInfo.throwsTypes,
-        returnType: throwsInfo.returnType,
-      };
-    }
-
-    // Fallback: try to get from checker's type info
-    const calleeType = this.checkResult.typeMap.get(callExpr.callee);
-    if (calleeType && calleeType.kind === "function" && (calleeType as FunctionType).throwsTypes.length > 0) {
-      const ft = calleeType as FunctionType;
-      return {
-        funcName,
-        args,
-        throwsTypes: ft.throwsTypes.map(t => this.lowerCheckerType(t)),
-        returnType: this.lowerCheckerType(ft.returnType),
-      };
-    }
-
-    return null;
-  }
-
-  /** For catch throw: propagate errors from callee to caller's error protocol.
-   *  The callee already wrote the error value to the caller's __err buffer,
-   *  so we only need to remap tags if the error type ordering differs. */
-  private lowerCatchThrowPropagation(calleeThrowsTypes: KirType[], tagVar: VarId, _errPtr: VarId): void {
-    const callerThrowsTypes = this.currentFunctionThrowsTypes;
-
-    // Check if all callee types exist in caller types at same indices
-    let needsRemap = false;
-    for (let i = 0; i < calleeThrowsTypes.length; i++) {
-      const calleeType = calleeThrowsTypes[i];
-      const callerIdx = callerThrowsTypes.findIndex(
-        ct => ct.kind === "struct" && calleeType.kind === "struct" && ct.name === calleeType.name
-      );
-      if (callerIdx !== i) {
-        needsRemap = true;
-        break;
-      }
-    }
-
-    if (!needsRemap) {
-      // Direct propagation: same tag numbering, error already in caller's buffer
-      this.emitAllScopeDestroys();
-      this.setTerminator({ kind: "ret", value: tagVar });
-    } else {
-      // Remap: switch on callee tag, return caller's tag
-      const cases: { value: VarId; target: BlockId }[] = [];
-      const endPropLabel = this.freshBlockId("catch.prop.end");
-
-      for (let i = 0; i < calleeThrowsTypes.length; i++) {
-        const calleeTag = this.emitConstInt(i + 1);
-        const caseLabel = this.freshBlockId(`catch.prop.${i}`);
-        cases.push({ value: calleeTag, target: caseLabel });
-      }
-
-      this.setTerminator({
-        kind: "switch",
-        value: tagVar,
-        cases,
-        defaultBlock: endPropLabel,
-      });
-
-      for (let i = 0; i < calleeThrowsTypes.length; i++) {
-        const calleeType = calleeThrowsTypes[i];
-        const callerIdx = callerThrowsTypes.findIndex(
-          ct => ct.kind === "struct" && calleeType.kind === "struct" && ct.name === calleeType.name
-        );
-        if (callerIdx < 0) continue;
-
-        this.sealCurrentBlock();
-        this.startBlock(cases[i].target);
-        this.emitAllScopeDestroys();
-        const callerTag = this.emitConstInt(callerIdx + 1);
-        this.setTerminator({ kind: "ret", value: callerTag });
-      }
-
-      this.sealCurrentBlock();
-      this.startBlock(endPropLabel);
-      this.setTerminator({ kind: "unreachable" });
-    }
-  }
-
-  /** Find a const_int instruction by its dest VarId (for tag matching) */
-  private findConstIntInst(varId: VarId): { value: number } | null {
-    for (const block of this.blocks) {
-      for (const inst of block.instructions) {
-        if (inst.kind === "const_int" && inst.dest === varId) {
-          return { value: inst.value };
-        }
-      }
-    }
-    for (const inst of this.currentInsts) {
-      if (inst.kind === "const_int" && inst.dest === varId) {
-        return { value: inst.value };
-      }
-    }
-    return null;
-  }
+  // ─── Declaration methods (from lowering-decl.ts) ────────────────────────
+  declare lowerDeclaration: typeof declMethods.lowerDeclaration;
+  declare lowerFunction: typeof declMethods.lowerFunction;
+  declare lowerMethod: typeof declMethods.lowerMethod;
+  declare lowerExternFunction: typeof declMethods.lowerExternFunction;
+  declare lowerStructDecl: typeof declMethods.lowerStructDecl;
+  declare lowerMonomorphizedStruct: typeof declMethods.lowerMonomorphizedStruct;
+  declare lowerMonomorphizedFunction: typeof declMethods.lowerMonomorphizedFunction;
+  declare lowerEnumDecl: typeof declMethods.lowerEnumDecl;
+  declare lowerStaticDecl: typeof declMethods.lowerStaticDecl;
+
+  // ─── Statement methods (from lowering-stmt.ts) ─────────────────────────
+  declare lowerBlock: typeof stmtMethods.lowerBlock;
+  declare lowerScopedBlock: typeof stmtMethods.lowerScopedBlock;
+  declare lowerStatement: typeof stmtMethods.lowerStatement;
+  declare lowerLetStmt: typeof stmtMethods.lowerLetStmt;
+  declare lowerConstStmt: typeof stmtMethods.lowerConstStmt;
+  declare lowerReturnStmt: typeof stmtMethods.lowerReturnStmt;
+  declare lowerIfStmt: typeof stmtMethods.lowerIfStmt;
+  declare lowerWhileStmt: typeof stmtMethods.lowerWhileStmt;
+  declare lowerForStmt: typeof stmtMethods.lowerForStmt;
+  declare lowerSwitchStmt: typeof stmtMethods.lowerSwitchStmt;
+  declare lowerExprStmt: typeof stmtMethods.lowerExprStmt;
+  declare lowerAssertStmt: typeof stmtMethods.lowerAssertStmt;
+  declare lowerRequireStmt: typeof stmtMethods.lowerRequireStmt;
+
+  // ─── Expression methods (from lowering-expr.ts) ────────────────────────
+  declare lowerExpr: typeof exprMethods.lowerExpr;
+  declare lowerIntLiteral: typeof exprMethods.lowerIntLiteral;
+  declare lowerFloatLiteral: typeof exprMethods.lowerFloatLiteral;
+  declare lowerStringLiteral: typeof exprMethods.lowerStringLiteral;
+  declare lowerBoolLiteral: typeof exprMethods.lowerBoolLiteral;
+  declare lowerNullLiteral: typeof exprMethods.lowerNullLiteral;
+  declare lowerExprAsPtr: typeof exprMethods.lowerExprAsPtr;
+  declare lowerIdentifier: typeof exprMethods.lowerIdentifier;
+  declare lowerBinaryExpr: typeof exprMethods.lowerBinaryExpr;
+  declare lowerShortCircuitAnd: typeof exprMethods.lowerShortCircuitAnd;
+  declare lowerShortCircuitOr: typeof exprMethods.lowerShortCircuitOr;
+  declare lowerUnaryExpr: typeof exprMethods.lowerUnaryExpr;
+  declare lowerOperatorMethodCall: typeof exprMethods.lowerOperatorMethodCall;
+  declare lowerCallExpr: typeof exprMethods.lowerCallExpr;
+  declare lowerMemberExpr: typeof exprMethods.lowerMemberExpr;
+  declare lowerIndexExpr: typeof exprMethods.lowerIndexExpr;
+  declare lowerAssignExpr: typeof exprMethods.lowerAssignExpr;
+  declare lowerStructLiteral: typeof exprMethods.lowerStructLiteral;
+  declare lowerArrayLiteral: typeof exprMethods.lowerArrayLiteral;
+  declare lowerIfExpr: typeof exprMethods.lowerIfExpr;
+  declare lowerIncrementExpr: typeof exprMethods.lowerIncrementExpr;
+  declare lowerDecrementExpr: typeof exprMethods.lowerDecrementExpr;
+  declare lowerMoveExpr: typeof exprMethods.lowerMoveExpr;
+  declare lowerCastExpr: typeof exprMethods.lowerCastExpr;
+  declare lowerThrowExpr: typeof exprMethods.lowerThrowExpr;
+  declare lowerCatchExpr: typeof exprMethods.lowerCatchExpr;
+  declare resolveCallThrowsInfo: typeof exprMethods.resolveCallThrowsInfo;
+  declare lowerCatchThrowPropagation: typeof exprMethods.lowerCatchThrowPropagation;
+  declare findConstIntInst: typeof exprMethods.findConstIntInst;
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
-  private freshVar(): VarId {
+  freshVar(): VarId {
     return `%${this.varCounter++}`;
   }
 
-  private freshBlockId(prefix: string): BlockId {
+  freshBlockId(prefix: string): BlockId {
     return `${prefix}.${this.blockCounter++}`;
   }
 
-  private emit(inst: KirInst): void {
+  emit(inst: KirInst): void {
     this.currentInsts.push(inst);
   }
 
-  private emitConstInt(value: number): VarId {
+  emitConstInt(value: number): VarId {
     const dest = this.freshVar();
     this.emit({ kind: "const_int", dest, type: { kind: "int", bits: 32, signed: true }, value });
     return dest;
   }
 
-  private setTerminator(term: KirTerminator): void {
+  setTerminator(term: KirTerminator): void {
     // Only set terminator if block hasn't been terminated yet
     if (!this.isBlockTerminated()) {
       (this as any)._pendingTerminator = term;
     }
   }
 
-  private isBlockTerminated(): boolean {
+  isBlockTerminated(): boolean {
     return (this as any)._pendingTerminator != null;
   }
 
-  private sealCurrentBlock(): void {
+  sealCurrentBlock(): void {
     const terminator: KirTerminator = (this as any)._pendingTerminator ?? { kind: "unreachable" };
     this.blocks.push({
       id: this.currentBlockId,
@@ -2175,13 +332,13 @@ export class KirLowerer {
     (this as any)._pendingTerminator = null;
   }
 
-  private startBlock(id: BlockId): void {
+  startBlock(id: BlockId): void {
     this.currentBlockId = id;
     this.currentInsts = [];
     (this as any)._pendingTerminator = null;
   }
 
-  private ensureTerminator(returnType: KirType): void {
+  ensureTerminator(returnType: KirType): void {
     if (!this.isBlockTerminated()) {
       if (returnType.kind === "void") {
         this.setTerminator({ kind: "ret_void" });
@@ -2195,7 +352,7 @@ export class KirLowerer {
   /** Track which vars are stack-allocated (to know when to load vs use directly) */
   private stackAllocVars = new Set<VarId>();
 
-  private isStackAllocVar(varId: VarId): boolean {
+  isStackAllocVar(varId: VarId): boolean {
     // Check if any instruction in current block or previous blocks allocated this var
     for (const block of this.blocks) {
       for (const inst of block.instructions) {
@@ -2272,7 +429,7 @@ export class KirLowerer {
   // ─── Lifecycle Helpers ───────────────────────────────────────────────────
 
   /** Check if a checker Type is a struct that has __destroy or __oncopy methods */
-  private getStructLifecycle(checkerType: Type | undefined): { hasDestroy: boolean; hasOncopy: boolean; structName: string } | null {
+  getStructLifecycle(checkerType: Type | undefined): { hasDestroy: boolean; hasOncopy: boolean; structName: string } | null {
     if (!checkerType) return null;
     if (checkerType.kind !== "struct") return null;
 
@@ -2289,12 +446,12 @@ export class KirLowerer {
   }
 
   /** Push a new scope for lifecycle tracking */
-  private pushScope(): void {
+  pushScope(): void {
     this.scopeStack.push([]);
   }
 
   /** Pop scope and emit destroy for all live variables in reverse declaration order */
-  private popScopeWithDestroy(): void {
+  popScopeWithDestroy(): void {
     const scope = this.scopeStack.pop();
     if (!scope) return;
     this.emitScopeDestroys(scope);
@@ -2310,14 +467,14 @@ export class KirLowerer {
   }
 
   /** Emit destroys for all scopes (for early return) without popping */
-  private emitAllScopeDestroys(): void {
+  emitAllScopeDestroys(): void {
     for (let i = this.scopeStack.length - 1; i >= 0; i--) {
       this.emitScopeDestroys(this.scopeStack[i]);
     }
   }
 
   /** Emit destroys for all scopes, but skip a named variable (the returned value) */
-  private emitAllScopeDestroysExceptNamed(skipName: string | null): void {
+  emitAllScopeDestroysExceptNamed(skipName: string | null): void {
     for (let i = this.scopeStack.length - 1; i >= 0; i--) {
       const scope = this.scopeStack[i];
       for (let j = scope.length - 1; j >= 0; j--) {
@@ -2330,7 +487,7 @@ export class KirLowerer {
   }
 
   /** Track a variable in the current scope if it has lifecycle hooks */
-  private trackScopeVar(name: string, varId: VarId, expr: Expression): void {
+  trackScopeVar(name: string, varId: VarId, expr: Expression): void {
     if (this.scopeStack.length === 0) return;
     const checkerType = this.checkResult.typeMap.get(expr);
     const lifecycle = this.getStructLifecycle(checkerType);
@@ -2344,7 +501,7 @@ export class KirLowerer {
   }
 
   /** Track a variable by its checker type directly */
-  private trackScopeVarByType(name: string, varId: VarId, checkerType: Type | undefined): void {
+  trackScopeVarByType(name: string, varId: VarId, checkerType: Type | undefined): void {
     if (this.scopeStack.length === 0) return;
     const lifecycle = this.getStructLifecycle(checkerType);
     if (lifecycle?.hasDestroy) {
@@ -2358,7 +515,7 @@ export class KirLowerer {
 
   // ─── Type Conversions ────────────────────────────────────────────────────
 
-  private getExprKirType(expr: Expression): KirType {
+  getExprKirType(expr: Expression): KirType {
     const checkerType = this.checkResult.typeMap.get(expr);
     if (checkerType) {
       return this.lowerCheckerType(checkerType);
@@ -2367,7 +524,7 @@ export class KirLowerer {
     return { kind: "int", bits: 32, signed: true };
   }
 
-  private lowerCheckerType(t: Type): KirType {
+  lowerCheckerType(t: Type): KirType {
     switch (t.kind) {
       case "int":
         return { kind: "int", bits: t.bits, signed: t.signed };
@@ -2430,7 +587,7 @@ export class KirLowerer {
     }
   }
 
-  private lowerTypeNode(typeNode: { kind: string; name: string }): KirType {
+  lowerTypeNode(typeNode: { kind: string; name: string }): KirType {
     const name = typeNode.name;
     switch (name) {
       case "int": case "i32": return { kind: "int", bits: 32, signed: true };
@@ -2450,7 +607,7 @@ export class KirLowerer {
     }
   }
 
-  private resolveParamType(decl: FunctionDecl, paramName: string): KirType {
+  resolveParamType(decl: FunctionDecl, paramName: string): KirType {
     const param = decl.params.find((p) => p.name === paramName);
     if (param) {
       return this.lowerTypeNode(param.typeAnnotation);
@@ -2458,7 +615,7 @@ export class KirLowerer {
     return { kind: "int", bits: 32, signed: true };
   }
 
-  private resolveParamCheckerType(decl: FunctionDecl, paramName: string): Type | undefined {
+  resolveParamCheckerType(decl: FunctionDecl, paramName: string): Type | undefined {
     const param = decl.params.find((p) => p.name === paramName);
     if (param) {
       return this.nameToCheckerType(param.typeAnnotation.name) as Type;
@@ -2466,7 +623,7 @@ export class KirLowerer {
     return undefined;
   }
 
-  private getFunctionReturnType(decl: FunctionDecl): Type {
+  getFunctionReturnType(decl: FunctionDecl): Type {
     // Try to get from the checker's type map
     // The function decl itself isn't in typeMap, but we can derive from return type annotation
     if (decl.returnType) {
@@ -2501,7 +658,7 @@ export class KirLowerer {
     }
   }
 
-  private mapBinOp(op: string): BinOp | null {
+  mapBinOp(op: string): BinOp | null {
     const map: Record<string, BinOp> = {
       "+": "add", "-": "sub", "*": "mul", "/": "div", "%": "mod",
       "==": "eq", "!=": "neq", "<": "lt", ">": "gt", "<=": "lte", ">=": "gte",
@@ -2512,13 +669,13 @@ export class KirLowerer {
   }
 
   /** Build a mangled function name from a FunctionDecl (for overloaded definitions). */
-  private mangleFunctionName(baseName: string, decl: FunctionDecl): string {
+  mangleFunctionName(baseName: string, decl: FunctionDecl): string {
     const paramSuffixes = decl.params.map((p) => this.typeNameSuffix(p.typeAnnotation.name));
     return `${baseName}_${paramSuffixes.join("_")}`;
   }
 
   /** Build a mangled function name from a resolved FunctionType (for overloaded calls). */
-  private mangleFunctionNameFromType(baseName: string, funcType: FunctionType): string {
+  mangleFunctionNameFromType(baseName: string, funcType: FunctionType): string {
     const paramSuffixes = funcType.params.map((p) => this.checkerTypeSuffix(p.type));
     return `${baseName}_${paramSuffixes.join("_")}`;
   }
@@ -2569,7 +726,7 @@ export class KirLowerer {
     }
   }
 
-  private mapCompoundAssignOp(op: string): BinOp | null {
+  mapCompoundAssignOp(op: string): BinOp | null {
     const map: Record<string, BinOp> = {
       "+=": "add", "-=": "sub", "*=": "mul", "/=": "div", "%=": "mod",
       "&=": "bit_and", "|=": "bit_or", "^=": "bit_xor", "<<=": "shl", ">>=": "shr",
@@ -2577,6 +734,65 @@ export class KirLowerer {
     return map[op] ?? null;
   }
 }
+
+// ─── Attach extracted methods to KirLowerer prototype ─────────────────────────
+
+// Declaration methods
+KirLowerer.prototype.lowerDeclaration = declMethods.lowerDeclaration;
+KirLowerer.prototype.lowerFunction = declMethods.lowerFunction;
+KirLowerer.prototype.lowerMethod = declMethods.lowerMethod;
+KirLowerer.prototype.lowerExternFunction = declMethods.lowerExternFunction;
+KirLowerer.prototype.lowerStructDecl = declMethods.lowerStructDecl;
+KirLowerer.prototype.lowerMonomorphizedStruct = declMethods.lowerMonomorphizedStruct;
+KirLowerer.prototype.lowerMonomorphizedFunction = declMethods.lowerMonomorphizedFunction;
+KirLowerer.prototype.lowerEnumDecl = declMethods.lowerEnumDecl;
+KirLowerer.prototype.lowerStaticDecl = declMethods.lowerStaticDecl;
+
+// Statement methods
+KirLowerer.prototype.lowerBlock = stmtMethods.lowerBlock;
+KirLowerer.prototype.lowerScopedBlock = stmtMethods.lowerScopedBlock;
+KirLowerer.prototype.lowerStatement = stmtMethods.lowerStatement;
+KirLowerer.prototype.lowerLetStmt = stmtMethods.lowerLetStmt;
+KirLowerer.prototype.lowerConstStmt = stmtMethods.lowerConstStmt;
+KirLowerer.prototype.lowerReturnStmt = stmtMethods.lowerReturnStmt;
+KirLowerer.prototype.lowerIfStmt = stmtMethods.lowerIfStmt;
+KirLowerer.prototype.lowerWhileStmt = stmtMethods.lowerWhileStmt;
+KirLowerer.prototype.lowerForStmt = stmtMethods.lowerForStmt;
+KirLowerer.prototype.lowerSwitchStmt = stmtMethods.lowerSwitchStmt;
+KirLowerer.prototype.lowerExprStmt = stmtMethods.lowerExprStmt;
+KirLowerer.prototype.lowerAssertStmt = stmtMethods.lowerAssertStmt;
+KirLowerer.prototype.lowerRequireStmt = stmtMethods.lowerRequireStmt;
+
+// Expression methods
+KirLowerer.prototype.lowerExpr = exprMethods.lowerExpr;
+KirLowerer.prototype.lowerIntLiteral = exprMethods.lowerIntLiteral;
+KirLowerer.prototype.lowerFloatLiteral = exprMethods.lowerFloatLiteral;
+KirLowerer.prototype.lowerStringLiteral = exprMethods.lowerStringLiteral;
+KirLowerer.prototype.lowerBoolLiteral = exprMethods.lowerBoolLiteral;
+KirLowerer.prototype.lowerNullLiteral = exprMethods.lowerNullLiteral;
+KirLowerer.prototype.lowerExprAsPtr = exprMethods.lowerExprAsPtr;
+KirLowerer.prototype.lowerIdentifier = exprMethods.lowerIdentifier;
+KirLowerer.prototype.lowerBinaryExpr = exprMethods.lowerBinaryExpr;
+KirLowerer.prototype.lowerShortCircuitAnd = exprMethods.lowerShortCircuitAnd;
+KirLowerer.prototype.lowerShortCircuitOr = exprMethods.lowerShortCircuitOr;
+KirLowerer.prototype.lowerUnaryExpr = exprMethods.lowerUnaryExpr;
+KirLowerer.prototype.lowerOperatorMethodCall = exprMethods.lowerOperatorMethodCall;
+KirLowerer.prototype.lowerCallExpr = exprMethods.lowerCallExpr;
+KirLowerer.prototype.lowerMemberExpr = exprMethods.lowerMemberExpr;
+KirLowerer.prototype.lowerIndexExpr = exprMethods.lowerIndexExpr;
+KirLowerer.prototype.lowerAssignExpr = exprMethods.lowerAssignExpr;
+KirLowerer.prototype.lowerStructLiteral = exprMethods.lowerStructLiteral;
+KirLowerer.prototype.lowerArrayLiteral = exprMethods.lowerArrayLiteral;
+KirLowerer.prototype.lowerIfExpr = exprMethods.lowerIfExpr;
+KirLowerer.prototype.lowerIncrementExpr = exprMethods.lowerIncrementExpr;
+KirLowerer.prototype.lowerDecrementExpr = exprMethods.lowerDecrementExpr;
+KirLowerer.prototype.lowerMoveExpr = exprMethods.lowerMoveExpr;
+KirLowerer.prototype.lowerCastExpr = exprMethods.lowerCastExpr;
+KirLowerer.prototype.lowerThrowExpr = exprMethods.lowerThrowExpr;
+KirLowerer.prototype.lowerCatchExpr = exprMethods.lowerCatchExpr;
+KirLowerer.prototype.resolveCallThrowsInfo = exprMethods.resolveCallThrowsInfo;
+KirLowerer.prototype.lowerCatchThrowPropagation = exprMethods.lowerCatchThrowPropagation;
+KirLowerer.prototype.findConstIntInst = exprMethods.findConstIntInst;
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
