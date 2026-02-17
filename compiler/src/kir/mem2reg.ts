@@ -3,12 +3,17 @@
  *
  * Implements the classic Cytron et al. algorithm:
  *   1. Identify promotable allocas (only load/store, no address-taken)
- *   2. Build CFG (predecessor/successor maps)
+ *   2. Build CFG (predecessor/successor maps) and compute RPO
  *   3. Compute dominance tree (Cooper, Harvey, Kennedy iterative algorithm)
  *   4. Compute dominance frontiers
- *   5. Insert phi nodes at dominance frontiers (iterated dominance frontier)
- *   6. Rename variables (walk dominator tree, replace loads/stores)
+ *   5. Insert phi nodes at iterated dominance frontiers of def blocks
+ *   6. Rename variables (walk dominator tree, replace loads with SSA values)
  *   7. Remove dead stack_alloc/load/store instructions
+ *   8. Eliminate trivial phi nodes (all-same or self-referential)
+ *
+ * An alloca is "promotable" if it is only accessed via load/store — never
+ * via field_ptr, index_ptr, or passed as an address (call_throws out/err
+ * pointers). Address-taken allocas remain in memory.
  */
 
 import type {
@@ -28,10 +33,19 @@ import type {
 interface CFG {
   preds: Map<BlockId, BlockId[]>;
   succs: Map<BlockId, BlockId[]>;
-  blockOrder: BlockId[]; // RPO order
+  /** Blocks in reverse post-order (reachable from entry only). */
+  blockOrder: BlockId[];
   blockMap: Map<BlockId, KirBlock>;
 }
 
+/**
+ * Build the control-flow graph for a function's blocks.
+ *
+ * Computes predecessor/successor maps from terminator edges, then
+ * derives a reverse post-order (RPO) via DFS from the entry block.
+ * Only blocks reachable from the entry appear in blockOrder — unreachable
+ * blocks are excluded from dominance/phi computations.
+ */
 function buildCFG(blocks: KirBlock[]): CFG {
   const preds = new Map<BlockId, BlockId[]>();
   const succs = new Map<BlockId, BlockId[]>();
@@ -46,21 +60,23 @@ function buildCFG(blocks: KirBlock[]): CFG {
   for (const block of blocks) {
     const targets = terminatorTargets(block.terminator);
     succs.set(block.id, targets);
-    for (const t of targets) {
-      const p = preds.get(t);
-      if (p) p.push(block.id);
+    for (const target of targets) {
+      const predList = preds.get(target);
+      if (predList) predList.push(block.id);
     }
   }
 
-  // Compute reverse post-order via DFS
+  // Compute reverse post-order via iterative DFS.
+  // RPO is needed by the dominator algorithm (blocks processed before
+  // their dominatees) and determines the order of phi insertion.
   const visited = new Set<BlockId>();
   const rpo: BlockId[] = [];
 
   function dfs(id: BlockId) {
     if (visited.has(id)) return;
     visited.add(id);
-    for (const s of succs.get(id) ?? []) {
-      dfs(s);
+    for (const succ of succs.get(id) ?? []) {
+      dfs(succ);
     }
     rpo.push(id);
   }
@@ -73,6 +89,7 @@ function buildCFG(blocks: KirBlock[]): CFG {
   return { preds, succs, blockOrder: rpo, blockMap };
 }
 
+/** Extract branch targets from a terminator instruction. */
 function terminatorTargets(term: KirTerminator): BlockId[] {
   switch (term.kind) {
     case "jump":
@@ -91,61 +108,80 @@ function terminatorTargets(term: KirTerminator): BlockId[] {
 
 // ─── Dominance (Cooper, Harvey, Kennedy) ────────────────────────────────────
 
+/**
+ * Compute immediate dominators using the Cooper-Harvey-Kennedy algorithm.
+ *
+ * This is an iterative fixed-point algorithm that works on RPO-numbered
+ * blocks. The entry block dominates itself (idom[entry] = entry). For
+ * every other block, we intersect the idom paths of all processed
+ * predecessors to find the nearest common dominator.
+ *
+ * Returns a map from each block to its immediate dominator.
+ */
 function computeDominators(cfg: CFG): Map<BlockId, BlockId> {
   const { blockOrder, preds } = cfg;
   if (blockOrder.length === 0) return new Map();
 
-  const entry = blockOrder[0];
-  // Map block → index in RPO for efficient comparisons
+  const entryBlock = blockOrder[0];
+
+  // Map block → index in RPO for efficient comparisons.
+  // Lower index = earlier in RPO = dominates more blocks.
   const rpoIndex = new Map<BlockId, number>();
   for (let i = 0; i < blockOrder.length; i++) {
     rpoIndex.set(blockOrder[i], i);
   }
 
-  // idom[b] = immediate dominator of b
   const idom = new Map<BlockId, BlockId>();
-  idom.set(entry, entry);
+  idom.set(entryBlock, entryBlock);
 
+  /**
+   * Walk up the dominator tree from two blocks to find their nearest
+   * common dominator (NCD). Uses RPO indices — the block with the
+   * higher index is farther from the entry, so we step it upward.
+   */
   function intersect(b1: BlockId, b2: BlockId): BlockId {
-    let finger1 = rpoIndex.get(b1)!;
-    let finger2 = rpoIndex.get(b2)!;
-    while (finger1 !== finger2) {
-      while (finger1 > finger2) {
-        finger1 = rpoIndex.get(idom.get(blockOrder[finger1])!)!;
+    let idx1 = rpoIndex.get(b1)!;
+    let idx2 = rpoIndex.get(b2)!;
+    while (idx1 !== idx2) {
+      while (idx1 > idx2) {
+        idx1 = rpoIndex.get(idom.get(blockOrder[idx1])!)!;
       }
-      while (finger2 > finger1) {
-        finger2 = rpoIndex.get(idom.get(blockOrder[finger2])!)!;
+      while (idx2 > idx1) {
+        idx2 = rpoIndex.get(idom.get(blockOrder[idx2])!)!;
       }
     }
-    return blockOrder[finger1];
+    return blockOrder[idx1];
   }
 
+  // Iterate until fixed point. Skip the entry (index 0) since its
+  // idom is itself.
   let changed = true;
   while (changed) {
     changed = false;
     for (let i = 1; i < blockOrder.length; i++) {
-      const b = blockOrder[i];
-      const predList = preds.get(b) ?? [];
+      const blockId = blockOrder[i];
+      const predList = preds.get(blockId) ?? [];
 
-      // Pick first processed predecessor as initial idom
+      // Pick the first already-processed predecessor as the initial idom
       let newIdom: BlockId | null = null;
-      for (const p of predList) {
-        if (idom.has(p)) {
-          newIdom = p;
+      for (const pred of predList) {
+        if (idom.has(pred)) {
+          newIdom = pred;
           break;
         }
       }
       if (newIdom === null) continue;
 
-      for (const p of predList) {
-        if (p === newIdom) continue;
-        if (idom.has(p)) {
-          newIdom = intersect(p, newIdom);
+      // Intersect with all other processed predecessors
+      for (const pred of predList) {
+        if (pred === newIdom) continue;
+        if (idom.has(pred)) {
+          newIdom = intersect(pred, newIdom);
         }
       }
 
-      if (idom.get(b) !== newIdom) {
-        idom.set(b, newIdom);
+      if (idom.get(blockId) !== newIdom) {
+        idom.set(blockId, newIdom);
         changed = true;
       }
     }
@@ -156,34 +192,51 @@ function computeDominators(cfg: CFG): Map<BlockId, BlockId> {
 
 // ─── Dominance frontiers ────────────────────────────────────────────────────
 
-function computeDominanceFrontiers(
+/**
+ * Compute dominance frontiers for all blocks.
+ *
+ * DF(X) = set of blocks Y where X dominates a predecessor of Y but
+ * does not strictly dominate Y itself. These are the join points where
+ * phi nodes may be needed.
+ *
+ * Algorithm: For each join point (block with >= 2 predecessors), walk
+ * up the dominator tree from each predecessor until we reach the
+ * block's immediate dominator, adding the join point to each runner's
+ * dominance frontier along the way.
+ */
+function computeDomFrontiers(
   cfg: CFG,
   idom: Map<BlockId, BlockId>,
 ): Map<BlockId, Set<BlockId>> {
-  const df = new Map<BlockId, Set<BlockId>>();
+  const domFrontiers = new Map<BlockId, Set<BlockId>>();
   for (const id of cfg.blockOrder) {
-    df.set(id, new Set());
+    domFrontiers.set(id, new Set());
   }
 
-  for (const b of cfg.blockOrder) {
-    const predList = cfg.preds.get(b) ?? [];
+  for (const blockId of cfg.blockOrder) {
+    const predList = cfg.preds.get(blockId) ?? [];
     if (predList.length < 2) continue;
 
-    for (const p of predList) {
-      let runner = p;
-      while (runner !== idom.get(b) && runner !== undefined) {
-        df.get(runner)!.add(b);
+    for (const pred of predList) {
+      // Skip predecessors not in the RPO (unreachable blocks).
+      // These have no idom entry and would cause a null dereference.
+      if (!idom.has(pred)) continue;
+
+      let runner = pred;
+      while (runner !== idom.get(blockId) && runner !== undefined) {
+        domFrontiers.get(runner)!.add(blockId);
         if (runner === idom.get(runner)) break; // entry node
         runner = idom.get(runner)!;
       }
     }
   }
 
-  return df;
+  return domFrontiers;
 }
 
 // ─── Dominator tree children ────────────────────────────────────────────────
 
+/** Build a map from each block to its children in the dominator tree. */
 function buildDomTree(
   cfg: CFG,
   idom: Map<BlockId, BlockId>,
@@ -206,14 +259,23 @@ function buildDomTree(
 interface AllocaInfo {
   dest: VarId;
   type: KirType;
-  defBlocks: Set<BlockId>; // blocks that store to this alloca
-  useBlocks: Set<BlockId>; // blocks that load from this alloca
+  /** Blocks containing a store to this alloca. */
+  defBlocks: Set<BlockId>;
+  /** Blocks containing a load from this alloca. */
+  useBlocks: Set<BlockId>;
 }
 
+/**
+ * Find stack_alloc instructions that can be promoted to SSA registers.
+ *
+ * An alloca is promotable if it is only accessed by load and store
+ * instructions. If its address escapes (via field_ptr, index_ptr, or
+ * as an out/err pointer to call_throws), it must stay in memory.
+ */
 function findPromotableAllocas(fn: KirFunction): Map<VarId, AllocaInfo> {
   const allocas = new Map<VarId, AllocaInfo>();
 
-  // First pass: find all stack_alloc instructions
+  // First pass: collect all stack_alloc instructions
   for (const block of fn.blocks) {
     for (const inst of block.instructions) {
       if (inst.kind === "stack_alloc") {
@@ -227,8 +289,10 @@ function findPromotableAllocas(fn: KirFunction): Map<VarId, AllocaInfo> {
     }
   }
 
-  // Second pass: identify address-taken allocas (not promotable)
-  // and record def/use blocks for promotable ones
+  // Second pass: classify each use of an alloca.
+  // - load → record use block
+  // - store → record def block
+  // - anything else using the alloca pointer → mark address-taken
   const addressTaken = new Set<VarId>();
 
   for (const block of fn.blocks) {
@@ -253,9 +317,9 @@ function findPromotableAllocas(fn: KirFunction): Map<VarId, AllocaInfo> {
     }
   }
 
-  // Remove address-taken allocas
-  for (const v of addressTaken) {
-    allocas.delete(v);
+  // Remove address-taken allocas — they can't be promoted
+  for (const varId of addressTaken) {
+    allocas.delete(varId);
   }
 
   return allocas;
@@ -263,45 +327,61 @@ function findPromotableAllocas(fn: KirFunction): Map<VarId, AllocaInfo> {
 
 // ─── Phi insertion (iterated dominance frontier) ────────────────────────────
 
+/**
+ * Insert phi nodes at iterated dominance frontiers of each alloca's
+ * def blocks.
+ *
+ * For each promotable alloca, we find every block in the iterated
+ * dominance frontier of its store locations. A phi node is placed at
+ * each such block, with one incoming slot per predecessor. The phi's
+ * dest and incoming values are left empty — they'll be filled during
+ * the rename pass.
+ */
 function insertPhis(
   fn: KirFunction,
   cfg: CFG,
-  df: Map<BlockId, Set<BlockId>>,
+  domFrontiers: Map<BlockId, Set<BlockId>>,
   allocas: Map<VarId, AllocaInfo>,
 ): Map<BlockId, Map<VarId, KirPhi>> {
   // Map: blockId → allocaVar → phi node
   const phis = new Map<BlockId, Map<VarId, KirPhi>>();
 
   for (const [allocaVar, info] of allocas) {
-    // Iterated dominance frontier
+    // Worklist algorithm for iterated dominance frontier (IDF).
+    // Start with blocks that store to this alloca, then expand:
+    // any block in the DF of a def block is also a def (via the phi),
+    // so we add it to the worklist too.
     const phiBlocks = new Set<BlockId>();
     const worklist = [...info.defBlocks];
-    const processed = new Set<BlockId>();
+    const visited = new Set<BlockId>();
 
     while (worklist.length > 0) {
-      const block = worklist.pop()!;
-      if (processed.has(block)) continue;
-      processed.add(block);
+      const defBlock = worklist.pop()!;
+      if (visited.has(defBlock)) continue;
+      visited.add(defBlock);
 
-      for (const dfBlock of df.get(block) ?? []) {
-        if (!phiBlocks.has(dfBlock)) {
-          phiBlocks.add(dfBlock);
+      for (const frontierBlock of domFrontiers.get(defBlock) ?? []) {
+        if (phiBlocks.has(frontierBlock)) continue;
+        phiBlocks.add(frontierBlock);
 
-          // Create phi node
-          if (!phis.has(dfBlock)) {
-            phis.set(dfBlock, new Map());
-          }
-          const predList = cfg.preds.get(dfBlock) ?? [];
-          phis.get(dfBlock)!.set(allocaVar, {
-            dest: "", // will be assigned during rename
-            type: info.type,
-            incoming: predList.map((p) => ({ value: "" as VarId, from: p })),
-          });
+        // Create phi node for this alloca at this frontier block
+        if (!phis.has(frontierBlock)) {
+          phis.set(frontierBlock, new Map());
+        }
+        const predList = cfg.preds.get(frontierBlock) ?? [];
+        phis.get(frontierBlock)!.set(allocaVar, {
+          dest: "", // assigned during rename
+          type: info.type,
+          incoming: predList.map((pred) => ({
+            value: "" as VarId,
+            from: pred,
+          })),
+        });
 
-          // Add to worklist if not already a def block
-          if (!info.defBlocks.has(dfBlock)) {
-            worklist.push(dfBlock);
-          }
+        // The phi itself is a def — add frontier block to worklist
+        // so we compute the IDF transitively
+        if (!info.defBlocks.has(frontierBlock)) {
+          worklist.push(frontierBlock);
         }
       }
     }
@@ -310,8 +390,116 @@ function insertPhis(
   return phis;
 }
 
+// ─── Operand rewriting helpers ──────────────────────────────────────────────
+
+/**
+ * Rewrite all VarId operands in an instruction using the given mapping
+ * function. This is the single source of truth for which fields are
+ * operands for each instruction kind.
+ */
+function mapInstOperands(
+  inst: KirInst,
+  mapVar: (v: VarId) => VarId,
+): KirInst {
+  switch (inst.kind) {
+    case "bin_op":
+      return { ...inst, lhs: mapVar(inst.lhs), rhs: mapVar(inst.rhs) };
+    case "neg":
+      return { ...inst, operand: mapVar(inst.operand) };
+    case "not":
+      return { ...inst, operand: mapVar(inst.operand) };
+    case "bit_not":
+      return { ...inst, operand: mapVar(inst.operand) };
+    case "call":
+      return { ...inst, args: inst.args.map(mapVar) };
+    case "call_void":
+      return { ...inst, args: inst.args.map(mapVar) };
+    case "call_extern":
+      return { ...inst, args: inst.args.map(mapVar) };
+    case "call_extern_void":
+      return { ...inst, args: inst.args.map(mapVar) };
+    case "cast":
+      return { ...inst, value: mapVar(inst.value) };
+    case "store":
+      return { ...inst, value: mapVar(inst.value), ptr: mapVar(inst.ptr) };
+    case "load":
+      return { ...inst, ptr: mapVar(inst.ptr) };
+    case "field_ptr":
+      return { ...inst, base: mapVar(inst.base) };
+    case "index_ptr":
+      return {
+        ...inst,
+        base: mapVar(inst.base),
+        index: mapVar(inst.index),
+      };
+    case "bounds_check":
+      return {
+        ...inst,
+        index: mapVar(inst.index),
+        length: mapVar(inst.length),
+      };
+    case "overflow_check":
+      return { ...inst, lhs: mapVar(inst.lhs), rhs: mapVar(inst.rhs) };
+    case "null_check":
+      return { ...inst, ptr: mapVar(inst.ptr) };
+    case "assert_check":
+      return { ...inst, cond: mapVar(inst.cond) };
+    case "require_check":
+      return { ...inst, cond: mapVar(inst.cond) };
+    case "destroy":
+      return { ...inst, value: mapVar(inst.value) };
+    case "oncopy":
+      return { ...inst, value: mapVar(inst.value) };
+    case "move":
+      return { ...inst, source: mapVar(inst.source) };
+    case "call_throws":
+      return {
+        ...inst,
+        args: inst.args.map(mapVar),
+        outPtr: mapVar(inst.outPtr),
+        errPtr: mapVar(inst.errPtr),
+      };
+    default:
+      return inst;
+  }
+}
+
+/** Rewrite all VarId operands in a terminator using the given mapping. */
+function mapTerminatorOperands(
+  term: KirTerminator,
+  mapVar: (v: VarId) => VarId,
+): KirTerminator {
+  switch (term.kind) {
+    case "ret":
+      return { ...term, value: mapVar(term.value) };
+    case "br":
+      return { ...term, cond: mapVar(term.cond) };
+    case "switch":
+      return {
+        ...term,
+        value: mapVar(term.value),
+        cases: term.cases.map((c) => ({
+          ...c,
+          value: mapVar(c.value),
+        })),
+      };
+    default:
+      return term;
+  }
+}
+
 // ─── Variable renaming ─────────────────────────────────────────────────────
 
+/**
+ * Rename variables: walk the dominator tree in pre-order, replacing
+ * loads with SSA values, stores with def pushes, and filling in phi
+ * incoming operands.
+ *
+ * Each alloca gets a "definition stack" that tracks the current SSA
+ * value at each point in the dominator tree walk. Phi nodes and stores
+ * push new definitions; when we backtrack out of a dominated subtree
+ * we pop them to restore the parent's view.
+ */
 function renameVariables(
   fn: KirFunction,
   cfg: CFG,
@@ -321,31 +509,39 @@ function renameVariables(
 ): KirBlock[] {
   const domChildren = buildDomTree(cfg, idom);
 
-  // Fresh SSA name counter (continues from fn's counter)
+  // Fresh SSA name counter (continues from fn's counter so names don't collide)
   let varCounter = fn.localCount;
   function freshVar(): VarId {
     return `%${varCounter++}`;
   }
 
-  // Stack of current definitions for each alloca
-  const stacks = new Map<VarId, VarId[]>();
+  // Per-alloca stack of current SSA definitions.
+  // Top of stack = current reaching definition.
+  const defStacks = new Map<VarId, VarId[]>();
   for (const allocaVar of allocas.keys()) {
-    stacks.set(allocaVar, []);
+    defStacks.set(allocaVar, []);
   }
 
-  // Get current value for an alloca (top of stack)
   function currentDef(allocaVar: VarId): VarId | undefined {
-    const stack = stacks.get(allocaVar);
+    const stack = defStacks.get(allocaVar);
     if (!stack || stack.length === 0) return undefined;
     return stack[stack.length - 1];
   }
 
-  // Push a new definition
   function pushDef(allocaVar: VarId, value: VarId): void {
-    stacks.get(allocaVar)!.push(value);
+    defStacks.get(allocaVar)!.push(value);
   }
 
-  // Build result blocks
+  // Map from removed load destinations to their SSA replacement values.
+  // This allows subsequent instructions to find the right value when
+  // they reference a load that was eliminated.
+  const loadReplacements = new Map<VarId, VarId>();
+
+  function resolveValue(v: VarId): VarId {
+    return loadReplacements.get(v) ?? v;
+  }
+
+  // Build output blocks (cloned from originals)
   const newBlocks = new Map<BlockId, KirBlock>();
   for (const block of fn.blocks) {
     newBlocks.set(block.id, {
@@ -356,66 +552,78 @@ function renameVariables(
     });
   }
 
-  // Rename in dominator-tree DFS order
+  /**
+   * Process a single block during the dominator-tree walk:
+   *   1. Assign SSA names to phi dests and push onto def stacks
+   *   2. Filter instructions: remove promoted alloc/load/store,
+   *      rewrite operands in surviving instructions
+   *   3. Rewrite terminator operands
+   *   4. Fill in phi incoming values in successor blocks
+   *   5. Recurse into dominated children
+   *   6. Pop def stacks to restore parent state
+   */
   function renameBlock(blockId: BlockId): void {
     const block = cfg.blockMap.get(blockId)!;
     const newBlock = newBlocks.get(blockId)!;
 
-    // Track how many defs we pushed (for rollback)
+    // Track how many defs we push per alloca, so we can pop exactly
+    // that many when backtracking.
     const pushCounts = new Map<VarId, number>();
     for (const allocaVar of allocas.keys()) {
       pushCounts.set(allocaVar, 0);
     }
 
-    // 1. Process phi nodes in this block — each phi defines a new SSA name
+    // Step 1: Process phi nodes — each phi defines a fresh SSA name
     const blockPhis = phiMap.get(blockId);
     if (blockPhis) {
       for (const [allocaVar, phi] of blockPhis) {
-        const newName = freshVar();
-        phi.dest = newName;
-        pushDef(allocaVar, newName);
+        const ssaName = freshVar();
+        phi.dest = ssaName;
+        pushDef(allocaVar, ssaName);
         pushCounts.set(allocaVar, pushCounts.get(allocaVar)! + 1);
         newBlock.phis.push(phi);
       }
     }
 
-    // 2. Process instructions — replace loads, update stores, remove both
-    const filteredInsts: KirInst[] = [];
+    // Step 2: Process instructions
+    const keptInsts: KirInst[] = [];
     for (const inst of block.instructions) {
       if (inst.kind === "stack_alloc" && allocas.has(inst.dest)) {
-        // Remove promoted stack_alloc
+        // Promoted alloca — remove entirely
         continue;
       }
       if (inst.kind === "store" && allocas.has(inst.ptr)) {
-        // Store to promoted alloca → define new SSA value
-        // The value being stored becomes the current def, but we need
-        // to resolve it first (it might reference a load from another alloca)
+        // Store to promoted alloca → push the stored value as current def.
+        // Resolve first: the value might reference an eliminated load.
         const resolvedValue = resolveValue(inst.value);
         pushDef(inst.ptr, resolvedValue);
         pushCounts.set(inst.ptr, pushCounts.get(inst.ptr)! + 1);
         continue;
       }
       if (inst.kind === "load" && allocas.has(inst.ptr)) {
-        // Load from promoted alloca → replace with current SSA value
+        // Load from promoted alloca → record dest → current SSA value
         const value = currentDef(inst.ptr);
         if (value !== undefined) {
-          // Record mapping: inst.dest → value (for use by other instructions)
-          valueMap.set(inst.dest, value);
+          loadReplacements.set(inst.dest, value);
         }
         continue;
       }
 
-      // For other instructions, rewrite operands that reference removed loads
-      const rewritten = rewriteInst(inst);
-      filteredInsts.push(rewritten);
+      // Surviving instruction — rewrite any operands that reference
+      // eliminated loads
+      keptInsts.push(mapInstOperands(inst, resolveValue));
     }
+    newBlock.instructions = keptInsts;
 
-    newBlock.instructions = filteredInsts;
+    // Step 3: Rewrite terminator operands
+    newBlock.terminator = mapTerminatorOperands(
+      block.terminator,
+      resolveValue,
+    );
 
-    // 3. Rewrite terminator operands
-    newBlock.terminator = rewriteTerminator(block.terminator);
-
-    // 4. Fill in phi operands in successor blocks
+    // Step 4: Fill in phi incoming values in each successor block.
+    // The current def for each alloca at this point is what flows
+    // into the successor's phi from this predecessor.
     for (const succId of cfg.succs.get(blockId) ?? []) {
       const succPhis = phiMap.get(succId);
       if (!succPhis) continue;
@@ -429,111 +637,17 @@ function renameVariables(
       }
     }
 
-    // 5. Recurse into dominated blocks
+    // Step 5: Recurse into dominated children
     for (const child of domChildren.get(blockId) ?? []) {
       renameBlock(child);
     }
 
-    // 6. Pop definitions
+    // Step 6: Pop definitions to restore parent's state
     for (const [allocaVar, count] of pushCounts) {
-      const stack = stacks.get(allocaVar)!;
+      const stack = defStacks.get(allocaVar)!;
       for (let i = 0; i < count; i++) {
         stack.pop();
       }
-    }
-  }
-
-  // Map from old load dest → new SSA value
-  const valueMap = new Map<VarId, VarId>();
-
-  function resolveValue(v: VarId): VarId {
-    return valueMap.get(v) ?? v;
-  }
-
-  function rewriteInst(inst: KirInst): KirInst {
-    switch (inst.kind) {
-      case "bin_op":
-        return {
-          ...inst,
-          lhs: resolveValue(inst.lhs),
-          rhs: resolveValue(inst.rhs),
-        };
-      case "neg":
-        return { ...inst, operand: resolveValue(inst.operand) };
-      case "not":
-        return { ...inst, operand: resolveValue(inst.operand) };
-      case "bit_not":
-        return { ...inst, operand: resolveValue(inst.operand) };
-      case "call":
-        return { ...inst, args: inst.args.map(resolveValue) };
-      case "call_void":
-        return { ...inst, args: inst.args.map(resolveValue) };
-      case "call_extern":
-        return { ...inst, args: inst.args.map(resolveValue) };
-      case "call_extern_void":
-        return { ...inst, args: inst.args.map(resolveValue) };
-      case "cast":
-        return { ...inst, value: resolveValue(inst.value) };
-      case "store":
-        return { ...inst, value: resolveValue(inst.value), ptr: resolveValue(inst.ptr) };
-      case "load":
-        return { ...inst, ptr: resolveValue(inst.ptr) };
-      case "field_ptr":
-        return { ...inst, base: resolveValue(inst.base) };
-      case "index_ptr":
-        return {
-          ...inst,
-          base: resolveValue(inst.base),
-          index: resolveValue(inst.index),
-        };
-      case "bounds_check":
-        return {
-          ...inst,
-          index: resolveValue(inst.index),
-          length: resolveValue(inst.length),
-        };
-      case "overflow_check":
-        return {
-          ...inst,
-          lhs: resolveValue(inst.lhs),
-          rhs: resolveValue(inst.rhs),
-        };
-      case "null_check":
-        return { ...inst, ptr: resolveValue(inst.ptr) };
-      case "assert_check":
-        return { ...inst, cond: resolveValue(inst.cond) };
-      case "require_check":
-        return { ...inst, cond: resolveValue(inst.cond) };
-      case "destroy":
-        return { ...inst, value: resolveValue(inst.value) };
-      case "oncopy":
-        return { ...inst, value: resolveValue(inst.value) };
-      case "move":
-        return { ...inst, source: resolveValue(inst.source) };
-      case "call_throws":
-        return { ...inst, args: inst.args.map(resolveValue), outPtr: resolveValue(inst.outPtr), errPtr: resolveValue(inst.errPtr) };
-      default:
-        return inst;
-    }
-  }
-
-  function rewriteTerminator(term: KirTerminator): KirTerminator {
-    switch (term.kind) {
-      case "ret":
-        return { ...term, value: resolveValue(term.value) };
-      case "br":
-        return { ...term, cond: resolveValue(term.cond) };
-      case "switch":
-        return {
-          ...term,
-          value: resolveValue(term.value),
-          cases: term.cases.map((c) => ({
-            ...c,
-            value: resolveValue(c.value),
-          })),
-        };
-      default:
-        return term;
     }
   }
 
@@ -541,24 +655,33 @@ function renameVariables(
     renameBlock(cfg.blockOrder[0]);
   }
 
-  // Update localCount
+  // Update localCount so subsequent passes don't reuse SSA names
   fn.localCount = varCounter;
 
-  // Return blocks in original order
+  // Return blocks in original order (preserving layout)
   return fn.blocks.map((b) => newBlocks.get(b.id)!);
 }
 
-// ─── Dead phi elimination ───────────────────────────────────────────────────
+// ─── Trivial phi elimination ────────────────────────────────────────────────
 
+/**
+ * Remove trivial phi nodes in a fixed-point loop.
+ *
+ * A phi is trivial if, after ignoring self-references, all incoming
+ * values are the same. Such a phi can be replaced by that single value.
+ * Removing one trivial phi can make others trivial (e.g., a phi
+ * referencing only another trivial phi and itself), so we iterate.
+ *
+ * A phi with only self-references (or no incoming) is dead and removed.
+ */
 function eliminateDeadPhis(blocks: KirBlock[]): void {
-  // Remove phi nodes where all incoming values are the same (or self-referential)
   let changed = true;
   while (changed) {
     changed = false;
     for (const block of blocks) {
-      const newPhis: KirPhi[] = [];
+      const survivingPhis: KirPhi[] = [];
       for (const phi of block.phis) {
-        // Filter out self-references
+        // Filter out self-references (phi.dest appearing in its own incoming)
         const nonSelfValues = phi.incoming
           .filter((e) => e.value !== phi.dest)
           .map((e) => e.value);
@@ -566,118 +689,37 @@ function eliminateDeadPhis(blocks: KirBlock[]): void {
         const uniqueValues = [...new Set(nonSelfValues)];
 
         if (uniqueValues.length === 0) {
-          // All self-referential or empty — remove (dead)
+          // All self-referential or empty — dead phi, remove
           changed = true;
           continue;
         }
 
         if (uniqueValues.length === 1) {
-          // All incoming are the same value — replace phi with that value
+          // Trivial phi: all incoming paths carry the same value.
+          // Replace all uses of phi.dest with that value.
           const replacement = uniqueValues[0];
-          // Rewrite all uses of phi.dest → replacement across all blocks
+          const from = phi.dest;
+          const mapVar = (v: VarId) => (v === from ? replacement : v);
+
           for (const b of blocks) {
             for (const p of b.phis) {
               for (const inc of p.incoming) {
-                if (inc.value === phi.dest) inc.value = replacement;
+                if (inc.value === from) inc.value = replacement;
               }
             }
             b.instructions = b.instructions.map((inst) =>
-              rewriteAllUses(inst, phi.dest, replacement),
+              mapInstOperands(inst, mapVar),
             );
-            b.terminator = rewriteTerminatorUses(
-              b.terminator,
-              phi.dest,
-              replacement,
-            );
+            b.terminator = mapTerminatorOperands(b.terminator, mapVar);
           }
           changed = true;
           continue;
         }
 
-        newPhis.push(phi);
+        survivingPhis.push(phi);
       }
-      block.phis = newPhis;
+      block.phis = survivingPhis;
     }
-  }
-}
-
-function rewriteAllUses(inst: KirInst, from: VarId, to: VarId): KirInst {
-  function r(v: VarId): VarId {
-    return v === from ? to : v;
-  }
-
-  switch (inst.kind) {
-    case "bin_op":
-      return { ...inst, lhs: r(inst.lhs), rhs: r(inst.rhs) };
-    case "neg":
-      return { ...inst, operand: r(inst.operand) };
-    case "not":
-      return { ...inst, operand: r(inst.operand) };
-    case "bit_not":
-      return { ...inst, operand: r(inst.operand) };
-    case "call":
-      return { ...inst, args: inst.args.map(r) };
-    case "call_void":
-      return { ...inst, args: inst.args.map(r) };
-    case "call_extern":
-      return { ...inst, args: inst.args.map(r) };
-    case "call_extern_void":
-      return { ...inst, args: inst.args.map(r) };
-    case "cast":
-      return { ...inst, value: r(inst.value) };
-    case "store":
-      return { ...inst, value: r(inst.value), ptr: r(inst.ptr) };
-    case "load":
-      return { ...inst, ptr: r(inst.ptr) };
-    case "field_ptr":
-      return { ...inst, base: r(inst.base) };
-    case "index_ptr":
-      return { ...inst, base: r(inst.base), index: r(inst.index) };
-    case "bounds_check":
-      return { ...inst, index: r(inst.index), length: r(inst.length) };
-    case "overflow_check":
-      return { ...inst, lhs: r(inst.lhs), rhs: r(inst.rhs) };
-    case "null_check":
-      return { ...inst, ptr: r(inst.ptr) };
-    case "assert_check":
-      return { ...inst, cond: r(inst.cond) };
-    case "require_check":
-      return { ...inst, cond: r(inst.cond) };
-    case "destroy":
-      return { ...inst, value: r(inst.value) };
-    case "oncopy":
-      return { ...inst, value: r(inst.value) };
-    case "move":
-      return { ...inst, source: r(inst.source) };
-    case "call_throws":
-      return { ...inst, args: inst.args.map(r), outPtr: r(inst.outPtr), errPtr: r(inst.errPtr) };
-    default:
-      return inst;
-  }
-}
-
-function rewriteTerminatorUses(
-  term: KirTerminator,
-  from: VarId,
-  to: VarId,
-): KirTerminator {
-  function r(v: VarId): VarId {
-    return v === from ? to : v;
-  }
-
-  switch (term.kind) {
-    case "ret":
-      return { ...term, value: r(term.value) };
-    case "br":
-      return { ...term, cond: r(term.cond) };
-    case "switch":
-      return {
-        ...term,
-        value: r(term.value),
-        cases: term.cases.map((c) => ({ ...c, value: r(c.value) })),
-      };
-    default:
-      return term;
   }
 }
 
@@ -686,18 +728,22 @@ function rewriteTerminatorUses(
 function runMem2RegOnFunction(fn: KirFunction): void {
   if (fn.blocks.length === 0) return;
 
+  // Step 1: Find promotable allocas
   const allocas = findPromotableAllocas(fn);
   if (allocas.size === 0) return;
 
+  // Step 2: Build CFG and compute dominance
   const cfg = buildCFG(fn.blocks);
   const idom = computeDominators(cfg);
-  const df = computeDominanceFrontiers(cfg, idom);
-  const phiMap = insertPhis(fn, cfg, df, allocas);
+  const domFrontiers = computeDomFrontiers(cfg, idom);
+
+  // Steps 3-4: Insert phi nodes and rename variables
+  const phiMap = insertPhis(fn, cfg, domFrontiers, allocas);
   const newBlocks = renameVariables(fn, cfg, idom, allocas, phiMap);
 
   fn.blocks = newBlocks;
 
-  // Clean up trivial / dead phi nodes
+  // Step 5: Clean up trivial / dead phi nodes
   eliminateDeadPhis(fn.blocks);
 }
 
