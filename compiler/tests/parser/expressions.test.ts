@@ -4,8 +4,10 @@ import { parse } from "./helpers.ts";
 
 function parseExpr(exprStr: string): Expression {
   const program = parse(`fn test() { let _r = ${exprStr}; }`);
+  // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
   const fn = program.declarations[0]!;
   if (fn.kind !== "FunctionDecl") throw new Error("Expected FunctionDecl");
+  // biome-ignore lint/style/noNonNullAssertion: test input guarantees statement exists
   const stmt = fn.body.statements[0]!;
   if (stmt.kind !== "LetStmt") throw new Error("Expected LetStmt");
   return stmt.initializer;
@@ -13,8 +15,10 @@ function parseExpr(exprStr: string): Expression {
 
 function parseExprStmt(src: string): Expression {
   const program = parse(`fn test() { ${src} }`);
+  // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
   const fn = program.declarations[0]!;
   if (fn.kind !== "FunctionDecl") throw new Error("Expected FunctionDecl");
+  // biome-ignore lint/style/noNonNullAssertion: test input guarantees statement exists
   const stmt = fn.body.statements[0]!;
   if (stmt.kind !== "ExprStmt") throw new Error(`Expected ExprStmt, got ${stmt.kind}`);
   return stmt.expression;
@@ -166,8 +170,10 @@ describe("Parser — Expressions", () => {
     const program = parse(
       "fn test() { let x = getUser(10) catch { NotFound: return -1; DbError e: return -2; }; }"
     );
+    // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
     const fn = program.declarations[0]!;
     if (fn.kind !== "FunctionDecl") return;
+    // biome-ignore lint/style/noNonNullAssertion: test input guarantees statement exists
     const stmt = fn.body.statements[0]!;
     if (stmt.kind !== "LetStmt") return;
     const expr = stmt.initializer;
@@ -281,6 +287,7 @@ describe("Parser — Expressions", () => {
     expect(expr.kind).toBe("UnsafeExpr");
     if (expr.kind !== "UnsafeExpr") return;
     expect(expr.body.statements).toHaveLength(1);
+    // biome-ignore lint/style/noNonNullAssertion: test input guarantees statement exists
     const inner = expr.body.statements[0]!;
     expect(inner.kind).toBe("ExprStmt");
     if (inner.kind !== "ExprStmt") return;
@@ -292,6 +299,7 @@ describe("Parser — Expressions", () => {
     expect(expr.kind).toBe("UnsafeExpr");
     if (expr.kind !== "UnsafeExpr") return;
     expect(expr.body.statements).toHaveLength(1);
+    // biome-ignore lint/style/noNonNullAssertion: test input guarantees statement exists
     const inner = expr.body.statements[0]!;
     if (inner.kind !== "ExprStmt") return;
     expect(inner.expression.kind).toBe("UnaryExpr");

@@ -26,6 +26,7 @@ describe("Parser — Error Recovery", () => {
     const { program, diagnostics } = parseWithDiagnostics("fn test() { }");
     expect(diagnostics).toHaveLength(0);
     expect(program.declarations).toHaveLength(1);
+    // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
     const fn = program.declarations[0]!;
     if (fn.kind === "FunctionDecl") {
       expect(fn.body.statements).toHaveLength(0);

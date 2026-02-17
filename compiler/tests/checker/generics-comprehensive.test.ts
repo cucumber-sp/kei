@@ -416,6 +416,7 @@ describe("Checker: Generics (comprehensive)", () => {
       const checker = new Checker(program, file);
       const result = checker.check();
 
+      // biome-ignore lint/suspicious/noExplicitAny: dynamic require loses type info
       const errors = result.diagnostics.filter((d: any) => d.severity === "error");
       expect(errors.length).toBe(0);
       expect(result.monomorphizedStructs.has("Box_i32")).toBe(true);
@@ -446,6 +447,7 @@ describe("Checker: Generics (comprehensive)", () => {
       const checker = new Checker(program, file);
       const result = checker.check();
 
+      // biome-ignore lint/suspicious/noExplicitAny: dynamic require loses type info
       const errors = result.diagnostics.filter((d: any) => d.severity === "error");
       expect(errors.length).toBe(0);
       expect(result.monomorphizedFunctions.has("identity_i32")).toBe(true);
@@ -474,6 +476,7 @@ describe("Checker: Generics (comprehensive)", () => {
       const checker = new Checker(program, file);
       const result = checker.check();
 
+      // biome-ignore lint/suspicious/noExplicitAny: dynamic require loses type info
       const errors = result.diagnostics.filter((d: any) => d.severity === "error");
       expect(errors.length).toBe(0);
       expect(result.genericResolutions.size).toBeGreaterThan(0);

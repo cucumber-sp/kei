@@ -132,6 +132,7 @@ describe("KIR: while loops", () => {
     `,
       "foo"
     );
+    // biome-ignore lint/style/noNonNullAssertion: test setup guarantees block exists
     const headerBlock = fn.blocks.find((b) => b.id.startsWith("while.header"))!;
     expect(headerBlock.terminator.kind).toBe("br");
   });
@@ -148,6 +149,7 @@ describe("KIR: while loops", () => {
     `,
       "foo"
     );
+    // biome-ignore lint/style/noNonNullAssertion: test setup guarantees block exists
     const bodyBlock = fn.blocks.find((b) => b.id.startsWith("while.body"))!;
     expect(bodyBlock.terminator.kind).toBe("jump");
     if (bodyBlock.terminator.kind === "jump") {
@@ -248,6 +250,7 @@ describe("KIR: for loops", () => {
     `,
       "foo"
     );
+    // biome-ignore lint/style/noNonNullAssertion: test setup guarantees block exists
     const headerBlock = fn.blocks.find((b) => b.id.startsWith("for.header"))!;
     expect(headerBlock.terminator.kind).toBe("br");
   });
@@ -263,6 +266,7 @@ describe("KIR: for loops", () => {
     `,
       "foo"
     );
+    // biome-ignore lint/style/noNonNullAssertion: test setup guarantees block exists
     const latchBlock = fn.blocks.find((b) => b.id.startsWith("for.latch"))!;
     expect(latchBlock.terminator.kind).toBe("jump");
     if (latchBlock.terminator.kind === "jump") {

@@ -522,6 +522,7 @@ describe("Checker: Operator Overloading", () => {
       const checker = new Checker(program, file);
       const result = checker.check();
 
+      // biome-ignore lint/suspicious/noExplicitAny: dynamic require loses type info
       const errors = result.diagnostics.filter((d: any) => d.severity === "error");
       expect(errors.length).toBe(0);
       expect(result.operatorMethods.size).toBeGreaterThan(0);

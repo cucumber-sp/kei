@@ -4,8 +4,10 @@ import { parse, parseWithDiagnostics } from "./helpers.ts";
 
 function parseExpr(exprStr: string): Expression {
   const program = parse(`fn test() { let _r = ${exprStr}; }`);
+  // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
   const fn = program.declarations[0]!;
   if (fn.kind !== "FunctionDecl") throw new Error("Expected FunctionDecl");
+  // biome-ignore lint/style/noNonNullAssertion: test input guarantees statement exists
   const stmt = fn.body.statements[0]!;
   if (stmt.kind !== "LetStmt") throw new Error("Expected LetStmt");
   return stmt.initializer;
@@ -29,6 +31,7 @@ describe("Parser — Edge Cases", () => {
       expect(expr.kind).toBe("CallExpr");
       if (expr.kind !== "CallExpr") return;
       expect(expr.args[0]?.kind).toBe("CallExpr");
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees element exists
       const inner = expr.args[0]!;
       if (inner.kind !== "CallExpr") return;
       expect(inner.args[0]?.kind).toBe("CallExpr");
@@ -183,6 +186,7 @@ describe("Parser — Edge Cases", () => {
 
     test("trailing comma in enum variants", () => {
       const program = parse("enum Dir : u8 { Up = 0, Down = 1, }");
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const e = program.declarations[0]!;
       if (e.kind !== "EnumDecl") return;
       expect(e.variants).toHaveLength(2);
@@ -193,6 +197,7 @@ describe("Parser — Edge Cases", () => {
     test("empty function body", () => {
       const { program, diagnostics } = parseWithDiagnostics("fn empty() { }");
       expect(diagnostics).toHaveLength(0);
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const fn = program.declarations[0]!;
       if (fn.kind !== "FunctionDecl") return;
       expect(fn.body.statements).toHaveLength(0);
@@ -200,6 +205,7 @@ describe("Parser — Edge Cases", () => {
 
     test("empty struct", () => {
       const program = parse("struct Empty {}");
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const s = program.declarations[0]!;
       expect(s.kind).toBe("StructDecl");
       if (s.kind !== "StructDecl") return;
@@ -209,6 +215,7 @@ describe("Parser — Edge Cases", () => {
 
     test("empty enum", () => {
       const program = parse("enum Nothing : u8 {}");
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const e = program.declarations[0]!;
       expect(e.kind).toBe("EnumDecl");
       if (e.kind !== "EnumDecl") return;
@@ -217,6 +224,7 @@ describe("Parser — Edge Cases", () => {
 
     test("function with single return", () => {
       const program = parse("fn identity() -> int { return 42; }");
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const fn = program.declarations[0]!;
       if (fn.kind !== "FunctionDecl") return;
       expect(fn.body.statements).toHaveLength(1);
@@ -233,6 +241,7 @@ describe("Parser — Edge Cases", () => {
           let c = a + b;
         }
       `);
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const fn = program.declarations[0]!;
       if (fn.kind !== "FunctionDecl") return;
       expect(fn.body.statements).toHaveLength(3);
@@ -307,6 +316,7 @@ describe("Parser — Edge Cases", () => {
     test("very long identifier name", () => {
       const longName = "a".repeat(200);
       const program = parse(`fn ${longName}() -> int { return 0; }`);
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const fn = program.declarations[0]!;
       if (fn.kind !== "FunctionDecl") return;
       expect(fn.name).toBe(longName);
@@ -314,6 +324,7 @@ describe("Parser — Edge Cases", () => {
 
     test("identifiers with underscores", () => {
       const program = parse("fn _my_func(_a: int, __b: int) -> int { return _a; }");
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const fn = program.declarations[0]!;
       if (fn.kind !== "FunctionDecl") return;
       expect(fn.name).toBe("_my_func");
@@ -348,6 +359,7 @@ describe("Parser — Edge Cases", () => {
         }
       `);
       expect(diagnostics).toHaveLength(0);
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const fn = program.declarations[0]!;
       if (fn.kind !== "FunctionDecl") return;
       expect(fn.body.statements).toHaveLength(2);
@@ -358,6 +370,7 @@ describe("Parser — Edge Cases", () => {
         "fn /* comment */ test() /* another */ -> int { return /* here */ 0; }"
       );
       expect(diagnostics).toHaveLength(0);
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const fn = program.declarations[0]!;
       if (fn.kind !== "FunctionDecl") return;
       expect(fn.name).toBe("test");
@@ -372,6 +385,7 @@ describe("Parser — Edge Cases", () => {
           y: f64;
         }
       `);
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const s = program.declarations[0]!;
       if (s.kind !== "StructDecl") return;
       expect(s.fields).toHaveLength(2);
@@ -426,6 +440,7 @@ describe("Parser — Edge Cases", () => {
           x >>= 2;
         }
       `);
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const fn = program.declarations[0]!;
       if (fn.kind !== "FunctionDecl") return;
       // let + 10 assignments = 11
@@ -441,6 +456,7 @@ describe("Parser — Edge Cases", () => {
 
     test("sizeof parsed as call-like expression", () => {
       const program = parse("fn test() { let s = sizeof(Point); }");
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const fn = program.declarations[0]!;
       if (fn.kind !== "FunctionDecl") return;
       expect(fn.body.statements).toHaveLength(1);
@@ -474,6 +490,7 @@ describe("Parser — Edge Cases", () => {
   describe("generic and complex declarations", () => {
     test("generic function with multiple type params", () => {
       const program = parse("fn pair<A, B>(a: A, b: B) -> A { return a; }");
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const fn = program.declarations[0]!;
       if (fn.kind !== "FunctionDecl") return;
       expect(fn.genericParams).toEqual(["A", "B"]);
@@ -488,6 +505,7 @@ describe("Parser — Edge Cases", () => {
           fn zero() -> Vec2 { return Vec2{ x: 0.0, y: 0.0 }; }
         }
       `);
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const s = program.declarations[0]!;
       if (s.kind !== "StructDecl") return;
       expect(s.fields).toHaveLength(2);
@@ -496,6 +514,7 @@ describe("Parser — Edge Cases", () => {
 
     test("enum with trailing comma in variants", () => {
       const program = parse("enum Dir : u8 { Up = 0, Down = 1, Left = 2, Right = 3, }");
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const e = program.declarations[0]!;
       if (e.kind !== "EnumDecl") return;
       expect(e.variants).toHaveLength(4);
@@ -509,6 +528,7 @@ describe("Parser — Edge Cases", () => {
           Unknown
         }
       `);
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const e = program.declarations[0]!;
       if (e.kind !== "EnumDecl") return;
       expect(e.variants).toHaveLength(3);
@@ -519,6 +539,7 @@ describe("Parser — Edge Cases", () => {
 
     test("type alias for pointer type", () => {
       const program = parse("type IntPtr = ptr<int>;");
+      // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
       const t = program.declarations[0]!;
       expect(t.kind).toBe("TypeAlias");
       if (t.kind !== "TypeAlias") return;

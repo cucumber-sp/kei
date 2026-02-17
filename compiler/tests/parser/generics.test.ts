@@ -4,8 +4,10 @@ import { parse } from "./helpers.ts";
 
 function parseExpr(exprStr: string): Expression {
   const program = parse(`fn test() { let _r = ${exprStr}; }`);
+  // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
   const fn = program.declarations[0]!;
   if (fn.kind !== "FunctionDecl") throw new Error("Expected FunctionDecl");
+  // biome-ignore lint/style/noNonNullAssertion: test input guarantees statement exists
   const stmt = fn.body.statements[0]!;
   if (stmt.kind !== "LetStmt") throw new Error("Expected LetStmt");
   return stmt.initializer;
@@ -13,8 +15,10 @@ function parseExpr(exprStr: string): Expression {
 
 function parseExprStmt(src: string): Expression {
   const program = parse(`fn test() { ${src} }`);
+  // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
   const fn = program.declarations[0]!;
   if (fn.kind !== "FunctionDecl") throw new Error("Expected FunctionDecl");
+  // biome-ignore lint/style/noNonNullAssertion: test input guarantees statement exists
   const stmt = fn.body.statements[0]!;
   if (stmt.kind !== "ExprStmt") throw new Error(`Expected ExprStmt, got ${stmt.kind}`);
   return stmt.expression;
