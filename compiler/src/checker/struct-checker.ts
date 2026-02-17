@@ -3,25 +3,11 @@
  * lifecycle hook auto-generation (__destroy / __oncopy).
  */
 
-import type {
-  Declaration,
-  FunctionDecl,
-  StructDecl,
-  UnsafeStructDecl,
-} from "../ast/nodes.ts";
+import type { Declaration, FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes.ts";
 import type { Checker } from "./checker.ts";
 import { typeSymbol } from "./symbols.ts";
-import type {
-  FunctionType,
-  ParamInfo,
-  StructType,
-} from "./types";
-import {
-  functionType,
-  isPtrType,
-  TypeKind,
-  VOID_TYPE,
-} from "./types";
+import type { FunctionType, ParamInfo, StructType } from "./types";
+import { functionType, isPtrType, TypeKind, VOID_TYPE } from "./types";
 
 export class StructChecker {
   private checker: Checker;
@@ -35,8 +21,12 @@ export class StructChecker {
   registerStruct(
     decl: StructDecl | UnsafeStructDecl,
     isUnsafe: boolean,
-    checkDuplicateTypeParams: (params: string[], declName: string, span: { start: number; end: number }) => void,
-    buildFunctionType: (decl: FunctionDecl) => FunctionType,
+    checkDuplicateTypeParams: (
+      params: string[],
+      declName: string,
+      span: { start: number; end: number }
+    ) => void,
+    buildFunctionType: (decl: FunctionDecl) => FunctionType
   ): void {
     // Check for duplicate type parameters
     checkDuplicateTypeParams(decl.genericParams, decl.name, decl.span);

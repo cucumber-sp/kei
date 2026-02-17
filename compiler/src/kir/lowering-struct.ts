@@ -4,11 +4,7 @@
  * Extracted from lowering-decl.ts for modularity.
  */
 
-import type {
-  FunctionDecl,
-  StructDecl,
-  UnsafeStructDecl,
-} from "../ast/nodes.ts";
+import type { FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes.ts";
 import type { MonomorphizedStruct } from "../checker/generics.ts";
 import type { StructType } from "../checker/types";
 import type {

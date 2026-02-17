@@ -14,6 +14,8 @@
 
 import { type Diagnostic, Severity } from "../errors/index.ts";
 import type { SourceFile } from "../utils/source.ts";
+import * as numberMethods from "./lexer-numbers.ts";
+import * as stringMethods from "./lexer-strings.ts";
 import {
   getReservedTokenKind,
   isReservedKeyword,
@@ -21,8 +23,6 @@ import {
   type Token,
   TokenKind,
 } from "./token.ts";
-import * as numberMethods from "./lexer-numbers.ts";
-import * as stringMethods from "./lexer-strings.ts";
 
 // ─── Character helpers ────────────────────────────────────────────────────
 

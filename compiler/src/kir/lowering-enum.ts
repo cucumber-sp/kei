@@ -15,10 +15,7 @@ import type { KirLowerer } from "./lowering.ts";
  * Lower an enum data variant construction call: Shape.Circle(3.14)
  * Returns the VarId of the constructed tagged union, or null if expr is not an enum construction.
  */
-export function lowerEnumVariantConstruction(
-  this: KirLowerer,
-  expr: CallExpr
-): VarId | null {
+export function lowerEnumVariantConstruction(this: KirLowerer, expr: CallExpr): VarId | null {
   if (expr.callee.kind !== "MemberExpr") return null;
 
   const calleeType = this.checkResult.typeMap.get(expr.callee.object);
@@ -80,10 +77,7 @@ export function lowerEnumVariantConstruction(
  * Lower an enum variant member access: Color.Red or Shape.None (fieldless variant of tagged union).
  * Returns the VarId, or null if expr is not an enum variant access.
  */
-export function lowerEnumVariantAccess(
-  this: KirLowerer,
-  expr: MemberExpr
-): VarId | null {
+export function lowerEnumVariantAccess(this: KirLowerer, expr: MemberExpr): VarId | null {
   const objectType = this.checkResult.typeMap.get(expr.object);
   if (objectType?.kind !== "enum") return null;
 

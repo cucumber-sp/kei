@@ -14,12 +14,7 @@ import type { Checker } from "./checker.ts";
 import { EnumChecker } from "./enum-checker.ts";
 import { StructChecker } from "./struct-checker.ts";
 import { functionSymbol, moduleSymbol, typeSymbol, variableSymbol } from "./symbols.ts";
-import type {
-  FunctionType,
-  ModuleType,
-  ParamInfo,
-  Type,
-} from "./types";
+import type { FunctionType, ModuleType, ParamInfo, Type } from "./types";
 import {
   ERROR_TYPE,
   functionType,
@@ -59,7 +54,7 @@ export class DeclarationChecker {
           decl,
           false,
           this.checkDuplicateTypeParams.bind(this),
-          this.buildFunctionType.bind(this),
+          this.buildFunctionType.bind(this)
         );
         break;
       case "UnsafeStructDecl":
@@ -67,7 +62,7 @@ export class DeclarationChecker {
           decl,
           true,
           this.checkDuplicateTypeParams.bind(this),
-          this.buildFunctionType.bind(this),
+          this.buildFunctionType.bind(this)
         );
         break;
       case "EnumDecl":

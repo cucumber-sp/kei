@@ -6,13 +6,7 @@ import type { EnumDecl } from "../ast/nodes.ts";
 import type { Checker } from "./checker.ts";
 import { typeSymbol } from "./symbols.ts";
 import type { EnumVariantInfo } from "./types";
-import {
-  isAssignableTo,
-  isErrorType,
-  isIntegerType,
-  TypeKind,
-  typeToString,
-} from "./types";
+import { isAssignableTo, isErrorType, isIntegerType, TypeKind, typeToString } from "./types";
 
 export class EnumChecker {
   private checker: Checker;

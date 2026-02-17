@@ -4,10 +4,17 @@
  */
 
 import { Severity } from "../errors/index.ts";
+import type { Lexer } from "./lexer.ts";
+import {
+  isAlpha,
+  isAlphaNumeric,
+  isBinaryDigit,
+  isDigit,
+  isHexDigit,
+  isOctalDigit,
+} from "./lexer.ts";
 import type { Token } from "./token.ts";
 import { TokenKind } from "./token.ts";
-import type { Lexer } from "./lexer.ts";
-import { isAlpha, isAlphaNumeric, isDigit, isHexDigit, isBinaryDigit, isOctalDigit } from "./lexer.ts";
 
 // ─── Number scanning ──────────────────────────────────────────────────────
 

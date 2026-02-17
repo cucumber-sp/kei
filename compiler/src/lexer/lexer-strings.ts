@@ -4,10 +4,10 @@
  */
 
 import { Severity } from "../errors/index.ts";
-import type { Token } from "./token.ts";
-import { TokenKind } from "./token.ts";
 import type { Lexer } from "./lexer.ts";
 import { isHexDigit } from "./lexer.ts";
+import type { Token } from "./token.ts";
+import { TokenKind } from "./token.ts";
 
 // ─── String scanning ──────────────────────────────────────────────────────
 

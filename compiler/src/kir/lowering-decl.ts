@@ -7,21 +7,9 @@
  * Enum declaration lowering: lowering-enum-decl.ts
  */
 
-import type {
-  Declaration,
-  ExternFunctionDecl,
-  FunctionDecl,
-  StaticDecl,
-} from "../ast/nodes.ts";
+import type { Declaration, ExternFunctionDecl, FunctionDecl, StaticDecl } from "../ast/nodes.ts";
 import type { MonomorphizedFunction } from "../checker/generics.ts";
-import type {
-  KirExtern,
-  KirFunction,
-  KirGlobal,
-  KirParam,
-  KirType,
-  VarId,
-} from "./kir-types.ts";
+import type { KirExtern, KirFunction, KirGlobal, KirParam, KirType, VarId } from "./kir-types.ts";
 import type { KirLowerer } from "./lowering.ts";
 import { lowerAutoDestroy, lowerAutoOncopy } from "./lowering-struct.ts";
 
@@ -89,7 +77,11 @@ export function resetFunctionState(this: KirLowerer): void {
 }
 
 /** Finalize function body: pop scope, add terminator, seal last block. */
-export function finalizeFunctionBody(this: KirLowerer, isThrows: boolean, returnType: KirType): void {
+export function finalizeFunctionBody(
+  this: KirLowerer,
+  isThrows: boolean,
+  returnType: KirType
+): void {
   // Emit destroy for function-scope variables before implicit return
   if (!this.isBlockTerminated()) {
     this.popScopeWithDestroy();
@@ -112,7 +104,11 @@ export function finalizeFunctionBody(this: KirLowerer, isThrows: boolean, return
 }
 
 /** Add __out and __err pointer params for throws functions. */
-export function addThrowsParams(this: KirLowerer, params: KirParam[], originalReturnType: KirType): void {
+export function addThrowsParams(
+  this: KirLowerer,
+  params: KirParam[],
+  originalReturnType: KirType
+): void {
   const outParamId: VarId = `%__out`;
   const errParamId: VarId = `%__err`;
   this.varMap.set("__out", outParamId);
