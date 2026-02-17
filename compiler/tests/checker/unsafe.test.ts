@@ -224,4 +224,43 @@ describe("Checker — Unsafe", () => {
       "requires unsafe block"
     );
   });
+
+  test("regular struct with ptr<T> field → error", () => {
+    checkError(
+      `
+        struct Bad { data: ptr<u8>; }
+        fn main() -> int { return 0; }
+      `,
+      "use 'unsafe struct' for pointer fields"
+    );
+  });
+
+  test("regular struct with non-ptr fields → ok", () => {
+    checkOk(`
+      struct Good { value: int; name: string; }
+      fn main() -> int { return 0; }
+    `);
+  });
+
+  test("alloc<T>(count) returns ptr<T>", () => {
+    checkOk(`${MEM_STUBS}
+      fn takes_ptr_i32(p: ptr<i32>) {}
+      fn main() -> int {
+        unsafe {
+          let p = alloc<i32>(10);
+          takes_ptr_i32(p);
+        }
+        return 0;
+      }
+    `);
+  });
+
+  test("alloc without type arg returns ptr<void>", () => {
+    checkOk(`${MEM_STUBS}
+      fn main() -> int {
+        unsafe { let p = alloc(10); free(p); }
+        return 0;
+      }
+    `);
+  });
 });

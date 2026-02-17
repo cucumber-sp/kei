@@ -49,6 +49,7 @@ const PRIMITIVE_TYPE_MAP: ReadonlyMap<string, Type> = new Map([
   ["c_char", C_CHAR_TYPE],
   // Built-in aliases
   ["int", I32_TYPE],
+  ["uint", U32_TYPE],
   ["long", I64_TYPE],
   ["float", F32_TYPE],
   ["double", F64_TYPE],

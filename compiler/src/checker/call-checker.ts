@@ -68,6 +68,17 @@ function checkBuiltinAllocFree(checker: Checker, expr: CallExpr): Type | null {
     if (!allocArg) return ERROR_TYPE;
     const argType = checker.checkExpression(allocArg);
     if (isErrorType(argType)) return ERROR_TYPE;
+
+    // alloc<T>(count) returns ptr<T>; alloc(count) returns ptr<void>
+    if (expr.typeArgs.length === 1) {
+      const elementType = checker.resolveType(expr.typeArgs[0]!);
+      if (isErrorType(elementType)) return ERROR_TYPE;
+      return ptrType(elementType);
+    }
+    if (expr.typeArgs.length > 1) {
+      checker.error("'alloc' expects at most 1 type argument", expr.span);
+      return ERROR_TYPE;
+    }
     return ptrType(VOID_TYPE);
   }
 

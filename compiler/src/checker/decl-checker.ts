@@ -353,6 +353,19 @@ export class DeclarationChecker {
     // Skip body checking for generic structs — methods are checked when instantiated
     if (decl.genericParams.length > 0) return;
 
+    // Regular structs cannot have ptr<T> fields — only unsafe struct allows them
+    if (!isUnsafe) {
+      for (const field of decl.fields) {
+        const ft = this.checker.resolveType(field.typeAnnotation);
+        if (isPtrType(ft)) {
+          this.checker.error(
+            `struct '${decl.name}' cannot have pointer field '${field.name}'; use 'unsafe struct' for pointer fields`,
+            field.span
+          );
+        }
+      }
+    }
+
     // Check unsafe struct lifecycle rules
     if (isUnsafe) {
       const hasPtrField = decl.fields.some((f) => {

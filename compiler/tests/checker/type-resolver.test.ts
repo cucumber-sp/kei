@@ -6,6 +6,7 @@ import {
   I32_TYPE,
   I64_TYPE,
   U8_TYPE,
+  U32_TYPE,
   F32_TYPE,
   F64_TYPE,
   BOOL_TYPE,
@@ -82,6 +83,7 @@ describe("TypeResolver", () => {
       expect(resolver.resolve(namedType("float"), scope)).toEqual(F32_TYPE);
       expect(resolver.resolve(namedType("double"), scope)).toEqual(F64_TYPE);
       expect(resolver.resolve(namedType("byte"), scope)).toEqual(U8_TYPE);
+      expect(resolver.resolve(namedType("uint"), scope)).toEqual(U32_TYPE);
     });
   });
 
