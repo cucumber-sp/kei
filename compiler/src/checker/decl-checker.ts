@@ -169,7 +169,16 @@ export class DeclarationChecker {
     }
 
     // Now resolve methods (self: StructName will now resolve)
+    const seenMethods = new Set<string>();
     for (const method of decl.methods) {
+      if (seenMethods.has(method.name)) {
+        this.checker.error(
+          `duplicate method '${method.name}' in struct '${decl.name}'`,
+          method.span
+        );
+        continue;
+      }
+      seenMethods.add(method.name);
       const methodType = this.buildFunctionType(method);
       structType.methods.set(method.name, methodType);
     }
@@ -181,6 +190,18 @@ export class DeclarationChecker {
 
   private registerEnum(decl: EnumDecl): void {
     const baseType = decl.baseType ? this.checker.resolveType(decl.baseType) : null;
+
+    // Check for duplicate variants
+    const seenVariants = new Set<string>();
+    for (const v of decl.variants) {
+      if (seenVariants.has(v.name)) {
+        this.checker.error(
+          `duplicate variant '${v.name}' in enum '${decl.name}'`,
+          v.span
+        );
+      }
+      seenVariants.add(v.name);
+    }
 
     const variants: EnumVariantInfo[] = decl.variants.map((v) => ({
       name: v.name,
@@ -353,6 +374,34 @@ export class DeclarationChecker {
           this.checker.error(
             `unsafe struct '${decl.name}' with ptr<T> fields must define '__oncopy'`,
             decl.span
+          );
+        }
+      }
+    }
+
+    // Validate lifecycle hook signatures
+    for (const method of decl.methods) {
+      if (method.name === "__destroy") {
+        if (method.params.length !== 1) {
+          this.checker.error(
+            `lifecycle hook '__destroy' must take exactly 1 parameter`,
+            method.span
+          );
+        }
+        if (method.returnType) {
+          const retType = this.checker.resolveType(method.returnType);
+          if (retType.kind !== TypeKind.Void) {
+            this.checker.error(
+              `lifecycle hook '__destroy' must return void`,
+              method.span
+            );
+          }
+        }
+      } else if (method.name === "__oncopy") {
+        if (method.params.length >= 1 && method.params[0].name !== "self") {
+          this.checker.error(
+            `lifecycle hook '__oncopy' first parameter must be named 'self'`,
+            method.span
           );
         }
       }

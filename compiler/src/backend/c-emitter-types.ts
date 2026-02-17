@@ -3,11 +3,9 @@
  */
 
 import type { KirType, VarId } from "../kir/kir-types.ts";
+import { I32_MIN, I32_MAX } from "../utils/constants.ts";
 
-// ─── Integer range constants ────────────────────────────────────────────────
-
-export const I32_MIN = -2147483648;
-export const I32_MAX = 2147483647;
+export { I32_MIN, I32_MAX };
 
 // ─── Type mapping ───────────────────────────────────────────────────────────
 
