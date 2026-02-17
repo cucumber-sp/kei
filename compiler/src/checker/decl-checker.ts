@@ -128,6 +128,9 @@ export class DeclarationChecker {
   }
 
   private registerStruct(decl: StructDecl | UnsafeStructDecl, isUnsafe: boolean): void {
+    // Check for duplicate type parameters
+    this.checkDuplicateTypeParams(decl.genericParams, decl.name, decl.span);
+
     // Create the struct type first with empty fields/methods so self-references work
     const structType: StructType = {
       kind: TypeKind.Struct,
@@ -451,6 +454,9 @@ export class DeclarationChecker {
   // ─── Helpers ───────────────────────────────────────────────────────────
 
   private buildFunctionType(decl: FunctionDecl): FunctionType {
+    // Check for duplicate type parameters
+    this.checkDuplicateTypeParams(decl.genericParams, decl.name, decl.span);
+
     // Push generic type params into scope for resolving param/return types
     if (decl.genericParams.length > 0) {
       this.checker.pushScope({});
@@ -475,6 +481,20 @@ export class DeclarationChecker {
     }
 
     return functionType(params, returnType, throwsTypes, decl.genericParams, false);
+  }
+
+  /** Report an error if the same type parameter name appears more than once. */
+  private checkDuplicateTypeParams(params: string[], declName: string, span: { start: number; end: number }): void {
+    const seen = new Set<string>();
+    for (const gp of params) {
+      if (seen.has(gp)) {
+        this.checker.error(
+          `duplicate type parameter '${gp}' in '${declName}'`,
+          span
+        );
+      }
+      seen.add(gp);
+    }
   }
 
   private inferStaticType(decl: StaticDecl): Type {

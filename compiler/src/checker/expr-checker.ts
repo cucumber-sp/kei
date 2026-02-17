@@ -522,14 +522,17 @@ export class ExpressionChecker {
     // Find the generic overload
     const genericOverload = sym.overloads.find((o) => o.type.genericParams.length > 0);
     if (!genericOverload) {
-      this.checker.error(`function '${name}' is not generic`, expr.span);
+      this.checker.error(
+        `function '${name}' is not generic but was called with ${expr.typeArgs.length} type argument(s)`,
+        expr.span
+      );
       return ERROR_TYPE;
     }
 
     const funcType = genericOverload.type;
     if (expr.typeArgs.length !== funcType.genericParams.length) {
       this.checker.error(
-        `function '${name}' expects ${funcType.genericParams.length} type argument(s), got ${expr.typeArgs.length}`,
+        `function '${name}' expects ${funcType.genericParams.length} type argument(s) <${funcType.genericParams.join(", ")}>, got ${expr.typeArgs.length}`,
         expr.span
       );
       return ERROR_TYPE;

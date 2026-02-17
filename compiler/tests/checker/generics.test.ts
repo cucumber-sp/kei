@@ -62,7 +62,7 @@ describe("Checker: Generics", () => {
           let p = Pair<i32>{ first: 1, second: true };
         }
         `,
-        "expects 2 type argument(s), got 1"
+        "expects 2 type argument(s) <A, B>, got 1"
       );
     });
 
@@ -172,7 +172,7 @@ describe("Checker: Generics", () => {
           identity<i32, bool>(42);
         }
         `,
-        "expects 1 type argument(s), got 2"
+        "expects 1 type argument(s) <T>, got 2"
       );
     });
 
@@ -300,6 +300,159 @@ describe("Checker: Generics", () => {
         }
         `,
         "expected 'i32', got 'string'"
+      );
+    });
+  });
+
+  // ─── Edge Cases ────────────────────────────────────────────────────────
+
+  describe("edge cases", () => {
+    test("duplicate type parameter in struct", () => {
+      checkError(
+        `
+        struct Bad<T, T> {
+          a: T;
+          b: T;
+        }
+        fn main() {
+          let b = Bad<i32>{ a: 1, b: 2 };
+        }
+        `,
+        "duplicate type parameter 'T'"
+      );
+    });
+
+    test("duplicate type parameter in function", () => {
+      checkError(
+        `
+        fn bad<T, T>(a: T, b: T) -> T {
+          return a;
+        }
+        fn main() {
+          bad<i32>(1, 2);
+        }
+        `,
+        "duplicate type parameter 'T'"
+      );
+    });
+
+    test("non-generic function called with type args — improved message", () => {
+      checkError(
+        `
+        fn add(a: i32, b: i32) -> i32 {
+          return a + b;
+        }
+        fn main() {
+          add<i32>(1, 2);
+        }
+        `,
+        "is not generic but was called with 1 type argument(s)"
+      );
+    });
+
+    test("generic struct with ptr<T> field", () => {
+      checkOk(`
+        struct PtrBox<T> {
+          value: ptr<T>;
+        }
+        fn main() {
+          let x: i32 = 42;
+          let p: ptr<i32> = unsafe { &x };
+          let b = PtrBox<i32>{ value: p };
+        }
+      `);
+    });
+
+    test("generic function with ptr param", () => {
+      checkOk(`
+        fn deref<T>(p: ptr<T>) -> T {
+          return unsafe { p.* };
+        }
+        fn main() -> i32 {
+          let x: i32 = 42;
+          let p: ptr<i32> = unsafe { &x };
+          return deref<i32>(p);
+        }
+      `);
+    });
+
+    test("struct inference fails with uninferred params", () => {
+      checkError(
+        `
+        struct Pair<A, B> {
+          first: A;
+          second: B;
+        }
+        fn main() {
+          let p = Pair{ first: 42 };
+        }
+        `,
+        "missing field"
+      );
+    });
+
+    test("generic method return type is concrete after instantiation", () => {
+      checkOk(`
+        struct Box<T> {
+          value: T;
+          fn get(self: Box<T>) -> T {
+            return self.value;
+          }
+        }
+        fn main() -> i32 {
+          let b = Box<i32>{ value: 42 };
+          let v: i32 = b.get();
+          return v;
+        }
+      `);
+    });
+
+    test("generic struct with multiple methods", () => {
+      checkOk(`
+        struct Container<T> {
+          value: T;
+          fn get(self: Container<T>) -> T {
+            return self.value;
+          }
+          fn set(self: Container<T>, new_val: T) -> Container<T> {
+            return Container<T>{ value: new_val };
+          }
+        }
+        fn main() -> i32 {
+          let c = Container<i32>{ value: 1 };
+          let v = c.get();
+          return v;
+        }
+      `);
+    });
+
+    test("type error message includes param names for structs", () => {
+      checkError(
+        `
+        struct Triple<X, Y, Z> {
+          a: X;
+          b: Y;
+          c: Z;
+        }
+        fn main() {
+          let t = Triple<i32>{ a: 1, b: true, c: "hi" };
+        }
+        `,
+        "<X, Y, Z>"
+      );
+    });
+
+    test("type error message includes param names for functions", () => {
+      checkError(
+        `
+        fn pair<A, B>(a: A, b: B) -> A {
+          return a;
+        }
+        fn main() {
+          pair<i32>(1, true);
+        }
+        `,
+        "<A, B>"
       );
     });
   });

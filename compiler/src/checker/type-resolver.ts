@@ -120,8 +120,11 @@ export class TypeResolver {
           return ERROR_TYPE;
         }
         if (typeArgs.length !== baseType.genericParams.length) {
+          const paramHint = baseType.genericParams.length > 0
+            ? ` <${baseType.genericParams.join(", ")}>`
+            : "";
           this.addError(
-            `type '${name}' expects ${baseType.genericParams.length} type argument(s), got ${typeArgs.length}`,
+            `type '${name}' expects ${baseType.genericParams.length} type argument(s)${paramHint}, got ${typeArgs.length}`,
             span
           );
           return ERROR_TYPE;

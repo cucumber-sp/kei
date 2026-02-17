@@ -176,8 +176,11 @@ function instantiateGenericStruct(
   expr: StructLiteral
 ): Type {
   if (expr.typeArgs.length !== baseStruct.genericParams.length) {
+    const paramHint = baseStruct.genericParams.length > 0
+      ? ` <${baseStruct.genericParams.join(", ")}>`
+      : "";
     checker.error(
-      `type '${baseStruct.name}' expects ${baseStruct.genericParams.length} type argument(s), got ${expr.typeArgs.length}`,
+      `type '${baseStruct.name}' expects ${baseStruct.genericParams.length} type argument(s)${paramHint}, got ${expr.typeArgs.length}`,
       expr.span
     );
     return ERROR_TYPE;
@@ -347,24 +350,12 @@ function checkGenericStructLiteralInferred(
   }
 
   // Fallback: could not fully infer all type params
-  const newFields = new Map<string, Type>();
-  for (const [fieldName, fieldType] of structType.fields) {
-    newFields.set(fieldName, substituteType(fieldType, subs));
-  }
-
-  const typeArgStrs = structType.genericParams.map((gp) => {
-    const sub = subs.get(gp);
-    return sub ? typeToString(sub) : gp;
-  });
-
-  return {
-    kind: TypeKind.Struct,
-    name: `${structType.name}<${typeArgStrs.join(", ")}>`,
-    fields: newFields,
-    methods: structType.methods,
-    isUnsafe: structType.isUnsafe,
-    genericParams: [],
-  };
+  const uninferred = structType.genericParams.filter((gp) => !subs.has(gp));
+  checker.error(
+    `cannot infer type parameter(s) '${uninferred.join("', '")}' for struct '${structType.name}' — provide explicit type arguments`,
+    expr.span
+  );
+  return ERROR_TYPE;
 }
 
 /** Recursively extract TypeParam→concrete type mappings by walking declared and concrete types. */

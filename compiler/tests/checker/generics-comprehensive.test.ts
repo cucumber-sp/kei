@@ -528,7 +528,7 @@ describe("Checker: Generics (comprehensive)", () => {
           identity<i32, bool>(42);
         }
         `,
-        "expects 1 type argument(s), got 2"
+        "expects 1 type argument(s) <T>, got 2"
       );
     });
 
