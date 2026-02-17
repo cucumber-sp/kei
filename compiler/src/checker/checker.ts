@@ -95,6 +95,11 @@ export class Checker {
   /** Maps generic call/struct literal expressions to their resolved mangled names */
   genericResolutions: Map<Expression, string> = new Map();
 
+  /** Per-instantiation type map, set during checkMonomorphizedBodies */
+  private currentBodyTypeMap: Map<Expression, Type> | null = null;
+  /** Per-instantiation generic resolutions, set during checkMonomorphizedBodies */
+  private currentBodyGenericResolutions: Map<Expression, string> | null = null;
+
   constructor(program: Program, source: SourceFile) {
     this.program = program;
     this.source = source;
@@ -229,6 +234,24 @@ export class Checker {
       const decl = monoFunc.declaration;
       const concreteType = monoFunc.concrete;
 
+      // Build type parameter substitution map (e.g. A→i32, B→bool)
+      // so that struct literals like Pair<A, B>{...} resolve correctly
+      const typeSubs = new Map<string, Type>();
+      for (let i = 0; i < decl.genericParams.length; i++) {
+        const paramName = decl.genericParams[i];
+        const concreteArg = monoFunc.typeArgs[i];
+        if (paramName && concreteArg) {
+          typeSubs.set(paramName, concreteArg);
+        }
+      }
+      this.typeResolver.setSubstitutions(typeSubs);
+
+      // Set up per-instantiation type map to avoid shared-AST conflicts
+      const bodyTypeMap = new Map<Expression, Type>();
+      const bodyGenericResolutions = new Map<Expression, string>();
+      this.currentBodyTypeMap = bodyTypeMap;
+      this.currentBodyGenericResolutions = bodyGenericResolutions;
+
       // Push a function scope with concrete param types
       this.pushScope({ functionContext: concreteType });
 
@@ -245,6 +268,13 @@ export class Checker {
       }
 
       this.popScope();
+      this.typeResolver.clearSubstitutions();
+      this.currentBodyTypeMap = null;
+      this.currentBodyGenericResolutions = null;
+
+      // Store per-instantiation maps on the monomorphized function
+      monoFunc.bodyTypeMap = bodyTypeMap;
+      monoFunc.bodyGenericResolutions = bodyGenericResolutions;
     }
 
     // Also store struct declarations in MonomorphizedStruct
@@ -411,6 +441,16 @@ export class Checker {
 
   setExprType(expr: Expression, type: Type): void {
     this.typeMap.set(expr, type);
+    if (this.currentBodyTypeMap) {
+      this.currentBodyTypeMap.set(expr, type);
+    }
+  }
+
+  setGenericResolution(expr: Expression, mangledName: string): void {
+    this.genericResolutions.set(expr, mangledName);
+    if (this.currentBodyGenericResolutions) {
+      this.currentBodyGenericResolutions.set(expr, mangledName);
+    }
   }
 
   // ─── Throws Tracking ──────────────────────────────────────────────────

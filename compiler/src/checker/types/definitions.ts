@@ -73,6 +73,10 @@ export interface StructType {
   methods: Map<string, FunctionType>;
   isUnsafe: boolean;
   genericParams: string[];
+  /** Original base name for generic instantiations (e.g. "Pair" for "Pair_A_B"). */
+  genericBaseName?: string;
+  /** Original type args for generic instantiations (needed for re-mangling after substitution). */
+  genericTypeArgs?: Type[];
 }
 
 /** Variant info for an enum — name, optional fields, optional explicit discriminant. */

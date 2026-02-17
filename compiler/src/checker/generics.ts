@@ -69,8 +69,15 @@ export function substituteType(type: Type, typeMap: Map<string, Type>): Type {
         newMethods.set(methodName, subbed);
       }
       if (!changed) return type;
+      // Re-mangle name if this struct was a generic instantiation with TypeParam args
+      let newName = type.name;
+      if (type.genericBaseName && type.genericTypeArgs) {
+        const subbedArgs = type.genericTypeArgs.map((a) => substituteType(a, typeMap));
+        newName = mangleGenericName(type.genericBaseName, subbedArgs);
+      }
       return {
         ...type,
+        name: newName,
         fields: newFields,
         methods: newMethods,
       };
@@ -210,4 +217,8 @@ export interface MonomorphizedFunction {
   mangledName: string;
   /** Original AST declaration (needed for lowering the body). */
   declaration?: FunctionDecl;
+  /** Per-instantiation type map for body expressions (avoids shared-AST conflicts). */
+  bodyTypeMap?: Map<Expression, Type>;
+  /** Per-instantiation generic resolutions for body expressions. */
+  bodyGenericResolutions?: Map<Expression, string>;
 }

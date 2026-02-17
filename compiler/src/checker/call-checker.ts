@@ -388,7 +388,7 @@ function cacheMonomorphizedFunction(
     });
   }
   checker.setExprType(expr.callee, concreteType);
-  checker.genericResolutions.set(expr, mangledName);
+  checker.setGenericResolution(expr, mangledName);
 }
 
 /** Handle generic function call with explicit type args: max<i32>(a, b) */

@@ -9,6 +9,11 @@ import type { KirType } from "./kir-types.ts";
 import type { KirLowerer } from "./lowering.ts";
 
 export function getExprKirType(this: KirLowerer, expr: Expression): KirType {
+  // Prefer per-instantiation type map (for monomorphized function bodies)
+  const bodyType = this.currentBodyTypeMap?.get(expr);
+  if (bodyType) {
+    return this.lowerCheckerType(bodyType);
+  }
   const checkerType = this.checkResult.typeMap.get(expr);
   if (checkerType) {
     return this.lowerCheckerType(checkerType);

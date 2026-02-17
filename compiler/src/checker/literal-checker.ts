@@ -230,7 +230,7 @@ function instantiateGenericStruct(
   });
 
   // Store generic resolution for the struct literal
-  checker.genericResolutions.set(expr, mangledName);
+  checker.setGenericResolution(expr, mangledName);
 
   return concreteStruct;
 }
@@ -316,7 +316,7 @@ function checkGenericStructLiteralInferred(
     });
 
     // Store generic resolution for the struct literal
-    checker.genericResolutions.set(expr, mangledName);
+    checker.setGenericResolution(expr, mangledName);
 
     return concreteStruct;
   }

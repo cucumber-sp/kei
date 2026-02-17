@@ -315,8 +315,20 @@ export function lowerMonomorphizedFunction(
     ? { kind: "int" as const, bits: 32 as const, signed: true }
     : originalReturnType;
 
+  // Set per-instantiation type map override for correct type resolution
+  if (monoFunc.bodyTypeMap) {
+    this.currentBodyTypeMap = monoFunc.bodyTypeMap;
+  }
+  if (monoFunc.bodyGenericResolutions) {
+    this.currentBodyGenericResolutions = monoFunc.bodyGenericResolutions;
+  }
+
   // Lower body
   this.lowerBlock(decl.body);
+
+  // Clear per-instantiation overrides
+  this.currentBodyTypeMap = null;
+  this.currentBodyGenericResolutions = null;
 
   finalizeFunctionBody(this, isThrows, returnType);
 

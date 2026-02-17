@@ -150,7 +150,7 @@ export function lowerCallExpr(this: KirLowerer, expr: CallExpr): VarId {
   let funcName: string;
 
   // Check for generic call resolution (e.g. max<i32>(a, b) → max_i32)
-  const genericName = this.checkResult.genericResolutions.get(expr);
+  const genericName = this.currentBodyGenericResolutions?.get(expr) ?? this.checkResult.genericResolutions.get(expr);
   if (genericName) {
     funcName = this.modulePrefix ? `${this.modulePrefix}_${genericName}` : genericName;
   } else if (expr.callee.kind === "Identifier") {

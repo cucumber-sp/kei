@@ -1623,7 +1623,7 @@ describe("Complex: operator overloading + generics", () => {
   });
 
   // skip: KIR lowering and C backend not yet updated for generics (generic type args in function body)
-  test.skip("generic struct Pair with methods", () => {
+  test("generic struct Pair with methods", () => {
     const r = run(
       "complex_generic_pair",
       `
