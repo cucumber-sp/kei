@@ -89,6 +89,9 @@ import type {
 import * as declMethods from "./lowering-decl.ts";
 import * as stmtMethods from "./lowering-stmt.ts";
 import * as exprMethods from "./lowering-expr.ts";
+import * as literalMethods from "./lowering-literals.ts";
+import * as operatorMethods from "./lowering-operators.ts";
+import * as errorMethods from "./lowering-error.ts";
 
 // ─── Scope variable tracking for lifecycle ───────────────────────────────────
 
@@ -260,34 +263,40 @@ export class KirLowerer {
 
   // ─── Expression methods (from lowering-expr.ts) ────────────────────────
   declare lowerExpr: typeof exprMethods.lowerExpr;
-  declare lowerIntLiteral: typeof exprMethods.lowerIntLiteral;
-  declare lowerFloatLiteral: typeof exprMethods.lowerFloatLiteral;
-  declare lowerStringLiteral: typeof exprMethods.lowerStringLiteral;
-  declare lowerBoolLiteral: typeof exprMethods.lowerBoolLiteral;
-  declare lowerNullLiteral: typeof exprMethods.lowerNullLiteral;
   declare lowerExprAsPtr: typeof exprMethods.lowerExprAsPtr;
   declare lowerIdentifier: typeof exprMethods.lowerIdentifier;
-  declare lowerBinaryExpr: typeof exprMethods.lowerBinaryExpr;
-  declare lowerShortCircuitAnd: typeof exprMethods.lowerShortCircuitAnd;
-  declare lowerShortCircuitOr: typeof exprMethods.lowerShortCircuitOr;
-  declare lowerUnaryExpr: typeof exprMethods.lowerUnaryExpr;
-  declare lowerOperatorMethodCall: typeof exprMethods.lowerOperatorMethodCall;
   declare lowerCallExpr: typeof exprMethods.lowerCallExpr;
   declare lowerMemberExpr: typeof exprMethods.lowerMemberExpr;
   declare lowerIndexExpr: typeof exprMethods.lowerIndexExpr;
   declare lowerAssignExpr: typeof exprMethods.lowerAssignExpr;
-  declare lowerStructLiteral: typeof exprMethods.lowerStructLiteral;
-  declare lowerArrayLiteral: typeof exprMethods.lowerArrayLiteral;
   declare lowerIfExpr: typeof exprMethods.lowerIfExpr;
-  declare lowerIncrementExpr: typeof exprMethods.lowerIncrementExpr;
-  declare lowerDecrementExpr: typeof exprMethods.lowerDecrementExpr;
   declare lowerMoveExpr: typeof exprMethods.lowerMoveExpr;
   declare lowerCastExpr: typeof exprMethods.lowerCastExpr;
-  declare lowerThrowExpr: typeof exprMethods.lowerThrowExpr;
-  declare lowerCatchExpr: typeof exprMethods.lowerCatchExpr;
-  declare resolveCallThrowsInfo: typeof exprMethods.resolveCallThrowsInfo;
-  declare lowerCatchThrowPropagation: typeof exprMethods.lowerCatchThrowPropagation;
   declare findConstIntInst: typeof exprMethods.findConstIntInst;
+
+  // ─── Literal methods (from lowering-literals.ts) ────────────────────────
+  declare lowerIntLiteral: typeof literalMethods.lowerIntLiteral;
+  declare lowerFloatLiteral: typeof literalMethods.lowerFloatLiteral;
+  declare lowerStringLiteral: typeof literalMethods.lowerStringLiteral;
+  declare lowerBoolLiteral: typeof literalMethods.lowerBoolLiteral;
+  declare lowerNullLiteral: typeof literalMethods.lowerNullLiteral;
+  declare lowerStructLiteral: typeof literalMethods.lowerStructLiteral;
+  declare lowerArrayLiteral: typeof literalMethods.lowerArrayLiteral;
+
+  // ─── Operator methods (from lowering-operators.ts) ──────────────────────
+  declare lowerBinaryExpr: typeof operatorMethods.lowerBinaryExpr;
+  declare lowerShortCircuitAnd: typeof operatorMethods.lowerShortCircuitAnd;
+  declare lowerShortCircuitOr: typeof operatorMethods.lowerShortCircuitOr;
+  declare lowerUnaryExpr: typeof operatorMethods.lowerUnaryExpr;
+  declare lowerOperatorMethodCall: typeof operatorMethods.lowerOperatorMethodCall;
+  declare lowerIncrementExpr: typeof operatorMethods.lowerIncrementExpr;
+  declare lowerDecrementExpr: typeof operatorMethods.lowerDecrementExpr;
+
+  // ─── Error handling methods (from lowering-error.ts) ────────────────────
+  declare lowerThrowExpr: typeof errorMethods.lowerThrowExpr;
+  declare lowerCatchExpr: typeof errorMethods.lowerCatchExpr;
+  declare resolveCallThrowsInfo: typeof errorMethods.resolveCallThrowsInfo;
+  declare lowerCatchThrowPropagation: typeof errorMethods.lowerCatchThrowPropagation;
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -765,34 +774,40 @@ KirLowerer.prototype.lowerRequireStmt = stmtMethods.lowerRequireStmt;
 
 // Expression methods
 KirLowerer.prototype.lowerExpr = exprMethods.lowerExpr;
-KirLowerer.prototype.lowerIntLiteral = exprMethods.lowerIntLiteral;
-KirLowerer.prototype.lowerFloatLiteral = exprMethods.lowerFloatLiteral;
-KirLowerer.prototype.lowerStringLiteral = exprMethods.lowerStringLiteral;
-KirLowerer.prototype.lowerBoolLiteral = exprMethods.lowerBoolLiteral;
-KirLowerer.prototype.lowerNullLiteral = exprMethods.lowerNullLiteral;
 KirLowerer.prototype.lowerExprAsPtr = exprMethods.lowerExprAsPtr;
 KirLowerer.prototype.lowerIdentifier = exprMethods.lowerIdentifier;
-KirLowerer.prototype.lowerBinaryExpr = exprMethods.lowerBinaryExpr;
-KirLowerer.prototype.lowerShortCircuitAnd = exprMethods.lowerShortCircuitAnd;
-KirLowerer.prototype.lowerShortCircuitOr = exprMethods.lowerShortCircuitOr;
-KirLowerer.prototype.lowerUnaryExpr = exprMethods.lowerUnaryExpr;
-KirLowerer.prototype.lowerOperatorMethodCall = exprMethods.lowerOperatorMethodCall;
 KirLowerer.prototype.lowerCallExpr = exprMethods.lowerCallExpr;
 KirLowerer.prototype.lowerMemberExpr = exprMethods.lowerMemberExpr;
 KirLowerer.prototype.lowerIndexExpr = exprMethods.lowerIndexExpr;
 KirLowerer.prototype.lowerAssignExpr = exprMethods.lowerAssignExpr;
-KirLowerer.prototype.lowerStructLiteral = exprMethods.lowerStructLiteral;
-KirLowerer.prototype.lowerArrayLiteral = exprMethods.lowerArrayLiteral;
 KirLowerer.prototype.lowerIfExpr = exprMethods.lowerIfExpr;
-KirLowerer.prototype.lowerIncrementExpr = exprMethods.lowerIncrementExpr;
-KirLowerer.prototype.lowerDecrementExpr = exprMethods.lowerDecrementExpr;
 KirLowerer.prototype.lowerMoveExpr = exprMethods.lowerMoveExpr;
 KirLowerer.prototype.lowerCastExpr = exprMethods.lowerCastExpr;
-KirLowerer.prototype.lowerThrowExpr = exprMethods.lowerThrowExpr;
-KirLowerer.prototype.lowerCatchExpr = exprMethods.lowerCatchExpr;
-KirLowerer.prototype.resolveCallThrowsInfo = exprMethods.resolveCallThrowsInfo;
-KirLowerer.prototype.lowerCatchThrowPropagation = exprMethods.lowerCatchThrowPropagation;
 KirLowerer.prototype.findConstIntInst = exprMethods.findConstIntInst;
+
+// Literal methods
+KirLowerer.prototype.lowerIntLiteral = literalMethods.lowerIntLiteral;
+KirLowerer.prototype.lowerFloatLiteral = literalMethods.lowerFloatLiteral;
+KirLowerer.prototype.lowerStringLiteral = literalMethods.lowerStringLiteral;
+KirLowerer.prototype.lowerBoolLiteral = literalMethods.lowerBoolLiteral;
+KirLowerer.prototype.lowerNullLiteral = literalMethods.lowerNullLiteral;
+KirLowerer.prototype.lowerStructLiteral = literalMethods.lowerStructLiteral;
+KirLowerer.prototype.lowerArrayLiteral = literalMethods.lowerArrayLiteral;
+
+// Operator methods
+KirLowerer.prototype.lowerBinaryExpr = operatorMethods.lowerBinaryExpr;
+KirLowerer.prototype.lowerShortCircuitAnd = operatorMethods.lowerShortCircuitAnd;
+KirLowerer.prototype.lowerShortCircuitOr = operatorMethods.lowerShortCircuitOr;
+KirLowerer.prototype.lowerUnaryExpr = operatorMethods.lowerUnaryExpr;
+KirLowerer.prototype.lowerOperatorMethodCall = operatorMethods.lowerOperatorMethodCall;
+KirLowerer.prototype.lowerIncrementExpr = operatorMethods.lowerIncrementExpr;
+KirLowerer.prototype.lowerDecrementExpr = operatorMethods.lowerDecrementExpr;
+
+// Error handling methods
+KirLowerer.prototype.lowerThrowExpr = errorMethods.lowerThrowExpr;
+KirLowerer.prototype.lowerCatchExpr = errorMethods.lowerCatchExpr;
+KirLowerer.prototype.resolveCallThrowsInfo = errorMethods.resolveCallThrowsInfo;
+KirLowerer.prototype.lowerCatchThrowPropagation = errorMethods.lowerCatchThrowPropagation;
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
