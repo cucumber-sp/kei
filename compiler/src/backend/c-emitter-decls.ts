@@ -15,14 +15,51 @@ export function emitTypeDecl(td: KirTypeDecl): string {
     return `struct ${sanitizeName(td.name)} {\n${fields}\n};`;
   }
   if (td.type.kind === "enum") {
+    const sName = sanitizeName(td.name);
+    const hasDataVariants = td.type.variants.some((v) => v.fields.length > 0);
+
+    if (hasDataVariants) {
+      // Tagged union: struct with tag + union of variant payloads
+      const unionMembers = td.type.variants
+        .filter((v) => v.fields.length > 0)
+        .map((v) => {
+          const fields = v.fields
+            .map((f) => `${emitCTypeForDecl(f.type, sanitizeName(f.name))};`)
+            .join(" ");
+          return `        struct { ${fields} } ${sanitizeName(v.name)};`;
+        })
+        .join("\n");
+
+      const tagConstants = td.type.variants
+        .map((v, i) => {
+          const val = v.value !== null ? v.value : i;
+          return `    ${sName}_${sanitizeName(v.name)} = ${val}`;
+        })
+        .join(",\n");
+
+      return [
+        `typedef struct {`,
+        `    int32_t tag;`,
+        `    union {`,
+        unionMembers,
+        `    } data;`,
+        `} ${sName};`,
+        ``,
+        `enum ${sName}_Tag {`,
+        tagConstants,
+        `};`,
+      ].join("\n");
+    }
+
+    // Simple enum: no variant has fields
     const variants = td.type.variants
       .map((v) => {
-        const name = `${sanitizeName(td.name)}_${sanitizeName(v.name)}`;
+        const name = `${sName}_${sanitizeName(v.name)}`;
         if (v.value !== null) return `    ${name} = ${v.value}`;
         return `    ${name}`;
       })
       .join(",\n");
-    return `enum ${sanitizeName(td.name)} {\n${variants}\n};`;
+    return `enum ${sName} {\n${variants}\n};`;
   }
   return `/* unknown type ${td.name} */`;
 }

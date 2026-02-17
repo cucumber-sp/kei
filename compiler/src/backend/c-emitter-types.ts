@@ -25,8 +25,10 @@ export function emitCType(t: KirType): string {
       return `${emitCType(t.pointee)}*`;
     case "struct":
       return `struct ${sanitizeName(t.name)}`;
-    case "enum":
-      return `enum ${sanitizeName(t.name)}`;
+    case "enum": {
+      const hasData = t.variants.some((v) => v.fields.length > 0);
+      return hasData ? sanitizeName(t.name) : `enum ${sanitizeName(t.name)}`;
+    }
     case "array":
       return `${emitCType(t.element)}`;
     case "function":
