@@ -51,6 +51,15 @@ function isOctalDigit(ch: string): boolean {
   return code >= CHAR_0 && code <= CHAR_7;
 }
 
+/**
+ * Lexer for the Kei language.
+ *
+ * Converts a {@link SourceFile} into a stream of {@link Token}s.  The lexer
+ * performs error recovery: when it encounters an invalid character or malformed
+ * literal it emits a {@link TokenKind.Error} token, records a diagnostic, and
+ * continues scanning so that downstream passes receive as many valid tokens as
+ * possible.
+ */
 export class Lexer {
   private source: SourceFile;
   private pos: number;
@@ -62,10 +71,17 @@ export class Lexer {
     this.diagnostics = [];
   }
 
+  /** Returns all diagnostics accumulated during the most recent tokenization. */
   getDiagnostics(): ReadonlyArray<Diagnostic> {
     return this.diagnostics;
   }
 
+  /**
+   * Scans the entire source file and returns an array of tokens.
+   *
+   * The returned array always ends with a {@link TokenKind.Eof} token.
+   * Calling this method resets the lexer position and diagnostics.
+   */
   tokenize(): Token[] {
     const tokens: Token[] = [];
     this.pos = 0;
@@ -79,6 +95,11 @@ export class Lexer {
     return tokens;
   }
 
+  /**
+   * Scans and returns the next token from the source.
+   *
+   * Returns {@link TokenKind.Eof} when the end of input is reached.
+   */
   nextToken(): Token {
     this.skipWhitespaceAndComments();
 
@@ -165,7 +186,12 @@ export class Lexer {
       }
       this.pos++;
     }
-    this.addDiagnostic(Severity.Error, "Unterminated multi-line comment", start);
+    const { line, column } = this.source.lineCol(start);
+    this.addDiagnostic(
+      Severity.Error,
+      `Unterminated multi-line comment (started at ${line}:${column})`,
+      start,
+    );
   }
 
   private readIdentifierOrKeyword(): Token {
@@ -249,14 +275,20 @@ export class Lexer {
           if (isDigit(this.peek())) {
             this.consumeDigits(isDigit);
           }
-          this.consumeExponent();
+          if (!this.consumeExponent()) {
+            this.addDiagnostic(Severity.Error, "Expected digit in exponent", start);
+            return this.makeToken(TokenKind.Error, start, this.pos);
+          }
           return this.makeNumberToken(TokenKind.FloatLiteral, start);
         }
       }
     }
 
     if (this.peek() === "e" || this.peek() === "E") {
-      this.consumeExponent();
+      if (!this.consumeExponent()) {
+        this.addDiagnostic(Severity.Error, "Expected digit in exponent", start);
+        return this.makeToken(TokenKind.Error, start, this.pos);
+      }
       return this.makeNumberToken(TokenKind.FloatLiteral, start);
     }
 
@@ -266,7 +298,10 @@ export class Lexer {
   private readDecimalFraction(start: number): Token {
     this.pos++; // consume dot
     this.consumeDigits(isDigit);
-    this.consumeExponent();
+    if (!this.consumeExponent()) {
+      this.addDiagnostic(Severity.Error, "Expected digit in exponent", start);
+      return this.makeToken(TokenKind.Error, start, this.pos);
+    }
     return this.makeNumberToken(TokenKind.FloatLiteral, start);
   }
 
@@ -311,14 +346,18 @@ export class Lexer {
     }
   }
 
-  private consumeExponent(): void {
+  private consumeExponent(): boolean {
     if (this.peek() === "e" || this.peek() === "E") {
       this.pos++;
       if (this.peek() === "+" || this.peek() === "-") {
         this.pos++;
       }
+      if (!isDigit(this.peek())) {
+        return false;
+      }
       this.consumeDigits(isDigit);
     }
+    return true;
   }
 
   private makeNumberToken(kind: TokenKind, start: number): Token {
@@ -371,7 +410,11 @@ export class Lexer {
       }
 
       if (ch === "\n" || ch === "\r") {
-        this.addDiagnostic(Severity.Error, "Unterminated string literal", start);
+        this.addDiagnostic(
+          Severity.Error,
+          "Unterminated string literal (strings cannot contain unescaped newlines)",
+          start,
+        );
         return this.makeToken(TokenKind.Error, start, this.pos);
       }
 
@@ -388,7 +431,11 @@ export class Lexer {
       this.pos++;
     }
 
-    this.addDiagnostic(Severity.Error, "Unterminated string literal", start);
+    this.addDiagnostic(
+      Severity.Error,
+      "Unterminated string literal (missing closing '\"')",
+      start,
+    );
     return this.makeToken(TokenKind.Error, start, this.pos);
   }
 

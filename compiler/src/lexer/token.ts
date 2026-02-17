@@ -1,12 +1,16 @@
 /**
- * Token types for the Kei language lexer
+ * Token types and keyword lookup tables for the Kei language lexer.
+ *
+ * @module token
  */
 
+/** Byte-offset range within source text (half-open: `[start, end)`). */
 export interface Span {
   start: number;
   end: number;
 }
 
+/** Discriminator for every token the lexer can produce. */
 export enum TokenKind {
   // Special tokens
   Eof = "EOF",
@@ -173,16 +177,27 @@ export enum TokenKind {
   Comma = ",",
 }
 
+/**
+ * A single lexical token produced by the {@link Lexer}.
+ *
+ * Every token carries its raw source text (`lexeme`), location information,
+ * and an optional pre-parsed `value` for literals.
+ */
 export interface Token {
   kind: TokenKind;
-  lexeme: string; // Raw source text
-  span: Span; // Byte offsets in source
-  line: number; // 1-based line number
-  column: number; // 1-based column number
-  value?: number | string | boolean; // Parsed literal value
+  /** Raw source text that was consumed to produce this token. */
+  lexeme: string;
+  /** Byte-offset span within the source file. */
+  span: Span;
+  /** 1-based line number where the token starts. */
+  line: number;
+  /** 1-based column number where the token starts. */
+  column: number;
+  /** Pre-parsed literal value (numbers, strings, booleans). */
+  value?: number | string | boolean;
 }
 
-// Active keywords — identifiers that map to a specific TokenKind
+/** Active keywords — identifiers that map to a specific {@link TokenKind}. */
 const KEYWORD_MAP: ReadonlyMap<string, TokenKind> = new Map([
   ["as", TokenKind.As],
   ["assert", TokenKind.Assert],
@@ -248,7 +263,7 @@ const KEYWORD_MAP: ReadonlyMap<string, TokenKind> = new Map([
   ["double", TokenKind.Double],
 ]);
 
-// Reserved keywords — produce a diagnostic when used
+/** Reserved keywords — produce a diagnostic when used as identifiers. */
 const RESERVED_KEYWORD_MAP: ReadonlyMap<string, TokenKind> = new Map([
   ["async", TokenKind.Async],
   ["await", TokenKind.Await],
@@ -270,14 +285,17 @@ const RESERVED_KEYWORD_MAP: ReadonlyMap<string, TokenKind> = new Map([
   ["yield", TokenKind.Yield],
 ]);
 
+/** Returns the keyword {@link TokenKind} for `identifier`, or `undefined` if it is not a keyword. */
 export function lookupKeyword(identifier: string): TokenKind | undefined {
   return KEYWORD_MAP.get(identifier);
 }
 
+/** Returns `true` if `identifier` is a reserved keyword (not yet usable in Kei). */
 export function isReservedKeyword(identifier: string): boolean {
   return RESERVED_KEYWORD_MAP.has(identifier);
 }
 
+/** Returns the {@link TokenKind} for a reserved keyword, or `undefined` if it is not reserved. */
 export function getReservedTokenKind(identifier: string): TokenKind | undefined {
   return RESERVED_KEYWORD_MAP.get(identifier);
 }
