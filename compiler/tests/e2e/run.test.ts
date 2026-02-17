@@ -1201,8 +1201,7 @@ describe("Complex: structs with lifecycle", () => {
     expect(r.stdout).toContain("destroy\n1\n");
   });
 
-  // skip: C backend passes struct by value to __oncopy instead of by pointer
-  test.skip("struct with __oncopy hook via assignment", () => {
+  test("struct with __oncopy hook via assignment", () => {
     const r = run(
       "complex_oncopy",
       `
@@ -1521,8 +1520,7 @@ describe("Complex: error handling chains", () => {
 // ─── Complex: operator overloading + generics ───────────────────────────────
 
 describe("Complex: operator overloading + generics", () => {
-  // skip: C backend passes struct by value to method calls (dot, magnitude_sq) instead of by pointer
-  test.skip("Vec2 with +, -, == operators", () => {
+  test("Vec2 with +, -, == operators", () => {
     const r = run(
       "complex_vec2_ops",
       `
@@ -1580,8 +1578,7 @@ describe("Complex: operator overloading + generics", () => {
     expect(r.stdout).toBe("4\n6\n2\n2\ntrue\nfalse\n11\n25\n");
   });
 
-  // skip: C backend emits undeclared variables for chained operator overloading expressions
-  test.skip("chained operator overloading (a + b + c)", () => {
+  test("chained operator overloading (a + b + c)", () => {
     const r = run(
       "complex_chained_ops",
       `

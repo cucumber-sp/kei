@@ -79,7 +79,7 @@ export function emitInst(inst: KirInst): string {
     case "destroy":
       return `${sanitizeName(inst.structName)}___destroy(${varName(inst.value)});`;
     case "oncopy":
-      return `${varName(inst.value)} = ${sanitizeName(inst.structName)}___oncopy(${varName(inst.value)});`;
+      return `${varName(inst.value)} = ${sanitizeName(inst.structName)}___oncopy(&${varName(inst.value)});`;
     case "move":
       return `${varName(inst.dest)} = ${varName(inst.source)};`;
     case "call_throws": {

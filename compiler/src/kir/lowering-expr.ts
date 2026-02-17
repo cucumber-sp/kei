@@ -196,7 +196,10 @@ export function lowerCallExpr(this: KirLowerer, expr: CallExpr): VarId {
       }
     } else {
       // Instance method call: obj.method(args) → StructName_method(obj, args)
-      const objId = this.lowerExpr(expr.callee.object);
+      // Methods expect self as a pointer, so use lowerExprAsPtr for struct objects
+      const objId = objType?.kind === "struct"
+        ? this.lowerExprAsPtr(expr.callee.object)
+        : this.lowerExpr(expr.callee.object);
       const methodName = expr.callee.property;
 
       if (objType?.kind === "struct") {
@@ -205,13 +208,28 @@ export function lowerCallExpr(this: KirLowerer, expr: CallExpr): VarId {
         funcName = methodName;
       }
 
+      // Methods wrap struct params in ptr<>, so re-lower struct args as pointers.
+      // The `args` array already lowered them as values; for struct args, we need
+      // to wrap the already-lowered value into a stack_alloc + store to get a pointer.
+      const methodArgs = args.map((argId, i) => {
+        const argExpr = expr.args[i];
+        const argType = argExpr ? this.checkResult.typeMap.get(argExpr) : undefined;
+        if (argType?.kind === "struct") {
+          const kirType = this.lowerCheckerType(argType);
+          const alloc = this.emitStackAlloc(kirType);
+          this.emit({ kind: "store", ptr: alloc, value: argId });
+          return alloc;
+        }
+        return argId;
+      });
+
       if (isVoid) {
-        this.emit({ kind: "call_void", func: funcName, args: [objId, ...args] });
+        this.emit({ kind: "call_void", func: funcName, args: [objId, ...methodArgs] });
         return objId; // void calls return nothing meaningful
       }
 
       const dest = this.freshVar();
-      this.emit({ kind: "call", dest, func: funcName, args: [objId, ...args], type: resultType });
+      this.emit({ kind: "call", dest, func: funcName, args: [objId, ...methodArgs], type: resultType });
       return dest;
     }
   } else {

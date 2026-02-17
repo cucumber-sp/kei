@@ -85,10 +85,23 @@ function findPromotableAllocas(fn: KirFunction): Map<VarId, AllocaInfo> {
         if (allocas.has(inst.base)) addressTaken.add(inst.base);
       } else if (inst.kind === "index_ptr") {
         if (allocas.has(inst.base)) addressTaken.add(inst.base);
+      } else if (inst.kind === "call" || inst.kind === "call_void") {
+        // If a stack_alloc pointer is passed as an argument to a function call,
+        // the callee may use it as a pointer — mark as address-taken
+        for (const arg of inst.args) {
+          if (allocas.has(arg)) addressTaken.add(arg);
+        }
+      } else if (inst.kind === "call_extern" || inst.kind === "call_extern_void") {
+        for (const arg of inst.args) {
+          if (allocas.has(arg)) addressTaken.add(arg);
+        }
       } else if (inst.kind === "call_throws") {
         // outPtr and errPtr are passed by address — not promotable
         if (allocas.has(inst.outPtr)) addressTaken.add(inst.outPtr);
         if (allocas.has(inst.errPtr)) addressTaken.add(inst.errPtr);
+        for (const arg of inst.args) {
+          if (allocas.has(arg)) addressTaken.add(arg);
+        }
       }
     }
   }

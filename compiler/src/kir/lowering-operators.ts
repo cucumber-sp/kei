@@ -11,7 +11,7 @@ import type {
   UnaryExpr,
 } from "../ast/nodes.ts";
 import type { StructType } from "../checker/types";
-import type { VarId } from "./kir-types.ts";
+import type { KirType, VarId } from "./kir-types.ts";
 import type { KirLowerer } from "./lowering.ts";
 
 export function lowerBinaryExpr(this: KirLowerer, expr: BinaryExpr): VarId {
@@ -53,42 +53,71 @@ export function lowerBinaryExpr(this: KirLowerer, expr: BinaryExpr): VarId {
 }
 
 export function lowerShortCircuitAnd(this: KirLowerer, expr: BinaryExpr): VarId {
+  const resultType: KirType = { kind: "bool" };
+  const resultPtr = this.emitStackAlloc(resultType);
+
   const lhs = this.lowerExpr(expr.left);
   const rhsLabel = this.freshBlockId("and.rhs");
+  const falseLabel = this.freshBlockId("and.false");
   const endLabel = this.freshBlockId("and.end");
 
-  this.setTerminator({ kind: "br", cond: lhs, thenBlock: rhsLabel, elseBlock: endLabel });
+  this.setTerminator({ kind: "br", cond: lhs, thenBlock: rhsLabel, elseBlock: falseLabel });
 
+  // False path: store false
+  this.sealCurrentBlock();
+  this.startBlock(falseLabel);
+  const falseVal = this.freshVar();
+  this.emit({ kind: "const_bool", dest: falseVal, value: false });
+  this.emit({ kind: "store", ptr: resultPtr, value: falseVal });
+  this.setTerminator({ kind: "jump", target: endLabel });
+
+  // RHS path: evaluate rhs and store it
   this.sealCurrentBlock();
   this.startBlock(rhsLabel);
   const rhs = this.lowerExpr(expr.right);
+  this.emit({ kind: "store", ptr: resultPtr, value: rhs });
   this.setTerminator({ kind: "jump", target: endLabel });
 
+  // End: load result
   this.sealCurrentBlock();
   this.startBlock(endLabel);
-
-  // Without phi nodes, we use a stack_alloc + stores approach
-  // For simplicity, just return rhs (correct when both paths converge)
-  // In full SSA this would be a phi node
-  return rhs;
+  const dest = this.freshVar();
+  this.emit({ kind: "load", dest, ptr: resultPtr, type: resultType });
+  return dest;
 }
 
 export function lowerShortCircuitOr(this: KirLowerer, expr: BinaryExpr): VarId {
+  const resultType: KirType = { kind: "bool" };
+  const resultPtr = this.emitStackAlloc(resultType);
+
   const lhs = this.lowerExpr(expr.left);
+  const trueLabel = this.freshBlockId("or.true");
   const rhsLabel = this.freshBlockId("or.rhs");
   const endLabel = this.freshBlockId("or.end");
 
-  this.setTerminator({ kind: "br", cond: lhs, thenBlock: endLabel, elseBlock: rhsLabel });
+  this.setTerminator({ kind: "br", cond: lhs, thenBlock: trueLabel, elseBlock: rhsLabel });
 
+  // True path: store true
   this.sealCurrentBlock();
-  this.startBlock(rhsLabel);
-  const _rhs = this.lowerExpr(expr.right);
+  this.startBlock(trueLabel);
+  const trueVal = this.freshVar();
+  this.emit({ kind: "const_bool", dest: trueVal, value: true });
+  this.emit({ kind: "store", ptr: resultPtr, value: trueVal });
   this.setTerminator({ kind: "jump", target: endLabel });
 
+  // RHS path: evaluate rhs and store it
+  this.sealCurrentBlock();
+  this.startBlock(rhsLabel);
+  const rhs = this.lowerExpr(expr.right);
+  this.emit({ kind: "store", ptr: resultPtr, value: rhs });
+  this.setTerminator({ kind: "jump", target: endLabel });
+
+  // End: load result
   this.sealCurrentBlock();
   this.startBlock(endLabel);
-
-  return lhs;
+  const dest = this.freshVar();
+  this.emit({ kind: "load", dest, ptr: resultPtr, type: resultType });
+  return dest;
 }
 
 export function lowerUnaryExpr(this: KirLowerer, expr: UnaryExpr): VarId {
