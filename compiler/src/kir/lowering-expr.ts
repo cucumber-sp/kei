@@ -102,8 +102,7 @@ export function lowerExprAsPtr(this: KirLowerer, expr: Expression): VarId {
   const exprType = this.checkResult.typeMap.get(expr);
   if (exprType?.kind === "struct") {
     const kirType = this.lowerCheckerType(exprType);
-    const alloc = this.freshVar();
-    this.emit({ kind: "stack_alloc", dest: alloc, type: kirType });
+    const alloc = this.emitStackAlloc(kirType);
     this.emit({ kind: "store", ptr: alloc, value: valueId });
     return alloc;
   }
@@ -239,12 +238,8 @@ export function lowerMemberExpr(this: KirLowerer, expr: MemberExpr): VarId {
     // For strings, .len is a field access on the kei_string struct
     if (objectType?.kind === "string") {
       const baseId = this.lowerExpr(expr.object);
-      const dest = this.freshVar();
       const resultType = this.getExprKirType(expr);
-      const ptrDest = this.freshVar();
-      this.emit({ kind: "field_ptr", dest: ptrDest, base: baseId, field: "len", type: resultType });
-      this.emit({ kind: "load", dest, ptr: ptrDest, type: resultType });
-      return dest;
+      return this.emitFieldLoad(baseId, "len", resultType);
     }
   }
 
@@ -268,14 +263,8 @@ export function lowerMemberExpr(this: KirLowerer, expr: MemberExpr): VarId {
     baseId = this.lowerExpr(expr.object);
   }
 
-  const dest = this.freshVar();
   const resultType = this.getExprKirType(expr);
-
-  // Get pointer to field, then load
-  const ptrDest = this.freshVar();
-  this.emit({ kind: "field_ptr", dest: ptrDest, base: baseId, field: expr.property, type: resultType });
-  this.emit({ kind: "load", dest, ptr: ptrDest, type: resultType });
-  return dest;
+  return this.emitFieldLoad(baseId, expr.property, resultType);
 }
 
 export function lowerIndexExpr(this: KirLowerer, expr: IndexExpr): VarId {
@@ -395,8 +384,7 @@ export function lowerIfExpr(this: KirLowerer, expr: IfExpr): VarId {
   const endLabel = this.freshBlockId("ifexpr.end");
 
   // Allocate result on stack
-  const resultPtr = this.freshVar();
-  this.emit({ kind: "stack_alloc", dest: resultPtr, type: resultType });
+  const resultPtr = this.emitStackAlloc(resultType);
 
   this.setTerminator({ kind: "br", cond: condId, thenBlock: thenLabel, elseBlock: elseLabel });
 

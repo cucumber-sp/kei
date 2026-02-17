@@ -29,8 +29,7 @@ export function lowerThrowExpr(this: KirLowerer, expr: ThrowExpr): VarId {
   const hasFields = errorKirType.kind === "struct" && errorKirType.fields.length > 0;
   if (hasFields) {
     // Cast __err (void*) to the specific error struct pointer type
-    const typedErrPtr = this.freshVar();
-    this.emit({ kind: "cast", dest: typedErrPtr, value: errPtr, targetType: { kind: "ptr", pointee: errorKirType } });
+    const typedErrPtr = this.emitCastToPtr(errPtr, errorKirType);
 
     // The struct literal returns a pointer; load the actual struct value from it
     const structVal = this.freshVar();
@@ -71,14 +70,12 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
   const { funcName, args: callArgs, throwsTypes, returnType: successType } = throwsInfo;
 
   // Allocate buffers for out value and error value
-  const outPtr = this.freshVar();
-  const errPtr = this.freshVar();
   const outType = successType.kind === "void"
     ? { kind: "int" as const, bits: 8 as const, signed: false as const }
     : successType;
-  this.emit({ kind: "stack_alloc", dest: outPtr, type: outType });
+  const outPtr = this.emitStackAlloc(outType);
   // err buffer: use u8 placeholder (C backend will emit union-sized buffer)
-  this.emit({ kind: "stack_alloc", dest: errPtr, type: { kind: "int", bits: 8, signed: false } });
+  const errPtr = this.emitStackAlloc({ kind: "int", bits: 8, signed: false });
 
   // Call the throws function — dest receives the i32 tag
   const tagVar = this.freshVar();
@@ -95,9 +92,7 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
 
   if (expr.catchType === "panic") {
     // catch panic: if tag != 0 → kei_panic
-    const zeroConst = this.emitConstInt(0);
-    const isOk = this.freshVar();
-    this.emit({ kind: "bin_op", op: "eq", dest: isOk, lhs: tagVar, rhs: zeroConst, type: { kind: "bool" } });
+    const isOk = this.emitTagIsSuccess(tagVar);
     const okLabel = this.freshBlockId("catch.ok");
     const panicLabel = this.freshBlockId("catch.panic");
     this.setTerminator({ kind: "br", cond: isOk, thenBlock: okLabel, elseBlock: panicLabel });
@@ -140,9 +135,7 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
       errorTypes: throwsTypes,
     });
 
-    const zeroConst = this.emitConstInt(0);
-    const isOk = this.freshVar();
-    this.emit({ kind: "bin_op", op: "eq", dest: isOk, lhs: tagVar, rhs: zeroConst, type: { kind: "bool" } });
+    const isOk = this.emitTagIsSuccess(tagVar);
     const okLabel = this.freshBlockId("catch.ok");
     const propagateLabel = this.freshBlockId("catch.throw");
     this.setTerminator({ kind: "br", cond: isOk, thenBlock: okLabel, elseBlock: propagateLabel });
@@ -165,9 +158,7 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
   }
 
   // catch { clauses } — block catch with per-error-type handling
-  const zeroConst = this.emitConstInt(0);
-  const isOk = this.freshVar();
-  this.emit({ kind: "bin_op", op: "eq", dest: isOk, lhs: tagVar, rhs: zeroConst, type: { kind: "bool" } });
+  const isOk = this.emitTagIsSuccess(tagVar);
 
   const okLabel = this.freshBlockId("catch.ok");
   const switchLabel = this.freshBlockId("catch.switch");
@@ -176,8 +167,7 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
 
   // Allocate result storage (the catch expr produces a value)
   const resultType = this.getExprKirType(expr);
-  const resultPtr = this.freshVar();
-  this.emit({ kind: "stack_alloc", dest: resultPtr, type: resultType });
+  const resultPtr = this.emitStackAlloc(resultType);
 
   // Switch block: branch on tag value
   this.sealCurrentBlock();
@@ -233,8 +223,7 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
     if (clause.varName) {
       const errType = throwsTypes[errorTag - 1];
       // Cast errPtr to typed pointer — this becomes the variable's storage
-      const typedErrPtr = this.freshVar();
-      this.emit({ kind: "cast", dest: typedErrPtr, value: errPtr, targetType: { kind: "ptr", pointee: errType } });
+      const typedErrPtr = this.emitCastToPtr(errPtr, errType);
       this.varMap.set(clause.varName, typedErrPtr);
     }
 
@@ -255,8 +244,7 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
     if (defaultClause.varName) {
       // Bind the error variable to a typed pointer into the err buffer
       const firstErrType = throwsTypes[0] || { kind: "int" as const, bits: 8 as const, signed: false as const };
-      const typedErrPtr = this.freshVar();
-      this.emit({ kind: "cast", dest: typedErrPtr, value: errPtr, targetType: { kind: "ptr", pointee: firstErrType } });
+      const typedErrPtr = this.emitCastToPtr(errPtr, firstErrType);
       this.varMap.set(defaultClause.varName, typedErrPtr);
     }
     for (const stmt of defaultClause.body) {

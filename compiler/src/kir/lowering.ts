@@ -346,6 +346,11 @@ export class KirLowerer {
   declare isStackAllocVar: typeof utilMethods.isStackAllocVar;
   declare mapBinOp: typeof utilMethods.mapBinOp;
   declare mapCompoundAssignOp: typeof utilMethods.mapCompoundAssignOp;
+  declare emitStackAlloc: typeof utilMethods.emitStackAlloc;
+  declare emitFieldLoad: typeof utilMethods.emitFieldLoad;
+  declare emitTagIsSuccess: typeof utilMethods.emitTagIsSuccess;
+  declare emitCastToPtr: typeof utilMethods.emitCastToPtr;
+  declare emitLoadModifyStore: typeof utilMethods.emitLoadModifyStore;
 }
 
 // ─── Attach extracted methods to KirLowerer prototype ─────────────────────────
@@ -452,6 +457,11 @@ KirLowerer.prototype.ensureTerminator = utilMethods.ensureTerminator;
 KirLowerer.prototype.isStackAllocVar = utilMethods.isStackAllocVar;
 KirLowerer.prototype.mapBinOp = utilMethods.mapBinOp;
 KirLowerer.prototype.mapCompoundAssignOp = utilMethods.mapCompoundAssignOp;
+KirLowerer.prototype.emitStackAlloc = utilMethods.emitStackAlloc;
+KirLowerer.prototype.emitFieldLoad = utilMethods.emitFieldLoad;
+KirLowerer.prototype.emitTagIsSuccess = utilMethods.emitTagIsSuccess;
+KirLowerer.prototype.emitCastToPtr = utilMethods.emitCastToPtr;
+KirLowerer.prototype.emitLoadModifyStore = utilMethods.emitLoadModifyStore;
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 

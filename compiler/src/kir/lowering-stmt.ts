@@ -117,8 +117,7 @@ export function lowerLetStmt(this: KirLowerer, stmt: LetStmt): void {
     ptrId = valueId;
   } else {
     // Regular path: alloc + store
-    ptrId = this.freshVar();
-    this.emit({ kind: "stack_alloc", dest: ptrId, type });
+    ptrId = this.emitStackAlloc(type);
 
     // Emit oncopy if this is a copy of a struct with __oncopy (not a move)
     if (stmt.initializer.kind !== "MoveExpr") {
@@ -293,17 +292,14 @@ export function lowerForStmt(this: KirLowerer, stmt: ForStmt): void {
 
     // Allocate loop variable
     const loopVarType: KirType = { kind: "int", bits: 32, signed: true };
-    const loopVarPtr = this.freshVar();
-    this.emit({ kind: "stack_alloc", dest: loopVarPtr, type: loopVarType });
+    const loopVarPtr = this.emitStackAlloc(loopVarType);
     this.emit({ kind: "store", ptr: loopVarPtr, value: startId });
     this.varMap.set(stmt.variable, loopVarPtr);
 
     // Index variable if present
     if (stmt.index) {
-      const indexPtr = this.freshVar();
-      const zeroId = this.freshVar();
-      this.emit({ kind: "stack_alloc", dest: indexPtr, type: loopVarType });
-      this.emit({ kind: "const_int", dest: zeroId, type: { kind: "int", bits: 32, signed: true }, value: 0 });
+      const indexPtr = this.emitStackAlloc(loopVarType);
+      const zeroId = this.emitConstInt(0);
       this.emit({ kind: "store", ptr: indexPtr, value: zeroId });
       this.varMap.set(stmt.index, indexPtr);
     }
@@ -349,32 +345,14 @@ export function lowerForStmt(this: KirLowerer, stmt: ForStmt): void {
     // Latch: increment loop var
     this.sealCurrentBlock();
     this.startBlock(latchLabel);
-    const curVal2 = this.freshVar();
-    this.emit({ kind: "load", dest: curVal2, ptr: loopVarPtr, type: loopVarType });
-    const oneId = this.freshVar();
-    this.emit({ kind: "const_int", dest: oneId, type: { kind: "int", bits: 32, signed: true }, value: 1 });
-    const nextVal = this.freshVar();
-    this.emit({
-      kind: "bin_op", op: "add", dest: nextVal,
-      lhs: curVal2, rhs: oneId,
-      type: loopVarType,
-    });
-    this.emit({ kind: "store", ptr: loopVarPtr, value: nextVal });
+    const oneId = this.emitConstInt(1);
+    this.emitLoadModifyStore(loopVarPtr, "add", oneId, loopVarType);
 
     // Increment index if present
     if (stmt.index) {
       const indexPtr = this.varMap.get(stmt.index)!;
-      const idxVal = this.freshVar();
-      this.emit({ kind: "load", dest: idxVal, ptr: indexPtr, type: loopVarType });
-      const oneId2 = this.freshVar();
-      this.emit({ kind: "const_int", dest: oneId2, type: { kind: "int", bits: 32, signed: true }, value: 1 });
-      const nextIdx = this.freshVar();
-      this.emit({
-        kind: "bin_op", op: "add", dest: nextIdx,
-        lhs: idxVal, rhs: oneId2,
-        type: loopVarType,
-      });
-      this.emit({ kind: "store", ptr: indexPtr, value: nextIdx });
+      const oneId2 = this.emitConstInt(1);
+      this.emitLoadModifyStore(indexPtr, "add", oneId2, loopVarType);
     }
 
     this.setTerminator({ kind: "jump", target: headerLabel });

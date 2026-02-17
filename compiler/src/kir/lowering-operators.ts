@@ -167,13 +167,8 @@ export function lowerIncrementExpr(this: KirLowerer, expr: IncrementExpr): VarId
     const ptrId = this.varMap.get(expr.operand.name);
     if (ptrId) {
       const type = this.getExprKirType(expr.operand);
-      const currentVal = this.freshVar();
-      this.emit({ kind: "load", dest: currentVal, ptr: ptrId, type });
       const oneId = this.emitConstInt(1);
-      const result = this.freshVar();
-      this.emit({ kind: "bin_op", op: "add", dest: result, lhs: currentVal, rhs: oneId, type });
-      this.emit({ kind: "store", ptr: ptrId, value: result });
-      return currentVal; // post-increment: return old value
+      return this.emitLoadModifyStore(ptrId, "add", oneId, type); // post-increment: returns old value
     }
   }
   return this.emitConstInt(0);
@@ -184,13 +179,8 @@ export function lowerDecrementExpr(this: KirLowerer, expr: DecrementExpr): VarId
     const ptrId = this.varMap.get(expr.operand.name);
     if (ptrId) {
       const type = this.getExprKirType(expr.operand);
-      const currentVal = this.freshVar();
-      this.emit({ kind: "load", dest: currentVal, ptr: ptrId, type });
       const oneId = this.emitConstInt(1);
-      const result = this.freshVar();
-      this.emit({ kind: "bin_op", op: "sub", dest: result, lhs: currentVal, rhs: oneId, type });
-      this.emit({ kind: "store", ptr: ptrId, value: result });
-      return currentVal; // post-decrement: return old value
+      return this.emitLoadModifyStore(ptrId, "sub", oneId, type); // post-decrement: returns old value
     }
   }
   return this.emitConstInt(0);

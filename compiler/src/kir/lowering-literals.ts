@@ -61,8 +61,7 @@ export function lowerNullLiteral(this: KirLowerer): VarId {
 
 export function lowerStructLiteral(this: KirLowerer, expr: StructLiteral): VarId {
   const type = this.getExprKirType(expr);
-  const ptrId = this.freshVar();
-  this.emit({ kind: "stack_alloc", dest: ptrId, type });
+  const ptrId = this.emitStackAlloc(type);
 
   for (const field of expr.fields) {
     const valueId = this.lowerExpr(field.value);
@@ -83,8 +82,7 @@ export function lowerArrayLiteral(this: KirLowerer, expr: ArrayLiteral): VarId {
   }
 
   const arrType: KirType = { kind: "array", element: elemType, length: expr.elements.length };
-  const ptrId = this.freshVar();
-  this.emit({ kind: "stack_alloc", dest: ptrId, type: arrType });
+  const ptrId = this.emitStackAlloc(arrType);
 
   // Store each element at its index
   for (let i = 0; i < expr.elements.length; i++) {

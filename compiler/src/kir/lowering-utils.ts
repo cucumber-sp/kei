@@ -101,3 +101,44 @@ export function mapCompoundAssignOp(this: KirLowerer, op: string): BinOp | null 
   };
   return map[op] ?? null;
 }
+
+/** Emit a stack_alloc and return the pointer VarId. */
+export function emitStackAlloc(this: KirLowerer, type: KirType): VarId {
+  const dest = this.freshVar();
+  this.emit({ kind: "stack_alloc", dest, type });
+  return dest;
+}
+
+/** Emit field_ptr + load and return the loaded value VarId. */
+export function emitFieldLoad(this: KirLowerer, base: VarId, field: string, type: KirType): VarId {
+  const ptr = this.freshVar();
+  this.emit({ kind: "field_ptr", dest: ptr, base, field, type });
+  const dest = this.freshVar();
+  this.emit({ kind: "load", dest, ptr, type });
+  return dest;
+}
+
+/** Compare tag == 0 (success check for error handling). Returns the bool VarId. */
+export function emitTagIsSuccess(this: KirLowerer, tagVar: VarId): VarId {
+  const zeroConst = this.emitConstInt(0);
+  const isOk = this.freshVar();
+  this.emit({ kind: "bin_op", op: "eq", dest: isOk, lhs: tagVar, rhs: zeroConst, type: { kind: "bool" } });
+  return isOk;
+}
+
+/** Cast a void* pointer to a typed pointer. Returns the cast VarId. */
+export function emitCastToPtr(this: KirLowerer, value: VarId, pointeeType: KirType): VarId {
+  const dest = this.freshVar();
+  this.emit({ kind: "cast", dest, value, targetType: { kind: "ptr", pointee: pointeeType } });
+  return dest;
+}
+
+/** Load current value from ptr, apply binary op with rhs, store result back. Returns the new value. */
+export function emitLoadModifyStore(this: KirLowerer, ptr: VarId, op: BinOp, rhs: VarId, type: KirType): VarId {
+  const currentVal = this.freshVar();
+  this.emit({ kind: "load", dest: currentVal, ptr, type });
+  const result = this.freshVar();
+  this.emit({ kind: "bin_op", op, dest: result, lhs: currentVal, rhs, type });
+  this.emit({ kind: "store", ptr, value: result });
+  return currentVal;
+}
