@@ -260,6 +260,12 @@ function parsePrimaryExpression(ctx: ParserContext): Expression {
     return { kind: "Identifier", name: token.lexeme, span: token.span };
   }
 
+  // Primitive type keywords in expression position (e.g. sizeof(i32))
+  if (isPrimitiveTypeKeyword(token.kind)) {
+    ctx.advance();
+    return { kind: "Identifier", name: token.lexeme, span: token.span };
+  }
+
   // Grouped expression: (expr)
   if (token.kind === TokenKind.LeftParen) {
     ctx.advance();
@@ -293,4 +299,21 @@ function parsePrimaryExpression(ctx: ParserContext): Expression {
 
   ctx.addError(`Unexpected token '${token.kind}' in expression`, token);
   ctx.throwParseError();
+}
+
+function isPrimitiveTypeKeyword(kind: TokenKind): boolean {
+  return (
+    kind === TokenKind.I8 ||
+    kind === TokenKind.I16 ||
+    kind === TokenKind.I32 ||
+    kind === TokenKind.I64 ||
+    kind === TokenKind.U8 ||
+    kind === TokenKind.U16 ||
+    kind === TokenKind.U32 ||
+    kind === TokenKind.U64 ||
+    kind === TokenKind.F32 ||
+    kind === TokenKind.F64 ||
+    kind === TokenKind.Bool ||
+    kind === TokenKind.String
+  );
 }

@@ -461,6 +461,20 @@ describe("Parser — Edge Cases", () => {
       if (fn.kind !== "FunctionDecl") return;
       expect(fn.body.statements).toHaveLength(1);
     });
+
+    test("sizeof with primitive type keywords", () => {
+      const primitives = ["i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "bool", "string"];
+      for (const prim of primitives) {
+        const expr = parseExpr(`sizeof(${prim})`);
+        expect(expr.kind).toBe("CallExpr");
+        if (expr.kind !== "CallExpr") continue;
+        expect(expr.args).toHaveLength(1);
+        expect(expr.args[0].kind).toBe("Identifier");
+        if (expr.args[0].kind === "Identifier") {
+          expect(expr.args[0].name).toBe(prim);
+        }
+      }
+    });
   });
 
   describe("parser error recovery", () => {
