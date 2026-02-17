@@ -9,6 +9,7 @@ import type {
   ConstStmt,
   ContinueStmt,
   DeferStmt,
+  Expression,
   ExprStmt,
   ForStmt,
   IfStmt,
@@ -91,35 +92,14 @@ export class StatementChecker {
   }
 
   private checkLetStatement(stmt: LetStmt): boolean {
-    const initType = this.checker.checkExpression(stmt.initializer);
-
-    if (stmt.typeAnnotation) {
-      const annotatedType = this.checker.resolveType(stmt.typeAnnotation);
-      if (
-        !isErrorType(initType) &&
-        !isErrorType(annotatedType) &&
-        !isAssignableTo(initType, annotatedType)
-      ) {
-        // Check if this is a literal that can be implicitly converted
-        const litInfo = extractLiteralInfo(stmt.initializer);
-        const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, annotatedType);
-        if (!isLiteralOk) {
-          this.checker.error(
-            `type mismatch: expected '${typeToString(annotatedType)}', got '${typeToString(initType)}'`,
-            stmt.span
-          );
-        }
-      }
-      this.checker.defineVariable(stmt.name, annotatedType, true, false, stmt.span);
-    } else {
-      // Infer type from initializer
-      this.checker.defineVariable(stmt.name, initType, true, false, stmt.span);
-    }
-
-    return false;
+    return this.checkVariableDeclaration(stmt, true, false);
   }
 
   private checkConstStatement(stmt: ConstStmt): boolean {
+    return this.checkVariableDeclaration(stmt, false, true);
+  }
+
+  private checkVariableDeclaration(stmt: LetStmt | ConstStmt, isMutable: boolean, isConst: boolean): boolean {
     const initType = this.checker.checkExpression(stmt.initializer);
 
     if (stmt.typeAnnotation) {
@@ -129,7 +109,6 @@ export class StatementChecker {
         !isErrorType(annotatedType) &&
         !isAssignableTo(initType, annotatedType)
       ) {
-        // Check if this is a literal that can be implicitly converted
         const litInfo = extractLiteralInfo(stmt.initializer);
         const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, annotatedType);
         if (!isLiteralOk) {
@@ -139,9 +118,9 @@ export class StatementChecker {
           );
         }
       }
-      this.checker.defineVariable(stmt.name, annotatedType, false, true, stmt.span);
+      this.checker.defineVariable(stmt.name, annotatedType, isMutable, isConst, stmt.span);
     } else {
-      this.checker.defineVariable(stmt.name, initType, false, true, stmt.span);
+      this.checker.defineVariable(stmt.name, initType, isMutable, isConst, stmt.span);
     }
 
     return false;
@@ -400,42 +379,28 @@ export class StatementChecker {
   }
 
   private checkAssertStatement(stmt: AssertStmt): boolean {
-    const condType = this.checker.checkExpression(stmt.condition);
-    if (!isErrorType(condType) && condType.kind !== TypeKind.Bool) {
-      this.checker.error(
-        `assert condition must be bool, got '${typeToString(condType)}'`,
-        stmt.condition.span
-      );
-    }
-
-    if (stmt.message) {
-      const msgType = this.checker.checkExpression(stmt.message);
-      if (!isErrorType(msgType) && msgType.kind !== TypeKind.String) {
-        this.checker.error(
-          `assert message must be string, got '${typeToString(msgType)}'`,
-          stmt.message.span
-        );
-      }
-    }
-
-    return false;
+    return this.checkConditionStatement("assert", stmt.condition, stmt.message);
   }
 
   private checkRequireStatement(stmt: RequireStmt): boolean {
-    const condType = this.checker.checkExpression(stmt.condition);
+    return this.checkConditionStatement("require", stmt.condition, stmt.message);
+  }
+
+  private checkConditionStatement(keyword: string, condition: Expression, message: Expression | undefined): boolean {
+    const condType = this.checker.checkExpression(condition);
     if (!isErrorType(condType) && condType.kind !== TypeKind.Bool) {
       this.checker.error(
-        `require condition must be bool, got '${typeToString(condType)}'`,
-        stmt.condition.span
+        `${keyword} condition must be bool, got '${typeToString(condType)}'`,
+        condition.span
       );
     }
 
-    if (stmt.message) {
-      const msgType = this.checker.checkExpression(stmt.message);
+    if (message) {
+      const msgType = this.checker.checkExpression(message);
       if (!isErrorType(msgType) && msgType.kind !== TypeKind.String) {
         this.checker.error(
-          `require message must be string, got '${typeToString(msgType)}'`,
-          stmt.message.span
+          `${keyword} message must be string, got '${typeToString(msgType)}'`,
+          message.span
         );
       }
     }

@@ -31,6 +31,18 @@ import {
   typeToString,
 } from "./types";
 
+/** Report an error if left and right types are not equal. Returns false if they differ. */
+function requireSameTypes(checker: Checker, op: string, left: Type, right: Type, span: { start: number; end: number }): boolean {
+  if (!typesEqual(left, right)) {
+    checker.error(
+      `operator '${op}' requires same types, got '${typeToString(left)}' and '${typeToString(right)}'`,
+      span
+    );
+    return false;
+  }
+  return true;
+}
+
 const ARITHMETIC_OPS = new Set(["+", "-", "*", "/", "%"]);
 const COMPARISON_OPS = new Set(["<", ">", "<=", ">="]);
 const EQUALITY_OPS = new Set(["==", "!="]);
@@ -85,13 +97,7 @@ export function checkBinaryExpression(checker: Checker, expr: BinaryExpr): Type 
       );
       return ERROR_TYPE;
     }
-    if (!typesEqual(left, right)) {
-      checker.error(
-        `operator '${op}' requires same types, got '${typeToString(left)}' and '${typeToString(right)}'`,
-        expr.span
-      );
-      return ERROR_TYPE;
-    }
+    if (!requireSameTypes(checker, op, left, right, expr.span)) return ERROR_TYPE;
     return left;
   }
 
@@ -104,13 +110,7 @@ export function checkBinaryExpression(checker: Checker, expr: BinaryExpr): Type 
       );
       return ERROR_TYPE;
     }
-    if (!typesEqual(left, right)) {
-      checker.error(
-        `operator '${op}' requires same types, got '${typeToString(left)}' and '${typeToString(right)}'`,
-        expr.span
-      );
-      return ERROR_TYPE;
-    }
+    if (!requireSameTypes(checker, op, left, right, expr.span)) return ERROR_TYPE;
     return BOOL_TYPE;
   }
 
@@ -159,13 +159,7 @@ export function checkBinaryExpression(checker: Checker, expr: BinaryExpr): Type 
       );
       return ERROR_TYPE;
     }
-    if (!typesEqual(left, right)) {
-      checker.error(
-        `operator '${op}' requires same types, got '${typeToString(left)}' and '${typeToString(right)}'`,
-        expr.span
-      );
-      return ERROR_TYPE;
-    }
+    if (!requireSameTypes(checker, op, left, right, expr.span)) return ERROR_TYPE;
     return left;
   }
 
@@ -316,13 +310,7 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
       );
       return ERROR_TYPE;
     }
-    if (!typesEqual(targetType, valueType)) {
-      checker.error(
-        `operator '${op}' requires same types, got '${typeToString(targetType)}' and '${typeToString(valueType)}'`,
-        expr.span
-      );
-      return ERROR_TYPE;
-    }
+    if (!requireSameTypes(checker, op, targetType, valueType, expr.span)) return ERROR_TYPE;
     return targetType;
   }
 
@@ -334,13 +322,7 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
       );
       return ERROR_TYPE;
     }
-    if (!typesEqual(targetType, valueType)) {
-      checker.error(
-        `operator '${op}' requires same types, got '${typeToString(targetType)}' and '${typeToString(valueType)}'`,
-        expr.span
-      );
-      return ERROR_TYPE;
-    }
+    if (!requireSameTypes(checker, op, targetType, valueType, expr.span)) return ERROR_TYPE;
     return targetType;
   }
 

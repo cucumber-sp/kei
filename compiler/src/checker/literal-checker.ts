@@ -217,22 +217,7 @@ function instantiateGenericStruct(
     genericParams: [],
   };
 
-  // Substitute method types, replacing self-referential struct types with the concrete struct
-  const isSelfRef = (t: Type) =>
-    t.kind === TypeKind.Struct &&
-    (t.name === baseStruct.name || t.name.startsWith(baseStruct.name + "_"));
-  for (const [methodName, methodType] of baseStruct.methods) {
-    const subbed = substituteFunctionType(methodType, typeMap);
-    const fixedParams = subbed.params.map((p) =>
-      isSelfRef(p.type) ? { ...p, type: concreteStruct } : p
-    );
-    const fixedReturn = isSelfRef(subbed.returnType) ? concreteStruct : subbed.returnType;
-    concreteStruct.methods.set(methodName, {
-      ...subbed,
-      params: fixedParams,
-      returnType: fixedReturn,
-    });
-  }
+  substituteStructMethods(baseStruct, concreteStruct, typeMap);
 
   checker.registerMonomorphizedStruct(mangledName, {
     original: baseStruct,
@@ -318,22 +303,7 @@ function checkGenericStructLiteralInferred(
       genericParams: [],
     };
 
-    // Substitute method types, replacing self-referential struct types with the concrete struct
-    const isSelfRef = (t: Type) =>
-      t.kind === TypeKind.Struct &&
-      (t.name === structType.name || t.name.startsWith(structType.name + "_"));
-    for (const [methodName, methodType] of structType.methods) {
-      const subbed = substituteFunctionType(methodType, subs);
-      const fixedParams = subbed.params.map((p) =>
-        isSelfRef(p.type) ? { ...p, type: concreteStruct } : p
-      );
-      const fixedReturn = isSelfRef(subbed.returnType) ? concreteStruct : subbed.returnType;
-      concreteStruct.methods.set(methodName, {
-        ...subbed,
-        params: fixedParams,
-        returnType: fixedReturn,
-      });
-    }
+    substituteStructMethods(structType, concreteStruct, subs);
 
     checker.registerMonomorphizedStruct(mangledName, {
       original: structType,
@@ -354,6 +324,29 @@ function checkGenericStructLiteralInferred(
     expr.span
   );
   return ERROR_TYPE;
+}
+
+/** Substitute base struct methods into concrete struct, fixing self-referential types. */
+function substituteStructMethods(
+  base: StructType,
+  concrete: StructType,
+  typeMap: Map<string, Type>
+): void {
+  const isSelfRef = (t: Type) =>
+    t.kind === TypeKind.Struct &&
+    (t.name === base.name || t.name.startsWith(base.name + "_"));
+  for (const [methodName, methodType] of base.methods) {
+    const subbed = substituteFunctionType(methodType, typeMap);
+    const fixedParams = subbed.params.map((p) =>
+      isSelfRef(p.type) ? { ...p, type: concrete } : p
+    );
+    const fixedReturn = isSelfRef(subbed.returnType) ? concrete : subbed.returnType;
+    concrete.methods.set(methodName, {
+      ...subbed,
+      params: fixedParams,
+      returnType: fixedReturn,
+    });
+  }
 }
 
 /** Recursively extract TypeParam→concrete type mappings by walking declared and concrete types. */

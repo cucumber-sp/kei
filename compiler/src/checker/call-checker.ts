@@ -4,7 +4,7 @@
  * calls, static method calls, and instance method calls.
  */
 
-import type { CallExpr, Expression } from "../ast/nodes.ts";
+import type { CallExpr, Expression, FunctionDecl } from "../ast/nodes.ts";
 import type { Checker } from "./checker.ts";
 import { mangleGenericName, substituteFunctionType } from "./generics.ts";
 import { extractTypeParamSubs } from "./literal-checker.ts";
@@ -238,25 +238,11 @@ function resolveOverloadedCall(
 
   if (matches.length === 1) {
     const matched = matches[0]!;
-    // Store the resolved overload type on the callee expression
     checker.setExprType(expr.callee, matched.type);
-
-    // Handle move params
-    for (let i = 0; i < expr.args.length; i++) {
-      const arg = expr.args[i];
-      if (matched.type.params[i]?.isMove && arg?.kind === "MoveExpr") {
-        const moveExpr = arg;
-        if (moveExpr.operand.kind === "Identifier") {
-          checker.markVariableMoved(moveExpr.operand.name);
-        }
-      }
-    }
-
-    // Check throws
+    applyMoveParams(checker, expr, matched.type);
     if (matched.type.throwsTypes.length > 0) {
       checker.flagThrowsCall(expr, matched.type);
     }
-
     return matched.type.returnType;
   }
 
@@ -296,21 +282,10 @@ function resolveOverloadedCall(
   if (wideMatches.length === 1) {
     const matched = wideMatches[0]!;
     checker.setExprType(expr.callee, matched.type);
-
-    for (let i = 0; i < expr.args.length; i++) {
-      const arg = expr.args[i];
-      if (matched.type.params[i]?.isMove && arg?.kind === "MoveExpr") {
-        const moveExpr = arg;
-        if (moveExpr.operand.kind === "Identifier") {
-          checker.markVariableMoved(moveExpr.operand.name);
-        }
-      }
-    }
-
+    applyMoveParams(checker, expr, matched.type);
     if (matched.type.throwsTypes.length > 0) {
       checker.flagThrowsCall(expr, matched.type);
     }
-
     return matched.type.returnType;
   }
 
@@ -323,6 +298,18 @@ function resolveOverloadedCall(
   const argStr = argTypes.map((t) => typeToString(t)).join(", ");
   checker.error(`no matching overload for call with arguments (${argStr})`, expr.span);
   return ERROR_TYPE;
+}
+
+/** Mark move parameters as moved after a successful overload resolution. */
+function applyMoveParams(checker: Checker, expr: CallExpr, funcType: FunctionType): void {
+  for (let i = 0; i < expr.args.length; i++) {
+    const arg = expr.args[i];
+    if (funcType.params[i]?.isMove && arg?.kind === "MoveExpr") {
+      if (arg.operand.kind === "Identifier") {
+        checker.markVariableMoved(arg.operand.name);
+      }
+    }
+  }
 }
 
 function checkFunctionCallArgs(
@@ -380,6 +367,29 @@ function checkFunctionCallArgs(
   return funcType.returnType;
 }
 
+/** Register a monomorphized function in the cache and record resolution metadata. */
+function cacheMonomorphizedFunction(
+  checker: Checker,
+  expr: CallExpr,
+  name: string,
+  mangledName: string,
+  resolvedTypeArgs: Type[],
+  concreteType: FunctionType,
+  declaration?: FunctionDecl
+): void {
+  if (!checker.getMonomorphizedFunction(mangledName)) {
+    checker.registerMonomorphizedFunction(mangledName, {
+      originalName: name,
+      typeArgs: resolvedTypeArgs,
+      concrete: concreteType,
+      mangledName,
+      declaration,
+    });
+  }
+  checker.setExprType(expr.callee, concreteType);
+  checker.genericResolutions.set(expr, mangledName);
+}
+
 /** Handle generic function call with explicit type args: max<i32>(a, b) */
 function checkGenericFunctionCall(checker: Checker, expr: CallExpr): Type {
   if (expr.callee.kind !== "Identifier") return ERROR_TYPE;
@@ -425,20 +435,7 @@ function checkGenericFunctionCall(checker: Checker, expr: CallExpr): Type {
   const concreteType = substituteFunctionType(funcType, typeMap);
   const mangledName = mangleGenericName(name, resolvedTypeArgs);
 
-  // Cache the monomorphized function
-  if (!checker.getMonomorphizedFunction(mangledName)) {
-    checker.registerMonomorphizedFunction(mangledName, {
-      originalName: name,
-      typeArgs: resolvedTypeArgs,
-      concrete: concreteType,
-      mangledName,
-      declaration: genericOverload.declaration ?? undefined,
-    });
-  }
-
-  // Store the concrete type on the callee and the mangled name resolution
-  checker.setExprType(expr.callee, concreteType);
-  checker.genericResolutions.set(expr, mangledName);
+  cacheMonomorphizedFunction(checker, expr, name, mangledName, resolvedTypeArgs, concreteType, genericOverload.declaration ?? undefined);
 
   return checkFunctionCallArgs(checker, concreteType, expr.args, expr, false);
 }
@@ -492,19 +489,7 @@ function checkGenericFunctionCallInferred(
   const name = (expr.callee as { name: string }).name;
   const mangledName = mangleGenericName(name, resolvedTypeArgs);
 
-  // Cache
-  if (!checker.getMonomorphizedFunction(mangledName)) {
-    checker.registerMonomorphizedFunction(mangledName, {
-      originalName: name,
-      typeArgs: resolvedTypeArgs,
-      concrete: concreteType,
-      mangledName,
-    });
-  }
-
-  // Store the concrete type on the callee and the mangled name resolution
-  checker.setExprType(expr.callee, concreteType);
-  checker.genericResolutions.set(expr, mangledName);
+  cacheMonomorphizedFunction(checker, expr, name, mangledName, resolvedTypeArgs, concreteType);
 
   // Validate args against concrete param types
   for (let i = 0; i < argTypes.length; i++) {
