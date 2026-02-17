@@ -111,6 +111,85 @@ describe("Checker — Control Flow", () => {
     );
   });
 
+  test("switch expression: valid with default", () => {
+    checkOk(`
+      fn main() -> int {
+        let code = 200;
+        let msg = switch code {
+          case 200: "OK";
+          case 404: "Not Found";
+          default: "Unknown";
+        };
+        return 0;
+      }
+    `);
+  });
+
+  test("switch expression: type mismatch between branches", () => {
+    checkError(
+      `
+        fn main() -> int {
+          let code = 200;
+          let msg = switch code {
+            case 200: "OK";
+            case 404: 42;
+            default: "Unknown";
+          };
+          return 0;
+        }
+      `,
+      "switch expression branches have different types"
+    );
+  });
+
+  test("switch expression: missing default case", () => {
+    checkError(
+      `
+        fn main() -> int {
+          let code = 200;
+          let msg = switch code {
+            case 200: "OK";
+            case 404: "Not Found";
+          };
+          return 0;
+        }
+      `,
+      "switch expression must have a default case"
+    );
+  });
+
+  test("switch expression: exhaustive enum without default", () => {
+    checkOk(`
+      enum Color : u8 { Red = 0, Green = 1, Blue = 2 }
+      fn main() -> int {
+        let c = Color.Red;
+        let val = switch c {
+          case Red: 1;
+          case Green: 2;
+          case Blue: 3;
+        };
+        return 0;
+      }
+    `);
+  });
+
+  test("switch expression: non-exhaustive enum without default", () => {
+    checkError(
+      `
+        enum Color : u8 { Red = 0, Green = 1, Blue = 2 }
+        fn main() -> int {
+          let c = Color.Red;
+          let val = switch c {
+            case Red: 1;
+            case Green: 2;
+          };
+          return 0;
+        }
+      `,
+      "not exhaustive, missing: Blue"
+    );
+  });
+
   test("unreachable code after return → warning", () => {
     checkWarning(
       `

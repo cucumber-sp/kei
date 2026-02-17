@@ -1,5 +1,5 @@
 import type { BaseNode } from "./base.ts";
-import type { BlockStmt, Statement } from "./statements.ts";
+import type { BlockStmt, Statement, SwitchCase } from "./statements.ts";
 import type { TypeNode } from "./types.ts";
 
 export enum ExprKind {
@@ -28,6 +28,7 @@ export enum ExprKind {
   Unsafe = "UnsafeExpr",
   Cast = "CastExpr",
   ArrayLiteral = "ArrayLiteral",
+  SwitchExpr = "SwitchExpr",
 }
 
 /** Binary operation (`a + b`, `x == y`, `p && q`). */
@@ -222,6 +223,13 @@ export interface ArrayLiteral extends BaseNode {
   elements: Expression[];
 }
 
+/** Switch expression — produces a value from the matched case branch. */
+export interface SwitchExpr extends BaseNode {
+  kind: "SwitchExpr";
+  subject: Expression;
+  cases: SwitchCase[];
+}
+
 /** Union of all expression nodes. */
 export type Expression =
   | BinaryExpr
@@ -248,4 +256,5 @@ export type Expression =
   | RangeExpr
   | UnsafeExpr
   | CastExpr
-  | ArrayLiteral;
+  | ArrayLiteral
+  | SwitchExpr;

@@ -161,6 +161,25 @@ describe("Parser — Expressions", () => {
     expect(expr.elseBlock.statements).toHaveLength(1);
   });
 
+  test("switch expression", () => {
+    const expr = parseExpr('switch code { case 200: "OK"; case 404: "Not Found"; default: "Unknown"; }');
+    expect(expr.kind).toBe("SwitchExpr");
+    if (expr.kind !== "SwitchExpr") return;
+    expect(expr.cases).toHaveLength(3);
+    expect(expr.cases[0]?.values).toHaveLength(1);
+    expect(expr.cases[0]?.isDefault).toBe(false);
+    expect(expr.cases[1]?.values).toHaveLength(1);
+    expect(expr.cases[2]?.isDefault).toBe(true);
+  });
+
+  test("switch expression with multiple case values", () => {
+    const expr = parseExpr("switch x { case 1, 2: 10; default: 0; }");
+    expect(expr.kind).toBe("SwitchExpr");
+    if (expr.kind !== "SwitchExpr") return;
+    expect(expr.cases).toHaveLength(2);
+    expect(expr.cases[0]?.values).toHaveLength(2);
+  });
+
   test("move expression", () => {
     const expr = parseExpr("move value");
     expect(expr.kind).toBe("MoveExpr");

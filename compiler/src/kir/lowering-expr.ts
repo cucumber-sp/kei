@@ -18,6 +18,8 @@ import type {
   IndexExpr,
   MemberExpr,
   MoveExpr,
+  Statement,
+  SwitchExpr,
 } from "../ast/nodes.ts";
 import type { FunctionType } from "../checker/types";
 import type { KirType, VarId } from "./kir-types.ts";
@@ -71,6 +73,8 @@ export function lowerExpr(this: KirLowerer, expr: Expression): VarId {
       return this.lowerCastExpr(expr);
     case "ArrayLiteral":
       return this.lowerArrayLiteral(expr);
+    case "SwitchExpr":
+      return this.lowerSwitchExpr(expr);
     default:
       // Unhandled expression types return a placeholder
       return this.emitConstInt(0);
@@ -498,6 +502,68 @@ export function lowerCastExpr(this: KirLowerer, expr: CastExpr): VarId {
   const targetType = this.getExprKirType(expr);
   const dest = this.freshVar();
   this.emit({ kind: "cast", dest, value, targetType });
+  return dest;
+}
+
+export function lowerSwitchExpr(this: KirLowerer, expr: SwitchExpr): VarId {
+  const subjectId = this.lowerExpr(expr.subject);
+  const resultType = this.getExprKirType(expr);
+  const endLabel = this.freshBlockId("switchexpr.end");
+
+  // Allocate result on stack
+  const resultPtr = this.emitStackAlloc(resultType);
+
+  const caseLabels: { value: VarId; target: string }[] = [];
+  let defaultLabel = endLabel;
+  const caseBlocks: { label: string; stmts: Statement[] }[] = [];
+
+  for (const c of expr.cases) {
+    const label = c.isDefault
+      ? this.freshBlockId("switchexpr.default")
+      : this.freshBlockId("switchexpr.case");
+
+    if (c.isDefault) {
+      defaultLabel = label;
+    }
+
+    for (const val of c.values) {
+      const valId = this.lowerExpr(val);
+      caseLabels.push({ value: valId, target: label });
+    }
+
+    caseBlocks.push({ label, stmts: c.body });
+  }
+
+  this.setTerminator({
+    kind: "switch",
+    value: subjectId,
+    cases: caseLabels,
+    defaultBlock: defaultLabel,
+  });
+
+  // Emit case blocks — store last expression value into resultPtr
+  for (const cb of caseBlocks) {
+    this.sealCurrentBlock();
+    this.startBlock(cb.label);
+    for (const s of cb.stmts) {
+      if (s.kind === "ExprStmt") {
+        const val = this.lowerExpr(s.expression);
+        this.emit({ kind: "store", ptr: resultPtr, value: val });
+      } else {
+        this.lowerStatement(s);
+      }
+    }
+    if (!this.isBlockTerminated()) {
+      this.setTerminator({ kind: "jump", target: endLabel });
+    }
+  }
+
+  // End block — load and return result
+  this.sealCurrentBlock();
+  this.startBlock(endLabel);
+
+  const dest = this.freshVar();
+  this.emit({ kind: "load", dest, ptr: resultPtr, type: resultType });
   return dest;
 }
 

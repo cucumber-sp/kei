@@ -159,7 +159,7 @@ export function parseSwitchStatement(ctx: ParserContext): SwitchStmt {
   };
 }
 
-function parseSwitchCase(ctx: ParserContext): SwitchCase {
+export function parseSwitchCase(ctx: ParserContext): SwitchCase {
   if (ctx.match(TokenKind.Default)) {
     ctx.expect(TokenKind.Colon);
     const body = parseCaseBody(ctx);

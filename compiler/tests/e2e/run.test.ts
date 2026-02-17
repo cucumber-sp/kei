@@ -1779,6 +1779,58 @@ describe("Complex: control flow edge cases", () => {
     );
   });
 
+  test("switch expression", () => {
+    const r = run(
+      "switch_expr",
+      `
+      import { print } from io;
+
+      fn status_message(code: int) -> string {
+        let msg = switch code {
+          case 200: "OK";
+          case 404: "Not Found";
+          case 500: "Server Error";
+          default: "Unknown";
+        };
+        return msg;
+      }
+
+      fn main() -> int {
+        print(status_message(200));
+        print(status_message(404));
+        print(status_message(500));
+        print(status_message(999));
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("OK\nNot Found\nServer Error\nUnknown\n");
+  });
+
+  test("switch expression with int result", () => {
+    const r = run(
+      "switch_expr_int",
+      `
+      import { print } from io;
+
+      fn main() -> int {
+        let x = 2;
+        let result = switch x {
+          case 1: 10;
+          case 2: 20;
+          case 3: 30;
+          default: 0;
+        };
+        print(result);
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("20\n");
+  });
+
   test("early return from deeply nested blocks", () => {
     const r = run(
       "complex_early_return",

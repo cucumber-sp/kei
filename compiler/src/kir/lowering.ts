@@ -232,6 +232,7 @@ export class KirLowerer {
   declare lowerIndexExpr: typeof exprMethods.lowerIndexExpr;
   declare lowerAssignExpr: typeof exprMethods.lowerAssignExpr;
   declare lowerIfExpr: typeof exprMethods.lowerIfExpr;
+  declare lowerSwitchExpr: typeof exprMethods.lowerSwitchExpr;
   declare lowerMoveExpr: typeof exprMethods.lowerMoveExpr;
   declare lowerCastExpr: typeof exprMethods.lowerCastExpr;
   declare findConstIntInst: typeof exprMethods.findConstIntInst;
@@ -343,6 +344,7 @@ KirLowerer.prototype.lowerMemberExpr = exprMethods.lowerMemberExpr;
 KirLowerer.prototype.lowerIndexExpr = exprMethods.lowerIndexExpr;
 KirLowerer.prototype.lowerAssignExpr = exprMethods.lowerAssignExpr;
 KirLowerer.prototype.lowerIfExpr = exprMethods.lowerIfExpr;
+KirLowerer.prototype.lowerSwitchExpr = exprMethods.lowerSwitchExpr;
 KirLowerer.prototype.lowerMoveExpr = exprMethods.lowerMoveExpr;
 KirLowerer.prototype.lowerCastExpr = exprMethods.lowerCastExpr;
 KirLowerer.prototype.findConstIntInst = exprMethods.findConstIntInst;

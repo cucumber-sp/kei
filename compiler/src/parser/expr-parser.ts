@@ -3,7 +3,7 @@
  * Extracted from parser.ts — all methods operate on a ParserContext.
  */
 
-import type { ArrayLiteral, AssignExpr, BlockStmt, Expression, Statement } from "../ast/nodes.ts";
+import type { ArrayLiteral, AssignExpr, BlockStmt, Expression, Statement, SwitchCase } from "../ast/nodes.ts";
 import { TokenKind } from "../lexer/token.ts";
 import type { ParserContext } from "./parser.ts";
 import { parsePostfixExpression } from "./postfix-parser.ts";
@@ -14,6 +14,7 @@ import {
   isAssignmentOperator,
   Precedence,
 } from "./precedence.ts";
+import { parseSwitchCase } from "./stmt-parser.ts";
 
 export function parseExpression(ctx: ParserContext): Expression {
   return parsePrattExpression(ctx, Precedence.None);
@@ -133,6 +134,11 @@ function parsePrefixExpression(ctx: ParserContext): Expression {
     return parseIfExpression(ctx);
   }
 
+  // switch expression
+  if (token.kind === TokenKind.Switch) {
+    return parseSwitchExpression(ctx);
+  }
+
   // unsafe { expr } expression
   if (token.kind === TokenKind.Unsafe) {
     return parseUnsafeExpression(ctx);
@@ -154,6 +160,25 @@ function parseIfExpression(ctx: ParserContext): Expression {
     thenBlock,
     elseBlock,
     span: { start: start.span.start, end: elseBlock.span.end },
+  };
+}
+
+function parseSwitchExpression(ctx: ParserContext): Expression {
+  const start = ctx.expect(TokenKind.Switch);
+  const subject = parseExpression(ctx);
+  ctx.expect(TokenKind.LeftBrace);
+
+  const cases: SwitchCase[] = [];
+  while (!ctx.check(TokenKind.RightBrace) && !ctx.isAtEnd()) {
+    cases.push(parseSwitchCase(ctx));
+  }
+
+  const end = ctx.expect(TokenKind.RightBrace);
+  return {
+    kind: "SwitchExpr",
+    subject,
+    cases,
+    span: { start: start.span.start, end: end.span.end },
   };
 }
 

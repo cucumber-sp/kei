@@ -43,6 +43,7 @@ import type {
   StringLiteral,
   StructDecl,
   StructLiteral,
+  SwitchExpr,
   SwitchStmt,
   ThrowExpr,
   TypeAlias,
@@ -108,4 +109,5 @@ export interface AstVisitor<T = void> {
   visitRangeExpr(node: RangeExpr): T;
   visitUnsafeExpr(node: UnsafeExpr): T;
   visitCastExpr(node: CastExpr): T;
+  visitSwitchExpr(node: SwitchExpr): T;
 }

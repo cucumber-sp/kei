@@ -13,6 +13,7 @@ import type {
   MemberExpr,
   MoveExpr,
   RangeExpr,
+  SwitchExpr,
   UnsafeExpr,
 } from "../ast/nodes.ts";
 import { checkCallExpression } from "./call-checker.ts";
@@ -119,6 +120,8 @@ export class ExpressionChecker {
         return this.checkCastExpression(expr);
       case "ArrayLiteral":
         return checkArrayLiteral(this.checker, expr);
+      case "SwitchExpr":
+        return this.checkSwitchExpression(expr);
     }
   }
 
@@ -312,6 +315,98 @@ export class ExpressionChecker {
     }
 
     return thenType;
+  }
+
+  private checkSwitchExpression(expr: SwitchExpr): Type {
+    const subjectType = this.checker.checkExpression(expr.subject);
+    let hasDefault = false;
+    let resultType: Type | null = null;
+
+    for (const switchCase of expr.cases) {
+      if (switchCase.isDefault) {
+        hasDefault = true;
+      } else {
+        for (const value of switchCase.values) {
+          if (subjectType.kind === TypeKind.Enum && value.kind === "Identifier") {
+            const variant = subjectType.variants.find((v) => v.name === value.name);
+            if (!variant) {
+              this.checker.error(
+                `enum '${subjectType.name}' has no variant '${value.name}'`,
+                value.span
+              );
+            }
+          } else {
+            const valueType = this.checker.checkExpression(value);
+            if (!isErrorType(valueType) && !isErrorType(subjectType)) {
+              if (!isAssignableTo(valueType, subjectType)) {
+                this.checker.error(
+                  `case value type '${typeToString(valueType)}' does not match switch subject type '${typeToString(subjectType)}'`,
+                  value.span
+                );
+              }
+            }
+          }
+        }
+      }
+
+      // Get the type of the last expression in the case body
+      this.checker.pushScope({});
+      let caseType: Type = VOID_TYPE;
+      for (const s of switchCase.body) {
+        if (s.kind === "ExprStmt") {
+          caseType = this.checker.checkExpression(s.expression);
+        } else {
+          this.checker.checkStatement(s);
+          caseType = VOID_TYPE;
+        }
+      }
+      this.checker.popScope();
+
+      if (isErrorType(caseType)) continue;
+
+      if (resultType === null) {
+        resultType = caseType;
+      } else if (!isErrorType(resultType) && !typesEqual(resultType, caseType)) {
+        this.checker.error(
+          `switch expression branches have different types: '${typeToString(resultType)}' and '${typeToString(caseType)}'`,
+          switchCase.span
+        );
+        return ERROR_TYPE;
+      }
+    }
+
+    // Check exhaustiveness
+    let isExhaustiveEnum = false;
+    if (subjectType.kind === TypeKind.Enum && !hasDefault) {
+      const coveredVariants = new Set<string>();
+      for (const switchCase of expr.cases) {
+        if (!switchCase.isDefault) {
+          for (const value of switchCase.values) {
+            if (value.kind === "Identifier") {
+              coveredVariants.add(value.name);
+            }
+          }
+        }
+      }
+
+      const uncovered = subjectType.variants.filter((v) => !coveredVariants.has(v.name));
+      if (uncovered.length > 0) {
+        const names = uncovered.map((v) => v.name).join(", ");
+        this.checker.error(
+          `switch expression on enum '${subjectType.name}' is not exhaustive, missing: ${names}`,
+          expr.span
+        );
+      } else {
+        isExhaustiveEnum = true;
+      }
+    }
+
+    if (!hasDefault && !isExhaustiveEnum) {
+      this.checker.error("switch expression must have a default case", expr.span);
+      return ERROR_TYPE;
+    }
+
+    return resultType ?? VOID_TYPE;
   }
 
   private checkMoveExpression(expr: MoveExpr): Type {
