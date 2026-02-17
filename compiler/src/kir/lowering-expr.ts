@@ -212,7 +212,8 @@ export function lowerCallExpr(this: KirLowerer, expr: CallExpr): VarId {
   let funcName: string;
 
   // Check for generic call resolution (e.g. max<i32>(a, b) → max_i32)
-  const genericName = this.currentBodyGenericResolutions?.get(expr) ?? this.checkResult.genericResolutions.get(expr);
+  const genericName =
+    this.currentBodyGenericResolutions?.get(expr) ?? this.checkResult.genericResolutions.get(expr);
   if (genericName) {
     funcName = this.modulePrefix ? `${this.modulePrefix}_${genericName}` : genericName;
   } else if (expr.callee.kind === "Identifier") {
@@ -259,9 +260,10 @@ export function lowerCallExpr(this: KirLowerer, expr: CallExpr): VarId {
     } else {
       // Instance method call: obj.method(args) → StructName_method(obj, args)
       // Methods expect self as a pointer, so use lowerExprAsPtr for struct objects
-      const objId = objType?.kind === "struct"
-        ? this.lowerExprAsPtr(expr.callee.object)
-        : this.lowerExpr(expr.callee.object);
+      const objId =
+        objType?.kind === "struct"
+          ? this.lowerExprAsPtr(expr.callee.object)
+          : this.lowerExpr(expr.callee.object);
       const methodName = expr.callee.property;
 
       if (objType?.kind === "struct") {
@@ -291,7 +293,13 @@ export function lowerCallExpr(this: KirLowerer, expr: CallExpr): VarId {
       }
 
       const dest = this.freshVar();
-      this.emit({ kind: "call", dest, func: funcName, args: [objId, ...methodArgs], type: resultType });
+      this.emit({
+        kind: "call",
+        dest,
+        func: funcName,
+        args: [objId, ...methodArgs],
+        type: resultType,
+      });
       return dest;
     }
   } else {
@@ -617,8 +625,7 @@ export function lowerSwitchExpr(this: KirLowerer, expr: SwitchExpr): VarId {
   // Check if this is a switch on a data-variant (tagged union) enum
   const subjectType = this.checkResult.typeMap.get(expr.subject);
   const isTaggedUnionEnum =
-    subjectType?.kind === "enum" &&
-    subjectType.variants.some((v) => v.fields.length > 0);
+    subjectType?.kind === "enum" && subjectType.variants.some((v) => v.fields.length > 0);
 
   // For tagged union enums, compare on the .tag field
   let switchValue: VarId;

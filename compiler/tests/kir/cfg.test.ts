@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildCFG } from "../../src/kir/cfg.ts";
-import type { KirBlock, KirTerminator, BlockId } from "../../src/kir/kir-types";
+import type { BlockId, KirBlock, KirTerminator } from "../../src/kir/kir-types";
 
 function block(id: BlockId, terminator: KirTerminator): KirBlock {
   return { id, phis: [], instructions: [], terminator };
@@ -110,10 +110,17 @@ describe("buildCFG", () => {
 
   test("switch terminator creates multiple successors", () => {
     const blocks = [
-      block("entry", switchTerm("%v", [
-        { value: "%c1", target: "case1" },
-        { value: "%c2", target: "case2" },
-      ], "default")),
+      block(
+        "entry",
+        switchTerm(
+          "%v",
+          [
+            { value: "%c1", target: "case1" },
+            { value: "%c2", target: "case2" },
+          ],
+          "default"
+        )
+      ),
       block("case1", retVoid()),
       block("case2", retVoid()),
       block("default", retVoid()),
@@ -191,10 +198,7 @@ describe("buildCFG", () => {
   });
 
   test("unreachable terminator has no successors", () => {
-    const blocks = [
-      block("entry", jump("panic")),
-      block("panic", unreachable()),
-    ];
+    const blocks = [block("entry", jump("panic")), block("panic", unreachable())];
     const cfg = buildCFG(blocks);
 
     expect(cfg.succs.get("panic")).toEqual([]);
@@ -203,10 +207,17 @@ describe("buildCFG", () => {
   test("multiple predecessors for merge block", () => {
     // Three-way merge
     const blocks = [
-      block("entry", switchTerm("%v", [
-        { value: "%c1", target: "a" },
-        { value: "%c2", target: "b" },
-      ], "c")),
+      block(
+        "entry",
+        switchTerm(
+          "%v",
+          [
+            { value: "%c1", target: "a" },
+            { value: "%c2", target: "b" },
+          ],
+          "c"
+        )
+      ),
       block("a", jump("merge")),
       block("b", jump("merge")),
       block("c", jump("merge")),

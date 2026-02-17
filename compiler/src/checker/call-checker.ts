@@ -163,7 +163,8 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
             const field = variant.fields[i];
             if (field && !isErrorType(argType) && !isAssignableTo(argType, field.type)) {
               const litInfo = extractLiteralInfo(arg);
-              const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, field.type);
+              const isLiteralOk =
+                litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, field.type);
               if (!isLiteralOk) {
                 checker.error(
                   `argument '${field.name}': expected '${typeToString(field.type)}', got '${typeToString(argType)}'`,
@@ -177,10 +178,7 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
           checker.setExprType(expr.callee, enumType);
           return enumType;
         }
-        checker.error(
-          `enum '${enumType.name}' has no variant '${memberExpr.property}'`,
-          expr.span
-        );
+        checker.error(`enum '${enumType.name}' has no variant '${memberExpr.property}'`, expr.span);
         return ERROR_TYPE;
       }
     }

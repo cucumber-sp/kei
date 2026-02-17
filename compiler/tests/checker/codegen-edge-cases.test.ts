@@ -408,7 +408,20 @@ describe("Checker — Codegen Edge Cases", () => {
     });
 
     test("sizeof with primitive type keywords → ok", () => {
-      const primitives = ["i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "bool", "string"];
+      const primitives = [
+        "i8",
+        "i16",
+        "i32",
+        "i64",
+        "u8",
+        "u16",
+        "u32",
+        "u64",
+        "f32",
+        "f64",
+        "bool",
+        "string",
+      ];
       for (const prim of primitives) {
         checkOk(`fn main() -> int { let s = sizeof(${prim}); return 0; }`);
       }

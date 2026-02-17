@@ -337,7 +337,7 @@ export class StatementChecker {
               switchCase.bindings[i],
               bindingInfo.fieldTypes[i],
               false, // not mutable
-              true,  // const
+              true, // const
               switchCase.span
             );
           }

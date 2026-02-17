@@ -361,10 +361,18 @@ export class Lexer {
   }
 
   private static readonly NUMERIC_SUFFIXES: ReadonlySet<string> = new Set([
-    "i8", "i16", "i32", "i64",
-    "u8", "u16", "u32", "u64",
-    "isize", "usize",
-    "f32", "f64",
+    "i8",
+    "i16",
+    "i32",
+    "i64",
+    "u8",
+    "u16",
+    "u32",
+    "u64",
+    "isize",
+    "usize",
+    "f32",
+    "f64",
   ]);
 
   private static readonly FLOAT_SUFFIXES: ReadonlySet<string> = new Set(["f32", "f64"]);

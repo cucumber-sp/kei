@@ -54,9 +54,7 @@ describe("KIR — Enum variant construction", () => {
     expect(tagPtr).toBeDefined();
 
     // No data field ptrs — only tag
-    const dataPtrs = fieldPtrs.filter(
-      (i) => i.kind === "field_ptr" && i.field.startsWith("data.")
-    );
+    const dataPtrs = fieldPtrs.filter((i) => i.kind === "field_ptr" && i.field.startsWith("data."));
     expect(dataPtrs.length).toBe(0);
   });
 
@@ -74,9 +72,7 @@ describe("KIR — Enum variant construction", () => {
 
     // One stack_alloc for the variable `c`, but no field_ptr (no tag/data setup)
     const allocs = getInstructions(fn, "stack_alloc");
-    const enumAllocs = allocs.filter(
-      (i) => i.kind === "stack_alloc" && i.type.kind === "enum"
-    );
+    const enumAllocs = allocs.filter((i) => i.kind === "stack_alloc" && i.type.kind === "enum");
     expect(enumAllocs.length).toBe(1);
 
     // No field_ptr — simple enum doesn't use tag/data struct
@@ -269,12 +265,8 @@ describe("KIR — Enum variant destructuring in switch", () => {
 
     const fieldPtrs = getInstructions(fn, "field_ptr");
     // Should have field_ptrs for data.Rect.w and data.Rect.h from destructuring
-    const wPtrs = fieldPtrs.filter(
-      (i) => i.kind === "field_ptr" && i.field === "data.Rect.w"
-    );
-    const hPtrs = fieldPtrs.filter(
-      (i) => i.kind === "field_ptr" && i.field === "data.Rect.h"
-    );
+    const wPtrs = fieldPtrs.filter((i) => i.kind === "field_ptr" && i.field === "data.Rect.w");
+    const hPtrs = fieldPtrs.filter((i) => i.kind === "field_ptr" && i.field === "data.Rect.h");
     // At least 1 from construction + 1 from destructuring for each
     expect(wPtrs.length).toBeGreaterThanOrEqual(2);
     expect(hPtrs.length).toBeGreaterThanOrEqual(2);

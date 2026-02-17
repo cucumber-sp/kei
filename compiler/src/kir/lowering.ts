@@ -109,7 +109,10 @@ export class KirLowerer {
   throwsFunctions: Map<string, { throwsTypes: KirType[]; returnType: KirType }> = new Map();
 
   /** Per-instantiation type map override for monomorphized function bodies */
-  currentBodyTypeMap: Map<import("../ast/nodes.ts").Expression, import("../checker/types").Type> | null = null;
+  currentBodyTypeMap: Map<
+    import("../ast/nodes.ts").Expression,
+    import("../checker/types").Type
+  > | null = null;
   /** Per-instantiation generic resolutions override for monomorphized function bodies */
   currentBodyGenericResolutions: Map<import("../ast/nodes.ts").Expression, string> | null = null;
 

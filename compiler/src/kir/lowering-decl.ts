@@ -423,7 +423,10 @@ function lowerAutoDestroy(
       const fieldPtr = freshVar();
       const kirStringType: KirType = { kind: "string" };
       insts.push({
-        kind: "field_ptr", dest: fieldPtr, base: selfVar, field: fieldName,
+        kind: "field_ptr",
+        dest: fieldPtr,
+        base: selfVar,
+        field: fieldName,
         type: kirStringType,
       });
       insts.push({ kind: "call_extern_void", func: "kei_string_destroy", args: [fieldPtr] });
@@ -432,7 +435,10 @@ function lowerAutoDestroy(
       const fieldPtr = freshVar();
       const kirFieldType: KirType = { kind: "struct", name: fieldType.name, fields: [] };
       insts.push({
-        kind: "field_ptr", dest: fieldPtr, base: selfVar, field: fieldName,
+        kind: "field_ptr",
+        dest: fieldPtr,
+        base: selfVar,
+        field: fieldName,
         type: kirFieldType,
       });
       insts.push({ kind: "destroy", value: fieldPtr, structName: fieldType.name });
@@ -482,15 +488,21 @@ function lowerAutoOncopy(
       const fieldPtr = freshVar();
       const kirStringType: KirType = { kind: "string" };
       insts.push({
-        kind: "field_ptr", dest: fieldPtr, base: selfVar, field: fieldName,
+        kind: "field_ptr",
+        dest: fieldPtr,
+        base: selfVar,
+        field: fieldName,
         type: kirStringType,
       });
       const loaded = freshVar();
       insts.push({ kind: "load", dest: loaded, ptr: fieldPtr, type: kirStringType });
       const copied = freshVar();
       insts.push({
-        kind: "call_extern", dest: copied, func: "kei_string_copy",
-        args: [loaded], type: kirStringType,
+        kind: "call_extern",
+        dest: copied,
+        func: "kei_string_copy",
+        args: [loaded],
+        type: kirStringType,
       });
       insts.push({ kind: "store", ptr: fieldPtr, value: copied });
     } else if (fieldType.kind === "struct" && fieldType.methods.has("__oncopy")) {
@@ -498,7 +510,10 @@ function lowerAutoOncopy(
       const fieldPtr = freshVar();
       const kirFieldType: KirType = { kind: "struct", name: fieldType.name, fields: [] };
       insts.push({
-        kind: "field_ptr", dest: fieldPtr, base: selfVar, field: fieldName,
+        kind: "field_ptr",
+        dest: fieldPtr,
+        base: selfVar,
+        field: fieldName,
         type: kirFieldType,
       });
       const loaded = freshVar();

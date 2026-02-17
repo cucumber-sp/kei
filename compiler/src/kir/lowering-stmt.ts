@@ -385,8 +385,7 @@ export function lowerSwitchStmt(this: KirLowerer, stmt: SwitchStmt): void {
   // Check if this is a switch on a data-variant (tagged union) enum
   const subjectType = this.checkResult.typeMap.get(stmt.subject);
   const isTaggedUnionEnum =
-    subjectType?.kind === "enum" &&
-    subjectType.variants.some((v) => v.fields.length > 0);
+    subjectType?.kind === "enum" && subjectType.variants.some((v) => v.fields.length > 0);
 
   // For tagged union enums, compare on the .tag field instead of the whole value
   let switchValue: VarId;
@@ -399,7 +398,12 @@ export function lowerSwitchStmt(this: KirLowerer, stmt: SwitchStmt): void {
 
   const caseLabels: { value: VarId; target: string }[] = [];
   let defaultLabel = endLabel;
-  const caseBlocks: { label: string; stmts: Statement[]; isDefault: boolean; astCase: SwitchCase }[] = [];
+  const caseBlocks: {
+    label: string;
+    stmts: Statement[];
+    isDefault: boolean;
+    astCase: SwitchCase;
+  }[] = [];
 
   for (const c of stmt.cases) {
     const label = c.isDefault

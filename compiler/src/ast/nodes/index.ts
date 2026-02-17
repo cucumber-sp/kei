@@ -40,10 +40,10 @@ export type {
   RangeExpr,
   StringLiteral,
   StructLiteral,
+  SwitchExpr,
   ThrowExpr,
   UnaryExpr,
   UnsafeExpr,
-  SwitchExpr,
 } from "./expressions.ts";
 export { ExprKind } from "./expressions.ts";
 export type { Program } from "./program.ts";

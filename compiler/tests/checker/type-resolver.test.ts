@@ -1,28 +1,28 @@
 import { describe, expect, test } from "bun:test";
-import { TypeResolver } from "../../src/checker/type-resolver.ts";
+import type { TypeNode } from "../../src/ast/nodes.ts";
 import { Scope } from "../../src/checker/scope.ts";
 import { typeSymbol } from "../../src/checker/symbols.ts";
+import { TypeResolver } from "../../src/checker/type-resolver.ts";
+import type { StructType } from "../../src/checker/types";
 import {
-  I32_TYPE,
-  I64_TYPE,
-  U8_TYPE,
-  U32_TYPE,
-  F32_TYPE,
-  F64_TYPE,
+  arrayType,
   BOOL_TYPE,
-  VOID_TYPE,
-  STRING_TYPE,
   C_CHAR_TYPE,
   ERROR_TYPE,
-  TypeKind,
-  ptrType,
-  arrayType,
-  sliceType,
+  F32_TYPE,
+  F64_TYPE,
   functionType,
+  I32_TYPE,
+  I64_TYPE,
+  ptrType,
+  STRING_TYPE,
+  sliceType,
+  TypeKind,
+  U8_TYPE,
+  U32_TYPE,
+  VOID_TYPE,
 } from "../../src/checker/types";
-import type { TypeNode } from "../../src/ast/nodes.ts";
 import type { Span } from "../../src/lexer/token.ts";
-import type { StructType } from "../../src/checker/types";
 
 const span: Span = { start: 0, end: 0 };
 
@@ -37,7 +37,10 @@ function genericType(name: string, typeArgs: TypeNode[]): TypeNode {
 function makeStructType(
   name: string,
   fields: [string, import("../../src/checker/types").Type][],
-  opts: { genericParams?: string[]; methods?: [string, import("../../src/checker/types").FunctionType][] } = {}
+  opts: {
+    genericParams?: string[];
+    methods?: [string, import("../../src/checker/types").FunctionType][];
+  } = {}
 ): StructType {
   return {
     kind: TypeKind.Struct,
@@ -187,7 +190,10 @@ describe("TypeResolver", () => {
       const resolver = new TypeResolver();
       const scope = new Scope();
 
-      const result = resolver.resolve(genericType("ptr", [namedType("i32"), namedType("bool")]), scope);
+      const result = resolver.resolve(
+        genericType("ptr", [namedType("i32"), namedType("bool")]),
+        scope
+      );
       expect(result).toEqual(ERROR_TYPE);
       expect(resolver.getDiagnostics()[0].message).toContain("expects exactly 1 type argument");
     });
@@ -212,7 +218,10 @@ describe("TypeResolver", () => {
       const resolver = new TypeResolver();
       const scope = new Scope();
 
-      const result = resolver.resolve(genericType("slice", [namedType("i32"), namedType("i64")]), scope);
+      const result = resolver.resolve(
+        genericType("slice", [namedType("i32"), namedType("i64")]),
+        scope
+      );
       expect(result).toEqual(ERROR_TYPE);
       expect(resolver.getDiagnostics()[0].message).toContain("expects exactly 1 type argument");
     });
@@ -260,9 +269,16 @@ describe("TypeResolver", () => {
       const scope = new Scope();
       const tParam = { kind: TypeKind.TypeParam, name: "T" } as const;
       const uParam = { kind: TypeKind.TypeParam, name: "U" } as const;
-      const pairStruct = makeStructType("Pair", [["first", tParam], ["second", uParam]], {
-        genericParams: ["T", "U"],
-      });
+      const pairStruct = makeStructType(
+        "Pair",
+        [
+          ["first", tParam],
+          ["second", uParam],
+        ],
+        {
+          genericParams: ["T", "U"],
+        }
+      );
       scope.define(typeSymbol("Pair", pairStruct));
 
       const result = resolver.resolve(genericType("Pair", [namedType("i32")]), scope);

@@ -162,7 +162,9 @@ describe("Parser — Expressions", () => {
   });
 
   test("switch expression", () => {
-    const expr = parseExpr('switch code { case 200: "OK"; case 404: "Not Found"; default: "Unknown"; }');
+    const expr = parseExpr(
+      'switch code { case 200: "OK"; case 404: "Not Found"; default: "Unknown"; }'
+    );
     expect(expr.kind).toBe("SwitchExpr");
     if (expr.kind !== "SwitchExpr") return;
     expect(expr.cases).toHaveLength(3);

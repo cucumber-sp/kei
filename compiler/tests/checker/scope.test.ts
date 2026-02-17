@@ -1,19 +1,26 @@
 import { describe, expect, test } from "bun:test";
 import { Scope } from "../../src/checker/scope.ts";
-import { functionSymbol, typeSymbol, variableSymbol } from "../../src/checker/symbols.ts";
-import { SymbolKind } from "../../src/checker/symbols.ts";
+import {
+  functionSymbol,
+  SymbolKind,
+  typeSymbol,
+  variableSymbol,
+} from "../../src/checker/symbols.ts";
+import type { FunctionType } from "../../src/checker/types";
 import {
   BOOL_TYPE,
+  F64_TYPE,
+  functionType,
   I32_TYPE,
   I64_TYPE,
-  F64_TYPE,
   STRING_TYPE,
   VOID_TYPE,
-  functionType,
 } from "../../src/checker/types";
-import type { FunctionType } from "../../src/checker/types";
 
-function makeFnType(paramTypes: import("../../src/checker/types").Type[], ret: import("../../src/checker/types").Type): FunctionType {
+function makeFnType(
+  paramTypes: import("../../src/checker/types").Type[],
+  ret: import("../../src/checker/types").Type
+): FunctionType {
   return functionType(
     paramTypes.map((t, i) => ({ name: `p${i}`, type: t, isMut: false, isMove: false })),
     ret

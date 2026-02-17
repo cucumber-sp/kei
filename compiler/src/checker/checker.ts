@@ -42,7 +42,10 @@ export interface CheckResult {
   /** Struct types that have auto-generated __oncopy (name → checker StructType) */
   autoOncopyStructs: Map<string, StructType>;
   /** Destructuring bindings for switch cases on data enum variants */
-  switchCaseBindings: Map<SwitchCase, { variantName: string; fieldNames: string[]; fieldTypes: Type[] }>;
+  switchCaseBindings: Map<
+    SwitchCase,
+    { variantName: string; fieldNames: string[]; fieldTypes: Type[] }
+  >;
 }
 
 /** Info about a module to check in multi-module mode */
@@ -76,7 +79,10 @@ export interface MultiModuleCheckResult {
   /** Combined auto-oncopy struct types */
   autoOncopyStructs: Map<string, StructType>;
   /** Combined switch case destructuring bindings */
-  switchCaseBindings: Map<SwitchCase, { variantName: string; fieldNames: string[]; fieldTypes: Type[] }>;
+  switchCaseBindings: Map<
+    SwitchCase,
+    { variantName: string; fieldNames: string[]; fieldTypes: Type[] }
+  >;
 }
 
 export class Checker {
@@ -109,7 +115,10 @@ export class Checker {
   genericResolutions: Map<Expression, string> = new Map();
 
   /** Destructuring bindings for switch cases on data enum variants */
-  switchCaseBindings: Map<SwitchCase, { variantName: string; fieldNames: string[]; fieldTypes: Type[] }> = new Map();
+  switchCaseBindings: Map<
+    SwitchCase,
+    { variantName: string; fieldNames: string[]; fieldTypes: Type[] }
+  > = new Map();
 
   /** Per-instantiation type map, set during checkMonomorphizedBodies */
   private currentBodyTypeMap: Map<Expression, Type> | null = null;
@@ -354,7 +363,10 @@ export class Checker {
     const combinedGenericResolutions = new Map<Expression, string>();
     const combinedAutoDestroy = new Map<string, StructType>();
     const combinedAutoOncopy = new Map<string, StructType>();
-    const combinedSwitchCaseBindings = new Map<SwitchCase, { variantName: string; fieldNames: string[]; fieldTypes: Type[] }>();
+    const combinedSwitchCaseBindings = new Map<
+      SwitchCase,
+      { variantName: string; fieldNames: string[]; fieldTypes: Type[] }
+    >();
 
     for (const mod of modules) {
       const checker = new Checker(mod.program, mod.source);

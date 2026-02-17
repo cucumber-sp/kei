@@ -1,29 +1,29 @@
 import { describe, expect, test } from "bun:test";
 import {
-  substituteType,
-  substituteFunctionType,
   mangleGenericName,
+  substituteFunctionType,
+  substituteType,
 } from "../../src/checker/generics.ts";
+import type { FunctionType, StructType, Type } from "../../src/checker/types";
 import {
-  I32_TYPE,
-  I64_TYPE,
-  U8_TYPE,
-  U64_TYPE,
-  F32_TYPE,
-  F64_TYPE,
+  arrayType,
   BOOL_TYPE,
-  VOID_TYPE,
-  STRING_TYPE,
   C_CHAR_TYPE,
   ERROR_TYPE,
-  TypeKind,
-  ptrType,
-  arrayType,
-  sliceType,
-  rangeType,
+  F32_TYPE,
+  F64_TYPE,
   functionType,
+  I32_TYPE,
+  I64_TYPE,
+  ptrType,
+  rangeType,
+  STRING_TYPE,
+  sliceType,
+  TypeKind,
+  U8_TYPE,
+  U64_TYPE,
+  VOID_TYPE,
 } from "../../src/checker/types";
-import type { Type, FunctionType, StructType } from "../../src/checker/types";
 
 function typeParam(name: string): Type {
   return { kind: TypeKind.TypeParam, name } as Type;
@@ -103,7 +103,10 @@ describe("substituteType", () => {
   });
 
   test("returns original Struct when no fields change", () => {
-    const s = makeStructType("Point", [["x", I32_TYPE], ["y", I32_TYPE]]);
+    const s = makeStructType("Point", [
+      ["x", I32_TYPE],
+      ["y", I32_TYPE],
+    ]);
     const result = substituteType(s, new Map([["T", BOOL_TYPE]]));
     expect(result).toBe(s); // same reference, nothing to substitute
   });
