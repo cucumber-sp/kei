@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { KirDestroy, KirMove, KirOncopy } from "../../src/kir/kir-types.ts";
+import type { KirCallExternVoid, KirDestroy, KirMove, KirOncopy } from "../../src/kir/kir-types.ts";
 import { getInstructions, lowerAndPrint, lowerFunction } from "./helpers.ts";
 
 describe("KIR: lifecycle — destroy", () => {
@@ -215,6 +215,89 @@ describe("KIR: lifecycle — primitives", () => {
     const oncopies = getInstructions(fn, "oncopy") as KirOncopy[];
     expect(destroys.length).toBe(0);
     expect(oncopies.length).toBe(0);
+  });
+});
+
+describe("KIR: lifecycle — string destroy on reassignment", () => {
+  test("string variable reassignment emits kei_string_destroy", () => {
+    const fn = lowerFunction(
+      `
+      fn foo() {
+        let name = "Alice";
+        name = "Bob";
+      }
+    `,
+      "foo"
+    );
+    const calls = getInstructions(fn, "call_extern_void") as KirCallExternVoid[];
+    const destroyCalls = calls.filter((c) => c.func === "kei_string_destroy");
+    // One destroy for reassignment + one for scope exit
+    expect(destroyCalls.length).toBe(2);
+  });
+
+  test("string field reassignment emits kei_string_destroy", () => {
+    const fn = lowerFunction(
+      `
+      struct Wrapper { text: string; }
+      fn foo() {
+        let w = Wrapper{ text: "hello" };
+        w.text = "world";
+      }
+    `,
+      "foo"
+    );
+    const calls = getInstructions(fn, "call_extern_void") as KirCallExternVoid[];
+    const destroyCalls = calls.filter((c) => c.func === "kei_string_destroy");
+    // At least one destroy for the field reassignment
+    expect(destroyCalls.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("string variable scope exit emits kei_string_destroy", () => {
+    const fn = lowerFunction(
+      `
+      fn foo() {
+        let name = "Alice";
+      }
+    `,
+      "foo"
+    );
+    const calls = getInstructions(fn, "call_extern_void") as KirCallExternVoid[];
+    const destroyCalls = calls.filter((c) => c.func === "kei_string_destroy");
+    // One destroy for scope exit
+    expect(destroyCalls.length).toBe(1);
+  });
+
+  test("string variable not destroyed at scope exit if returned", () => {
+    const fn = lowerFunction(
+      `
+      fn foo() -> string {
+        let name = "Alice";
+        return name;
+      }
+    `,
+      "foo"
+    );
+    const calls = getInstructions(fn, "call_extern_void") as KirCallExternVoid[];
+    const destroyCalls = calls.filter((c) => c.func === "kei_string_destroy");
+    // Returned value should NOT be destroyed
+    expect(destroyCalls.length).toBe(0);
+  });
+
+  test("struct with string field — reassignment destroys old field via struct destroy", () => {
+    const fn = lowerFunction(
+      `
+      struct Wrapper { text: string; }
+      fn foo() {
+        let a = Wrapper{ text: "hello" };
+        let b = Wrapper{ text: "world" };
+        a = b;
+      }
+    `,
+      "foo"
+    );
+    const destroys = getInstructions(fn, "destroy") as KirDestroy[];
+    // One destroy for reassignment (old a) + two for scope exit (a and b)
+    expect(destroys.length).toBe(3);
   });
 });
 

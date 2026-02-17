@@ -373,7 +373,7 @@ export function lowerAssignExpr(this: KirLowerer, expr: AssignExpr): VarId {
         }
       }
 
-      // For simple assignment to struct with lifecycle: destroy old, store new, oncopy new
+      // For simple assignment to managed type: destroy old, store new, oncopy new
       const checkerType = this.checkResult.typeMap.get(expr.target);
       const lifecycle = this.getStructLifecycle(checkerType);
       if (lifecycle?.hasDestroy) {
@@ -382,6 +382,9 @@ export function lowerAssignExpr(this: KirLowerer, expr: AssignExpr): VarId {
         const type = this.getExprKirType(expr.target);
         this.emit({ kind: "load", dest: oldVal, ptr: ptrId, type });
         this.emit({ kind: "destroy", value: oldVal, structName: lifecycle.structName });
+      } else if (checkerType?.kind === "string") {
+        // String: call kei_string_destroy on the pointer to the old value
+        this.emit({ kind: "call_extern_void", func: "kei_string_destroy", args: [ptrId] });
       }
 
       this.emit({ kind: "store", ptr: ptrId, value: valueId });
@@ -410,6 +413,9 @@ export function lowerAssignExpr(this: KirLowerer, expr: AssignExpr): VarId {
       const oldVal = this.freshVar();
       this.emit({ kind: "load", dest: oldVal, ptr: ptrDest, type: fieldType });
       this.emit({ kind: "destroy", value: oldVal, structName: lifecycle.structName });
+    } else if (checkerType?.kind === "string") {
+      // String field: call kei_string_destroy on the pointer to the old value
+      this.emit({ kind: "call_extern_void", func: "kei_string_destroy", args: [ptrDest] });
     }
 
     this.emit({ kind: "store", ptr: ptrDest, value: valueId });
@@ -423,6 +429,18 @@ export function lowerAssignExpr(this: KirLowerer, expr: AssignExpr): VarId {
     const elemType = this.getExprKirType(expr.target);
     const ptrDest = this.freshVar();
     this.emit({ kind: "index_ptr", dest: ptrDest, base: baseId, index: indexId, type: elemType });
+
+    // Destroy old element value if it's a managed type
+    const checkerType = this.checkResult.typeMap.get(expr.target);
+    const lifecycle = this.getStructLifecycle(checkerType);
+    if (lifecycle?.hasDestroy) {
+      const oldVal = this.freshVar();
+      this.emit({ kind: "load", dest: oldVal, ptr: ptrDest, type: elemType });
+      this.emit({ kind: "destroy", value: oldVal, structName: lifecycle.structName });
+    } else if (checkerType?.kind === "string") {
+      this.emit({ kind: "call_extern_void", func: "kei_string_destroy", args: [ptrDest] });
+    }
+
     this.emit({ kind: "store", ptr: ptrDest, value: valueId });
   }
 

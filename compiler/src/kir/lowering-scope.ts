@@ -43,12 +43,16 @@ export function popScopeWithDestroy(this: KirLowerer): void {
 /** Emit destroys for scope variables in reverse order, skipping moved vars */
 export function emitScopeDestroys(
   this: KirLowerer,
-  scope: { name: string; varId: VarId; structName: string }[]
+  scope: { name: string; varId: VarId; structName: string; isString?: boolean }[]
 ): void {
   for (let i = scope.length - 1; i >= 0; i--) {
     const sv = scope[i];
     if (this.movedVars.has(sv.name)) continue;
-    this.emit({ kind: "destroy", value: sv.varId, structName: sv.structName });
+    if (sv.isString) {
+      this.emit({ kind: "call_extern_void", func: "kei_string_destroy", args: [sv.varId] });
+    } else {
+      this.emit({ kind: "destroy", value: sv.varId, structName: sv.structName });
+    }
   }
 }
 
@@ -67,7 +71,11 @@ export function emitAllScopeDestroysExceptNamed(this: KirLowerer, skipName: stri
       const sv = scope[j];
       if (this.movedVars.has(sv.name)) continue;
       if (skipName !== null && sv.name === skipName) continue;
-      this.emit({ kind: "destroy", value: sv.varId, structName: sv.structName });
+      if (sv.isString) {
+        this.emit({ kind: "call_extern_void", func: "kei_string_destroy", args: [sv.varId] });
+      } else {
+        this.emit({ kind: "destroy", value: sv.varId, structName: sv.structName });
+      }
     }
   }
 }
@@ -81,6 +89,15 @@ export function trackScopeVar(
 ): void {
   if (this.scopeStack.length === 0) return;
   const checkerType = this.checkResult.typeMap.get(expr);
+  if (checkerType?.kind === "string") {
+    this.scopeStack[this.scopeStack.length - 1].push({
+      name,
+      varId,
+      structName: "",
+      isString: true,
+    });
+    return;
+  }
   const lifecycle = this.getStructLifecycle(checkerType);
   if (lifecycle?.hasDestroy) {
     this.scopeStack[this.scopeStack.length - 1].push({
@@ -91,7 +108,7 @@ export function trackScopeVar(
   }
 }
 
-/** Track a variable by its checker type directly */
+/** Track a variable by its checker type directly (used for function params) */
 export function trackScopeVarByType(
   this: KirLowerer,
   name: string,
@@ -99,6 +116,9 @@ export function trackScopeVarByType(
   checkerType: Type | undefined
 ): void {
   if (this.scopeStack.length === 0) return;
+  // Note: strings are NOT tracked here because function params are values,
+  // not stack pointers. kei_string_destroy requires a pointer.
+  // Local string variables are tracked via trackScopeVar instead.
   const lifecycle = this.getStructLifecycle(checkerType);
   if (lifecycle?.hasDestroy) {
     this.scopeStack[this.scopeStack.length - 1].push({

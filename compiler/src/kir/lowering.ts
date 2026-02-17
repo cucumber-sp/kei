@@ -48,6 +48,7 @@ interface ScopeVar {
   name: string;
   varId: VarId;
   structName: string; // struct type name (for __destroy/__oncopy dispatch)
+  isString?: boolean; // true for string variables (use kei_string_destroy instead)
 }
 
 // ─── Lowerer ─────────────────────────────────────────────────────────────────
