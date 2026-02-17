@@ -1,0 +1,112 @@
+import { describe, expect, test } from "bun:test";
+import { getInstructions, lower, lowerFunction } from "./helpers.ts";
+
+describe("KIR — Enum variant construction", () => {
+  test("data variant construction emits stack_alloc + tag + field stores", () => {
+    const fn = lowerFunction(
+      `
+      enum Shape { Circle(radius: f64), Point }
+      fn main() -> int {
+        let s: Shape = Shape.Circle(3.14);
+        return 0;
+      }
+      `,
+      "main"
+    );
+
+    // Should have a stack_alloc for the enum type
+    const allocs = getInstructions(fn, "stack_alloc");
+    const enumAlloc = allocs.find(
+      (i) => i.kind === "stack_alloc" && i.type.kind === "enum" && i.type.name === "Shape"
+    );
+    expect(enumAlloc).toBeDefined();
+
+    // Should have field_ptr to "tag" and to "data.Circle.radius"
+    const fieldPtrs = getInstructions(fn, "field_ptr");
+    const tagPtr = fieldPtrs.find((i) => i.kind === "field_ptr" && i.field === "tag");
+    expect(tagPtr).toBeDefined();
+    const dataPtr = fieldPtrs.find(
+      (i) => i.kind === "field_ptr" && i.field === "data.Circle.radius"
+    );
+    expect(dataPtr).toBeDefined();
+  });
+
+  test("fieldless variant on tagged union emits stack_alloc + tag only", () => {
+    const fn = lowerFunction(
+      `
+      enum Shape { Circle(radius: f64), Point }
+      fn main() -> int {
+        let p: Shape = Shape.Point;
+        return 0;
+      }
+      `,
+      "main"
+    );
+
+    const allocs = getInstructions(fn, "stack_alloc");
+    const enumAlloc = allocs.find(
+      (i) => i.kind === "stack_alloc" && i.type.kind === "enum" && i.type.name === "Shape"
+    );
+    expect(enumAlloc).toBeDefined();
+
+    const fieldPtrs = getInstructions(fn, "field_ptr");
+    const tagPtr = fieldPtrs.find((i) => i.kind === "field_ptr" && i.field === "tag");
+    expect(tagPtr).toBeDefined();
+
+    // No data field ptrs — only tag
+    const dataPtrs = fieldPtrs.filter(
+      (i) => i.kind === "field_ptr" && i.field.startsWith("data.")
+    );
+    expect(dataPtrs.length).toBe(0);
+  });
+
+  test("simple enum variant emits const_int (one stack_alloc for the variable)", () => {
+    const fn = lowerFunction(
+      `
+      enum Color : u8 { Red = 0, Green = 1, Blue = 2 }
+      fn main() -> int {
+        let c: Color = Color.Red;
+        return 0;
+      }
+      `,
+      "main"
+    );
+
+    // One stack_alloc for the variable `c`, but no field_ptr (no tag/data setup)
+    const allocs = getInstructions(fn, "stack_alloc");
+    const enumAllocs = allocs.filter(
+      (i) => i.kind === "stack_alloc" && i.type.kind === "enum"
+    );
+    expect(enumAllocs.length).toBe(1);
+
+    // No field_ptr — simple enum doesn't use tag/data struct
+    const fieldPtrs = getInstructions(fn, "field_ptr");
+    expect(fieldPtrs.length).toBe(0);
+
+    // Should have const_int for the variant value
+    const consts = getInstructions(fn, "const_int");
+    const tagConst = consts.find((i) => i.kind === "const_int" && i.value === 0);
+    expect(tagConst).toBeDefined();
+  });
+
+  test("multi-field data variant construction", () => {
+    const fn = lowerFunction(
+      `
+      enum Shape { Circle(radius: f64), Rect(w: f64, h: f64), Point }
+      fn main() -> int {
+        let r: Shape = Shape.Rect(1.0, 2.0);
+        return 0;
+      }
+      `,
+      "main"
+    );
+
+    const fieldPtrs = getInstructions(fn, "field_ptr");
+    const tagPtr = fieldPtrs.find((i) => i.kind === "field_ptr" && i.field === "tag");
+    expect(tagPtr).toBeDefined();
+    const wPtr = fieldPtrs.find((i) => i.kind === "field_ptr" && i.field === "data.Rect.w");
+    expect(wPtr).toBeDefined();
+    const hPtr = fieldPtrs.find((i) => i.kind === "field_ptr" && i.field === "data.Rect.h");
+    expect(hPtr).toBeDefined();
+  });
+});

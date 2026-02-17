@@ -25,8 +25,13 @@ export function emitInst(inst: KirInst): string {
       return `${varName(inst.dest)} = *${varName(inst.ptr)};`;
     case "store":
       return `*${varName(inst.ptr)} = ${varName(inst.value)};`;
-    case "field_ptr":
-      return `${varName(inst.dest)} = &${varName(inst.base)}->${sanitizeName(inst.field)};`;
+    case "field_ptr": {
+      // Dotted field paths (e.g. "data.Circle.radius") are used for enum tagged union access
+      const fieldPath = inst.field.includes(".")
+        ? inst.field.split(".").map(sanitizeName).join(".")
+        : sanitizeName(inst.field);
+      return `${varName(inst.dest)} = &${varName(inst.base)}->${fieldPath};`;
+    }
     case "index_ptr":
       return `${varName(inst.dest)} = &${varName(inst.base)}[${varName(inst.index)}];`;
     case "bin_op":

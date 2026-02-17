@@ -128,6 +128,63 @@ export function lowerIdentifier(this: KirLowerer, expr: Identifier): VarId {
 }
 
 export function lowerCallExpr(this: KirLowerer, expr: CallExpr): VarId {
+  // Enum variant construction: Shape.Circle(3.14) → stack_alloc + tag + data fields
+  if (expr.callee.kind === "MemberExpr") {
+    const calleeType = this.checkResult.typeMap.get(expr.callee.object);
+    if (calleeType?.kind === "enum") {
+      const enumType = calleeType;
+      const variantName = expr.callee.property;
+      const variantIndex = enumType.variants.findIndex((v) => v.name === variantName);
+      if (variantIndex >= 0) {
+        const variant = enumType.variants[variantIndex];
+        const tagValue = variant.value ?? variantIndex;
+        const kirEnumType = this.lowerCheckerType(enumType);
+
+        // stack_alloc the tagged union struct
+        const ptrId = this.emitStackAlloc(kirEnumType);
+
+        // Set tag field
+        const tagPtrId = this.freshVar();
+        this.emit({
+          kind: "field_ptr",
+          dest: tagPtrId,
+          base: ptrId,
+          field: "tag",
+          type: { kind: "int", bits: 32, signed: true },
+        });
+        const tagVal = this.freshVar();
+        this.emit({
+          kind: "const_int",
+          dest: tagVal,
+          type: { kind: "int", bits: 32, signed: true },
+          value: tagValue,
+        });
+        this.emit({ kind: "store", ptr: tagPtrId, value: tagVal });
+
+        // Set data fields: data.VariantName.fieldName
+        for (let i = 0; i < expr.args.length; i++) {
+          const arg = expr.args[i];
+          if (!arg) continue;
+          const valueId = this.lowerExpr(arg);
+          const field = variant.fields[i];
+          if (!field) continue;
+          const fieldType = this.lowerCheckerType(field.type);
+          const fieldPtrId = this.freshVar();
+          this.emit({
+            kind: "field_ptr",
+            dest: fieldPtrId,
+            base: ptrId,
+            field: `data.${variantName}.${field.name}`,
+            type: fieldType,
+          });
+          this.emit({ kind: "store", ptr: fieldPtrId, value: valueId });
+        }
+
+        return ptrId;
+      }
+    }
+  }
+
   // sizeof(Type) → KIR sizeof instruction (resolved by backend)
   if (
     expr.callee.kind === "Identifier" &&
@@ -279,6 +336,34 @@ export function lowerMemberExpr(this: KirLowerer, expr: MemberExpr): VarId {
     if (variantIndex >= 0) {
       const variant = objectType.variants[variantIndex];
       const value = variant.value ?? variantIndex;
+      const hasDataVariants = objectType.variants.some((v) => v.fields.length > 0);
+
+      if (hasDataVariants) {
+        // Tagged union enum: construct full struct with tag set (no data fields for fieldless variant)
+        const kirEnumType = this.lowerCheckerType(objectType);
+        const ptrId = this.emitStackAlloc(kirEnumType);
+
+        const tagPtrId = this.freshVar();
+        this.emit({
+          kind: "field_ptr",
+          dest: tagPtrId,
+          base: ptrId,
+          field: "tag",
+          type: { kind: "int", bits: 32, signed: true },
+        });
+        const tagVal = this.freshVar();
+        this.emit({
+          kind: "const_int",
+          dest: tagVal,
+          type: { kind: "int", bits: 32, signed: true },
+          value,
+        });
+        this.emit({ kind: "store", ptr: tagPtrId, value: tagVal });
+
+        return ptrId;
+      }
+
+      // Simple enum: just emit the integer discriminant
       const dest = this.freshVar();
       this.emit({ kind: "const_int", dest, type: { kind: "int", bits: 32, signed: true }, value });
       return dest;

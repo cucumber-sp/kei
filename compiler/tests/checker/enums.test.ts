@@ -199,4 +199,72 @@ describe("Checker — Enums", () => {
       }
     `);
   });
+
+  test("data enum variant construction → ok", () => {
+    checkOk(`
+      enum Shape {
+        Circle(radius: f64),
+        Rect(w: f64, h: f64),
+        Point
+      }
+      fn main() -> int {
+        let s: Shape = Shape.Circle(3.14);
+        let r: Shape = Shape.Rect(1.0, 2.0);
+        let p: Shape = Shape.Point;
+        return 0;
+      }
+    `);
+  });
+
+  test("data enum variant construction: wrong arg count → error", () => {
+    checkError(
+      `
+        enum Shape { Circle(radius: f64), Point }
+        fn main() -> int {
+          let s: Shape = Shape.Circle(1.0, 2.0);
+          return 0;
+        }
+      `,
+      "expects 1 argument(s), got 2"
+    );
+  });
+
+  test("data enum variant construction: wrong arg type → error", () => {
+    checkError(
+      `
+        enum Shape { Circle(radius: f64), Point }
+        fn main() -> int {
+          let s: Shape = Shape.Circle(true);
+          return 0;
+        }
+      `,
+      "expected 'f64', got 'bool'"
+    );
+  });
+
+  test("data enum variant construction: calling fieldless variant → error", () => {
+    checkError(
+      `
+        enum Shape { Circle(radius: f64), Point }
+        fn main() -> int {
+          let s: Shape = Shape.Point();
+          return 0;
+        }
+      `,
+      "has no fields"
+    );
+  });
+
+  test("data enum variant construction: non-existent variant → error", () => {
+    checkError(
+      `
+        enum Shape { Circle(radius: f64), Point }
+        fn main() -> int {
+          let s: Shape = Shape.Triangle(1.0);
+          return 0;
+        }
+      `,
+      "has no variant 'Triangle'"
+    );
+  });
 });

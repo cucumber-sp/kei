@@ -182,4 +182,25 @@ describe("c-emitter", () => {
     expect(c).not.toContain("phi");
     expect(c).not.toContain("φ");
   });
+
+  test("enum data variant construction emits tagged union init", () => {
+    const c = compileToC(`
+      enum Shape { Circle(radius: f64), Point }
+      fn main() -> int {
+        let s: Shape = Shape.Circle(3.14);
+        let p: Shape = Shape.Point;
+        return 0;
+      }
+    `);
+    // Should have the tagged union typedef
+    expect(c).toContain("typedef struct");
+    expect(c).toContain("int32_t tag;");
+    expect(c).toContain("union {");
+    // Tag constants
+    expect(c).toContain("Shape_Circle");
+    expect(c).toContain("Shape_Point");
+    // Data variant construction: tag + data field access
+    expect(c).toContain("->tag");
+    expect(c).toContain("->data.Circle.radius");
+  });
 });

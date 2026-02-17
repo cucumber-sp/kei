@@ -131,6 +131,61 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
     }
   }
 
+  // Check for enum variant construction: Enum.Variant(args)
+  if (expr.callee.kind === "MemberExpr") {
+    const memberExpr = expr.callee;
+    if (memberExpr.object.kind === "Identifier") {
+      const enumSym = checker.currentScope.lookupType(memberExpr.object.name);
+      if (enumSym && enumSym.kind === SymbolKind.Type && enumSym.type.kind === TypeKind.Enum) {
+        const enumType = enumSym.type;
+        const variant = enumType.variants.find((v) => v.name === memberExpr.property);
+        if (variant) {
+          if (variant.fields.length === 0) {
+            checker.error(
+              `enum variant '${enumType.name}.${variant.name}' has no fields — use '${enumType.name}.${variant.name}' without call syntax`,
+              expr.span
+            );
+            return ERROR_TYPE;
+          }
+          // Check argument count
+          if (expr.args.length !== variant.fields.length) {
+            checker.error(
+              `enum variant '${enumType.name}.${variant.name}' expects ${variant.fields.length} argument(s), got ${expr.args.length}`,
+              expr.span
+            );
+            return ERROR_TYPE;
+          }
+          // Check argument types
+          for (let i = 0; i < expr.args.length; i++) {
+            const arg = expr.args[i];
+            if (!arg) continue;
+            const argType = checker.checkExpression(arg);
+            const field = variant.fields[i];
+            if (field && !isErrorType(argType) && !isAssignableTo(argType, field.type)) {
+              const litInfo = extractLiteralInfo(arg);
+              const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, field.type);
+              if (!isLiteralOk) {
+                checker.error(
+                  `argument '${field.name}': expected '${typeToString(field.type)}', got '${typeToString(argType)}'`,
+                  arg.span
+                );
+              }
+            }
+          }
+          // Store the enum type on the callee so lowerer can detect this
+          checker.setExprType(memberExpr.object, enumType);
+          checker.setExprType(expr.callee, enumType);
+          return enumType;
+        }
+        checker.error(
+          `enum '${enumType.name}' has no variant '${memberExpr.property}'`,
+          expr.span
+        );
+        return ERROR_TYPE;
+      }
+    }
+  }
+
   // Check for module-qualified call or static method call: mod.func(args) or Type.method(args)
   if (expr.callee.kind === "MemberExpr") {
     const memberExpr = expr.callee;
