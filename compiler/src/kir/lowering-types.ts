@@ -122,8 +122,15 @@ export function lowerTypeNode(this: KirLowerer, typeNode: { kind: string; name: 
       return { kind: "void" };
     case "string":
       return { kind: "string" };
-    default:
+    default: {
+      // Check if the name refers to an enum declaration
+      for (const decl of this.program.declarations) {
+        if (decl.kind === "EnumDecl" && decl.name === name) {
+          return this.lowerEnumDecl(decl).type;
+        }
+      }
       return { kind: "struct", name, fields: [] };
+    }
   }
 }
 
@@ -153,9 +160,23 @@ export function getFunctionReturnType(this: KirLowerer, decl: FunctionDecl): Typ
   if (decl.returnType) {
     const name = decl.returnType.name;
     const checkerType = this.nameToCheckerType(name);
-    // If nameToCheckerType didn't recognize it (returns void for struct names),
-    // treat it as a struct type so lowerMethod gets the correct KIR return type
+    // If nameToCheckerType didn't recognize it (returns void for user-defined type names),
+    // check if it's an enum or struct declaration
     if (checkerType.kind === "void" && name !== "void") {
+      for (const d of this.program.declarations) {
+        if (d.kind === "EnumDecl" && d.name === name) {
+          return {
+            kind: "enum" as const,
+            name,
+            baseType: null,
+            variants: d.variants.map((v, i) => ({
+              name: v.name,
+              fields: [],
+              value: v.value?.kind === "IntLiteral" ? v.value.value : i,
+            })),
+          };
+        }
+      }
       return {
         kind: "struct" as const,
         name,

@@ -1986,8 +1986,7 @@ describe("Complex: realistic programs", () => {
     expect(r.stdout).toBe("ababab\nxxxxx\nhi hi \n");
   });
 
-  // skip: C backend emits 'struct' tag for enum types instead of 'enum' in function signatures
-  test.skip("enum state machine", () => {
+  test("enum state machine", () => {
     const r = run(
       "complex_enum_sm",
       `

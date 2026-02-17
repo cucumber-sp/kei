@@ -250,10 +250,22 @@ export function lowerMemberExpr(this: KirLowerer, expr: MemberExpr): VarId {
     }
   }
 
+  // Handle enum variant access — emit the variant's integer discriminant
+  const objectType = this.checkResult.typeMap.get(expr.object);
+  if (objectType?.kind === "enum") {
+    const variantIndex = objectType.variants.findIndex((v) => v.name === expr.property);
+    if (variantIndex >= 0) {
+      const variant = objectType.variants[variantIndex];
+      const value = variant.value ?? variantIndex;
+      const dest = this.freshVar();
+      this.emit({ kind: "const_int", dest, type: { kind: "int", bits: 32, signed: true }, value });
+      return dest;
+    }
+  }
+
   // For struct field access, use the alloc pointer directly (not a loaded value).
   // This ensures the alloc is address-taken and won't be incorrectly promoted by mem2reg.
   let baseId: VarId;
-  const objectType = this.checkResult.typeMap.get(expr.object);
   if (expr.object.kind === "Identifier" && objectType?.kind === "struct") {
     const varId = this.varMap.get(expr.object.name);
     if (varId && this.isStackAllocVar(varId)) {
