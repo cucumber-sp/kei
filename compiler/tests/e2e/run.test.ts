@@ -2300,3 +2300,363 @@ describe("Complex: realistic programs", () => {
     expect(r.stdout).toBe("1\n2\n5\n6\n27\n54321\n1\ntrue\nfalse\n");
   });
 });
+
+// ─── Enum data variants with destructuring ──────────────────────────────────
+
+describe("e2e: enum data variants", () => {
+  test("create data variant and switch with destructuring", () => {
+    const r = run(
+      "enum_data_destruct",
+      `
+      import { print } from io;
+
+      enum Shape {
+        Circle(radius: f64),
+        Rect(w: f64, h: f64),
+        Point
+      }
+
+      fn main() -> int {
+        let c: Shape = Shape.Circle(3.14);
+        let r: Shape = Shape.Rect(2.0, 5.0);
+        let p: Shape = Shape.Point;
+
+        switch c {
+          case Circle(rad): print(rad);
+          case Rect(w, h): print(w);
+          case Point: print(0.0);
+        }
+
+        switch r {
+          case Circle(rad): print(rad);
+          case Rect(w, h): {
+            let area = w * h;
+            print(area);
+          }
+          case Point: print(0.0);
+        }
+
+        switch p {
+          case Circle(rad): print(rad);
+          case Rect(w, h): print(w);
+          case Point: print(0.0);
+        }
+
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("3.14\n10\n0\n");
+  });
+
+  test("enum data variant with single field destructured in switch", () => {
+    const r = run(
+      "enum_single_field",
+      `
+      import { print } from io;
+
+      enum Token {
+        Number(val: i32),
+        Plus,
+        Minus
+      }
+
+      fn main() -> int {
+        let t1: Token = Token.Number(42);
+        let t2: Token = Token.Plus;
+        let t3: Token = Token.Minus;
+
+        switch t1 {
+          case Number(v): print(v);
+          case Plus: print(-1);
+          case Minus: print(-2);
+          default: print(-99);
+        }
+
+        switch t2 {
+          case Number(v): print(v);
+          case Plus: print(-1);
+          case Minus: print(-2);
+          default: print(-99);
+        }
+
+        switch t3 {
+          case Number(v): print(v);
+          case Plus: print(-1);
+          case Minus: print(-2);
+          default: print(-99);
+        }
+
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("42\n-1\n-2\n");
+  });
+
+  test("switch on enum data variant as expression with destructuring", () => {
+    const r = run(
+      "enum_switch_expr",
+      `
+      import { print } from io;
+
+      enum Value {
+        Int(n: i32),
+        Bool(b: bool)
+      }
+
+      fn main() -> int {
+        let v: Value = Value.Int(99);
+        let result = switch v {
+          case Int(n): n;
+          case Bool(b): 0;
+        };
+        print(result);
+
+        let v2: Value = Value.Bool(true);
+        let result2 = switch v2 {
+          case Int(n): n;
+          case Bool(b): 1;
+        };
+        print(result2);
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("99\n1\n");
+  });
+});
+
+// ─── Switch expression ──────────────────────────────────────────────────────
+
+describe("e2e: switch expression extended", () => {
+  test("switch expression used directly in print", () => {
+    const r = run(
+      "switch_expr_print",
+      `
+      import { print } from io;
+
+      fn main() -> int {
+        let code = 2;
+        let msg = switch code {
+          case 1: "one";
+          case 2: "two";
+          case 3: "three";
+          default: "other";
+        };
+        print(msg);
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("two\n");
+  });
+
+  test("switch expression with default fallback", () => {
+    const r = run(
+      "switch_expr_default",
+      `
+      import { print } from io;
+
+      fn main() -> int {
+        let x = 999;
+        let result = switch x {
+          case 0: 10;
+          case 1: 20;
+          default: 30;
+        };
+        print(result);
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("30\n");
+  });
+});
+
+// ─── Numeric literal suffixes ───────────────────────────────────────────────
+
+describe("e2e: numeric literal suffixes", () => {
+  test("i32 and i64 suffixes", () => {
+    const r = run(
+      "suffix_int",
+      `
+      import { print } from io;
+
+      fn main() -> int {
+        let a = 42i32;
+        let b = 100i64;
+        print(a);
+        print(b);
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("42\n100\n");
+  });
+
+  test("f32 and f64 suffixes", () => {
+    const r = run(
+      "suffix_float",
+      `
+      import { print } from io;
+
+      fn main() -> int {
+        let c = 2.5f32;
+        let d = 3.14f64;
+        print(c);
+        print(d);
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("2.5\n3.14\n");
+  });
+
+  test("integer literal with float suffix", () => {
+    const r = run(
+      "suffix_int_to_float",
+      `
+      import { print } from io;
+
+      fn main() -> int {
+        let x = 42f64;
+        print(x);
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("42\n");
+  });
+});
+
+// ─── Auto lifecycle (struct with string field) ──────────────────────────────
+
+describe("e2e: auto lifecycle", () => {
+  test("struct with string field: create and copy preserves values", () => {
+    const r = run(
+      "auto_lifecycle",
+      `
+      import { print } from io;
+
+      struct Wrapper {
+        name: string;
+        id: i32;
+      }
+
+      fn main() -> int {
+        let a = Wrapper{ name: "hello", id: 1 };
+        let b = a;
+        print(a.name);
+        print(b.name);
+        print(a.id);
+        print(b.id);
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("hello\nhello\n1\n1\n");
+  });
+
+  test("multiple structs with string fields", () => {
+    const r = run(
+      "auto_lifecycle_multi",
+      `
+      import { print } from io;
+
+      struct Named {
+        label: string;
+      }
+
+      fn main() -> int {
+        let x = Named{ label: "alpha" };
+        let y = Named{ label: "beta" };
+        let z = x;
+        print(x.label);
+        print(y.label);
+        print(z.label);
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("alpha\nbeta\nalpha\n");
+  });
+});
+
+// ─── Generic struct + function combo ────────────────────────────────────────
+
+describe("e2e: generic struct + function combo", () => {
+  test("generic Box struct with wrap function", () => {
+    const r = run(
+      "generic_box_wrap",
+      `
+      import { print } from io;
+
+      struct Box<T> {
+        value: T;
+      }
+
+      fn wrap<T>(x: T) -> Box<T> {
+        return Box<T>{ value: x };
+      }
+
+      fn main() -> int {
+        let b1 = wrap<i32>(42);
+        print(b1.value);
+
+        let b2 = wrap<bool>(true);
+        print(b2.value);
+
+        let b3 = wrap<string>("boxed");
+        print(b3.value);
+
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("42\ntrue\nboxed\n");
+  });
+
+  test("generic Pair struct with make function", () => {
+    const r = run(
+      "generic_pair_make",
+      `
+      import { print } from io;
+
+      struct Pair<A, B> {
+        first: A;
+        second: B;
+      }
+
+      fn make_pair<A, B>(a: A, b: B) -> Pair<A, B> {
+        return Pair<A, B>{ first: a, second: b };
+      }
+
+      fn main() -> int {
+        let p = make_pair<i32, string>(10, "ten");
+        print(p.first);
+        print(p.second);
+
+        let q = make_pair<bool, i32>(true, 99);
+        print(q.first);
+        print(q.second);
+
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("10\nten\ntrue\n99\n");
+  });
+});
