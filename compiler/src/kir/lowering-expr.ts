@@ -6,6 +6,8 @@
  *   - lowering-literals.ts   (literal and composite expressions)
  *   - lowering-operators.ts  (binary, unary, increment, decrement operators)
  *   - lowering-error.ts      (throw/catch error handling)
+ *   - lowering-switch.ts     (switch expression lowering)
+ *   - lowering-enum.ts       (enum variant construction and access)
  */
 
 import type {
@@ -18,12 +20,9 @@ import type {
   IndexExpr,
   MemberExpr,
   MoveExpr,
-  Statement,
-  SwitchCase,
-  SwitchExpr,
 } from "../ast/nodes.ts";
 import type { FunctionType } from "../checker/types";
-import type { KirType, VarId } from "./kir-types.ts";
+import type { VarId } from "./kir-types.ts";
 import type { KirLowerer } from "./lowering.ts";
 
 // ─── Expressions ─────────────────────────────────────────────────────────
@@ -130,61 +129,8 @@ export function lowerIdentifier(this: KirLowerer, expr: Identifier): VarId {
 
 export function lowerCallExpr(this: KirLowerer, expr: CallExpr): VarId {
   // Enum variant construction: Shape.Circle(3.14) → stack_alloc + tag + data fields
-  if (expr.callee.kind === "MemberExpr") {
-    const calleeType = this.checkResult.typeMap.get(expr.callee.object);
-    if (calleeType?.kind === "enum") {
-      const enumType = calleeType;
-      const variantName = expr.callee.property;
-      const variantIndex = enumType.variants.findIndex((v) => v.name === variantName);
-      if (variantIndex >= 0) {
-        const variant = enumType.variants[variantIndex];
-        const tagValue = variant.value ?? variantIndex;
-        const kirEnumType = this.lowerCheckerType(enumType);
-
-        // stack_alloc the tagged union struct
-        const ptrId = this.emitStackAlloc(kirEnumType);
-
-        // Set tag field
-        const tagPtrId = this.freshVar();
-        this.emit({
-          kind: "field_ptr",
-          dest: tagPtrId,
-          base: ptrId,
-          field: "tag",
-          type: { kind: "int", bits: 32, signed: true },
-        });
-        const tagVal = this.freshVar();
-        this.emit({
-          kind: "const_int",
-          dest: tagVal,
-          type: { kind: "int", bits: 32, signed: true },
-          value: tagValue,
-        });
-        this.emit({ kind: "store", ptr: tagPtrId, value: tagVal });
-
-        // Set data fields: data.VariantName.fieldName
-        for (let i = 0; i < expr.args.length; i++) {
-          const arg = expr.args[i];
-          if (!arg) continue;
-          const valueId = this.lowerExpr(arg);
-          const field = variant.fields[i];
-          if (!field) continue;
-          const fieldType = this.lowerCheckerType(field.type);
-          const fieldPtrId = this.freshVar();
-          this.emit({
-            kind: "field_ptr",
-            dest: fieldPtrId,
-            base: ptrId,
-            field: `data.${variantName}.${field.name}`,
-            type: fieldType,
-          });
-          this.emit({ kind: "store", ptr: fieldPtrId, value: valueId });
-        }
-
-        return ptrId;
-      }
-    }
-  }
+  const enumResult = this.lowerEnumVariantConstruction(expr);
+  if (enumResult !== null) return enumResult;
 
   // sizeof(Type) → KIR sizeof instruction (resolved by backend)
   if (
@@ -340,44 +286,8 @@ export function lowerMemberExpr(this: KirLowerer, expr: MemberExpr): VarId {
 
   // Handle enum variant access — emit the variant's integer discriminant
   const objectType = this.checkResult.typeMap.get(expr.object);
-  if (objectType?.kind === "enum") {
-    const variantIndex = objectType.variants.findIndex((v) => v.name === expr.property);
-    if (variantIndex >= 0) {
-      const variant = objectType.variants[variantIndex];
-      const value = variant.value ?? variantIndex;
-      const hasDataVariants = objectType.variants.some((v) => v.fields.length > 0);
-
-      if (hasDataVariants) {
-        // Tagged union enum: construct full struct with tag set (no data fields for fieldless variant)
-        const kirEnumType = this.lowerCheckerType(objectType);
-        const ptrId = this.emitStackAlloc(kirEnumType);
-
-        const tagPtrId = this.freshVar();
-        this.emit({
-          kind: "field_ptr",
-          dest: tagPtrId,
-          base: ptrId,
-          field: "tag",
-          type: { kind: "int", bits: 32, signed: true },
-        });
-        const tagVal = this.freshVar();
-        this.emit({
-          kind: "const_int",
-          dest: tagVal,
-          type: { kind: "int", bits: 32, signed: true },
-          value,
-        });
-        this.emit({ kind: "store", ptr: tagPtrId, value: tagVal });
-
-        return ptrId;
-      }
-
-      // Simple enum: just emit the integer discriminant
-      const dest = this.freshVar();
-      this.emit({ kind: "const_int", dest, type: { kind: "int", bits: 32, signed: true }, value });
-      return dest;
-    }
-  }
+  const enumVariant = this.lowerEnumVariantAccess(expr);
+  if (enumVariant !== null) return enumVariant;
 
   // For struct field access, use the alloc pointer directly (not a loaded value).
   // This ensures the alloc is address-taken and won't be incorrectly promoted by mem2reg.
@@ -617,124 +527,5 @@ export function lowerCastExpr(this: KirLowerer, expr: CastExpr): VarId {
   return dest;
 }
 
-export function lowerSwitchExpr(this: KirLowerer, expr: SwitchExpr): VarId {
-  const subjectId = this.lowerExpr(expr.subject);
-  const resultType = this.getExprKirType(expr);
-  const endLabel = this.freshBlockId("switchexpr.end");
-
-  // Check if this is a switch on a data-variant (tagged union) enum
-  const subjectType = this.checkResult.typeMap.get(expr.subject);
-  const isTaggedUnionEnum =
-    subjectType?.kind === "enum" && subjectType.variants.some((v) => v.fields.length > 0);
-
-  // For tagged union enums, compare on the .tag field
-  let switchValue: VarId;
-  if (isTaggedUnionEnum) {
-    const tagType: KirType = { kind: "int", bits: 32, signed: true };
-    switchValue = this.emitFieldLoad(subjectId, "tag", tagType);
-  } else {
-    switchValue = subjectId;
-  }
-
-  // Allocate result on stack
-  const resultPtr = this.emitStackAlloc(resultType);
-
-  const caseLabels: { value: VarId; target: string }[] = [];
-  let defaultLabel = endLabel;
-  const caseBlocks: { label: string; stmts: Statement[]; astCase: SwitchCase }[] = [];
-
-  for (const c of expr.cases) {
-    const label = c.isDefault
-      ? this.freshBlockId("switchexpr.default")
-      : this.freshBlockId("switchexpr.case");
-
-    if (c.isDefault) {
-      defaultLabel = label;
-    }
-
-    for (const val of c.values) {
-      // For tagged union enums, case values are variant names — emit const_int tag
-      if (isTaggedUnionEnum && subjectType?.kind === "enum" && val.kind === "Identifier") {
-        const variantIndex = subjectType.variants.findIndex((v) => v.name === val.name);
-        if (variantIndex >= 0) {
-          const variant = subjectType.variants[variantIndex];
-          const tagValue = variant.value ?? variantIndex;
-          const tagId = this.freshVar();
-          this.emit({
-            kind: "const_int",
-            dest: tagId,
-            type: { kind: "int", bits: 32, signed: true },
-            value: tagValue,
-          });
-          caseLabels.push({ value: tagId, target: label });
-          continue;
-        }
-      }
-      const valId = this.lowerExpr(val);
-      caseLabels.push({ value: valId, target: label });
-    }
-
-    caseBlocks.push({ label, stmts: c.body, astCase: c });
-  }
-
-  this.setTerminator({
-    kind: "switch",
-    value: switchValue,
-    cases: caseLabels,
-    defaultBlock: defaultLabel,
-  });
-
-  // Emit case blocks — store last expression value into resultPtr
-  for (const cb of caseBlocks) {
-    this.sealCurrentBlock();
-    this.startBlock(cb.label);
-
-    // Emit destructuring bindings
-    const bindingInfo = this.checkResult.switchCaseBindings?.get(cb.astCase);
-    if (bindingInfo && cb.astCase.bindings) {
-      for (let i = 0; i < cb.astCase.bindings.length; i++) {
-        const fieldPath = `data.${bindingInfo.variantName}.${bindingInfo.fieldNames[i]}`;
-        const fieldType = this.lowerCheckerType(bindingInfo.fieldTypes[i]);
-        const loadedVal = this.emitFieldLoad(subjectId, fieldPath, fieldType);
-        this.varMap.set(cb.astCase.bindings[i], loadedVal);
-      }
-    }
-
-    for (const s of cb.stmts) {
-      if (s.kind === "ExprStmt") {
-        const val = this.lowerExpr(s.expression);
-        this.emit({ kind: "store", ptr: resultPtr, value: val });
-      } else {
-        this.lowerStatement(s);
-      }
-    }
-    if (!this.isBlockTerminated()) {
-      this.setTerminator({ kind: "jump", target: endLabel });
-    }
-  }
-
-  // End block — load and return result
-  this.sealCurrentBlock();
-  this.startBlock(endLabel);
-
-  const dest = this.freshVar();
-  this.emit({ kind: "load", dest, ptr: resultPtr, type: resultType });
-  return dest;
-}
-
-/** Find a const_int instruction by its dest VarId (for tag matching) */
-export function findConstIntInst(this: KirLowerer, varId: VarId): { value: number } | null {
-  for (const block of this.blocks) {
-    for (const inst of block.instructions) {
-      if (inst.kind === "const_int" && inst.dest === varId) {
-        return { value: inst.value };
-      }
-    }
-  }
-  for (const inst of this.currentInsts) {
-    if (inst.kind === "const_int" && inst.dest === varId) {
-      return { value: inst.value };
-    }
-  }
-  return null;
-}
+// lowerSwitchExpr and findConstIntInst are in lowering-switch.ts
+// lowerEnumVariantConstruction and lowerEnumVariantAccess are in lowering-enum.ts

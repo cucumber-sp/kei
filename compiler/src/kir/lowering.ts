@@ -11,6 +11,8 @@
  *   - lowering-literals.ts   (literal expression lowering)
  *   - lowering-operators.ts  (operator expression lowering)
  *   - lowering-error.ts      (error handling lowering)
+ *   - lowering-switch.ts     (switch expression lowering)
+ *   - lowering-enum.ts       (enum variant construction/access)
  *   - lowering-types.ts      (type conversion helpers)
  *   - lowering-scope.ts      (scope/lifecycle helpers)
  *   - lowering-utils.ts      (basic emit helpers)
@@ -33,12 +35,14 @@ import type {
 
 // Import extracted method implementations
 import * as declMethods from "./lowering-decl.ts";
+import * as enumMethods from "./lowering-enum.ts";
 import * as errorMethods from "./lowering-error.ts";
 import * as exprMethods from "./lowering-expr.ts";
 import * as literalMethods from "./lowering-literals.ts";
 import * as operatorMethods from "./lowering-operators.ts";
 import * as scopeMethods from "./lowering-scope.ts";
 import * as stmtMethods from "./lowering-stmt.ts";
+import * as switchMethods from "./lowering-switch.ts";
 import * as typeMethods from "./lowering-types.ts";
 import * as utilMethods from "./lowering-utils.ts";
 
@@ -238,10 +242,16 @@ export class KirLowerer {
   declare lowerIndexExpr: typeof exprMethods.lowerIndexExpr;
   declare lowerAssignExpr: typeof exprMethods.lowerAssignExpr;
   declare lowerIfExpr: typeof exprMethods.lowerIfExpr;
-  declare lowerSwitchExpr: typeof exprMethods.lowerSwitchExpr;
   declare lowerMoveExpr: typeof exprMethods.lowerMoveExpr;
   declare lowerCastExpr: typeof exprMethods.lowerCastExpr;
-  declare findConstIntInst: typeof exprMethods.findConstIntInst;
+
+  // ─── Switch methods (from lowering-switch.ts) ─────────────────────────
+  declare lowerSwitchExpr: typeof switchMethods.lowerSwitchExpr;
+  declare findConstIntInst: typeof switchMethods.findConstIntInst;
+
+  // ─── Enum methods (from lowering-enum.ts) ─────────────────────────────
+  declare lowerEnumVariantConstruction: typeof enumMethods.lowerEnumVariantConstruction;
+  declare lowerEnumVariantAccess: typeof enumMethods.lowerEnumVariantAccess;
 
   // ─── Literal methods (from lowering-literals.ts) ────────────────────────
   declare lowerIntLiteral: typeof literalMethods.lowerIntLiteral;
@@ -351,10 +361,16 @@ KirLowerer.prototype.lowerMemberExpr = exprMethods.lowerMemberExpr;
 KirLowerer.prototype.lowerIndexExpr = exprMethods.lowerIndexExpr;
 KirLowerer.prototype.lowerAssignExpr = exprMethods.lowerAssignExpr;
 KirLowerer.prototype.lowerIfExpr = exprMethods.lowerIfExpr;
-KirLowerer.prototype.lowerSwitchExpr = exprMethods.lowerSwitchExpr;
 KirLowerer.prototype.lowerMoveExpr = exprMethods.lowerMoveExpr;
 KirLowerer.prototype.lowerCastExpr = exprMethods.lowerCastExpr;
-KirLowerer.prototype.findConstIntInst = exprMethods.findConstIntInst;
+
+// Switch methods
+KirLowerer.prototype.lowerSwitchExpr = switchMethods.lowerSwitchExpr;
+KirLowerer.prototype.findConstIntInst = switchMethods.findConstIntInst;
+
+// Enum methods
+KirLowerer.prototype.lowerEnumVariantConstruction = enumMethods.lowerEnumVariantConstruction;
+KirLowerer.prototype.lowerEnumVariantAccess = enumMethods.lowerEnumVariantAccess;
 
 // Literal methods
 KirLowerer.prototype.lowerIntLiteral = literalMethods.lowerIntLiteral;
