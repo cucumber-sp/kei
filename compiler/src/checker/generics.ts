@@ -12,8 +12,8 @@
  */
 
 import type { FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes.ts";
-import type { FunctionType, StructType, Type } from "./types.ts";
-import { arrayType, functionType, ptrType, rangeType, sliceType, TypeKind, typeToString } from "./types.ts";
+import type { FunctionType, StructType, Type } from "./types";
+import { arrayType, functionType, ptrType, rangeType, sliceType, TypeKind, typeToString } from "./types";
 
 /**
  * Recursively substitute type parameters in a type using the given map.

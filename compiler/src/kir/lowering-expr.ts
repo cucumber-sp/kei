@@ -10,7 +10,7 @@
 
 import type {
   FunctionType,
-} from "../checker/types.ts";
+} from "../checker/types";
 import type {
   Expression,
   CallExpr,

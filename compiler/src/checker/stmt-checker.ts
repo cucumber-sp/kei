@@ -21,7 +21,7 @@ import type {
   WhileStmt,
 } from "../ast/nodes.ts";
 import type { Checker } from "./checker.ts";
-import type { Type } from "./types.ts";
+import type { Type } from "./types";
 import {
   ERROR_TYPE,
   extractLiteralInfo,
@@ -31,7 +31,7 @@ import {
   isLiteralAssignableTo,
   TypeKind,
   typeToString,
-} from "./types.ts";
+} from "./types";
 
 export class StatementChecker {
   private checker: Checker;

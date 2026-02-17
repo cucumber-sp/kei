@@ -4,7 +4,7 @@
  */
 
 import type { MonomorphizedFunction, MonomorphizedStruct } from "../checker/generics.ts";
-import type { FunctionType } from "../checker/types.ts";
+import type { FunctionType } from "../checker/types";
 import type {
   Declaration,
   FunctionDecl,

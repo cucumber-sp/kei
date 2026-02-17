@@ -11,7 +11,7 @@ import { Checker } from "./checker.ts";
 import type { CheckResult } from "./checker.ts";
 import type { MonomorphizedFunction, MonomorphizedStruct } from "./generics.ts";
 import type { ScopeSymbol } from "./symbols.ts";
-import type { StructType, Type } from "./types.ts";
+import type { StructType, Type } from "./types";
 
 /** Info about a module to check in multi-module mode. */
 export interface ModuleCheckInfo {

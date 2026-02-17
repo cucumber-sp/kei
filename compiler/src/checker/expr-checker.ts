@@ -35,7 +35,7 @@ import {
   checkUnaryExpression,
 } from "./operator-checker.ts";
 import { SymbolKind } from "./symbols.ts";
-import type { Type } from "./types.ts";
+import type { Type } from "./types";
 import {
   ERROR_TYPE,
   isAssignableTo,
@@ -51,7 +51,7 @@ import {
   USIZE_TYPE,
   VOID_TYPE,
   isBoolType,
-} from "./types.ts";
+} from "./types";
 
 export class ExpressionChecker {
   private checker: Checker;

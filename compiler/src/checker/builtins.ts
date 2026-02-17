@@ -5,7 +5,7 @@
 
 import type { Scope } from "./scope.ts";
 import { functionSymbol, typeSymbol, variableSymbol } from "./symbols.ts";
-import type { Type } from "./types.ts";
+import type { Type } from "./types";
 import {
   BOOL_TYPE,
   C_CHAR_TYPE,
@@ -24,7 +24,7 @@ import {
   U64_TYPE,
   USIZE_TYPE,
   VOID_TYPE,
-} from "./types.ts";
+} from "./types";
 
 /** Map from primitive type name to its internal Type representation */
 const PRIMITIVE_TYPE_MAP: ReadonlyMap<string, Type> = new Map([

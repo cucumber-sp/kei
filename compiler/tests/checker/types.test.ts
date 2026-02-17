@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { TypeKind } from "../../src/checker/types.ts";
+import { TypeKind } from "../../src/checker/types";
 import { checkError, checkOk, typeOf } from "./helpers.ts";
 
 describe("Checker — Types", () => {

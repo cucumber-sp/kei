@@ -3,7 +3,7 @@
  */
 
 import { Checker } from "../../src/checker/checker.ts";
-import type { Type } from "../../src/checker/types.ts";
+import type { Type } from "../../src/checker/types";
 import type { Diagnostic } from "../../src/errors/diagnostic.ts";
 import { Severity } from "../../src/errors/diagnostic.ts";
 import { Lexer } from "../../src/lexer/index.ts";

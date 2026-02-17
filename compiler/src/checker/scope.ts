@@ -14,7 +14,7 @@
 
 import type { FunctionSymbol, ScopeSymbol } from "./symbols.ts";
 import { SymbolKind } from "./symbols.ts";
-import { typesEqual, type FunctionType } from "./types.ts";
+import { typesEqual, type FunctionType } from "./types";
 
 export class Scope {
   /** Parent scope, or `null` for the global scope. */

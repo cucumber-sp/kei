@@ -10,7 +10,7 @@ import { mangleGenericName, substituteFunctionType } from "./generics.ts";
 import { extractTypeParamSubs } from "./literal-checker.ts";
 import type { FunctionOverload } from "./symbols.ts";
 import { SymbolKind } from "./symbols.ts";
-import type { FunctionType, Type } from "./types.ts";
+import type { FunctionType, Type } from "./types";
 import {
   ERROR_TYPE,
   extractLiteralInfo,
@@ -24,7 +24,7 @@ import {
   typeToString,
   USIZE_TYPE,
   VOID_TYPE,
-} from "./types.ts";
+} from "./types";
 
 /** Special case: sizeof(Type) */
 function checkSizeofCall(checker: Checker, expr: CallExpr): Type | null {

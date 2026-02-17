@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { checkError, checkOk, typeOf } from "./helpers.ts";
-import { TypeKind } from "../../src/checker/types.ts";
+import { TypeKind } from "../../src/checker/types";
 
 describe("Checker — Codegen Edge Cases", () => {
   // ── Empty struct ─────────────────────────────────────────────────────

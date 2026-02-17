@@ -16,7 +16,7 @@ import type { Checker } from "./checker.ts";
 import { mangleGenericName, substituteFunctionType, substituteType } from "./generics.ts";
 import { SymbolKind } from "./symbols.ts";
 import { I32_MIN, I32_MAX } from "../utils/constants.ts";
-import type { ArrayType, PtrType, RangeType, SliceType, StructType, Type } from "./types.ts";
+import type { ArrayType, PtrType, RangeType, SliceType, StructType, Type } from "./types";
 import {
   arrayType,
   BOOL_TYPE,
@@ -34,7 +34,7 @@ import {
   STRING_TYPE,
   TypeKind,
   typeToString,
-} from "./types.ts";
+} from "./types";
 
 export function checkIntLiteral(expr: IntLiteral): Type {
   const v = expr.value;

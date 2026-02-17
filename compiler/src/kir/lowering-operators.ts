@@ -5,7 +5,7 @@
 
 import type {
   StructType,
-} from "../checker/types.ts";
+} from "../checker/types";
 import type {
   Expression,
   BinaryExpr,

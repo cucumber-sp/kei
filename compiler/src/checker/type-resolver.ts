@@ -9,7 +9,7 @@ import { lookupPrimitiveType } from "./builtins.ts";
 import { mangleGenericName, substituteType as substituteTypeGeneric, substituteFunctionType } from "./generics.ts";
 import type { Scope } from "./scope.ts";
 import { SymbolKind } from "./symbols.ts";
-import type { FunctionType, Type } from "./types.ts";
+import type { FunctionType, Type } from "./types";
 import {
   arrayType,
   ERROR_TYPE,
@@ -18,7 +18,7 @@ import {
   sliceType,
   TypeKind,
   typeToString,
-} from "./types.ts";
+} from "./types";
 
 export interface TypeResolverDiagnostic {
   message: string;

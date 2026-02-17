@@ -26,8 +26,8 @@ import type {
   StructType,
   EnumType,
   FunctionType,
-} from "../checker/types.ts";
-import { TypeKind, I32_TYPE, typeToString, typesEqual } from "../checker/types.ts";
+} from "../checker/types";
+import { TypeKind, I32_TYPE, typeToString, typesEqual } from "../checker/types";
 import type {
   Program,
   Declaration,

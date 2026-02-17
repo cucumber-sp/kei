@@ -8,7 +8,7 @@ import type {
 } from "../ast/nodes.ts";
 import type {
   Type,
-} from "../checker/types.ts";
+} from "../checker/types";
 import type {
   VarId,
 } from "./kir-types.ts";

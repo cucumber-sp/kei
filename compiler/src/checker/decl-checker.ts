@@ -16,7 +16,7 @@ import type {
 import type { Checker } from "./checker.ts";
 import { functionSymbol, moduleSymbol, typeSymbol, variableSymbol } from "./symbols.ts";
 import type { ScopeSymbol } from "./symbols.ts";
-import type { EnumVariantInfo, FunctionType, ModuleType, ParamInfo, StructType, Type } from "./types.ts";
+import type { EnumVariantInfo, FunctionType, ModuleType, ParamInfo, StructType, Type } from "./types";
 import {
   ERROR_TYPE,
   functionType,
@@ -28,7 +28,7 @@ import {
   TypeKind,
   typeToString,
   VOID_TYPE,
-} from "./types.ts";
+} from "./types";
 
 export class DeclarationChecker {
   private checker: Checker;

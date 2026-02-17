@@ -26,8 +26,8 @@ import type { ScopeSymbol } from "./symbols.ts";
 import { SymbolKind, moduleSymbol, typeSymbol, variableSymbol } from "./symbols.ts";
 import { TypeResolver } from "./type-resolver.ts";
 import type { MonomorphizedFunction, MonomorphizedStruct } from "./generics.ts";
-import type { FunctionType, ModuleType, StructType, Type } from "./types.ts";
-import { TypeKind, typeToString } from "./types.ts";
+import type { FunctionType, ModuleType, StructType, Type } from "./types";
+import { TypeKind, typeToString } from "./types";
 
 export interface CheckResult {
   diagnostics: Diagnostic[];

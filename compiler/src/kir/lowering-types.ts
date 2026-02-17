@@ -6,7 +6,7 @@
 import type {
   Type,
   FunctionType,
-} from "../checker/types.ts";
+} from "../checker/types";
 import type {
   Expression,
   FunctionDecl,

@@ -8,7 +8,7 @@
  */
 
 import type { EnumDecl, FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes.ts";
-import type { EnumType, FunctionType, ModuleType, StructType, Type } from "./types.ts";
+import type { EnumType, FunctionType, ModuleType, StructType, Type } from "./types";
 
 // ─── Symbol Kind Constants ──────────────────────────────────────────────────
 

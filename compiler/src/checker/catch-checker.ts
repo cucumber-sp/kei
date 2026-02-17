@@ -5,7 +5,7 @@
 
 import type { CatchExpr, ThrowExpr } from "../ast/nodes.ts";
 import type { Checker } from "./checker.ts";
-import type { Type } from "./types.ts";
+import type { Type } from "./types";
 import {
   ERROR_TYPE,
   isErrorType,
@@ -13,7 +13,7 @@ import {
   typesEqual,
   typeToString,
   VOID_TYPE,
-} from "./types.ts";
+} from "./types";
 
 export function checkCatchExpression(checker: Checker, expr: CatchExpr): Type {
   // The operand should be a function call that throws

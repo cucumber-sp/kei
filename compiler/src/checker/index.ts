@@ -25,7 +25,7 @@ export type {
   Type,
   TypeParamType,
   VoidType,
-} from "./types.ts";
+} from "./types";
 export {
   BOOL_TYPE,
   C_CHAR_TYPE,
@@ -50,4 +50,4 @@ export {
   U64_TYPE,
   USIZE_TYPE,
   VOID_TYPE,
-} from "./types.ts";
+} from "./types";

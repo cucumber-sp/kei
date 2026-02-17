@@ -13,7 +13,7 @@ import type {
 } from "../ast/nodes.ts";
 import type { Checker } from "./checker.ts";
 import { SymbolKind } from "./symbols.ts";
-import type { FunctionType, StructType, Type } from "./types.ts";
+import type { FunctionType, StructType, Type } from "./types";
 import {
   BOOL_TYPE,
   ERROR_TYPE,
@@ -29,7 +29,7 @@ import {
   TypeKind,
   typesEqual,
   typeToString,
-} from "./types.ts";
+} from "./types";
 
 const ARITHMETIC_OPS = new Set(["+", "-", "*", "/", "%"]);
 const COMPARISON_OPS = new Set(["<", ">", "<=", ">="]);
