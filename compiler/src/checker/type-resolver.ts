@@ -6,7 +6,11 @@
 import type { TypeNode } from "../ast/nodes.ts";
 import type { Span } from "../lexer/token.ts";
 import { lookupPrimitiveType } from "./builtins.ts";
-import { mangleGenericName, substituteType as substituteTypeGeneric, substituteFunctionType } from "./generics.ts";
+import {
+  mangleGenericName,
+  substituteFunctionType,
+  substituteType as substituteTypeGeneric,
+} from "./generics.ts";
 import type { Scope } from "./scope.ts";
 import { SymbolKind } from "./symbols.ts";
 import type { FunctionType, Type } from "./types";
@@ -120,9 +124,8 @@ export class TypeResolver {
           return ERROR_TYPE;
         }
         if (typeArgs.length !== baseType.genericParams.length) {
-          const paramHint = baseType.genericParams.length > 0
-            ? ` <${baseType.genericParams.join(", ")}>`
-            : "";
+          const paramHint =
+            baseType.genericParams.length > 0 ? ` <${baseType.genericParams.join(", ")}>` : "";
           this.addError(
             `type '${name}' expects ${baseType.genericParams.length} type argument(s)${paramHint}, got ${typeArgs.length}`,
             span

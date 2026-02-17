@@ -15,9 +15,9 @@ import type {
   RangeExpr,
   UnsafeExpr,
 } from "../ast/nodes.ts";
-import type { Checker } from "./checker.ts";
 import { checkCallExpression } from "./call-checker.ts";
 import { checkCatchExpression, checkThrowExpression } from "./catch-checker.ts";
+import type { Checker } from "./checker.ts";
 import {
   checkArrayLiteral,
   checkBoolLiteral,
@@ -39,6 +39,7 @@ import type { Type } from "./types";
 import {
   ERROR_TYPE,
   isAssignableTo,
+  isBoolType,
   isErrorType,
   isIntegerType,
   isNumericType,
@@ -50,7 +51,6 @@ import {
   typeToString,
   USIZE_TYPE,
   VOID_TYPE,
-  isBoolType,
 } from "./types";
 
 export class ExpressionChecker {

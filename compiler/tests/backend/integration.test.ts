@@ -1,10 +1,10 @@
-import { test, expect, describe, beforeAll } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
+import { tmpdir } from "os";
+import { join } from "path";
 import { emitC } from "../../src/backend/c-emitter.ts";
 import { runDeSsa } from "../../src/backend/de-ssa.ts";
 import { runMem2Reg } from "../../src/kir/mem2reg.ts";
 import { lower } from "../kir/helpers.ts";
-import { tmpdir } from "os";
-import { join } from "path";
 
 /** Full pipeline: source → KIR → mem2reg → de-ssa → C code */
 function compileToC(source: string): string {
@@ -36,7 +36,7 @@ beforeAll(() => {
 /** Compile C code to a binary and optionally run it */
 async function compileAndRun(
   cCode: string,
-  name: string,
+  name: string
 ): Promise<{ compiled: boolean; exitCode: number; stdout: string; stderr: string }> {
   if (!compiler) {
     return { compiled: false, exitCode: -1, stdout: "", stderr: "no compiler" };

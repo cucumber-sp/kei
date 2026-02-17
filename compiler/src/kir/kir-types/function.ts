@@ -1,7 +1,7 @@
-import type { KirType } from "./types";
-import type { VarId, BlockId } from "./identifiers";
+import type { BlockId, VarId } from "./identifiers";
 import type { KirInst } from "./instructions";
 import type { KirTerminator } from "./terminators";
+import type { KirType } from "./types";
 
 // ─── Function ────────────────────────────────────────────────────────────────
 

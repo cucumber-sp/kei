@@ -7,9 +7,9 @@
  * phi nodes for value merging at control-flow join points.
  */
 
-export * from "./identifiers";
-export * from "./types";
-export * from "./module";
 export * from "./function";
+export * from "./identifiers";
 export * from "./instructions";
+export * from "./module";
 export * from "./terminators";
+export * from "./types";

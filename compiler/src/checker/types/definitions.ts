@@ -3,7 +3,7 @@
  * These are semantic types — resolved and concrete — distinct from AST TypeNode.
  */
 
-import { TypeKind } from "./kinds";
+import type { TypeKind } from "./kinds";
 
 // ─── Type Definitions ───────────────────────────────────────────────────────
 

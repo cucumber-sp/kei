@@ -77,17 +77,11 @@ describe("Checker — Implicit Literal Conversions", () => {
   // ── Variables NOT ok ───────────────────────────────────────────────────
 
   test("variable i32 → f64: error (not a literal)", () => {
-    checkError(
-      `fn main() -> int { let a: i32 = 5; let b: f64 = a; return 0; }`,
-      "type mismatch"
-    );
+    checkError(`fn main() -> int { let a: i32 = 5; let b: f64 = a; return 0; }`, "type mismatch");
   });
 
   test("variable i32 → u8: error (not a literal)", () => {
-    checkError(
-      `fn main() -> int { let a: i32 = 5; let b: u8 = a; return 0; }`,
-      "type mismatch"
-    );
+    checkError(`fn main() -> int { let a: i32 = 5; let b: u8 = a; return 0; }`, "type mismatch");
   });
 
   // ── Struct field literals ──────────────────────────────────────────────

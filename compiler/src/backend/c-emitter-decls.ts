@@ -2,12 +2,7 @@
  * Emission of type declarations, extern declarations, globals, and function prototypes.
  */
 
-import type {
-  KirTypeDecl,
-  KirExtern,
-  KirGlobal,
-  KirFunction,
-} from "../kir/kir-types.ts";
+import type { KirExtern, KirFunction, KirGlobal, KirTypeDecl } from "../kir/kir-types.ts";
 import { emitCType, emitCTypeForDecl, sanitizeName, varName } from "./c-emitter-types.ts";
 
 // ─── Type declarations ──────────────────────────────────────────────────────

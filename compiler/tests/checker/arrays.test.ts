@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { checkOk, checkError, check } from "./helpers.ts";
 import { Checker } from "../../src/checker/checker.ts";
+import type { Type } from "../../src/checker/types";
 import { Lexer } from "../../src/lexer/index.ts";
 import { Parser } from "../../src/parser/index.ts";
 import { SourceFile } from "../../src/utils/source.ts";
-import type { Type } from "../../src/checker/types";
+import { check, checkError, checkOk } from "./helpers.ts";
 
 /** Get type of a let-binding by name from checked source */
 function typeOfLet(source: string, varName: string): Type {
@@ -48,17 +48,11 @@ describe("Checker — Array Literals", () => {
   });
 
   test("empty array literal is an error", () => {
-    checkError(
-      `fn main() -> int { let arr = []; return 0; }`,
-      "empty array literal"
-    );
+    checkError(`fn main() -> int { let arr = []; return 0; }`, "empty array literal");
   });
 
   test("mixed types in array literal", () => {
-    checkError(
-      `fn main() -> int { let arr = [1, "hello"]; return 0; }`,
-      "expected 'i32'"
-    );
+    checkError(`fn main() -> int { let arr = [1, "hello"]; return 0; }`, "expected 'i32'");
   });
 
   test("array indexing returns element type", () => {
@@ -84,10 +78,7 @@ describe("Checker — Array Literals", () => {
   });
 
   test("cannot index non-array type", () => {
-    checkError(
-      `fn main() -> int { let x = 42; let y = x[0]; return 0; }`,
-      "cannot index type"
-    );
+    checkError(`fn main() -> int { let x = 42; let y = x[0]; return 0; }`, "cannot index type");
   });
 
   test("array of booleans", () => {

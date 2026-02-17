@@ -165,8 +165,11 @@ describe("Checker — Unsafe", () => {
   });
 
   test("free with non-pointer → error", () => {
-    checkError(`${MEM_STUBS}
-      fn main() -> int { unsafe { free(42); } return 0; }`, "expects a pointer argument");
+    checkError(
+      `${MEM_STUBS}
+      fn main() -> int { unsafe { free(42); } return 0; }`,
+      "expects a pointer argument"
+    );
   });
 
   test("alloc with wrong number of args → error", () => {

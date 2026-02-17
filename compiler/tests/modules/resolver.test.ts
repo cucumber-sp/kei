@@ -2,8 +2,8 @@
  * Tests for the module resolver.
  */
 
-import { test, expect, describe } from "bun:test";
-import { resolve, join } from "node:path";
+import { describe, expect, test } from "bun:test";
+import { join, resolve } from "node:path";
 import { ModuleResolver } from "../../src/modules/resolver.ts";
 
 const FIXTURES_DIR = resolve(import.meta.dir, "../fixtures/modules");

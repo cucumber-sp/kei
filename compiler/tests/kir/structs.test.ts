@@ -1,6 +1,6 @@
-import { test, expect, describe } from "bun:test";
-import { lower, lowerFunction, getInstructions } from "./helpers.ts";
+import { describe, expect, test } from "bun:test";
 import type { KirFieldPtr, KirStackAlloc, KirStore } from "../../src/kir/kir-types.ts";
+import { getInstructions, lower, lowerFunction } from "./helpers.ts";
 
 describe("KIR: struct type declarations", () => {
   test("struct declaration generates type decl", () => {
@@ -24,7 +24,8 @@ describe("KIR: struct type declarations", () => {
 
 describe("KIR: struct literals", () => {
   test("struct literal generates stack_alloc + field_ptr + store", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       struct Point {
         x: int;
         y: int;
@@ -32,7 +33,9 @@ describe("KIR: struct literals", () => {
       fn foo() {
         let p: Point = Point { x: 10, y: 20 };
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     // stack_alloc for the struct literal + let binding
     const allocs = getInstructions(fn, "stack_alloc") as KirStackAlloc[];
     expect(allocs.length).toBeGreaterThanOrEqual(1);
@@ -52,7 +55,8 @@ describe("KIR: struct literals", () => {
 
 describe("KIR: struct field access", () => {
   test("field access generates field_ptr + load", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       struct Point {
         x: int;
         y: int;
@@ -61,14 +65,14 @@ describe("KIR: struct field access", () => {
         let p: Point = Point { x: 10, y: 20 };
         return p.x;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     const fieldPtrs = getInstructions(fn, "field_ptr") as KirFieldPtr[];
     // At least field_ptrs from struct literal + field access
     expect(fieldPtrs.length).toBeGreaterThanOrEqual(3);
     // The last field_ptr should be for the .x access
-    const xAccess = fieldPtrs.find(
-      (fp) => fp.field === "x" && fieldPtrs.indexOf(fp) >= 2
-    );
+    const xAccess = fieldPtrs.find((fp) => fp.field === "x" && fieldPtrs.indexOf(fp) >= 2);
     expect(xAccess).toBeDefined();
 
     const loads = getInstructions(fn, "load");

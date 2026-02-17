@@ -1,22 +1,26 @@
-import { test, expect, describe } from "bun:test";
-import { lowerFunction, getTerminators, getBlock } from "./helpers.ts";
+import { describe, expect, test } from "bun:test";
+import { getBlock, getTerminators, lowerFunction } from "./helpers.ts";
 
 describe("KIR: if/else", () => {
   test("if creates branch terminator", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo(x: bool) -> int {
         if x {
           return 1;
         }
         return 0;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     const branches = getTerminators(fn, "br");
     expect(branches.length).toBeGreaterThanOrEqual(1);
   });
 
   test("if/else creates two branch blocks", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo(x: bool) -> int {
         if x {
           return 1;
@@ -24,7 +28,9 @@ describe("KIR: if/else", () => {
           return 0;
         }
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     const branches = getTerminators(fn, "br");
     expect(branches.length).toBeGreaterThanOrEqual(1);
     // Should have then and else blocks
@@ -35,7 +41,8 @@ describe("KIR: if/else", () => {
   });
 
   test("if/else with merge block", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo(x: bool) {
         if x {
           let a: int = 1;
@@ -43,7 +50,9 @@ describe("KIR: if/else", () => {
           let b: int = 2;
         }
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     // Should have entry, then, else, and end blocks
     expect(fn.blocks.length).toBeGreaterThanOrEqual(4);
     const endBlock = fn.blocks.find((b) => b.id.startsWith("if.end"));
@@ -51,7 +60,8 @@ describe("KIR: if/else", () => {
   });
 
   test("nested if/else", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo(a: bool, b: bool) -> int {
         if a {
           if b {
@@ -63,14 +73,17 @@ describe("KIR: if/else", () => {
           return 3;
         }
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     // Should have multiple branch levels
     const branches = getTerminators(fn, "br");
     expect(branches.length).toBeGreaterThanOrEqual(2);
   });
 
   test("else-if chain", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo(x: int) -> int {
         if x == 1 {
           return 10;
@@ -80,7 +93,9 @@ describe("KIR: if/else", () => {
           return 30;
         }
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     const branches = getTerminators(fn, "br");
     expect(branches.length).toBeGreaterThanOrEqual(2);
   });
@@ -88,14 +103,17 @@ describe("KIR: if/else", () => {
 
 describe("KIR: while loops", () => {
   test("while loop creates header and body blocks", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo() {
         let x: int = 0;
         while x < 10 {
           x = x + 1;
         }
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     const headerBlock = fn.blocks.find((b) => b.id.startsWith("while.header"));
     const bodyBlock = fn.blocks.find((b) => b.id.startsWith("while.body"));
     expect(headerBlock).toBeDefined();
@@ -103,27 +121,33 @@ describe("KIR: while loops", () => {
   });
 
   test("while loop has conditional branch in header", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo() {
         let x: int = 0;
         while x < 10 {
           x = x + 1;
         }
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     const headerBlock = fn.blocks.find((b) => b.id.startsWith("while.header"))!;
     expect(headerBlock.terminator.kind).toBe("br");
   });
 
   test("while body jumps back to header", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo() {
         let x: int = 0;
         while x < 10 {
           x = x + 1;
         }
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     const bodyBlock = fn.blocks.find((b) => b.id.startsWith("while.body"))!;
     expect(bodyBlock.terminator.kind).toBe("jump");
     if (bodyBlock.terminator.kind === "jump") {
@@ -132,20 +156,24 @@ describe("KIR: while loops", () => {
   });
 
   test("while loop has end block", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo() {
         let x: int = 0;
         while x < 10 {
           x = x + 1;
         }
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     const endBlock = fn.blocks.find((b) => b.id.startsWith("while.end"));
     expect(endBlock).toBeDefined();
   });
 
   test("break in while loop jumps to end", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo() {
         let x: int = 0;
         while true {
@@ -155,17 +183,18 @@ describe("KIR: while loops", () => {
           x = x + 1;
         }
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     // Should have a jump to while.end somewhere
     const jumps = getTerminators(fn, "jump");
-    const jumpToEnd = jumps.some(
-      (j) => j.kind === "jump" && j.target.startsWith("while.end")
-    );
+    const jumpToEnd = jumps.some((j) => j.kind === "jump" && j.target.startsWith("while.end"));
     expect(jumpToEnd).toBe(true);
   });
 
   test("continue in while loop jumps to header", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo() {
         let x: int = 0;
         while x < 10 {
@@ -175,7 +204,9 @@ describe("KIR: while loops", () => {
           }
         }
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     const jumps = getTerminators(fn, "jump");
     const jumpToHeader = jumps.some(
       (j) => j.kind === "jump" && j.target.startsWith("while.header")
@@ -186,13 +217,16 @@ describe("KIR: while loops", () => {
 
 describe("KIR: for loops", () => {
   test("for range loop creates init/header/body/latch blocks", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo() {
         for i in 0..10 {
           let x: int = i;
         }
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     const initBlock = fn.blocks.find((b) => b.id.startsWith("for.init"));
     const headerBlock = fn.blocks.find((b) => b.id.startsWith("for.header"));
     const bodyBlock = fn.blocks.find((b) => b.id.startsWith("for.body"));
@@ -204,25 +238,31 @@ describe("KIR: for loops", () => {
   });
 
   test("for range loop has conditional branch in header", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo() {
         for i in 0..10 {
           let x: int = i;
         }
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     const headerBlock = fn.blocks.find((b) => b.id.startsWith("for.header"))!;
     expect(headerBlock.terminator.kind).toBe("br");
   });
 
   test("for loop latch increments and jumps to header", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo() {
         for i in 0..5 {
           let x: int = i;
         }
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     const latchBlock = fn.blocks.find((b) => b.id.startsWith("for.latch"))!;
     expect(latchBlock.terminator.kind).toBe("jump");
     if (latchBlock.terminator.kind === "jump") {

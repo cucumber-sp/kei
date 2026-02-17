@@ -3,9 +3,9 @@
  */
 
 import type { KirFunction, KirInst, KirType, VarId } from "../kir/kir-types.ts";
-import { emitCTypeForDecl, sanitizeName, varName } from "./c-emitter-types.ts";
 import { emitFunctionPrototype } from "./c-emitter-decls.ts";
 import { emitInst, emitTerminator } from "./c-emitter-insts.ts";
+import { emitCTypeForDecl, sanitizeName, varName } from "./c-emitter-types.ts";
 
 // ─── Function emission ──────────────────────────────────────────────────────
 

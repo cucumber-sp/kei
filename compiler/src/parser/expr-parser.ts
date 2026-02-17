@@ -3,14 +3,10 @@
  * Extracted from parser.ts — all methods operate on a ParserContext.
  */
 
-import type {
-  ArrayLiteral,
-  AssignExpr,
-  BlockStmt,
-  Expression,
-  Statement,
-} from "../ast/nodes.ts";
+import type { ArrayLiteral, AssignExpr, BlockStmt, Expression, Statement } from "../ast/nodes.ts";
 import { TokenKind } from "../lexer/token.ts";
+import type { ParserContext } from "./parser.ts";
+import { parsePostfixExpression } from "./postfix-parser.ts";
 import {
   Associativity,
   getBinaryAssociativity,
@@ -18,8 +14,6 @@ import {
   isAssignmentOperator,
   Precedence,
 } from "./precedence.ts";
-import type { ParserContext } from "./parser.ts";
-import { parsePostfixExpression } from "./postfix-parser.ts";
 
 export function parseExpression(ctx: ParserContext): Expression {
   return parsePrattExpression(ctx, Precedence.None);

@@ -73,10 +73,7 @@ describe("Checker — Unsafe Edge Cases", () => {
     });
 
     test("address-of outside unsafe → error", () => {
-      checkError(
-        `fn main() -> int { let x = 42; let p = &x; return 0; }`,
-        "requires unsafe block"
-      );
+      checkError(`fn main() -> int { let x = 42; let p = &x; return 0; }`, "requires unsafe block");
     });
 
     test("address-of struct field → ok", () => {

@@ -12,10 +12,10 @@ import type {
   StringLiteral,
   StructLiteral,
 } from "../ast/nodes.ts";
+import { I32_MAX, I32_MIN } from "../utils/constants.ts";
 import type { Checker } from "./checker.ts";
 import { mangleGenericName, substituteFunctionType, substituteType } from "./generics.ts";
 import { SymbolKind } from "./symbols.ts";
-import { I32_MIN, I32_MAX } from "../utils/constants.ts";
 import type { ArrayType, PtrType, RangeType, SliceType, StructType, Type } from "./types";
 import {
   arrayType,
@@ -141,7 +141,8 @@ export function checkStructLiteral(checker: Checker, expr: StructLiteral): Type 
     if (!isErrorType(valueType) && !isAssignableTo(valueType, expectedType)) {
       // Check if this is a literal that can be implicitly converted
       const litInfo = extractLiteralInfo(field.value);
-      const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, expectedType);
+      const isLiteralOk =
+        litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, expectedType);
       if (isLiteralOk) {
         // Update typeMap so KIR lowering uses the correct type (e.g. i32 literal → f64)
         checker.setExprType(field.value, expectedType);
@@ -174,9 +175,8 @@ function instantiateGenericStruct(
   expr: StructLiteral
 ): Type {
   if (expr.typeArgs.length !== baseStruct.genericParams.length) {
-    const paramHint = baseStruct.genericParams.length > 0
-      ? ` <${baseStruct.genericParams.join(", ")}>`
-      : "";
+    const paramHint =
+      baseStruct.genericParams.length > 0 ? ` <${baseStruct.genericParams.join(", ")}>` : "";
     checker.error(
       `type '${baseStruct.name}' expects ${baseStruct.genericParams.length} type argument(s)${paramHint}, got ${expr.typeArgs.length}`,
       expr.span
@@ -333,8 +333,7 @@ function substituteStructMethods(
   typeMap: Map<string, Type>
 ): void {
   const isSelfRef = (t: Type) =>
-    t.kind === TypeKind.Struct &&
-    (t.name === base.name || t.name.startsWith(base.name + "_"));
+    t.kind === TypeKind.Struct && (t.name === base.name || t.name.startsWith(base.name + "_"));
   for (const [methodName, methodType] of base.methods) {
     const subbed = substituteFunctionType(methodType, typeMap);
     const fixedParams = subbed.params.map((p) =>
@@ -350,7 +349,11 @@ function substituteStructMethods(
 }
 
 /** Recursively extract TypeParam→concrete type mappings by walking declared and concrete types. */
-export function extractTypeParamSubs(declared: Type, concrete: Type, subs: Map<string, Type>): void {
+export function extractTypeParamSubs(
+  declared: Type,
+  concrete: Type,
+  subs: Map<string, Type>
+): void {
   if (declared.kind === TypeKind.TypeParam) {
     if (!subs.has(declared.name)) {
       subs.set(declared.name, concrete);

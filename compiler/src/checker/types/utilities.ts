@@ -1,21 +1,21 @@
 // ─── Type Utilities ─────────────────────────────────────────────────────────
 
-import { TypeKind } from "./kinds";
 import type {
-  Type,
-  IntType,
-  FloatType,
-  PtrType,
   ArrayType,
-  SliceType,
-  RangeType,
-  StructType,
   EnumType,
+  FloatType,
   FunctionType,
-  TypeParamType,
+  IntType,
   ModuleType,
+  PtrType,
+  RangeType,
+  SliceType,
+  StructType,
+  Type,
+  TypeParamType,
 } from "./definitions";
 import { isErrorType } from "./guards";
+import { TypeKind } from "./kinds";
 
 /** Check if two types are structurally equal */
 export function typesEqual(a: Type, b: Type): boolean {
@@ -97,9 +97,12 @@ export function isAssignableTo(source: Type, target: Type): boolean {
  * Extract literal info from an expression, handling unary negation.
  * Returns { kind, value } if the expression is a literal (or -literal), else null.
  */
-export function extractLiteralInfo(
-  expr: { kind: string; value?: number; operator?: string; operand?: { kind: string; value?: number } }
-): { kind: "IntLiteral" | "FloatLiteral"; value: number } | null {
+export function extractLiteralInfo(expr: {
+  kind: string;
+  value?: number;
+  operator?: string;
+  operand?: { kind: string; value?: number };
+}): { kind: "IntLiteral" | "FloatLiteral"; value: number } | null {
   if (expr.kind === "IntLiteral" || expr.kind === "FloatLiteral") {
     return { kind: expr.kind, value: expr.value as number };
   }

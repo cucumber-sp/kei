@@ -1,6 +1,6 @@
-import { describe, test, expect } from "bun:test";
-import { check, checkError, checkOk } from "./helpers.ts";
+import { describe, expect, test } from "bun:test";
 import { Severity } from "../../src/errors/diagnostic.ts";
+import { check, checkError, checkOk } from "./helpers.ts";
 
 describe("Checker: Operator Overloading (comprehensive)", () => {
   // ─── op_add returning same struct type ──────────────────────────────

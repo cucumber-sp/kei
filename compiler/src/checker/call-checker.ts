@@ -80,10 +80,7 @@ function checkBuiltinAllocFree(checker: Checker, expr: CallExpr): Type | null {
   if (!freeArg) return ERROR_TYPE;
   const argType = checker.checkExpression(freeArg);
   if (!isErrorType(argType) && !isPtrType(argType)) {
-    checker.error(
-      `'free' expects a pointer argument, got '${typeToString(argType)}'`,
-      expr.span
-    );
+    checker.error(`'free' expects a pointer argument, got '${typeToString(argType)}'`, expr.span);
     return ERROR_TYPE;
   }
   return VOID_TYPE;
@@ -141,7 +138,11 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
           checker.setExprType(expr.callee, exportedSym.type);
           return checkFunctionCallArgs(checker, exportedSym.type, expr.args, expr, false);
         }
-        if (exportedSym && exportedSym.kind === SymbolKind.Type && exportedSym.type.kind === TypeKind.Struct) {
+        if (
+          exportedSym &&
+          exportedSym.kind === SymbolKind.Type &&
+          exportedSym.type.kind === TypeKind.Struct
+        ) {
           // Module-qualified static method: module.Struct.method() — handled below via normal MemberExpr flow
         }
         if (!exportedSym) {
@@ -196,10 +197,7 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
     return checkFunctionCallArgs(checker, calleeType, expr.args, expr, false);
   }
 
-  checker.error(
-    `expression of type '${typeToString(calleeType)}' is not callable`,
-    expr.span
-  );
+  checker.error(`expression of type '${typeToString(calleeType)}' is not callable`, expr.span);
   return ERROR_TYPE;
 }
 
@@ -269,7 +267,8 @@ function resolveOverloadedCall(
         // Check literal assignability
         const arg = expr.args[i];
         const litInfo = arg ? extractLiteralInfo(arg) : null;
-        const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, paramType);
+        const isLiteralOk =
+          litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, paramType);
         if (!isLiteralOk) {
           allAssignable = false;
           break;
@@ -435,7 +434,15 @@ function checkGenericFunctionCall(checker: Checker, expr: CallExpr): Type {
   const concreteType = substituteFunctionType(funcType, typeMap);
   const mangledName = mangleGenericName(name, resolvedTypeArgs);
 
-  cacheMonomorphizedFunction(checker, expr, name, mangledName, resolvedTypeArgs, concreteType, genericOverload.declaration ?? undefined);
+  cacheMonomorphizedFunction(
+    checker,
+    expr,
+    name,
+    mangledName,
+    resolvedTypeArgs,
+    concreteType,
+    genericOverload.declaration ?? undefined
+  );
 
   return checkFunctionCallArgs(checker, concreteType, expr.args, expr, false);
 }

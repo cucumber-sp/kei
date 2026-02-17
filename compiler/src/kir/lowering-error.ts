@@ -3,18 +3,9 @@
  * Extracted from lowering-expr.ts for modularity.
  */
 
-import type {
-  FunctionType,
-} from "../checker/types";
-import type {
-  Expression,
-  CatchExpr,
-  ThrowExpr,
-} from "../ast/nodes.ts";
-import type {
-  KirType,
-  VarId,
-} from "./kir-types.ts";
+import type { CatchExpr, Expression, ThrowExpr } from "../ast/nodes.ts";
+import type { FunctionType } from "../checker/types";
+import type { KirType, VarId } from "./kir-types.ts";
 import type { KirLowerer } from "./lowering.ts";
 
 export function lowerThrowExpr(this: KirLowerer, expr: ThrowExpr): VarId {
@@ -44,7 +35,7 @@ export function lowerThrowExpr(this: KirLowerer, expr: ThrowExpr): VarId {
   let tag = 1; // default
   if (checkerType && checkerType.kind === "struct") {
     const idx = this.currentFunctionThrowsTypes.findIndex(
-      t => t.kind === "struct" && t.name === checkerType.name
+      (t) => t.kind === "struct" && t.name === checkerType.name
     );
     if (idx >= 0) tag = idx + 1;
   }
@@ -70,9 +61,10 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
   const { funcName, args: callArgs, throwsTypes, returnType: successType } = throwsInfo;
 
   // Allocate buffers for out value and error value
-  const outType = successType.kind === "void"
-    ? { kind: "int" as const, bits: 8 as const, signed: false as const }
-    : successType;
+  const outType =
+    successType.kind === "void"
+      ? { kind: "int" as const, bits: 8 as const, signed: false as const }
+      : successType;
   const outPtr = this.emitStackAlloc(outType);
   // err buffer: use u8 placeholder (C backend will emit union-sized buffer)
   const errPtr = this.emitStackAlloc({ kind: "int", bits: 8, signed: false });
@@ -180,9 +172,8 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
     if (clause.isDefault) continue; // handle default separately
 
     // Find the tag for this error type
-    const errorTag = throwsTypes.findIndex(
-      t => t.kind === "struct" && t.name === clause.errorType
-    ) + 1;
+    const errorTag =
+      throwsTypes.findIndex((t) => t.kind === "struct" && t.name === clause.errorType) + 1;
 
     const clauseLabel = this.freshBlockId(`catch.clause.${clause.errorType}`);
     const tagConstVar = this.emitConstInt(errorTag);
@@ -190,7 +181,7 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
   }
 
   // Default block (unreachable or user default clause)
-  const defaultClause = expr.clauses.find(c => c.isDefault);
+  const defaultClause = expr.clauses.find((c) => c.isDefault);
   const defaultLabel = defaultClause
     ? this.freshBlockId("catch.default")
     : this.freshBlockId("catch.unreachable");
@@ -198,7 +189,7 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
   this.setTerminator({
     kind: "switch",
     value: tagVar,
-    cases: caseInfos.map(ci => ({ value: ci.tagConst, target: ci.label })),
+    cases: caseInfos.map((ci) => ({ value: ci.tagConst, target: ci.label })),
     defaultBlock: defaultLabel,
   });
 
@@ -206,10 +197,9 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
   for (const clause of expr.clauses) {
     if (clause.isDefault) continue;
 
-    const errorTag = throwsTypes.findIndex(
-      t => t.kind === "struct" && t.name === clause.errorType
-    ) + 1;
-    const clauseLabel = caseInfos.find(ci => {
+    const errorTag =
+      throwsTypes.findIndex((t) => t.kind === "struct" && t.name === clause.errorType) + 1;
+    const clauseLabel = caseInfos.find((ci) => {
       // Match by tag value
       const inst = this.findConstIntInst(ci.tagConst);
       return inst?.value === errorTag;
@@ -243,7 +233,11 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
   if (defaultClause) {
     if (defaultClause.varName) {
       // Bind the error variable to a typed pointer into the err buffer
-      const firstErrType = throwsTypes[0] || { kind: "int" as const, bits: 8 as const, signed: false as const };
+      const firstErrType = throwsTypes[0] || {
+        kind: "int" as const,
+        bits: 8 as const,
+        signed: false as const,
+      };
       const typedErrPtr = this.emitCastToPtr(errPtr, firstErrType);
       this.varMap.set(defaultClause.varName, typedErrPtr);
     }
@@ -278,7 +272,10 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
 }
 
 /** Resolve the function name, args, and throws info for a call expression used in catch */
-export function resolveCallThrowsInfo(this: KirLowerer, callExpr: Expression): {
+export function resolveCallThrowsInfo(
+  this: KirLowerer,
+  callExpr: Expression
+): {
   funcName: string;
   args: VarId[];
   throwsTypes: KirType[];
@@ -286,7 +283,7 @@ export function resolveCallThrowsInfo(this: KirLowerer, callExpr: Expression): {
 } | null {
   if (callExpr.kind !== "CallExpr") return null;
 
-  const args = callExpr.args.map(a => this.lowerExpr(a));
+  const args = callExpr.args.map((a) => this.lowerExpr(a));
   const resultType = this.getExprKirType(callExpr);
 
   // Resolve function name (same logic as lowerCallExpr)
@@ -331,12 +328,16 @@ export function resolveCallThrowsInfo(this: KirLowerer, callExpr: Expression): {
 
   // Fallback: try to get from checker's type info
   const calleeType = this.checkResult.typeMap.get(callExpr.callee);
-  if (calleeType && calleeType.kind === "function" && (calleeType as FunctionType).throwsTypes.length > 0) {
+  if (
+    calleeType &&
+    calleeType.kind === "function" &&
+    (calleeType as FunctionType).throwsTypes.length > 0
+  ) {
     const ft = calleeType as FunctionType;
     return {
       funcName,
       args,
-      throwsTypes: ft.throwsTypes.map(t => this.lowerCheckerType(t)),
+      throwsTypes: ft.throwsTypes.map((t) => this.lowerCheckerType(t)),
       returnType: this.lowerCheckerType(ft.returnType),
     };
   }
@@ -347,7 +348,12 @@ export function resolveCallThrowsInfo(this: KirLowerer, callExpr: Expression): {
 /** For catch throw: propagate errors from callee to caller's error protocol.
  *  The callee already wrote the error value to the caller's __err buffer,
  *  so we only need to remap tags if the error type ordering differs. */
-export function lowerCatchThrowPropagation(this: KirLowerer, calleeThrowsTypes: KirType[], tagVar: VarId, _errPtr: VarId): void {
+export function lowerCatchThrowPropagation(
+  this: KirLowerer,
+  calleeThrowsTypes: KirType[],
+  tagVar: VarId,
+  _errPtr: VarId
+): void {
   const callerThrowsTypes = this.currentFunctionThrowsTypes;
 
   // Check if all callee types exist in caller types at same indices
@@ -355,7 +361,7 @@ export function lowerCatchThrowPropagation(this: KirLowerer, calleeThrowsTypes: 
   for (let i = 0; i < calleeThrowsTypes.length; i++) {
     const calleeType = calleeThrowsTypes[i];
     const callerIdx = callerThrowsTypes.findIndex(
-      ct => ct.kind === "struct" && calleeType.kind === "struct" && ct.name === calleeType.name
+      (ct) => ct.kind === "struct" && calleeType.kind === "struct" && ct.name === calleeType.name
     );
     if (callerIdx !== i) {
       needsRemap = true;
@@ -388,7 +394,7 @@ export function lowerCatchThrowPropagation(this: KirLowerer, calleeThrowsTypes: 
     for (let i = 0; i < calleeThrowsTypes.length; i++) {
       const calleeType = calleeThrowsTypes[i];
       const callerIdx = callerThrowsTypes.findIndex(
-        ct => ct.kind === "struct" && calleeType.kind === "struct" && ct.name === calleeType.name
+        (ct) => ct.kind === "struct" && calleeType.kind === "struct" && ct.name === calleeType.name
       );
       if (callerIdx < 0) continue;
 

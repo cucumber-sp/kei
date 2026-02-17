@@ -4,25 +4,23 @@
  */
 
 import type {
-  StructType,
-} from "../checker/types";
-import type {
-  Expression,
   BinaryExpr,
-  UnaryExpr,
-  IncrementExpr,
   DecrementExpr,
+  Expression,
+  IncrementExpr,
+  UnaryExpr,
 } from "../ast/nodes.ts";
-import type {
-  VarId,
-} from "./kir-types.ts";
+import type { StructType } from "../checker/types";
+import type { VarId } from "./kir-types.ts";
 import type { KirLowerer } from "./lowering.ts";
 
 export function lowerBinaryExpr(this: KirLowerer, expr: BinaryExpr): VarId {
   // Check for operator overloading
   const opMethod = this.checkResult.operatorMethods.get(expr);
   if (opMethod) {
-    return this.lowerOperatorMethodCall(expr.left, opMethod.methodName, opMethod.structType, [expr.right]);
+    return this.lowerOperatorMethodCall(expr.left, opMethod.methodName, opMethod.structType, [
+      expr.right,
+    ]);
   }
 
   // Short-circuit for logical AND/OR
@@ -131,11 +129,11 @@ export function lowerOperatorMethodCall(
   selfExpr: Expression,
   methodName: string,
   structType: StructType,
-  argExprs: Expression[],
+  argExprs: Expression[]
 ): VarId {
   // Methods take self and args as pointers, so get alloc pointers, not loaded values
   const selfId = this.lowerExprAsPtr(selfExpr);
-  const args = argExprs.map(a => {
+  const args = argExprs.map((a) => {
     const argType = this.checkResult.typeMap.get(a);
     if (argType?.kind === "struct") {
       return this.lowerExprAsPtr(a);

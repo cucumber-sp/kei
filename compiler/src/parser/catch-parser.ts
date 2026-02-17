@@ -3,12 +3,7 @@
  * Extracted from expr-parser.ts.
  */
 
-import type {
-  CatchClause,
-  CatchExpr,
-  Expression,
-  Statement,
-} from "../ast/nodes.ts";
+import type { CatchClause, CatchExpr, Expression, Statement } from "../ast/nodes.ts";
 import { TokenKind } from "../lexer/token.ts";
 import type { ParserContext } from "./parser.ts";
 

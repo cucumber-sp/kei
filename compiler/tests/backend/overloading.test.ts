@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { emitC } from "../../src/backend/c-emitter.ts";
 import { runDeSsa } from "../../src/backend/de-ssa.ts";
 import { runMem2Reg } from "../../src/kir/mem2reg.ts";

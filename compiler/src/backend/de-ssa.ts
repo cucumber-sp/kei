@@ -22,13 +22,13 @@
  */
 
 import type {
-  KirModule,
-  KirFunction,
+  BlockId,
   KirBlock,
+  KirFunction,
   KirInst,
+  KirModule,
   KirType,
   VarId,
-  BlockId,
 } from "../kir/kir-types.ts";
 
 /**

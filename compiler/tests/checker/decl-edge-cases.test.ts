@@ -6,7 +6,7 @@
  */
 
 import { describe, test } from "bun:test";
-import { checkError, checkOk, checkErrors } from "./helpers.ts";
+import { checkError, checkErrors, checkOk } from "./helpers.ts";
 
 describe("Checker — Duplicate Methods", () => {
   test("duplicate method name in struct → error", () => {

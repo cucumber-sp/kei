@@ -32,7 +32,13 @@ import {
 } from "./types";
 
 /** Report an error if left and right types are not equal. Returns false if they differ. */
-function requireSameTypes(checker: Checker, op: string, left: Type, right: Type, span: { start: number; end: number }): boolean {
+function requireSameTypes(
+  checker: Checker,
+  op: string,
+  left: Type,
+  right: Type,
+  span: { start: number; end: number }
+): boolean {
   if (!typesEqual(left, right)) {
     checker.error(
       `operator '${op}' requires same types, got '${typeToString(left)}' and '${typeToString(right)}'`,
@@ -205,10 +211,7 @@ export function checkUnaryExpression(checker: Checker, expr: UnaryExpr): Type {
 
     case "!":
       if (operand.kind !== TypeKind.Bool) {
-        checker.error(
-          `unary '!' requires bool operand, got '${typeToString(operand)}'`,
-          expr.span
-        );
+        checker.error(`unary '!' requires bool operand, got '${typeToString(operand)}'`, expr.span);
         return ERROR_TYPE;
       }
       return BOOL_TYPE;

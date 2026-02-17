@@ -1,6 +1,6 @@
-import { describe, test, expect } from "bun:test";
-import { checkError, checkOk, typeOf } from "./helpers.ts";
+import { describe, expect, test } from "bun:test";
 import { TypeKind } from "../../src/checker/types";
+import { checkError, checkOk, typeOf } from "./helpers.ts";
 
 describe("Checker — Codegen Edge Cases", () => {
   // ── Empty struct ─────────────────────────────────────────────────────
@@ -273,17 +273,11 @@ describe("Checker — Codegen Edge Cases", () => {
     });
 
     test("break outside any loop → error", () => {
-      checkError(
-        `fn main() -> int { break; return 0; }`,
-        "'break' used outside of a loop"
-      );
+      checkError(`fn main() -> int { break; return 0; }`, "'break' used outside of a loop");
     });
 
     test("continue outside any loop → error", () => {
-      checkError(
-        `fn main() -> int { continue; return 0; }`,
-        "'continue' used outside of a loop"
-      );
+      checkError(`fn main() -> int { continue; return 0; }`, "'continue' used outside of a loop");
     });
   });
 
@@ -446,10 +440,7 @@ describe("Checker — Codegen Edge Cases", () => {
     });
 
     test("string → i32 → error", () => {
-      checkError(
-        `fn main() -> int { let s = "hi"; let x = s as i32; return 0; }`,
-        "cannot cast"
-      );
+      checkError(`fn main() -> int { let s = "hi"; let x = s as i32; return 0; }`, "cannot cast");
     });
 
     test("struct → i32 → error", () => {
@@ -640,10 +631,7 @@ describe("Checker — Codegen Edge Cases", () => {
     });
 
     test("void function returning value → error", () => {
-      checkError(
-        `fn doNothing() { return 42; }`,
-        "expects return type 'void', got"
-      );
+      checkError(`fn doNothing() { return 42; }`, "expects return type 'void', got");
     });
   });
 
@@ -692,10 +680,7 @@ describe("Checker — Codegen Edge Cases", () => {
     });
 
     test("for loop variable not accessible outside → error", () => {
-      checkError(
-        `fn main() -> int { for i in 0..10 {} return i; }`,
-        "undeclared variable 'i'"
-      );
+      checkError(`fn main() -> int { for i in 0..10 {} return i; }`, "undeclared variable 'i'");
     });
   });
 });

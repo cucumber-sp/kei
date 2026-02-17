@@ -3,24 +3,24 @@
  * Extracted from lowering.ts for modularity.
  */
 
+import type {
+  Declaration,
+  EnumDecl,
+  ExternFunctionDecl,
+  FunctionDecl,
+  StaticDecl,
+  StructDecl,
+  UnsafeStructDecl,
+} from "../ast/nodes.ts";
 import type { MonomorphizedFunction, MonomorphizedStruct } from "../checker/generics.ts";
 import type { FunctionType } from "../checker/types";
 import type {
-  Declaration,
-  FunctionDecl,
-  ExternFunctionDecl,
-  StructDecl,
-  UnsafeStructDecl,
-  EnumDecl,
-  StaticDecl,
-} from "../ast/nodes.ts";
-import type {
-  KirFunction,
   KirExtern,
-  KirTypeDecl,
+  KirFunction,
   KirGlobal,
-  KirType,
   KirParam,
+  KirType,
+  KirTypeDecl,
   VarId,
 } from "./kir-types.ts";
 import type { KirLowerer } from "./lowering.ts";
@@ -105,7 +105,16 @@ function addThrowsParams(self: KirLowerer, params: KirParam[], originalReturnTyp
   const errParamId: VarId = `%__err`;
   self.varMap.set("__out", outParamId);
   self.varMap.set("__err", errParamId);
-  params.push({ name: "__out", type: { kind: "ptr", pointee: originalReturnType.kind === "void" ? { kind: "int", bits: 8, signed: false } : originalReturnType } });
+  params.push({
+    name: "__out",
+    type: {
+      kind: "ptr",
+      pointee:
+        originalReturnType.kind === "void"
+          ? { kind: "int", bits: 8, signed: false }
+          : originalReturnType,
+    },
+  });
   params.push({ name: "__err", type: { kind: "ptr", pointee: { kind: "void" } } });
 }
 
@@ -114,11 +123,9 @@ export function lowerFunction(this: KirLowerer, decl: FunctionDecl): KirFunction
 
   // Detect throws function
   const isThrows = decl.throwsTypes.length > 0;
-  const throwsKirTypes = isThrows ? decl.throwsTypes.map(t => this.lowerTypeNode(t)) : [];
+  const throwsKirTypes = isThrows ? decl.throwsTypes.map((t) => this.lowerTypeNode(t)) : [];
 
-  const originalReturnType = this.lowerCheckerType(
-    this.getFunctionReturnType(decl)
-  );
+  const originalReturnType = this.lowerCheckerType(this.getFunctionReturnType(decl));
 
   // Set current function throws state
   this.currentFunctionThrowsTypes = throwsKirTypes;
@@ -146,7 +153,9 @@ export function lowerFunction(this: KirLowerer, decl: FunctionDecl): KirFunction
   }
 
   // For throws functions, the actual return type is i32 (tag)
-  const returnType = isThrows ? { kind: "int" as const, bits: 32 as const, signed: true } : originalReturnType;
+  const returnType = isThrows
+    ? { kind: "int" as const, bits: 32 as const, signed: true }
+    : originalReturnType;
 
   // Lower body
   this.lowerBlock(decl.body);
@@ -160,9 +169,7 @@ export function lowerFunction(this: KirLowerer, decl: FunctionDecl): KirFunction
   // Use mangled name for overloaded functions, and apply module prefix
   let funcName: string;
   if (this.overloadedNames.has(decl.name)) {
-    const baseName = this.modulePrefix
-      ? `${this.modulePrefix}_${decl.name}`
-      : decl.name;
+    const baseName = this.modulePrefix ? `${this.modulePrefix}_${decl.name}` : decl.name;
     funcName = this.mangleFunctionName(baseName, decl);
   } else if (this.modulePrefix && decl.name !== "main") {
     funcName = `${this.modulePrefix}_${decl.name}`;
@@ -180,7 +187,12 @@ export function lowerFunction(this: KirLowerer, decl: FunctionDecl): KirFunction
   };
 }
 
-export function lowerMethod(this: KirLowerer, decl: FunctionDecl, mangledName: string, structName: string): KirFunction {
+export function lowerMethod(
+  this: KirLowerer,
+  decl: FunctionDecl,
+  mangledName: string,
+  structName: string
+): KirFunction {
   resetFunctionState(this);
 
   // Push function-level scope
@@ -190,17 +202,13 @@ export function lowerMethod(this: KirLowerer, decl: FunctionDecl, mangledName: s
     const type = this.resolveParamType(decl, p.name);
     // The self parameter is passed as a pointer to the struct
     const paramType: KirType =
-      p.name === "self" || type.kind === "struct"
-        ? { kind: "ptr", pointee: type }
-        : type;
+      p.name === "self" || type.kind === "struct" ? { kind: "ptr", pointee: type } : type;
     const varId: VarId = `%${p.name}`;
     this.varMap.set(p.name, varId);
     return { name: p.name, type: paramType };
   });
 
-  const returnType = this.lowerCheckerType(
-    this.getFunctionReturnType(decl)
-  );
+  const returnType = this.lowerCheckerType(this.getFunctionReturnType(decl));
 
   // Set current function return type so lowerReturnStmt can add struct loads
   this.currentFunctionOrigReturnType = returnType;
@@ -232,7 +240,10 @@ export function lowerExternFunction(this: KirLowerer, decl: ExternFunctionDecl):
   return { name: decl.name, params, returnType };
 }
 
-export function lowerStructDecl(this: KirLowerer, decl: StructDecl | UnsafeStructDecl): KirTypeDecl {
+export function lowerStructDecl(
+  this: KirLowerer,
+  decl: StructDecl | UnsafeStructDecl
+): KirTypeDecl {
   const fields = decl.fields.map((f) => ({
     name: f.name,
     type: this.lowerTypeNode(f.typeAnnotation),
@@ -244,7 +255,11 @@ export function lowerStructDecl(this: KirLowerer, decl: StructDecl | UnsafeStruc
   };
 }
 
-export function lowerMonomorphizedStruct(this: KirLowerer, mangledName: string, monoStruct: MonomorphizedStruct): KirTypeDecl {
+export function lowerMonomorphizedStruct(
+  this: KirLowerer,
+  mangledName: string,
+  monoStruct: MonomorphizedStruct
+): KirTypeDecl {
   const concrete = monoStruct.concrete;
   const fields = Array.from(concrete.fields.entries()).map(([name, fieldType]) => ({
     name,
@@ -256,7 +271,10 @@ export function lowerMonomorphizedStruct(this: KirLowerer, mangledName: string, 
   };
 }
 
-export function lowerMonomorphizedFunction(this: KirLowerer, monoFunc: MonomorphizedFunction): KirFunction {
+export function lowerMonomorphizedFunction(
+  this: KirLowerer,
+  monoFunc: MonomorphizedFunction
+): KirFunction {
   const decl = monoFunc.declaration!;
   const concreteType = monoFunc.concrete;
 
@@ -264,7 +282,9 @@ export function lowerMonomorphizedFunction(this: KirLowerer, monoFunc: Monomorph
 
   // Detect throws function
   const isThrows = concreteType.throwsTypes.length > 0;
-  const throwsKirTypes = isThrows ? concreteType.throwsTypes.map(t => this.lowerCheckerType(t)) : [];
+  const throwsKirTypes = isThrows
+    ? concreteType.throwsTypes.map((t) => this.lowerCheckerType(t))
+    : [];
 
   const originalReturnType = this.lowerCheckerType(concreteType.returnType);
 
@@ -290,7 +310,9 @@ export function lowerMonomorphizedFunction(this: KirLowerer, monoFunc: Monomorph
   }
 
   // For throws functions, the actual return type is i32 (tag)
-  const returnType = isThrows ? { kind: "int" as const, bits: 32 as const, signed: true } : originalReturnType;
+  const returnType = isThrows
+    ? { kind: "int" as const, bits: 32 as const, signed: true }
+    : originalReturnType;
 
   // Lower body
   this.lowerBlock(decl.body);

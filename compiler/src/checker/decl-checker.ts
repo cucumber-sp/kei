@@ -14,9 +14,16 @@ import type {
   UnsafeStructDecl,
 } from "../ast/nodes.ts";
 import type { Checker } from "./checker.ts";
-import { functionSymbol, moduleSymbol, typeSymbol, variableSymbol } from "./symbols.ts";
 import type { ScopeSymbol } from "./symbols.ts";
-import type { EnumVariantInfo, FunctionType, ModuleType, ParamInfo, StructType, Type } from "./types";
+import { functionSymbol, moduleSymbol, typeSymbol, variableSymbol } from "./symbols.ts";
+import type {
+  EnumVariantInfo,
+  FunctionType,
+  ModuleType,
+  ParamInfo,
+  StructType,
+  Type,
+} from "./types";
 import {
   ERROR_TYPE,
   functionType,
@@ -106,7 +113,10 @@ export class DeclarationChecker {
     const funcType = this.buildFunctionType(decl);
     const sym = functionSymbol(decl.name, funcType, false, decl);
     if (!this.checker.currentScope.define(sym)) {
-      this.checker.error(`duplicate declaration '${decl.name}' (same parameter signature)`, decl.span);
+      this.checker.error(
+        `duplicate declaration '${decl.name}' (same parameter signature)`,
+        decl.span
+      );
     }
   }
 
@@ -195,10 +205,7 @@ export class DeclarationChecker {
     const seenVariants = new Set<string>();
     for (const v of decl.variants) {
       if (seenVariants.has(v.name)) {
-        this.checker.error(
-          `duplicate variant '${v.name}' in enum '${decl.name}'`,
-          v.span
-        );
+        this.checker.error(`duplicate variant '${v.name}' in enum '${decl.name}'`, v.span);
       }
       seenVariants.add(v.name);
     }
@@ -224,7 +231,6 @@ export class DeclarationChecker {
       this.checker.error(`duplicate declaration '${decl.name}'`, decl.span);
       return;
     }
-
   }
 
   private registerTypeAlias(decl: TypeAlias): void {
@@ -279,10 +285,7 @@ export class DeclarationChecker {
         if (sym) {
           this.checker.currentScope.define(sym);
         } else {
-          this.checker.error(
-            `'${item}' is not exported by module '${decl.path}'`,
-            decl.span
-          );
+          this.checker.error(`'${item}' is not exported by module '${decl.path}'`, decl.span);
         }
       }
     } else {
@@ -303,9 +306,7 @@ export class DeclarationChecker {
         exports: modExports,
       };
 
-      this.checker.currentScope.define(
-        moduleSymbol(localName, modType, exportedSymbols)
-      );
+      this.checker.currentScope.define(moduleSymbol(localName, modType, exportedSymbols));
     }
   }
 
@@ -391,10 +392,7 @@ export class DeclarationChecker {
         if (method.returnType) {
           const retType = this.checker.resolveType(method.returnType);
           if (retType.kind !== TypeKind.Void) {
-            this.checker.error(
-              `lifecycle hook '__destroy' must return void`,
-              method.span
-            );
+            this.checker.error(`lifecycle hook '__destroy' must return void`, method.span);
           }
         }
       } else if (method.name === "__oncopy") {
@@ -533,14 +531,15 @@ export class DeclarationChecker {
   }
 
   /** Report an error if the same type parameter name appears more than once. */
-  private checkDuplicateTypeParams(params: string[], declName: string, span: { start: number; end: number }): void {
+  private checkDuplicateTypeParams(
+    params: string[],
+    declName: string,
+    span: { start: number; end: number }
+  ): void {
     const seen = new Set<string>();
     for (const gp of params) {
       if (seen.has(gp)) {
-        this.checker.error(
-          `duplicate type parameter '${gp}' in '${declName}'`,
-          span
-        );
+        this.checker.error(`duplicate type parameter '${gp}' in '${declName}'`, span);
       }
       seen.add(gp);
     }

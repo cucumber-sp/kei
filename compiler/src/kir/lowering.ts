@@ -16,90 +16,90 @@
  *   - lowering-utils.ts      (basic emit helpers)
  */
 
-import type { CheckResult, MultiModuleCheckResult, ModuleCheckInfo } from "../checker/checker.ts";
+import type {
+  ArrayLiteral,
+  AssertStmt,
+  AssignExpr,
+  BinaryExpr,
+  BlockStmt,
+  BoolLiteral,
+  CallExpr,
+  CastExpr,
+  CatchExpr,
+  ConstStmt,
+  Declaration,
+  DecrementExpr,
+  EnumDecl,
+  Expression,
+  ExprStmt,
+  ExternFunctionDecl,
+  FloatLiteral,
+  ForStmt,
+  FunctionDecl,
+  GroupExpr,
+  Identifier,
+  IfExpr,
+  IfStmt,
+  IncrementExpr,
+  IndexExpr,
+  IntLiteral,
+  LetStmt,
+  MemberExpr,
+  MoveExpr,
+  Program,
+  RangeExpr,
+  RequireStmt,
+  ReturnStmt,
+  Statement,
+  StaticDecl,
+  StringLiteral,
+  StructDecl,
+  StructLiteral,
+  SwitchStmt,
+  ThrowExpr,
+  UnaryExpr,
+  UnsafeStructDecl,
+  WhileStmt,
+} from "../ast/nodes.ts";
+import type { CheckResult, ModuleCheckInfo, MultiModuleCheckResult } from "../checker/checker.ts";
 import type { MonomorphizedFunction, MonomorphizedStruct } from "../checker/generics.ts";
 import { mangleGenericName } from "../checker/generics.ts";
 import type {
-  Type,
-  IntType,
-  FloatType,
-  StructType,
   EnumType,
+  FloatType,
   FunctionType,
+  IntType,
+  StructType,
+  Type,
 } from "../checker/types";
-import { TypeKind, I32_TYPE, typeToString, typesEqual } from "../checker/types";
+import { I32_TYPE, TypeKind, typesEqual, typeToString } from "../checker/types";
 import type {
-  Program,
-  Declaration,
-  FunctionDecl,
-  ExternFunctionDecl,
-  StructDecl,
-  UnsafeStructDecl,
-  EnumDecl,
-  StaticDecl,
-  Statement,
-  BlockStmt,
-  LetStmt,
-  ConstStmt,
-  ReturnStmt,
-  IfStmt,
-  WhileStmt,
-  ForStmt,
-  SwitchStmt,
-  ExprStmt,
-  AssertStmt,
-  RequireStmt,
-  Expression,
-  ArrayLiteral,
-  BinaryExpr,
-  UnaryExpr,
-  CallExpr,
-  MemberExpr,
-  IndexExpr,
-  AssignExpr,
-  StructLiteral,
-  IntLiteral,
-  FloatLiteral,
-  StringLiteral,
-  BoolLiteral,
-  Identifier,
-  IfExpr,
-  IncrementExpr,
-  DecrementExpr,
-  GroupExpr,
-  RangeExpr,
-  MoveExpr,
-  CatchExpr,
-  ThrowExpr,
-  CastExpr,
-} from "../ast/nodes.ts";
-import type {
-  KirModule,
-  KirFunction,
+  BinOp,
+  BlockId,
   KirBlock,
+  KirExtern,
+  KirFloatType,
+  KirFunction,
+  KirGlobal,
   KirInst,
+  KirIntType,
+  KirModule,
+  KirParam,
   KirTerminator,
   KirType,
-  KirParam,
-  KirExtern,
   KirTypeDecl,
-  KirGlobal,
   VarId,
-  BlockId,
-  BinOp,
-  KirIntType,
-  KirFloatType,
 } from "./kir-types.ts";
 
 // Import extracted method implementations
 import * as declMethods from "./lowering-decl.ts";
-import * as stmtMethods from "./lowering-stmt.ts";
+import * as errorMethods from "./lowering-error.ts";
 import * as exprMethods from "./lowering-expr.ts";
 import * as literalMethods from "./lowering-literals.ts";
 import * as operatorMethods from "./lowering-operators.ts";
-import * as errorMethods from "./lowering-error.ts";
-import * as typeMethods from "./lowering-types.ts";
 import * as scopeMethods from "./lowering-scope.ts";
+import * as stmtMethods from "./lowering-stmt.ts";
+import * as typeMethods from "./lowering-types.ts";
 import * as utilMethods from "./lowering-utils.ts";
 
 // ─── Scope variable tracking for lifecycle ───────────────────────────────────
@@ -165,7 +165,13 @@ export class KirLowerer {
   /** Set of function names known to use the throws protocol */
   throwsFunctions: Map<string, { throwsTypes: KirType[]; returnType: KirType }> = new Map();
 
-  constructor(program: Program, checkResult: CheckResult, modulePrefix: string = "", importedNames?: Map<string, string>, importedOverloads?: Set<string>) {
+  constructor(
+    program: Program,
+    checkResult: CheckResult,
+    modulePrefix: string = "",
+    importedNames?: Map<string, string>,
+    importedOverloads?: Set<string>
+  ) {
     this.program = program;
     this.checkResult = checkResult;
     this.modulePrefix = modulePrefix;
@@ -193,14 +199,14 @@ export class KirLowerer {
     // Pre-pass: discover which functions use throws protocol
     for (const decl of this.program.declarations) {
       if (decl.kind === "FunctionDecl" && decl.throwsTypes.length > 0) {
-        const throwsKirTypes = decl.throwsTypes.map(t => this.lowerTypeNode(t));
-        const retType = decl.returnType ? this.lowerTypeNode(decl.returnType) : { kind: "void" as const };
+        const throwsKirTypes = decl.throwsTypes.map((t) => this.lowerTypeNode(t));
+        const retType = decl.returnType
+          ? this.lowerTypeNode(decl.returnType)
+          : { kind: "void" as const };
         // Compute the mangled name the same way lowerFunction does
         let funcName: string;
         if (this.overloadedNames.has(decl.name)) {
-          const baseName = this.modulePrefix
-            ? `${this.modulePrefix}_${decl.name}`
-            : decl.name;
+          const baseName = this.modulePrefix ? `${this.modulePrefix}_${decl.name}` : decl.name;
           funcName = this.mangleFunctionName(baseName, decl);
         } else if (this.modulePrefix && decl.name !== "main") {
           funcName = `${this.modulePrefix}_${decl.name}`;
@@ -221,7 +227,9 @@ export class KirLowerer {
       // Lower methods for monomorphized structs
       if (monoStruct.originalDecl) {
         for (const method of monoStruct.originalDecl.methods) {
-          const structPrefix = this.modulePrefix ? `${this.modulePrefix}_${mangledName}` : mangledName;
+          const structPrefix = this.modulePrefix
+            ? `${this.modulePrefix}_${mangledName}`
+            : mangledName;
           const methodMangledName = `${structPrefix}_${method.name}`;
           this.functions.push(this.lowerMethod(method, methodMangledName, mangledName));
         }
@@ -529,7 +537,13 @@ export function lowerModulesToKir(
       }
     }
 
-    const lowerer = new KirLowerer(mod.program, result, modulePrefix, importedNames, importedOverloads);
+    const lowerer = new KirLowerer(
+      mod.program,
+      result,
+      modulePrefix,
+      importedNames,
+      importedOverloads
+    );
     const kirModule = lowerer.lower();
 
     // Merge globals, functions, types, externs

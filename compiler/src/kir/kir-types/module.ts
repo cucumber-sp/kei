@@ -1,6 +1,6 @@
-import type { KirType, KirStructType, KirEnumType } from "./types";
 import type { KirFunction, KirParam } from "./function";
 import type { KirInst } from "./instructions";
+import type { KirEnumType, KirStructType, KirType } from "./types";
 
 // ─── Module ──────────────────────────────────────────────────────────────────
 

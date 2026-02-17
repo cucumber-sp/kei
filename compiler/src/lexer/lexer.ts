@@ -190,7 +190,7 @@ export class Lexer {
     this.addDiagnostic(
       Severity.Error,
       `Unterminated multi-line comment (started at ${line}:${column})`,
-      start,
+      start
     );
   }
 
@@ -413,7 +413,7 @@ export class Lexer {
         this.addDiagnostic(
           Severity.Error,
           "Unterminated string literal (strings cannot contain unescaped newlines)",
-          start,
+          start
         );
         return this.makeToken(TokenKind.Error, start, this.pos);
       }
@@ -431,11 +431,7 @@ export class Lexer {
       this.pos++;
     }
 
-    this.addDiagnostic(
-      Severity.Error,
-      "Unterminated string literal (missing closing '\"')",
-      start,
-    );
+    this.addDiagnostic(Severity.Error, "Unterminated string literal (missing closing '\"')", start);
     return this.makeToken(TokenKind.Error, start, this.pos);
   }
 

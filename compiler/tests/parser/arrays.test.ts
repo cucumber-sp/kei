@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Expression, ArrayLiteral } from "../../src/ast/nodes.ts";
+import type { ArrayLiteral, Expression } from "../../src/ast/nodes.ts";
 import { parse } from "./helpers.ts";
 
 function parseExpr(exprStr: string): Expression {

@@ -3,9 +3,15 @@
  */
 
 import { Checker } from "../../src/checker/checker.ts";
+import type {
+  KirBlock,
+  KirFunction,
+  KirInst,
+  KirModule,
+  KirTerminator,
+} from "../../src/kir/kir-types.ts";
 import { lowerToKir } from "../../src/kir/lowering.ts";
 import { printKir } from "../../src/kir/printer.ts";
-import type { KirModule, KirFunction, KirBlock, KirInst, KirTerminator } from "../../src/kir/kir-types.ts";
 import { Lexer } from "../../src/lexer/index.ts";
 import { Parser } from "../../src/parser/index.ts";
 import { SourceFile } from "../../src/utils/source.ts";
@@ -29,7 +35,9 @@ export function lower(source: string): KirModule {
 
   const errors = result.diagnostics.filter((d) => d.severity === "error");
   if (errors.length > 0) {
-    const msgs = errors.map((d) => `  ${d.message} at ${d.location.line}:${d.location.column}`).join("\n");
+    const msgs = errors
+      .map((d) => `  ${d.message} at ${d.location.line}:${d.location.column}`)
+      .join("\n");
     throw new Error(`Type errors:\n${msgs}`);
   }
 

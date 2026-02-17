@@ -1,14 +1,7 @@
 // ─── Type Guards ─────────────────────────────────────────────────────────────
 
+import type { BoolType, ErrorType, IntType, PtrType, StructType, Type } from "./definitions";
 import { TypeKind } from "./kinds";
-import type {
-  Type,
-  IntType,
-  BoolType,
-  PtrType,
-  StructType,
-  ErrorType,
-} from "./definitions";
 
 export function isErrorType(t: Type): t is ErrorType {
   return t.kind === TypeKind.Error;

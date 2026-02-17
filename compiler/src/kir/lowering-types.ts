@@ -3,18 +3,9 @@
  * Extracted from lowering.ts for modularity.
  */
 
-import type {
-  Type,
-  FunctionType,
-} from "../checker/types";
-import type {
-  Expression,
-  FunctionDecl,
-} from "../ast/nodes.ts";
-import type {
-  KirType,
-  BinOp,
-} from "./kir-types.ts";
+import type { Expression, FunctionDecl } from "../ast/nodes.ts";
+import type { FunctionType, Type } from "../checker/types";
+import type { BinOp, KirType } from "./kir-types.ts";
 import type { KirLowerer } from "./lowering.ts";
 
 export function getExprKirType(this: KirLowerer, expr: Expression): KirType {
@@ -75,15 +66,23 @@ export function lowerCheckerType(this: KirLowerer, t: Type): KirType {
     case "c_char":
       return { kind: "int", bits: 8, signed: true };
     case "slice":
-      return { kind: "struct", name: "slice", fields: [
-        { name: "ptr", type: { kind: "ptr", pointee: this.lowerCheckerType(t.element) } },
-        { name: "len", type: { kind: "int", bits: 64, signed: false } },
-      ]};
+      return {
+        kind: "struct",
+        name: "slice",
+        fields: [
+          { name: "ptr", type: { kind: "ptr", pointee: this.lowerCheckerType(t.element) } },
+          { name: "len", type: { kind: "int", bits: 64, signed: false } },
+        ],
+      };
     case "range":
-      return { kind: "struct", name: "Range", fields: [
-        { name: "start", type: this.lowerCheckerType(t.element) },
-        { name: "end", type: this.lowerCheckerType(t.element) },
-      ]};
+      return {
+        kind: "struct",
+        name: "Range",
+        fields: [
+          { name: "start", type: this.lowerCheckerType(t.element) },
+          { name: "end", type: this.lowerCheckerType(t.element) },
+        ],
+      };
     default:
       return { kind: "int", bits: 32, signed: true };
   }
@@ -92,20 +91,39 @@ export function lowerCheckerType(this: KirLowerer, t: Type): KirType {
 export function lowerTypeNode(this: KirLowerer, typeNode: { kind: string; name: string }): KirType {
   const name = typeNode.name;
   switch (name) {
-    case "int": case "i32": return { kind: "int", bits: 32, signed: true };
-    case "i8": return { kind: "int", bits: 8, signed: true };
-    case "i16": return { kind: "int", bits: 16, signed: true };
-    case "i64": case "isize": return { kind: "int", bits: 64, signed: true };
-    case "u8": return { kind: "int", bits: 8, signed: false };
-    case "u16": return { kind: "int", bits: 16, signed: false };
-    case "u32": return { kind: "int", bits: 32, signed: false };
-    case "u64": case "usize": return { kind: "int", bits: 64, signed: false };
-    case "f32": return { kind: "float", bits: 32 };
-    case "f64": case "float": case "double": return { kind: "float", bits: 64 };
-    case "bool": return { kind: "bool" };
-    case "void": return { kind: "void" };
-    case "string": return { kind: "string" };
-    default: return { kind: "struct", name, fields: [] };
+    case "int":
+    case "i32":
+      return { kind: "int", bits: 32, signed: true };
+    case "i8":
+      return { kind: "int", bits: 8, signed: true };
+    case "i16":
+      return { kind: "int", bits: 16, signed: true };
+    case "i64":
+    case "isize":
+      return { kind: "int", bits: 64, signed: true };
+    case "u8":
+      return { kind: "int", bits: 8, signed: false };
+    case "u16":
+      return { kind: "int", bits: 16, signed: false };
+    case "u32":
+      return { kind: "int", bits: 32, signed: false };
+    case "u64":
+    case "usize":
+      return { kind: "int", bits: 64, signed: false };
+    case "f32":
+      return { kind: "float", bits: 32 };
+    case "f64":
+    case "float":
+    case "double":
+      return { kind: "float", bits: 64 };
+    case "bool":
+      return { kind: "bool" };
+    case "void":
+      return { kind: "void" };
+    case "string":
+      return { kind: "string" };
+    default:
+      return { kind: "struct", name, fields: [] };
   }
 }
 
@@ -117,7 +135,11 @@ export function resolveParamType(this: KirLowerer, decl: FunctionDecl, paramName
   return { kind: "int", bits: 32, signed: true };
 }
 
-export function resolveParamCheckerType(this: KirLowerer, decl: FunctionDecl, paramName: string): Type | undefined {
+export function resolveParamCheckerType(
+  this: KirLowerer,
+  decl: FunctionDecl,
+  paramName: string
+): Type | undefined {
   const param = decl.params.find((p) => p.name === paramName);
   if (param) {
     return this.nameToCheckerType(param.typeAnnotation.name) as Type;
@@ -134,7 +156,14 @@ export function getFunctionReturnType(this: KirLowerer, decl: FunctionDecl): Typ
     // If nameToCheckerType didn't recognize it (returns void for struct names),
     // treat it as a struct type so lowerMethod gets the correct KIR return type
     if (checkerType.kind === "void" && name !== "void") {
-      return { kind: "struct" as const, name, fields: new Map(), methods: new Map(), isUnsafe: false, genericParams: [] };
+      return {
+        kind: "struct" as const,
+        name,
+        fields: new Map(),
+        methods: new Map(),
+        isUnsafe: false,
+        genericParams: [],
+      };
     }
     return checkerType;
   }
@@ -143,20 +172,36 @@ export function getFunctionReturnType(this: KirLowerer, decl: FunctionDecl): Typ
 
 export function nameToCheckerType(this: KirLowerer, name: string): Type {
   switch (name) {
-    case "int": case "i32": return { kind: "int" as const, bits: 32 as const, signed: true };
-    case "i8": return { kind: "int" as const, bits: 8 as const, signed: true };
-    case "i16": return { kind: "int" as const, bits: 16 as const, signed: true };
-    case "i64": return { kind: "int" as const, bits: 64 as const, signed: true };
-    case "u8": return { kind: "int" as const, bits: 8 as const, signed: false };
-    case "u16": return { kind: "int" as const, bits: 16 as const, signed: false };
-    case "u32": return { kind: "int" as const, bits: 32 as const, signed: false };
-    case "u64": return { kind: "int" as const, bits: 64 as const, signed: false };
-    case "f32": return { kind: "float" as const, bits: 32 as const };
-    case "f64": case "float": return { kind: "float" as const, bits: 64 as const };
-    case "bool": return { kind: "bool" as const };
-    case "string": return { kind: "string" as const };
-    case "void": return { kind: "void" as const };
-    default: return { kind: "void" as const };
+    case "int":
+    case "i32":
+      return { kind: "int" as const, bits: 32 as const, signed: true };
+    case "i8":
+      return { kind: "int" as const, bits: 8 as const, signed: true };
+    case "i16":
+      return { kind: "int" as const, bits: 16 as const, signed: true };
+    case "i64":
+      return { kind: "int" as const, bits: 64 as const, signed: true };
+    case "u8":
+      return { kind: "int" as const, bits: 8 as const, signed: false };
+    case "u16":
+      return { kind: "int" as const, bits: 16 as const, signed: false };
+    case "u32":
+      return { kind: "int" as const, bits: 32 as const, signed: false };
+    case "u64":
+      return { kind: "int" as const, bits: 64 as const, signed: false };
+    case "f32":
+      return { kind: "float" as const, bits: 32 as const };
+    case "f64":
+    case "float":
+      return { kind: "float" as const, bits: 64 as const };
+    case "bool":
+      return { kind: "bool" as const };
+    case "string":
+      return { kind: "string" as const };
+    case "void":
+      return { kind: "void" as const };
+    default:
+      return { kind: "void" as const };
   }
 }
 
@@ -176,18 +221,35 @@ export function resolveSizeofArg(this: KirLowerer, arg: Expression): number {
 /** Get size from a type name string. */
 export function sizeofTypeName(this: KirLowerer, name: string): number {
   switch (name) {
-    case "i8": case "u8": case "bool": return 1;
-    case "i16": case "u16": return 2;
-    case "i32": case "u32": case "int": case "f32": case "float": return 4;
-    case "i64": case "u64": case "f64": case "double":
-    case "usize": case "isize":
+    case "i8":
+    case "u8":
+    case "bool":
+      return 1;
+    case "i16":
+    case "u16":
+      return 2;
+    case "i32":
+    case "u32":
+    case "int":
+    case "f32":
+    case "float":
+      return 4;
+    case "i64":
+    case "u64":
+    case "f64":
+    case "double":
+    case "usize":
+    case "isize":
       return 8;
     case "string":
       return 32; // kei_string struct: data(8) + len(8) + cap(8) + ref(8)
     default: {
       // Look up struct in program declarations
       for (const decl of this.program.declarations) {
-        if ((decl.kind === "StructDecl" || decl.kind === "UnsafeStructDecl") && decl.name === name) {
+        if (
+          (decl.kind === "StructDecl" || decl.kind === "UnsafeStructDecl") &&
+          decl.name === name
+        ) {
           let size = 0;
           for (const field of decl.fields) {
             size += this.sizeofTypeName(field.typeAnnotation.name);
@@ -203,11 +265,16 @@ export function sizeofTypeName(this: KirLowerer, name: string): number {
 /** Get size from a checker Type. */
 export function sizeofCheckerType(this: KirLowerer, t: Type): number {
   switch (t.kind) {
-    case "bool": return 1;
-    case "int": return t.bits / 8;
-    case "float": return t.bits / 8;
-    case "string": return 32; // kei_string struct: data(8) + len(8) + cap(8) + ref(8)
-    case "ptr": return 8;
+    case "bool":
+      return 1;
+    case "int":
+      return t.bits / 8;
+    case "float":
+      return t.bits / 8;
+    case "string":
+      return 32; // kei_string struct: data(8) + len(8) + cap(8) + ref(8)
+    case "ptr":
+      return 8;
     case "struct": {
       let size = 0;
       for (const [, fieldType] of t.fields) {
@@ -215,7 +282,8 @@ export function sizeofCheckerType(this: KirLowerer, t: Type): number {
       }
       return size;
     }
-    default: return 8;
+    default:
+      return 8;
   }
 }
 
@@ -226,7 +294,11 @@ export function mangleFunctionName(this: KirLowerer, baseName: string, decl: Fun
 }
 
 /** Build a mangled function name from a resolved FunctionType (for overloaded calls). */
-export function mangleFunctionNameFromType(this: KirLowerer, baseName: string, funcType: FunctionType): string {
+export function mangleFunctionNameFromType(
+  this: KirLowerer,
+  baseName: string,
+  funcType: FunctionType
+): string {
   const paramSuffixes = funcType.params.map((p) => this.checkerTypeSuffix(p.type));
   return `${baseName}_${paramSuffixes.join("_")}`;
 }
@@ -234,22 +306,43 @@ export function mangleFunctionNameFromType(this: KirLowerer, baseName: string, f
 /** Convert a type annotation name to a short suffix for mangling. */
 export function typeNameSuffix(this: KirLowerer, name: string): string {
   switch (name) {
-    case "int": case "i32": return "i32";
-    case "i8": return "i8";
-    case "i16": return "i16";
-    case "i64": case "long": return "i64";
-    case "u8": case "byte": return "u8";
-    case "u16": return "u16";
-    case "u32": return "u32";
-    case "u64": return "u64";
-    case "isize": return "isize";
-    case "usize": return "usize";
-    case "f32": case "float": return "f32";
-    case "f64": case "double": return "f64";
-    case "bool": return "bool";
-    case "string": return "string";
-    case "void": return "void";
-    default: return name;
+    case "int":
+    case "i32":
+      return "i32";
+    case "i8":
+      return "i8";
+    case "i16":
+      return "i16";
+    case "i64":
+    case "long":
+      return "i64";
+    case "u8":
+    case "byte":
+      return "u8";
+    case "u16":
+      return "u16";
+    case "u32":
+      return "u32";
+    case "u64":
+      return "u64";
+    case "isize":
+      return "isize";
+    case "usize":
+      return "usize";
+    case "f32":
+    case "float":
+      return "f32";
+    case "f64":
+    case "double":
+      return "f64";
+    case "bool":
+      return "bool";
+    case "string":
+      return "string";
+    case "void":
+      return "void";
+    default:
+      return name;
   }
 }
 

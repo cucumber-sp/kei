@@ -1,5 +1,5 @@
-import type { KirType, KirIntType, KirFloatType } from "./types";
 import type { VarId } from "./identifiers";
+import type { KirFloatType, KirIntType, KirType } from "./types";
 
 // ─── Instructions ────────────────────────────────────────────────────────────
 
@@ -90,10 +90,24 @@ export interface KirIndexPtr {
 
 /** All supported binary operations. */
 export type BinOp =
-  | "add" | "sub" | "mul" | "div" | "mod"
-  | "eq" | "neq" | "lt" | "gt" | "lte" | "gte"
-  | "and" | "or"
-  | "bit_and" | "bit_or" | "bit_xor" | "shl" | "shr";
+  | "add"
+  | "sub"
+  | "mul"
+  | "div"
+  | "mod"
+  | "eq"
+  | "neq"
+  | "lt"
+  | "gt"
+  | "lte"
+  | "gte"
+  | "and"
+  | "or"
+  | "bit_and"
+  | "bit_or"
+  | "bit_xor"
+  | "shl"
+  | "shr";
 
 /** Binary operation on two SSA values. */
 export interface KirBinOp {

@@ -431,38 +431,23 @@ describe("Checker — Implicit Literal Conversions (comprehensive)", () => {
     });
 
     test("float literal → i32 let: error", () => {
-      checkError(
-        `fn main() -> int { let x: i32 = 2.5; return 0; }`,
-        "type mismatch"
-      );
+      checkError(`fn main() -> int { let x: i32 = 2.5; return 0; }`, "type mismatch");
     });
 
     test("float literal → u8 let: error", () => {
-      checkError(
-        `fn main() -> int { let x: u8 = 1.0; return 0; }`,
-        "type mismatch"
-      );
+      checkError(`fn main() -> int { let x: u8 = 1.0; return 0; }`, "type mismatch");
     });
 
     test("float literal → i64 let: error", () => {
-      checkError(
-        `fn main() -> int { let x: i64 = 3.14; return 0; }`,
-        "type mismatch"
-      );
+      checkError(`fn main() -> int { let x: i64 = 3.14; return 0; }`, "type mismatch");
     });
 
     test("int literal overflow in let: u8 = 256", () => {
-      checkError(
-        `fn main() -> int { let x: u8 = 256; return 0; }`,
-        "type mismatch"
-      );
+      checkError(`fn main() -> int { let x: u8 = 256; return 0; }`, "type mismatch");
     });
 
     test("int literal overflow in let: i8 = 200", () => {
-      checkError(
-        `fn main() -> int { let x: i8 = 200; return 0; }`,
-        "type mismatch"
-      );
+      checkError(`fn main() -> int { let x: i8 = 200; return 0; }`, "type mismatch");
     });
 
     test("int literal overflow in function arg", () => {
@@ -490,17 +475,11 @@ describe("Checker — Implicit Literal Conversions (comprehensive)", () => {
     });
 
     test("int literal overflow in return: u8 = 300", () => {
-      checkError(
-        `fn foo() -> u8 { return 300; }`,
-        "return type mismatch"
-      );
+      checkError(`fn foo() -> u8 { return 300; }`, "return type mismatch");
     });
 
     test("float literal in i32 return: error", () => {
-      checkError(
-        `fn foo() -> i32 { return 3.14; }`,
-        "return type mismatch"
-      );
+      checkError(`fn foo() -> i32 { return 3.14; }`, "return type mismatch");
     });
   });
 

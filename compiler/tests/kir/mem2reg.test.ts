@@ -1,8 +1,8 @@
-import { test, expect, describe } from "bun:test";
-import { lower, lowerFunction, getInstructions, countInstructions } from "./helpers.ts";
+import { describe, expect, test } from "bun:test";
+import type { KirBlock, KirFunction, KirPhi } from "../../src/kir/kir-types.ts";
 import { runMem2Reg } from "../../src/kir/mem2reg.ts";
 import { printKir } from "../../src/kir/printer.ts";
-import type { KirFunction, KirBlock, KirPhi } from "../../src/kir/kir-types.ts";
+import { countInstructions, getInstructions, lower, lowerFunction } from "./helpers.ts";
 
 /** Lower source, run mem2reg, return module. */
 function lowerOpt(source: string) {
@@ -47,12 +47,15 @@ function getBlockPhis(fn: KirFunction, blockPrefix: string): KirPhi[] {
 
 describe("mem2reg: simple variable (no phi needed)", () => {
   test("removes stack_alloc/load/store for simple let", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn foo() -> int {
         let x: int = 42;
         return x;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
 
     // No stack_alloc, load, or store should remain for the promoted variable
     const allocs = getInstructions(fn, "stack_alloc");
@@ -67,12 +70,15 @@ describe("mem2reg: simple variable (no phi needed)", () => {
   });
 
   test("preserves const_int values through promotion", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn foo() -> int {
         let x: int = 42;
         return x;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
 
     // The const_int 42 should still exist
     const constInts = getInstructions(fn, "const_int");
@@ -83,14 +89,17 @@ describe("mem2reg: simple variable (no phi needed)", () => {
   });
 
   test("sequential assignments without branches", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn foo() -> int {
         let x: int = 1;
         x = 2;
         x = 3;
         return x;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
 
     const allocs = getInstructions(fn, "stack_alloc");
     expect(allocs).toHaveLength(0);
@@ -98,13 +107,16 @@ describe("mem2reg: simple variable (no phi needed)", () => {
   });
 
   test("multiple variables, single block", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn foo() -> int {
         let a: int = 10;
         let b: int = 20;
         return a + b;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
 
     const allocs = getInstructions(fn, "stack_alloc");
     expect(allocs).toHaveLength(0);
@@ -112,11 +124,14 @@ describe("mem2reg: simple variable (no phi needed)", () => {
   });
 
   test("parameter usage unaffected", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn foo(x: int) -> int {
         return x;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
 
     // Parameters aren't stack-allocated, so nothing to promote
     const allocs = getInstructions(fn, "stack_alloc");
@@ -127,7 +142,8 @@ describe("mem2reg: simple variable (no phi needed)", () => {
 
 describe("mem2reg: if/else with phi nodes", () => {
   test("variable modified in both branches creates phi at merge", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn foo(cond: bool) -> int {
         let x: int = 0;
         if cond {
@@ -137,7 +153,9 @@ describe("mem2reg: if/else with phi nodes", () => {
         }
         return x;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
 
     // stack_alloc/load/store for x should be removed
     const allocs = getInstructions(fn, "stack_alloc");
@@ -153,7 +171,8 @@ describe("mem2reg: if/else with phi nodes", () => {
   });
 
   test("variable only modified in one branch still needs phi", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn foo(cond: bool) -> int {
         let x: int = 0;
         if cond {
@@ -161,7 +180,9 @@ describe("mem2reg: if/else with phi nodes", () => {
         }
         return x;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
 
     const allocs = getInstructions(fn, "stack_alloc");
     expect(allocs).toHaveLength(0);
@@ -172,7 +193,8 @@ describe("mem2reg: if/else with phi nodes", () => {
   });
 
   test("phi node has correct type", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn foo(cond: bool) -> int {
         let x: int = 0;
         if cond {
@@ -182,7 +204,9 @@ describe("mem2reg: if/else with phi nodes", () => {
         }
         return x;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
 
     const phis = getPhis(fn);
     const phi = phis.find((p) => p.incoming.length === 2);
@@ -193,7 +217,8 @@ describe("mem2reg: if/else with phi nodes", () => {
 
 describe("mem2reg: while loop with phi nodes", () => {
   test("loop variable creates phi at loop header", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn foo() -> int {
         let x: int = 0;
         while x < 10 {
@@ -201,7 +226,9 @@ describe("mem2reg: while loop with phi nodes", () => {
         }
         return x;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
 
     const allocs = getInstructions(fn, "stack_alloc");
     expect(allocs).toHaveLength(0);
@@ -212,7 +239,8 @@ describe("mem2reg: while loop with phi nodes", () => {
   });
 
   test("loop phi has incoming from entry and back-edge", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn foo() -> int {
         let x: int = 0;
         while x < 10 {
@@ -220,7 +248,9 @@ describe("mem2reg: while loop with phi nodes", () => {
         }
         return x;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
 
     const headerPhis = getBlockPhis(fn, "while.header");
     expect(headerPhis.length).toBeGreaterThanOrEqual(1);
@@ -234,7 +264,8 @@ describe("mem2reg: while loop with phi nodes", () => {
 
 describe("mem2reg: multiple variables with different liveness", () => {
   test("two variables, one modified in branch, one not", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn foo(cond: bool) -> int {
         let x: int = 1;
         let y: int = 2;
@@ -243,7 +274,9 @@ describe("mem2reg: multiple variables with different liveness", () => {
         }
         return x + y;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
 
     const allocs = getInstructions(fn, "stack_alloc");
     expect(allocs).toHaveLength(0);
@@ -254,7 +287,8 @@ describe("mem2reg: multiple variables with different liveness", () => {
   });
 
   test("variables with independent liveness", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn foo(cond: bool) -> int {
         let a: int = 1;
         let b: int = 2;
@@ -267,7 +301,9 @@ describe("mem2reg: multiple variables with different liveness", () => {
         }
         return a + b;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
 
     const allocs = getInstructions(fn, "stack_alloc");
     expect(allocs).toHaveLength(0);
@@ -280,7 +316,8 @@ describe("mem2reg: multiple variables with different liveness", () => {
 
 describe("mem2reg: nested control flow", () => {
   test("nested if/else", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn foo(a: bool, b: bool) -> int {
         let x: int = 0;
         if a {
@@ -294,7 +331,9 @@ describe("mem2reg: nested control flow", () => {
         }
         return x;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
 
     const allocs = getInstructions(fn, "stack_alloc");
     expect(allocs).toHaveLength(0);
@@ -305,7 +344,8 @@ describe("mem2reg: nested control flow", () => {
   });
 
   test("if inside while loop", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn foo() -> int {
         let x: int = 0;
         let i: int = 0;
@@ -317,7 +357,9 @@ describe("mem2reg: nested control flow", () => {
         }
         return x;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
 
     const allocs = getInstructions(fn, "stack_alloc");
     expect(allocs).toHaveLength(0);
@@ -330,7 +372,8 @@ describe("mem2reg: nested control flow", () => {
 
 describe("mem2reg: variables only used in one branch (no phi needed)", () => {
   test("variable defined and used only in then branch", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn foo(cond: bool) -> int {
         if cond {
           let x: int = 42;
@@ -338,7 +381,9 @@ describe("mem2reg: variables only used in one branch (no phi needed)", () => {
         }
         return 0;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
 
     const allocs = getInstructions(fn, "stack_alloc");
     expect(allocs).toHaveLength(0);
@@ -348,12 +393,15 @@ describe("mem2reg: variables only used in one branch (no phi needed)", () => {
   });
 
   test("const variables are not stack-allocated", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn foo() -> int {
         const x: int = 42;
         return x;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
 
     // Const vars use direct binding, no stack_alloc
     const allocs = getInstructions(fn, "stack_alloc");
@@ -399,7 +447,8 @@ describe("mem2reg: printer output", () => {
 
 describe("mem2reg: preserves non-promotable allocas", () => {
   test("struct field access preserves alloca (address-taken)", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       struct Point {
         x: int;
         y: int;
@@ -408,7 +457,9 @@ describe("mem2reg: preserves non-promotable allocas", () => {
         let p: Point = Point { x: 1, y: 2 };
         return p.x;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
 
     // Struct literal uses field_ptr, so p's alloca is address-taken
     // and should NOT be promoted (stack_alloc should remain)
@@ -443,11 +494,14 @@ describe("mem2reg: idempotency", () => {
 
 describe("mem2reg: function with no promotable allocas", () => {
   test("function with only params returns unchanged", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn add(a: int, b: int) -> int {
         return a + b;
       }
-    `, "add");
+    `,
+      "add"
+    );
 
     // No allocas to promote, function should be basically unchanged
     const allocs = getInstructions(fn, "stack_alloc");
@@ -464,7 +518,8 @@ describe("mem2reg: function with no promotable allocas", () => {
 
 describe("mem2reg: compound assignment", () => {
   test("compound assignment in loop", () => {
-    const fn = lowerOptFunction(`
+    const fn = lowerOptFunction(
+      `
       fn sum() -> int {
         let total: int = 0;
         let i: int = 0;
@@ -474,7 +529,9 @@ describe("mem2reg: compound assignment", () => {
         }
         return total;
       }
-    `, "sum");
+    `,
+      "sum"
+    );
 
     const allocs = getInstructions(fn, "stack_alloc");
     expect(allocs).toHaveLength(0);

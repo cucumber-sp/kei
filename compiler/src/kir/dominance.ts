@@ -7,8 +7,8 @@
  * children from the idom map.
  */
 
-import type { BlockId } from "./kir-types.ts";
 import type { CFG } from "./cfg.ts";
+import type { BlockId } from "./kir-types.ts";
 
 // ─── Dominance (Cooper, Harvey, Kennedy) ────────────────────────────────────
 
@@ -110,7 +110,7 @@ export function computeDominators(cfg: CFG): Map<BlockId, BlockId> {
  */
 export function computeDomFrontiers(
   cfg: CFG,
-  idom: Map<BlockId, BlockId>,
+  idom: Map<BlockId, BlockId>
 ): Map<BlockId, Set<BlockId>> {
   const domFrontiers = new Map<BlockId, Set<BlockId>>();
   for (const id of cfg.blockOrder) {
@@ -141,10 +141,7 @@ export function computeDomFrontiers(
 // ─── Dominator tree children ────────────────────────────────────────────────
 
 /** Build a map from each block to its children in the dominator tree. */
-export function buildDomTree(
-  cfg: CFG,
-  idom: Map<BlockId, BlockId>,
-): Map<BlockId, BlockId[]> {
+export function buildDomTree(cfg: CFG, idom: Map<BlockId, BlockId>): Map<BlockId, BlockId[]> {
   const children = new Map<BlockId, BlockId[]>();
   for (const id of cfg.blockOrder) {
     children.set(id, []);

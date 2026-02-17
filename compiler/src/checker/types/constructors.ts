@@ -1,23 +1,23 @@
 // ─── Type Constructors ──────────────────────────────────────────────────────
 
-import { TypeKind } from "./kinds";
 import type {
-  IntType,
-  FloatType,
-  BoolType,
-  VoidType,
-  StringType,
-  CCharType,
-  NullType,
-  ErrorType,
-  PtrType,
   ArrayType,
-  SliceType,
-  RangeType,
+  BoolType,
+  CCharType,
+  ErrorType,
+  FloatType,
   FunctionType,
-  Type,
+  IntType,
+  NullType,
   ParamInfo,
+  PtrType,
+  RangeType,
+  SliceType,
+  StringType,
+  Type,
+  VoidType,
 } from "./definitions";
+import { TypeKind } from "./kinds";
 
 export function intType(bits: 8 | 16 | 32 | 64, signed: boolean): IntType {
   return { kind: TypeKind.Int, bits, signed };

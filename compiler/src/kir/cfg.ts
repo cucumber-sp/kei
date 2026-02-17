@@ -5,7 +5,7 @@
  * a reverse post-order (RPO) via DFS from the entry block.
  */
 
-import type { KirBlock, KirTerminator, BlockId } from "./kir-types.ts";
+import type { BlockId, KirBlock, KirTerminator } from "./kir-types.ts";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 

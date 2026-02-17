@@ -2,10 +2,10 @@
  * Tests for multi-module KIR lowering.
  */
 
-import { test, expect, describe } from "bun:test";
-import { resolve, join } from "node:path";
-import { Checker } from "../../src/checker/checker.ts";
+import { describe, expect, test } from "bun:test";
+import { join, resolve } from "node:path";
 import type { ModuleCheckInfo } from "../../src/checker/checker.ts";
+import { Checker } from "../../src/checker/checker.ts";
 import { lowerModulesToKir } from "../../src/kir/lowering.ts";
 import { ModuleResolver } from "../../src/modules/resolver.ts";
 

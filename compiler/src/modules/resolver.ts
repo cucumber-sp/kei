@@ -12,11 +12,11 @@
  */
 
 import { existsSync } from "node:fs";
-import { resolve, dirname, join, relative, basename } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
+import type { ImportDecl, Program } from "../ast/nodes.ts";
 import { Lexer } from "../lexer/index.ts";
 import { Parser } from "../parser/index.ts";
 import { SourceFile } from "../utils/source.ts";
-import type { Program, ImportDecl } from "../ast/nodes.ts";
 
 // ─── Module Info ──────────────────────────────────────────────────────────────
 
@@ -164,7 +164,9 @@ export class ModuleResolver {
         .map((d) => `  ${d.location.line}:${d.location.column}: ${d.message}`)
         .join("\n");
       const extra = lexErrors.length > 3 ? `\n  ... and ${lexErrors.length - 3} more` : "";
-      this.errors.push(`module '${moduleName}': lexer errors in '${filePath}':\n${details}${extra}`);
+      this.errors.push(
+        `module '${moduleName}': lexer errors in '${filePath}':\n${details}${extra}`
+      );
       return;
     }
 
@@ -179,7 +181,9 @@ export class ModuleResolver {
         .map((d) => `  ${d.location.line}:${d.location.column}: ${d.message}`)
         .join("\n");
       const extra = parseErrors.length > 3 ? `\n  ... and ${parseErrors.length - 3} more` : "";
-      this.errors.push(`module '${moduleName}': parse errors in '${filePath}':\n${details}${extra}`);
+      this.errors.push(
+        `module '${moduleName}': parse errors in '${filePath}':\n${details}${extra}`
+      );
       return;
     }
 
@@ -264,7 +268,10 @@ export class ModuleResolver {
    */
   private filePathToModuleName(filePath: string): string {
     const rel = relative(this.sourceRoot, filePath);
-    return rel.replace(/\.kei$/, "").replace(/\//g, ".").replace(/\\/g, ".");
+    return rel
+      .replace(/\.kei$/, "")
+      .replace(/\//g, ".")
+      .replace(/\\/g, ".");
   }
 
   /**
@@ -282,9 +289,7 @@ export class ModuleResolver {
       if (inStack.has(name)) {
         const cycleStart = path.indexOf(name);
         const cycle = path.slice(cycleStart).concat(name);
-        this.errors.push(
-          `Circular dependency detected: ${cycle.join(" \u2192 ")}`
-        );
+        this.errors.push(`Circular dependency detected: ${cycle.join(" \u2192 ")}`);
         return false;
       }
 

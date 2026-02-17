@@ -5,16 +5,16 @@
  * does not crash, hang, or produce incorrect results under extreme inputs.
  */
 
-import { describe, test, expect } from "bun:test";
-import { Lexer } from "../../src/lexer/index.ts";
-import { Parser } from "../../src/parser/index.ts";
+import { describe, expect, test } from "bun:test";
+import { emitC } from "../../src/backend/c-emitter.ts";
+import { runDeSsa } from "../../src/backend/de-ssa.ts";
 import { Checker } from "../../src/checker/checker.ts";
+import type { Diagnostic } from "../../src/errors/diagnostic.ts";
 import { lowerToKir } from "../../src/kir/lowering.ts";
 import { runMem2Reg } from "../../src/kir/mem2reg.ts";
-import { runDeSsa } from "../../src/backend/de-ssa.ts";
-import { emitC } from "../../src/backend/c-emitter.ts";
+import { Lexer } from "../../src/lexer/index.ts";
+import { Parser } from "../../src/parser/index.ts";
 import { SourceFile } from "../../src/utils/source.ts";
-import type { Diagnostic } from "../../src/errors/diagnostic.ts";
 
 /** Run the full pipeline: source → tokens → AST → check → KIR → mem2reg → de-ssa → C */
 function compileFull(source: string): string {
@@ -84,10 +84,7 @@ function checkOnly(source: string): Diagnostic[] {
 
 describe("stress: large source files", () => {
   test("1000 let statements in a single function", () => {
-    const stmts = Array.from(
-      { length: 1000 },
-      (_, i) => `  let x${i}: i32 = ${i};`
-    ).join("\n");
+    const stmts = Array.from({ length: 1000 }, (_, i) => `  let x${i}: i32 = ${i};`).join("\n");
     const source = `fn main() -> i32 {\n${stmts}\n  return x999;\n}`;
     const c = compileFull(source);
     expect(c).toContain("main");
@@ -96,20 +93,18 @@ describe("stress: large source files", () => {
 
   test("500 independent functions", () => {
     // Use "func" prefix to avoid collisions with keywords like f32, f64
-    const fns = Array.from(
-      { length: 500 },
-      (_, i) => `fn func${i}() -> i32 { return ${i}; }`
-    ).join("\n");
+    const fns = Array.from({ length: 500 }, (_, i) => `fn func${i}() -> i32 { return ${i}; }`).join(
+      "\n"
+    );
     const source = `${fns}\nfn main() -> i32 { return func0(); }`;
     const c = compileFull(source);
     expect(c).toContain("main");
   });
 
   test("200 struct declarations", () => {
-    const structs = Array.from(
-      { length: 200 },
-      (_, i) => `struct S${i} { a: i32; b: i32; }`
-    ).join("\n");
+    const structs = Array.from({ length: 200 }, (_, i) => `struct S${i} { a: i32; b: i32; }`).join(
+      "\n"
+    );
     const source = `${structs}\nfn main() -> i32 { let s = S0{ a: 1, b: 2 }; return s.a; }`;
     const c = compileFull(source);
     expect(c).toContain("S0");
@@ -173,10 +168,7 @@ describe("stress: deeply nested expressions", () => {
   });
 
   test("50 chained comparisons via logical and", () => {
-    const parts = Array.from(
-      { length: 50 },
-      (_, i) => `(${i + 1} < ${i + 2})`
-    );
+    const parts = Array.from({ length: 50 }, (_, i) => `(${i + 1} < ${i + 2})`);
     const expr = parts.join(" && ");
     const source = `fn main() -> i32 { let b: bool = ${expr}; return 0; }`;
     const c = compileFull(source);
@@ -204,19 +196,11 @@ describe("stress: deeply nested expressions", () => {
 
 describe("stress: many function overloads", () => {
   test("12 overloads of the same function name", () => {
-    const overloads = Array.from(
-      { length: 12 },
-      (_, i) => {
-        const params = Array.from(
-          { length: i + 1 },
-          (_, j) => `p${j}: i32`
-        ).join(", ");
-        const sum = Array.from({ length: i + 1 }, (_, j) => `p${j}`).join(
-          " + "
-        );
-        return `fn compute(${params}) -> i32 { return ${sum}; }`;
-      }
-    ).join("\n");
+    const overloads = Array.from({ length: 12 }, (_, i) => {
+      const params = Array.from({ length: i + 1 }, (_, j) => `p${j}: i32`).join(", ");
+      const sum = Array.from({ length: i + 1 }, (_, j) => `p${j}`).join(" + ");
+      return `fn compute(${params}) -> i32 { return ${sum}; }`;
+    }).join("\n");
 
     const source = `${overloads}\nfn main() -> i32 { return compute(1); }`;
     const c = compileFull(source);
@@ -224,21 +208,8 @@ describe("stress: many function overloads", () => {
   });
 
   test("10 overloads differentiated by type", () => {
-    const types = [
-      "i32",
-      "i64",
-      "u8",
-      "u16",
-      "u32",
-      "u64",
-      "i8",
-      "i16",
-      "f32",
-      "f64",
-    ];
-    const overloads = types
-      .map((t) => `fn process(x: ${t}) -> ${t} { return x; }`)
-      .join("\n");
+    const types = ["i32", "i64", "u8", "u16", "u32", "u64", "i8", "i16", "f32", "f64"];
+    const overloads = types.map((t) => `fn process(x: ${t}) -> ${t} { return x; }`).join("\n");
     const source = `${overloads}\nfn main() -> i32 { let x: i32 = 5; return process(x); }`;
     const c = compileFull(source);
     expect(c).toContain("process");
@@ -250,28 +221,16 @@ describe("stress: many function overloads", () => {
 describe("stress: large struct declarations", () => {
   test("struct with 50 fields", () => {
     // Use "field" prefix to avoid collisions with keywords (f32, f64)
-    const fields = Array.from(
-      { length: 50 },
-      (_, i) => `  field${i}: i32;`
-    ).join("\n");
-    const inits = Array.from(
-      { length: 50 },
-      (_, i) => `field${i}: ${i}`
-    ).join(", ");
+    const fields = Array.from({ length: 50 }, (_, i) => `  field${i}: i32;`).join("\n");
+    const inits = Array.from({ length: 50 }, (_, i) => `field${i}: ${i}`).join(", ");
     const source = `struct Big {\n${fields}\n}\nfn main() -> i32 {\n  let b = Big{ ${inits} };\n  return b.field0;\n}`;
     const c = compileFull(source);
     expect(c).toContain("Big");
   });
 
   test("struct with 100 fields", () => {
-    const fields = Array.from(
-      { length: 100 },
-      (_, i) => `  field${i}: i32;`
-    ).join("\n");
-    const inits = Array.from(
-      { length: 100 },
-      (_, i) => `field${i}: ${i}`
-    ).join(", ");
+    const fields = Array.from({ length: 100 }, (_, i) => `  field${i}: i32;`).join("\n");
+    const inits = Array.from({ length: 100 }, (_, i) => `field${i}: ${i}`).join(", ");
     const source = `struct Huge {\n${fields}\n}\nfn main() -> i32 {\n  let h = Huge{ ${inits} };\n  return h.field99;\n}`;
     const c = compileFull(source);
     expect(c).toContain("Huge");
@@ -305,30 +264,21 @@ describe("stress: large struct declarations", () => {
 
 describe("stress: large enum declarations", () => {
   test("enum with 50 variants (simple)", () => {
-    const variants = Array.from(
-      { length: 50 },
-      (_, i) => `V${i} = ${i}`
-    ).join(", ");
+    const variants = Array.from({ length: 50 }, (_, i) => `V${i} = ${i}`).join(", ");
     const source = `enum BigEnum : i32 { ${variants} }\nfn main() -> i32 { return 0; }`;
     const c = compileFull(source);
     expect(c).toContain("BigEnum");
   });
 
   test("enum with 100 variants", () => {
-    const variants = Array.from(
-      { length: 100 },
-      (_, i) => `Variant${i} = ${i}`
-    ).join(", ");
+    const variants = Array.from({ length: 100 }, (_, i) => `Variant${i} = ${i}`).join(", ");
     const source = `enum HugeEnum : i32 { ${variants} }\nfn main() -> i32 { return 0; }`;
     const c = compileFull(source);
     expect(c).toContain("HugeEnum");
   });
 
   test("data enum with 50 variants with fields", () => {
-    const variants = Array.from(
-      { length: 50 },
-      (_, i) => `V${i}(x: i32, y: i32)`
-    ).join(",\n  ");
+    const variants = Array.from({ length: 50 }, (_, i) => `V${i}(x: i32, y: i32)`).join(",\n  ");
     const source = `enum DataEnum {\n  ${variants}\n}\nfn main() -> i32 { return 0; }`;
     const diags = checkOnly(source);
     const errors = diags.filter((d) => d.severity === "error");
@@ -387,10 +337,9 @@ describe("stress: long string literals", () => {
   });
 
   test("many short string literals (200 strings)", () => {
-    const stmts = Array.from(
-      { length: 200 },
-      (_, i) => `  let s${i}: string = "str_${i}";`
-    ).join("\n");
+    const stmts = Array.from({ length: 200 }, (_, i) => `  let s${i}: string = "str_${i}";`).join(
+      "\n"
+    );
     const source = `fn main() -> i32 {\n${stmts}\n  return 0;\n}`;
     const c = compileFull(source);
     expect(c).toContain("str_199");
@@ -409,9 +358,7 @@ describe("stress: many generic instantiations", () => {
     for (let i = 0; i < 20; i++) {
       const t = allTypes[i % allTypes.length];
       const defaultVal = floatTypes.includes(t) ? "0.0" : "0";
-      instantiations.push(
-        `  let b${i} = Box<${t}>{ value: ${defaultVal} };`
-      );
+      instantiations.push(`  let b${i} = Box<${t}>{ value: ${defaultVal} };`);
     }
 
     const source = `
@@ -443,18 +390,7 @@ describe("stress: many generic instantiations", () => {
   });
 
   test("generic function with 15 different instantiations", () => {
-    const types = [
-      "i8",
-      "i16",
-      "i32",
-      "i64",
-      "u8",
-      "u16",
-      "u32",
-      "u64",
-      "f32",
-      "f64",
-    ];
+    const types = ["i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"];
     const calls: string[] = [];
     for (let i = 0; i < 15; i++) {
       const t = types[i % types.length];
@@ -483,9 +419,7 @@ describe("stress: many generic instantiations", () => {
         const tb = types[j];
         const va = ta === "f64" ? "0.0" : ta === "bool" ? "false" : "0";
         const vb = tb === "f64" ? "0.0" : tb === "bool" ? "false" : "0";
-        instantiations.push(
-          `  let p${idx} = Pair<${ta}, ${tb}>{ first: ${va}, second: ${vb} };`
-        );
+        instantiations.push(`  let p${idx} = Pair<${ta}, ${tb}>{ first: ${va}, second: ${vb} };`);
       }
     }
     const source = `
@@ -523,9 +457,7 @@ describe("stress: chained method calls", () => {
   });
 
   test("chain of 20 method calls", () => {
-    const chain = Array.from({ length: 20 }, (_, i) => `.set(${i + 1})`).join(
-      ""
-    );
+    const chain = Array.from({ length: 20 }, (_, i) => `.set(${i + 1})`).join("");
     const source = `
       struct Chain {
         val: i32;
@@ -588,10 +520,7 @@ describe("stress: large arrays", () => {
 describe("stress: combined scenarios", () => {
   test("many functions each with many local variables", () => {
     const fns = Array.from({ length: 50 }, (_, fi) => {
-      const vars = Array.from(
-        { length: 20 },
-        (_, vi) => `  let v${vi}: i32 = ${vi};`
-      ).join("\n");
+      const vars = Array.from({ length: 20 }, (_, vi) => `  let v${vi}: i32 = ${vi};`).join("\n");
       return `fn func${fi}() -> i32 {\n${vars}\n  return v19;\n}`;
     }).join("\n");
     const source = `${fns}\nfn main() -> i32 { return func0(); }`;
@@ -600,10 +529,7 @@ describe("stress: combined scenarios", () => {
   });
 
   test("struct with methods and many calls", () => {
-    const calls = Array.from(
-      { length: 30 },
-      (_, i) => `  let r${i} = p.add(${i});`
-    ).join("\n");
+    const calls = Array.from({ length: 30 }, (_, i) => `  let r${i} = p.add(${i});`).join("\n");
     const source = `
       struct Point {
         x: i32;
@@ -624,14 +550,10 @@ describe("stress: combined scenarios", () => {
 
   test("many enum variants used in switch", () => {
     const count = 30;
-    const variants = Array.from(
-      { length: count },
-      (_, i) => `V${i} = ${i}`
-    ).join(", ");
-    const cases = Array.from(
-      { length: count },
-      (_, i) => `    case V${i}: return ${i};`
-    ).join("\n");
+    const variants = Array.from({ length: count }, (_, i) => `V${i} = ${i}`).join(", ");
+    const cases = Array.from({ length: count }, (_, i) => `    case V${i}: return ${i};`).join(
+      "\n"
+    );
     const source = `
       enum Action : i32 { ${variants} }
       fn handle(a: Action) -> i32 {
@@ -709,10 +631,7 @@ describe("stress: edge cases (no crash)", () => {
   });
 
   test("function with 20 parameters", () => {
-    const params = Array.from(
-      { length: 20 },
-      (_, i) => `p${i}: i32`
-    ).join(", ");
+    const params = Array.from({ length: 20 }, (_, i) => `p${i}: i32`).join(", ");
     const sum = Array.from({ length: 20 }, (_, i) => `p${i}`).join(" + ");
     const args = Array.from({ length: 20 }, (_, i) => `${i}`).join(", ");
     const source = `fn big(${params}) -> i32 { return ${sum}; }\nfn main() -> i32 { return big(${args}); }`;
@@ -721,10 +640,7 @@ describe("stress: edge cases (no crash)", () => {
   });
 
   test("many return statements in one function", () => {
-    const ifs = Array.from(
-      { length: 50 },
-      (_, i) => `  if x == ${i} { return ${i}; }`
-    ).join("\n");
+    const ifs = Array.from({ length: 50 }, (_, i) => `  if x == ${i} { return ${i}; }`).join("\n");
     const source = `fn pick(x: i32) -> i32 {\n${ifs}\n  return 0;\n}\nfn main() -> i32 { return pick(25); }`;
     const c = compileFull(source);
     expect(c).toContain("pick");

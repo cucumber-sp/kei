@@ -4,15 +4,10 @@
  * Extracted from expr-parser.ts.
  */
 
-import type {
-  CastExpr,
-  Expression,
-  FieldInit,
-  TypeNode,
-} from "../ast/nodes.ts";
+import type { CastExpr, Expression, FieldInit, TypeNode } from "../ast/nodes.ts";
 import { TokenKind } from "../lexer/token.ts";
-import { parseExpression } from "./expr-parser.ts";
 import { parseCatchExpression } from "./catch-parser.ts";
+import { parseExpression } from "./expr-parser.ts";
 import type { ParserContext } from "./parser.ts";
 
 export function parsePostfixExpression(ctx: ParserContext, left: Expression): Expression {
@@ -61,10 +56,7 @@ export function parsePostfixExpression(ctx: ParserContext, left: Expression): Ex
 
     // Generic type args: foo<i32, string>( or Pair<i32, bool>{
     // Use speculative parsing since < is also comparison operator
-    if (
-      ctx.check(TokenKind.Less) &&
-      (left.kind === "Identifier" || left.kind === "MemberExpr")
-    ) {
+    if (ctx.check(TokenKind.Less) && (left.kind === "Identifier" || left.kind === "MemberExpr")) {
       const typeArgsResult = tryParseTypeArgs(ctx);
       if (typeArgsResult !== null) {
         // Generic call: foo<i32>(args)
@@ -230,7 +222,7 @@ function isStructLiteral(ctx: ParserContext): boolean {
 function parseStructLiteralFromIdentifier(
   ctx: ParserContext,
   ident: Expression & { kind: "Identifier" },
-  typeArgs: TypeNode[],
+  typeArgs: TypeNode[]
 ): Expression {
   ctx.advance(); // skip {
   const fields: FieldInit[] = [];

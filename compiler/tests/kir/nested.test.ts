@@ -1,14 +1,17 @@
-import { test, expect, describe } from "bun:test";
-import { lowerFunction, getInstructions, getTerminators, countInstructions } from "./helpers.ts";
+import { describe, expect, test } from "bun:test";
 import type { KirBinOp } from "../../src/kir/kir-types.ts";
+import { countInstructions, getInstructions, getTerminators, lowerFunction } from "./helpers.ts";
 
 describe("KIR: nested expressions", () => {
   test("deeply nested arithmetic", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo(a: int, b: int, c: int, d: int) -> int {
         return ((a + b) * (c - d)) / (a + 1);
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     const binOps = getInstructions(fn, "bin_op") as KirBinOp[];
     // a+b, c-d, multiply, a+1, divide = 5 ops
     expect(binOps).toHaveLength(5);
@@ -20,12 +23,15 @@ describe("KIR: nested expressions", () => {
   });
 
   test("expression with function call and arithmetic", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn dbl(x: int) -> int { return x * 2; }
       fn foo(a: int) -> int {
         return dbl(a) + dbl(a + 1);
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     const calls = getInstructions(fn, "call");
     expect(calls).toHaveLength(2);
     const binOps = getInstructions(fn, "bin_op") as KirBinOp[];
@@ -33,13 +39,16 @@ describe("KIR: nested expressions", () => {
   });
 
   test("compound assignment", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo() -> int {
         let x: int = 10;
         x += 5;
         return x;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     const binOps = getInstructions(fn, "bin_op") as KirBinOp[];
     expect(binOps.some((op) => op.op === "add")).toBe(true);
     const stores = getInstructions(fn, "store");
@@ -47,7 +56,8 @@ describe("KIR: nested expressions", () => {
   });
 
   test("multiple compound assignments", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo() -> int {
         let x: int = 100;
         x += 10;
@@ -55,7 +65,9 @@ describe("KIR: nested expressions", () => {
         x *= 2;
         return x;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     const binOps = getInstructions(fn, "bin_op") as KirBinOp[];
     const ops = binOps.map((op) => op.op);
     expect(ops).toContain("add");
@@ -64,7 +76,8 @@ describe("KIR: nested expressions", () => {
   });
 
   test("if inside while loop", () => {
-    const fn = lowerFunction(`
+    const fn = lowerFunction(
+      `
       fn foo() -> int {
         let x: int = 0;
         let sum: int = 0;
@@ -76,7 +89,9 @@ describe("KIR: nested expressions", () => {
         }
         return sum;
       }
-    `, "foo");
+    `,
+      "foo"
+    );
     // Should have while blocks and if blocks
     const whileHeader = fn.blocks.find((b) => b.id.startsWith("while.header"));
     const ifThen = fn.blocks.find((b) => b.id.startsWith("if.then"));

@@ -1,7 +1,7 @@
 import type { BaseNode } from "./base.ts";
-import type { TypeNode } from "./types.ts";
-import type { BlockStmt } from "./statements.ts";
 import type { Expression } from "./expressions.ts";
+import type { BlockStmt } from "./statements.ts";
+import type { TypeNode } from "./types.ts";
 
 export enum DeclKind {
   Function = "FunctionDecl",

@@ -9,23 +9,18 @@
  */
 
 import type {
-  FunctionType,
-} from "../checker/types";
-import type {
-  Expression,
-  CallExpr,
-  MemberExpr,
-  IndexExpr,
   AssignExpr,
+  CallExpr,
+  CastExpr,
+  Expression,
   Identifier,
   IfExpr,
+  IndexExpr,
+  MemberExpr,
   MoveExpr,
-  CastExpr,
 } from "../ast/nodes.ts";
-import type {
-  KirType,
-  VarId,
-} from "./kir-types.ts";
+import type { FunctionType } from "../checker/types";
+import type { KirType, VarId } from "./kir-types.ts";
 import type { KirLowerer } from "./lowering.ts";
 
 // ─── Expressions ─────────────────────────────────────────────────────────
@@ -130,7 +125,11 @@ export function lowerIdentifier(this: KirLowerer, expr: Identifier): VarId {
 
 export function lowerCallExpr(this: KirLowerer, expr: CallExpr): VarId {
   // sizeof(Type) → KIR sizeof instruction (resolved by backend)
-  if (expr.callee.kind === "Identifier" && expr.callee.name === "sizeof" && expr.args.length === 1) {
+  if (
+    expr.callee.kind === "Identifier" &&
+    expr.callee.name === "sizeof" &&
+    expr.args.length === 1
+  ) {
     const arg = expr.args[0];
     let kirType: KirType;
     if (arg && arg.kind === "Identifier") {
@@ -185,7 +184,10 @@ export function lowerCallExpr(this: KirLowerer, expr: CallExpr): VarId {
       const calleeResolvedType = this.checkResult.typeMap.get(expr.callee);
       if (calleeResolvedType && calleeResolvedType.kind === "function") {
         if (this.overloadedNames.has(callName)) {
-          funcName = this.mangleFunctionNameFromType(baseMangledName, calleeResolvedType as FunctionType);
+          funcName = this.mangleFunctionNameFromType(
+            baseMangledName,
+            calleeResolvedType as FunctionType
+          );
         } else {
           funcName = baseMangledName;
         }
@@ -232,7 +234,12 @@ export function lowerMemberExpr(this: KirLowerer, expr: MemberExpr): VarId {
     const objectType = this.checkResult.typeMap.get(expr.object);
     if (objectType?.kind === "array" && objectType.length != null) {
       const dest = this.freshVar();
-      this.emit({ kind: "const_int", dest, type: { kind: "int", bits: 64, signed: false }, value: objectType.length });
+      this.emit({
+        kind: "const_int",
+        dest,
+        type: { kind: "int", bits: 64, signed: false },
+        value: objectType.length,
+      });
       return dest;
     }
     // For strings, .len is a field access on the kei_string struct
@@ -271,7 +278,9 @@ export function lowerIndexExpr(this: KirLowerer, expr: IndexExpr): VarId {
   // Check for operator overloading (e.g., obj[i] → obj.op_index(i))
   const opMethod = this.checkResult.operatorMethods.get(expr);
   if (opMethod) {
-    return this.lowerOperatorMethodCall(expr.object, opMethod.methodName, opMethod.structType, [expr.index]);
+    return this.lowerOperatorMethodCall(expr.object, opMethod.methodName, opMethod.structType, [
+      expr.index,
+    ]);
   }
 
   const baseId = this.lowerExpr(expr.object);
@@ -282,7 +291,12 @@ export function lowerIndexExpr(this: KirLowerer, expr: IndexExpr): VarId {
   const objectType = this.checkResult.typeMap.get(expr.object);
   if (objectType?.kind === "array" && objectType.length != null) {
     const lenId = this.freshVar();
-    this.emit({ kind: "const_int", dest: lenId, type: { kind: "int", bits: 64, signed: false }, value: objectType.length });
+    this.emit({
+      kind: "const_int",
+      dest: lenId,
+      type: { kind: "int", bits: 64, signed: false },
+      value: objectType.length,
+    });
     this.emit({ kind: "bounds_check", index: indexId, length: lenId });
   }
 
@@ -302,7 +316,7 @@ export function lowerAssignExpr(this: KirLowerer, expr: AssignExpr): VarId {
       expr.target.object,
       opMethod.methodName,
       opMethod.structType,
-      [expr.target.index, expr.value],
+      [expr.target.index, expr.value]
     );
   }
 
@@ -347,7 +361,13 @@ export function lowerAssignExpr(this: KirLowerer, expr: AssignExpr): VarId {
     const baseId = this.lowerExpr(expr.target.object);
     const ptrDest = this.freshVar();
     const fieldType = this.getExprKirType(expr.target);
-    this.emit({ kind: "field_ptr", dest: ptrDest, base: baseId, field: expr.target.property, type: fieldType });
+    this.emit({
+      kind: "field_ptr",
+      dest: ptrDest,
+      base: baseId,
+      field: expr.target.property,
+      type: fieldType,
+    });
 
     // Destroy old field value if it has lifecycle hooks
     const checkerType = this.checkResult.typeMap.get(expr.target);

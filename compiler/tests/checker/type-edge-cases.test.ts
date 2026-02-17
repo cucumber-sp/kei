@@ -18,10 +18,7 @@ describe("Checker — Type Edge Cases", () => {
     });
 
     test("increment const → error", () => {
-      checkError(
-        `fn main() -> int { const x = 5; x++; return x; }`,
-        "cannot assign to immutable"
-      );
+      checkError(`fn main() -> int { const x = 5; x++; return x; }`, "cannot assign to immutable");
     });
 
     test("const in nested scope still immutable", () => {
@@ -47,10 +44,7 @@ describe("Checker — Type Edge Cases", () => {
     });
 
     test("use undeclared in expression → error", () => {
-      checkError(
-        `fn main() -> int { return foo + 1; }`,
-        "undeclared variable 'foo'"
-      );
+      checkError(`fn main() -> int { return foo + 1; }`, "undeclared variable 'foo'");
     });
 
     test("use undeclared in condition → error", () => {
@@ -63,31 +57,19 @@ describe("Checker — Type Edge Cases", () => {
 
   describe("function return type errors", () => {
     test("non-void function with no return → error", () => {
-      checkError(
-        `fn getInt() -> int { let x = 42; }`,
-        "does not return a value on all paths"
-      );
+      checkError(`fn getInt() -> int { let x = 42; }`, "does not return a value on all paths");
     });
 
     test("return wrong type → error", () => {
-      checkError(
-        `fn getInt() -> int { return "hello"; }`,
-        "return type mismatch"
-      );
+      checkError(`fn getInt() -> int { return "hello"; }`, "return type mismatch");
     });
 
     test("return value in void function → error", () => {
-      checkError(
-        `fn doStuff() { return 42; }`,
-        "expects return type 'void', got"
-      );
+      checkError(`fn doStuff() { return 42; }`, "expects return type 'void', got");
     });
 
     test("void return in non-void function → error", () => {
-      checkError(
-        `fn getInt() -> int { return; }`,
-        "expects return type 'i32', got void"
-      );
+      checkError(`fn getInt() -> int { return; }`, "expects return type 'i32', got void");
     });
 
     test("function returning struct with wrong struct type → error", () => {
@@ -136,17 +118,11 @@ describe("Checker — Type Edge Cases", () => {
 
   describe("comparing different types", () => {
     test("int == string → error", () => {
-      checkError(
-        `fn main() -> int { let x = 1 == "hello"; return 0; }`,
-        "requires same types"
-      );
+      checkError(`fn main() -> int { let x = 1 == "hello"; return 0; }`, "requires same types");
     });
 
     test("bool < int → error", () => {
-      checkError(
-        `fn main() -> int { let x = true < 1; return 0; }`,
-        "requires numeric operands"
-      );
+      checkError(`fn main() -> int { let x = true < 1; return 0; }`, "requires numeric operands");
     });
 
     test("int == int → ok", () => {
@@ -170,47 +146,29 @@ describe("Checker — Type Edge Cases", () => {
     });
 
     test("bool * int → error", () => {
-      checkError(
-        `fn main() -> int { let x = true * 1; return 0; }`,
-        "requires numeric operands"
-      );
+      checkError(`fn main() -> int { let x = true * 1; return 0; }`, "requires numeric operands");
     });
 
     test("string - string → error", () => {
-      checkError(
-        `fn main() -> int { let x = "a" - "b"; return 0; }`,
-        "requires numeric operands"
-      );
+      checkError(`fn main() -> int { let x = "a" - "b"; return 0; }`, "requires numeric operands");
     });
 
     test("string * int → error", () => {
-      checkError(
-        `fn main() -> int { let x = "a" * 2; return 0; }`,
-        "requires numeric operands"
-      );
+      checkError(`fn main() -> int { let x = "a" * 2; return 0; }`, "requires numeric operands");
     });
 
     test("unary minus on bool → error", () => {
-      checkError(
-        `fn main() -> int { let x = -true; return 0; }`,
-        "requires numeric operand"
-      );
+      checkError(`fn main() -> int { let x = -true; return 0; }`, "requires numeric operand");
     });
 
     test("unary minus on string → error", () => {
-      checkError(
-        `fn main() -> int { let x = -"hello"; return 0; }`,
-        "requires numeric operand"
-      );
+      checkError(`fn main() -> int { let x = -"hello"; return 0; }`, "requires numeric operand");
     });
   });
 
   describe("calling non-function", () => {
     test("call integer variable → error", () => {
-      checkError(
-        `fn main() -> int { let x = 42; let y = x(1); return 0; }`,
-        "is not callable"
-      );
+      checkError(`fn main() -> int { let x = 42; let y = x(1); return 0; }`, "is not callable");
     });
 
     test("call string variable → error", () => {
@@ -221,10 +179,7 @@ describe("Checker — Type Edge Cases", () => {
     });
 
     test("call bool variable → error", () => {
-      checkError(
-        `fn main() -> int { let x = true; let y = x(); return 0; }`,
-        "is not callable"
-      );
+      checkError(`fn main() -> int { let x = true; let y = x(); return 0; }`, "is not callable");
     });
   });
 
@@ -311,10 +266,7 @@ describe("Checker — Type Edge Cases", () => {
     });
 
     test("duplicate variable in same scope → error", () => {
-      checkError(
-        `fn main() -> int { let x = 1; let x = 2; return x; }`,
-        "duplicate variable 'x'"
-      );
+      checkError(`fn main() -> int { let x = 1; let x = 2; return x; }`, "duplicate variable 'x'");
     });
 
     test("same name in different scopes → ok (shadowing)", () => {
@@ -468,10 +420,7 @@ describe("Checker — Type Edge Cases", () => {
     });
 
     test("access field on non-struct → error", () => {
-      checkError(
-        `fn main() -> int { let x = 42; let y = x.foo; return 0; }`,
-        "has no property"
-      );
+      checkError(`fn main() -> int { let x = 42; let y = x.foo; return 0; }`, "has no property");
     });
   });
 
@@ -496,10 +445,7 @@ describe("Checker — Type Edge Cases", () => {
     });
 
     test("null assignable to non-ptr → error", () => {
-      checkError(
-        `fn main() -> int { let x: int = null; return 0; }`,
-        "type mismatch"
-      );
+      checkError(`fn main() -> int { let x: int = null; return 0; }`, "type mismatch");
     });
 
     test("static used as constant → ok", () => {

@@ -70,7 +70,7 @@ export function parseDeclaration(ctx: ParserContext): Declaration {
 function parseFunctionDeclaration(
   ctx: ParserContext,
   isPublic: boolean,
-  startToken: Token,
+  startToken: Token
 ): FunctionDecl {
   ctx.expect(TokenKind.Fn);
   const name = ctx.expectIdentifier().lexeme;
@@ -95,10 +95,7 @@ function parseFunctionDeclaration(
   };
 }
 
-function parseExternFunctionDeclaration(
-  ctx: ParserContext,
-  startToken: Token,
-): ExternFunctionDecl {
+function parseExternFunctionDeclaration(ctx: ParserContext, startToken: Token): ExternFunctionDecl {
   ctx.expect(TokenKind.Extern);
   ctx.expect(TokenKind.Fn);
   const name = ctx.expectIdentifier().lexeme;
@@ -121,7 +118,7 @@ function parseStructDeclaration(
   ctx: ParserContext,
   isPublic: boolean,
   isUnsafe: boolean,
-  startToken: Token,
+  startToken: Token
 ): StructDecl | UnsafeStructDecl {
   ctx.expect(TokenKind.Struct);
   const name = ctx.expectIdentifier().lexeme;
@@ -186,11 +183,7 @@ function parseFieldDeclaration(ctx: ParserContext): Field {
   };
 }
 
-function parseEnumDeclaration(
-  ctx: ParserContext,
-  isPublic: boolean,
-  startToken: Token,
-): EnumDecl {
+function parseEnumDeclaration(ctx: ParserContext, isPublic: boolean, startToken: Token): EnumDecl {
   ctx.expect(TokenKind.Enum);
   const name = ctx.expectIdentifier().lexeme;
 
@@ -271,11 +264,7 @@ function parseEnumVariant(ctx: ParserContext): EnumVariant {
   };
 }
 
-function parseTypeAlias(
-  ctx: ParserContext,
-  isPublic: boolean,
-  startToken: Token,
-): TypeAlias {
+function parseTypeAlias(ctx: ParserContext, isPublic: boolean, startToken: Token): TypeAlias {
   ctx.expect(TokenKind.Type);
   const name = ctx.expectIdentifier().lexeme;
   ctx.expect(TokenKind.Equal);
@@ -294,7 +283,7 @@ function parseTypeAlias(
 function parseStaticDeclaration(
   ctx: ParserContext,
   isPublic: boolean,
-  startToken: Token,
+  startToken: Token
 ): StaticDecl {
   ctx.expect(TokenKind.Static);
   const name = ctx.expectIdentifier().lexeme;

@@ -84,17 +84,11 @@ describe("Checker — as cast", () => {
   // ── Invalid casts ─────────────────────────────────────────────────────
 
   test("string → i32 (error)", () => {
-    checkError(
-      `fn main() -> int { let x = "hello"; let y = x as i32; return 0; }`,
-      "cannot cast"
-    );
+    checkError(`fn main() -> int { let x = "hello"; let y = x as i32; return 0; }`, "cannot cast");
   });
 
   test("i32 → bool (error)", () => {
-    checkError(
-      `fn main() -> int { let x: i32 = 1; let y = x as bool; return 0; }`,
-      "cannot cast"
-    );
+    checkError(`fn main() -> int { let x: i32 = 1; let y = x as bool; return 0; }`, "cannot cast");
   });
 
   test("struct → i32 (error)", () => {
@@ -105,10 +99,7 @@ describe("Checker — as cast", () => {
   });
 
   test("bool → f64 (error)", () => {
-    checkError(
-      `fn main() -> int { let x = true; let y = x as f64; return 0; }`,
-      "cannot cast"
-    );
+    checkError(`fn main() -> int { let x = true; let y = x as f64; return 0; }`, "cannot cast");
   });
 
   // ── Pointer casts ─────────────────────────────────────────────────────

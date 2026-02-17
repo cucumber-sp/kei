@@ -20,12 +20,12 @@ import type { SourceFile } from "../utils/source.ts";
 import { registerBuiltins } from "./builtins.ts";
 import { DeclarationChecker } from "./decl-checker.ts";
 import { ExpressionChecker } from "./expr-checker.ts";
+import type { MonomorphizedFunction, MonomorphizedStruct } from "./generics.ts";
 import { Scope } from "./scope.ts";
 import { StatementChecker } from "./stmt-checker.ts";
 import type { ScopeSymbol } from "./symbols.ts";
-import { SymbolKind, moduleSymbol, typeSymbol, variableSymbol } from "./symbols.ts";
+import { moduleSymbol, SymbolKind, typeSymbol, variableSymbol } from "./symbols.ts";
 import { TypeResolver } from "./type-resolver.ts";
-import type { MonomorphizedFunction, MonomorphizedStruct } from "./generics.ts";
 import type { FunctionType, ModuleType, StructType, Type } from "./types";
 import { TypeKind, typeToString } from "./types";
 
@@ -215,7 +215,11 @@ export class Checker {
       if (!monoFunc.declaration) {
         // Try to find the declaration from the program
         for (const decl of this.program.declarations) {
-          if (decl.kind === "FunctionDecl" && decl.name === monoFunc.originalName && decl.genericParams.length > 0) {
+          if (
+            decl.kind === "FunctionDecl" &&
+            decl.name === monoFunc.originalName &&
+            decl.genericParams.length > 0
+          ) {
             monoFunc.declaration = decl;
             break;
           }
@@ -231,7 +235,7 @@ export class Checker {
 
       for (let i = 0; i < decl.params.length; i++) {
         const param = decl.params[i]!;
-        const paramType = concreteType.params[i]?.type ?? { kind: TypeKind.Void } as Type;
+        const paramType = concreteType.params[i]?.type ?? ({ kind: TypeKind.Void } as Type);
         this.defineVariable(param.name, paramType, param.isMut, false, param.span);
       }
 
@@ -247,8 +251,11 @@ export class Checker {
     for (const [_mangledName, monoStruct] of this.monomorphizedStructs) {
       if (!monoStruct.originalDecl) {
         for (const decl of this.program.declarations) {
-          if ((decl.kind === "StructDecl" || decl.kind === "UnsafeStructDecl") &&
-              decl.name === monoStruct.original.name && decl.genericParams.length > 0) {
+          if (
+            (decl.kind === "StructDecl" || decl.kind === "UnsafeStructDecl") &&
+            decl.name === monoStruct.original.name &&
+            decl.genericParams.length > 0
+          ) {
             monoStruct.originalDecl = decl;
             break;
           }

@@ -4,16 +4,16 @@
  */
 
 import type {
-  KirModule,
-  KirFunction,
   KirBlock,
-  KirInst,
-  KirTerminator,
-  KirPhi,
-  KirType,
   KirExtern,
-  KirTypeDecl,
+  KirFunction,
   KirGlobal,
+  KirInst,
+  KirModule,
+  KirPhi,
+  KirTerminator,
+  KirType,
+  KirTypeDecl,
   VarId,
 } from "./kir-types.ts";
 
@@ -51,9 +51,7 @@ export function printKir(module: KirModule): string {
 
 function printTypeDecl(td: KirTypeDecl): string {
   if (td.type.kind === "struct") {
-    const fields = td.type.fields
-      .map((f) => `  ${f.name}: ${printType(f.type)}`)
-      .join("\n");
+    const fields = td.type.fields.map((f) => `  ${f.name}: ${printType(f.type)}`).join("\n");
     return `type ${td.name} = struct {\n${fields}\n}`;
   }
   if (td.type.kind === "enum") {
@@ -73,9 +71,7 @@ function printTypeDecl(td: KirTypeDecl): string {
 }
 
 function printExtern(ext: KirExtern): string {
-  const params = ext.params
-    .map((p) => `${p.name}: ${printType(p.type)}`)
-    .join(", ");
+  const params = ext.params.map((p) => `${p.name}: ${printType(p.type)}`).join(", ");
   return `extern fn ${ext.name}(${params}): ${printType(ext.returnType)}`;
 }
 
@@ -84,9 +80,7 @@ function printGlobal(g: KirGlobal): string {
 }
 
 function printFunction(fn: KirFunction): string {
-  const params = fn.params
-    .map((p) => `${p.name}: ${printType(p.type)}`)
-    .join(", ");
+  const params = fn.params.map((p) => `${p.name}: ${printType(p.type)}`).join(", ");
   const lines: string[] = [];
   lines.push(`fn ${fn.name}(${params}): ${printType(fn.returnType)} {`);
 
@@ -116,9 +110,7 @@ function printBlock(block: KirBlock): string {
 }
 
 function printPhi(phi: KirPhi): string {
-  const incoming = phi.incoming
-    .map((e) => `${e.value} from ${e.from}`)
-    .join(", ");
+  const incoming = phi.incoming.map((e) => `${e.value} from ${e.from}`).join(", ");
   return `${phi.dest} = \u03C6 [${incoming}]`;
 }
 
@@ -196,9 +188,7 @@ function printTerminator(term: KirTerminator): string {
     case "br":
       return `br ${term.cond}, ${term.thenBlock}, ${term.elseBlock}`;
     case "switch": {
-      const cases = term.cases
-        .map((c) => `${c.value} → ${c.target}`)
-        .join(", ");
+      const cases = term.cases.map((c) => `${c.value} → ${c.target}`).join(", ");
       return `switch ${term.value}, [${cases}], default: ${term.defaultBlock}`;
     }
     case "unreachable":

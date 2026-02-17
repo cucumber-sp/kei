@@ -3,14 +3,7 @@
  * Extracted from lowering.ts for modularity.
  */
 
-import type {
-  KirInst,
-  KirTerminator,
-  KirType,
-  VarId,
-  BlockId,
-  BinOp,
-} from "./kir-types.ts";
+import type { BinOp, BlockId, KirInst, KirTerminator, KirType, VarId } from "./kir-types.ts";
 import type { KirLowerer } from "./lowering.ts";
 
 export function freshVar(this: KirLowerer): VarId {
@@ -86,18 +79,40 @@ export function isStackAllocVar(this: KirLowerer, varId: VarId): boolean {
 
 export function mapBinOp(this: KirLowerer, op: string): BinOp | null {
   const map: Record<string, BinOp> = {
-    "+": "add", "-": "sub", "*": "mul", "/": "div", "%": "mod",
-    "==": "eq", "!=": "neq", "<": "lt", ">": "gt", "<=": "lte", ">=": "gte",
-    "&": "bit_and", "|": "bit_or", "^": "bit_xor", "<<": "shl", ">>": "shr",
-    "&&": "and", "||": "or",
+    "+": "add",
+    "-": "sub",
+    "*": "mul",
+    "/": "div",
+    "%": "mod",
+    "==": "eq",
+    "!=": "neq",
+    "<": "lt",
+    ">": "gt",
+    "<=": "lte",
+    ">=": "gte",
+    "&": "bit_and",
+    "|": "bit_or",
+    "^": "bit_xor",
+    "<<": "shl",
+    ">>": "shr",
+    "&&": "and",
+    "||": "or",
   };
   return map[op] ?? null;
 }
 
 export function mapCompoundAssignOp(this: KirLowerer, op: string): BinOp | null {
   const map: Record<string, BinOp> = {
-    "+=": "add", "-=": "sub", "*=": "mul", "/=": "div", "%=": "mod",
-    "&=": "bit_and", "|=": "bit_or", "^=": "bit_xor", "<<=": "shl", ">>=": "shr",
+    "+=": "add",
+    "-=": "sub",
+    "*=": "mul",
+    "/=": "div",
+    "%=": "mod",
+    "&=": "bit_and",
+    "|=": "bit_or",
+    "^=": "bit_xor",
+    "<<=": "shl",
+    ">>=": "shr",
   };
   return map[op] ?? null;
 }
@@ -122,7 +137,14 @@ export function emitFieldLoad(this: KirLowerer, base: VarId, field: string, type
 export function emitTagIsSuccess(this: KirLowerer, tagVar: VarId): VarId {
   const zeroConst = this.emitConstInt(0);
   const isOk = this.freshVar();
-  this.emit({ kind: "bin_op", op: "eq", dest: isOk, lhs: tagVar, rhs: zeroConst, type: { kind: "bool" } });
+  this.emit({
+    kind: "bin_op",
+    op: "eq",
+    dest: isOk,
+    lhs: tagVar,
+    rhs: zeroConst,
+    type: { kind: "bool" },
+  });
   return isOk;
 }
 
@@ -134,7 +156,13 @@ export function emitCastToPtr(this: KirLowerer, value: VarId, pointeeType: KirTy
 }
 
 /** Load current value from ptr, apply binary op with rhs, store result back. Returns the new value. */
-export function emitLoadModifyStore(this: KirLowerer, ptr: VarId, op: BinOp, rhs: VarId, type: KirType): VarId {
+export function emitLoadModifyStore(
+  this: KirLowerer,
+  ptr: VarId,
+  op: BinOp,
+  rhs: VarId,
+  type: KirType
+): VarId {
   const currentVal = this.freshVar();
   this.emit({ kind: "load", dest: currentVal, ptr, type });
   const result = this.freshVar();

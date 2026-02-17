@@ -99,7 +99,11 @@ export class StatementChecker {
     return this.checkVariableDeclaration(stmt, false, true);
   }
 
-  private checkVariableDeclaration(stmt: LetStmt | ConstStmt, isMutable: boolean, isConst: boolean): boolean {
+  private checkVariableDeclaration(
+    stmt: LetStmt | ConstStmt,
+    isMutable: boolean,
+    isConst: boolean
+  ): boolean {
     const initType = this.checker.checkExpression(stmt.initializer);
 
     if (stmt.typeAnnotation) {
@@ -110,7 +114,8 @@ export class StatementChecker {
         !isAssignableTo(initType, annotatedType)
       ) {
         const litInfo = extractLiteralInfo(stmt.initializer);
-        const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, annotatedType);
+        const isLiteralOk =
+          litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, annotatedType);
         if (!isLiteralOk) {
           this.checker.error(
             `type mismatch: expected '${typeToString(annotatedType)}', got '${typeToString(initType)}'`,
@@ -145,7 +150,8 @@ export class StatementChecker {
         } else if (!isAssignableTo(valueType, enclosingFn.returnType)) {
           // Check if this is a literal that can be implicitly converted
           const litInfo = extractLiteralInfo(stmt.value);
-          const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, enclosingFn.returnType);
+          const isLiteralOk =
+            litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, enclosingFn.returnType);
           if (!isLiteralOk) {
             this.checker.error(
               `return type mismatch: expected '${typeToString(enclosingFn.returnType)}', got '${typeToString(valueType)}'`,
@@ -386,7 +392,11 @@ export class StatementChecker {
     return this.checkConditionStatement("require", stmt.condition, stmt.message);
   }
 
-  private checkConditionStatement(keyword: string, condition: Expression, message: Expression | undefined): boolean {
+  private checkConditionStatement(
+    keyword: string,
+    condition: Expression,
+    message: Expression | undefined
+  ): boolean {
     const condType = this.checker.checkExpression(condition);
     if (!isErrorType(condType) && condType.kind !== TypeKind.Bool) {
       this.checker.error(

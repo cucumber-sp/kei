@@ -290,16 +290,10 @@ describe("Checker — Scopes", () => {
   });
 
   test("let and const with same name in same scope → error", () => {
-    checkError(
-      `fn main() -> int { let x = 1; const x = 2; return x; }`,
-      "duplicate variable 'x'"
-    );
+    checkError(`fn main() -> int { let x = 1; const x = 2; return x; }`, "duplicate variable 'x'");
   });
 
   test("duplicate parameter name → error", () => {
-    checkError(
-      `fn foo(x: int, x: int) -> int { return x; }`,
-      "duplicate variable 'x'"
-    );
+    checkError(`fn foo(x: int, x: int) -> int { return x; }`, "duplicate variable 'x'");
   });
 });

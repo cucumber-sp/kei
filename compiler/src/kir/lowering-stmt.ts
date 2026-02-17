@@ -4,18 +4,18 @@
  */
 
 import type {
-  Statement,
-  BlockStmt,
-  LetStmt,
-  ConstStmt,
-  ReturnStmt,
-  IfStmt,
-  WhileStmt,
-  ForStmt,
-  SwitchStmt,
-  ExprStmt,
   AssertStmt,
+  BlockStmt,
+  ConstStmt,
+  ExprStmt,
+  ForStmt,
+  IfStmt,
+  LetStmt,
   RequireStmt,
+  ReturnStmt,
+  Statement,
+  SwitchStmt,
+  WhileStmt,
 } from "../ast/nodes.ts";
 import type { KirType, VarId } from "./kir-types.ts";
 import type { KirLowerer } from "./lowering.ts";
@@ -186,12 +186,8 @@ export function lowerReturnStmt(this: KirLowerer, stmt: ReturnStmt): void {
 export function lowerIfStmt(this: KirLowerer, stmt: IfStmt): void {
   const condId = this.lowerExpr(stmt.condition);
   const thenLabel = this.freshBlockId("if.then");
-  const elseLabel = stmt.elseBlock
-    ? this.freshBlockId("if.else")
-    : this.freshBlockId("if.end");
-  const endLabel = stmt.elseBlock
-    ? this.freshBlockId("if.end")
-    : elseLabel;
+  const elseLabel = stmt.elseBlock ? this.freshBlockId("if.else") : this.freshBlockId("if.end");
+  const endLabel = stmt.elseBlock ? this.freshBlockId("if.end") : elseLabel;
 
   this.setTerminator({
     kind: "br",
@@ -313,8 +309,11 @@ export function lowerForStmt(this: KirLowerer, stmt: ForStmt): void {
     this.emit({ kind: "load", dest: curVal, ptr: loopVarPtr, type: loopVarType });
     const condId = this.freshVar();
     this.emit({
-      kind: "bin_op", op: "lt", dest: condId,
-      lhs: curVal, rhs: endId,
+      kind: "bin_op",
+      op: "lt",
+      dest: condId,
+      lhs: curVal,
+      rhs: endId,
       type: { kind: "bool" },
     });
     this.setTerminator({
@@ -424,16 +423,12 @@ export function lowerExprStmt(this: KirLowerer, stmt: ExprStmt): void {
 
 export function lowerAssertStmt(this: KirLowerer, stmt: AssertStmt): void {
   const condId = this.lowerExpr(stmt.condition);
-  const msg = stmt.message?.kind === "StringLiteral"
-    ? stmt.message.value
-    : "assertion failed";
+  const msg = stmt.message?.kind === "StringLiteral" ? stmt.message.value : "assertion failed";
   this.emit({ kind: "assert_check", cond: condId, message: msg });
 }
 
 export function lowerRequireStmt(this: KirLowerer, stmt: RequireStmt): void {
   const condId = this.lowerExpr(stmt.condition);
-  const msg = stmt.message?.kind === "StringLiteral"
-    ? stmt.message.value
-    : "requirement failed";
+  const msg = stmt.message?.kind === "StringLiteral" ? stmt.message.value : "requirement failed";
   this.emit({ kind: "require_check", cond: condId, message: msg });
 }

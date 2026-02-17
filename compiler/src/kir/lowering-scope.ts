@@ -3,19 +3,16 @@
  * Extracted from lowering.ts for modularity.
  */
 
-import type {
-  Expression,
-} from "../ast/nodes.ts";
-import type {
-  Type,
-} from "../checker/types";
-import type {
-  VarId,
-} from "./kir-types.ts";
+import type { Expression } from "../ast/nodes.ts";
+import type { Type } from "../checker/types";
+import type { VarId } from "./kir-types.ts";
 import type { KirLowerer } from "./lowering.ts";
 
 /** Check if a checker Type is a struct that has __destroy or __oncopy methods */
-export function getStructLifecycle(this: KirLowerer, checkerType: Type | undefined): { hasDestroy: boolean; hasOncopy: boolean; structName: string } | null {
+export function getStructLifecycle(
+  this: KirLowerer,
+  checkerType: Type | undefined
+): { hasDestroy: boolean; hasOncopy: boolean; structName: string } | null {
   if (!checkerType) return null;
   if (checkerType.kind !== "struct") return null;
 
@@ -44,7 +41,10 @@ export function popScopeWithDestroy(this: KirLowerer): void {
 }
 
 /** Emit destroys for scope variables in reverse order, skipping moved vars */
-export function emitScopeDestroys(this: KirLowerer, scope: { name: string; varId: VarId; structName: string }[]): void {
+export function emitScopeDestroys(
+  this: KirLowerer,
+  scope: { name: string; varId: VarId; structName: string }[]
+): void {
   for (let i = scope.length - 1; i >= 0; i--) {
     const sv = scope[i];
     if (this.movedVars.has(sv.name)) continue;
@@ -73,7 +73,12 @@ export function emitAllScopeDestroysExceptNamed(this: KirLowerer, skipName: stri
 }
 
 /** Track a variable in the current scope if it has lifecycle hooks */
-export function trackScopeVar(this: KirLowerer, name: string, varId: VarId, expr: Expression): void {
+export function trackScopeVar(
+  this: KirLowerer,
+  name: string,
+  varId: VarId,
+  expr: Expression
+): void {
   if (this.scopeStack.length === 0) return;
   const checkerType = this.checkResult.typeMap.get(expr);
   const lifecycle = this.getStructLifecycle(checkerType);
@@ -87,7 +92,12 @@ export function trackScopeVar(this: KirLowerer, name: string, varId: VarId, expr
 }
 
 /** Track a variable by its checker type directly */
-export function trackScopeVarByType(this: KirLowerer, name: string, varId: VarId, checkerType: Type | undefined): void {
+export function trackScopeVarByType(
+  this: KirLowerer,
+  name: string,
+  varId: VarId,
+  checkerType: Type | undefined
+): void {
   if (this.scopeStack.length === 0) return;
   const lifecycle = this.getStructLifecycle(checkerType);
   if (lifecycle?.hasDestroy) {

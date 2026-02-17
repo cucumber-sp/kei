@@ -5,18 +5,13 @@
 
 import type {
   ArrayLiteral,
-  StructLiteral,
-  IntLiteral,
-  FloatLiteral,
-  StringLiteral,
   BoolLiteral,
+  FloatLiteral,
+  IntLiteral,
+  StringLiteral,
+  StructLiteral,
 } from "../ast/nodes.ts";
-import type {
-  KirType,
-  VarId,
-  KirIntType,
-  KirFloatType,
-} from "./kir-types.ts";
+import type { KirFloatType, KirIntType, KirType, VarId } from "./kir-types.ts";
 import type { KirLowerer } from "./lowering.ts";
 
 export function lowerIntLiteral(this: KirLowerer, expr: IntLiteral): VarId {
@@ -67,7 +62,13 @@ export function lowerStructLiteral(this: KirLowerer, expr: StructLiteral): VarId
     const valueId = this.lowerExpr(field.value);
     const fieldPtrId = this.freshVar();
     const fieldType = this.getExprKirType(field.value);
-    this.emit({ kind: "field_ptr", dest: fieldPtrId, base: ptrId, field: field.name, type: fieldType });
+    this.emit({
+      kind: "field_ptr",
+      dest: fieldPtrId,
+      base: ptrId,
+      field: field.name,
+      type: fieldType,
+    });
     this.emit({ kind: "store", ptr: fieldPtrId, value: valueId });
   }
 
@@ -88,7 +89,12 @@ export function lowerArrayLiteral(this: KirLowerer, expr: ArrayLiteral): VarId {
   for (let i = 0; i < expr.elements.length; i++) {
     const valueId = this.lowerExpr(expr.elements[i]!);
     const idxId = this.freshVar();
-    this.emit({ kind: "const_int", dest: idxId, type: { kind: "int", bits: 64, signed: false }, value: i });
+    this.emit({
+      kind: "const_int",
+      dest: idxId,
+      type: { kind: "int", bits: 64, signed: false },
+      value: i,
+    });
     const elemPtrId = this.freshVar();
     this.emit({ kind: "index_ptr", dest: elemPtrId, base: ptrId, index: idxId, type: elemType });
     this.emit({ kind: "store", ptr: elemPtrId, value: valueId });

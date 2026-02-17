@@ -1,8 +1,8 @@
-import { test, expect, describe, beforeAll, afterAll } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "bun";
-import { join } from "path";
-import { mkdtempSync, writeFileSync, unlinkSync, rmSync } from "fs";
+import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
+import { join } from "path";
 
 const CLI = join(import.meta.dir, "../../src/cli.ts");
 let tmpDir: string;
@@ -32,8 +32,12 @@ function run(name: string, source: string): { stdout: string; stderr: string; ex
   });
 
   // Clean up generated .c and binary
-  try { unlinkSync(filePath.replace(/\.kei$/, ".c")); } catch {}
-  try { unlinkSync(filePath.replace(/\.kei$/, "")); } catch {}
+  try {
+    unlinkSync(filePath.replace(/\.kei$/, ".c"));
+  } catch {}
+  try {
+    unlinkSync(filePath.replace(/\.kei$/, ""));
+  } catch {}
 
   return {
     stdout: result.stdout.toString(),
@@ -46,19 +50,24 @@ function run(name: string, source: string): { stdout: string; stderr: string; ex
 
 describe("e2e: basic programs", () => {
   test("hello world with print", () => {
-    const r = run("hello", `
+    const r = run(
+      "hello",
+      `
       import { print } from io;
       fn main() -> int {
         print("Hello, World!");
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("Hello, World!\n");
   });
 
   test("fibonacci recursive", () => {
-    const r = run("fib", `
+    const r = run(
+      "fib",
+      `
       import { print } from io;
       fn fib(n: int) -> int {
         if n <= 1 { return n; }
@@ -68,13 +77,16 @@ describe("e2e: basic programs", () => {
         print(fib(10));
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("55\n");
   });
 
   test("factorial recursive", () => {
-    const r = run("fact", `
+    const r = run(
+      "fact",
+      `
       import { print } from io;
       fn factorial(n: int) -> int {
         if n <= 1 { return 1; }
@@ -84,13 +96,16 @@ describe("e2e: basic programs", () => {
         print(factorial(10));
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("3628800\n");
   });
 
   test("simple arithmetic expressions", () => {
-    const r = run("arith", `
+    const r = run(
+      "arith",
+      `
       import { print } from io;
       fn main() -> int {
         let a: int = 10;
@@ -102,26 +117,32 @@ describe("e2e: basic programs", () => {
         print(a % b);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("13\n7\n30\n3\n1\n");
   });
 
   test("string concatenation with +", () => {
-    const r = run("strcat", `
+    const r = run(
+      "strcat",
+      `
       import { print } from io;
       fn main() -> int {
         let greeting: string = "Hello" + ", " + "World!";
         print(greeting);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("Hello, World!\n");
   });
 
   test("boolean logic", () => {
-    const r = run("booleans", `
+    const r = run(
+      "booleans",
+      `
       import { print } from io;
       fn main() -> int {
         let a: bool = true;
@@ -132,13 +153,16 @@ describe("e2e: basic programs", () => {
         print(b);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("true\ntrue\nfalse\nfalse\n");
   });
 
   test("multiple print types", () => {
-    const r = run("print_types", `
+    const r = run(
+      "print_types",
+      `
       import { print } from io;
       fn main() -> int {
         print(42);
@@ -147,7 +171,8 @@ describe("e2e: basic programs", () => {
         print(false);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("42\nhello\ntrue\nfalse\n");
   });
@@ -157,7 +182,9 @@ describe("e2e: basic programs", () => {
 
 describe("e2e: structs", () => {
   test("create struct, access fields, print", () => {
-    const r = run("struct_basic", `
+    const r = run(
+      "struct_basic",
+      `
       import { print } from io;
       struct Point {
         x: int;
@@ -170,13 +197,16 @@ describe("e2e: structs", () => {
         print(p.x + p.y);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("10\n20\n30\n");
   });
 
   test("multiple struct instances", () => {
-    const r = run("struct_multi", `
+    const r = run(
+      "struct_multi",
+      `
       import { print } from io;
       struct Point {
         x: int;
@@ -189,13 +219,16 @@ describe("e2e: structs", () => {
         print(a.y + b.y);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("4\n6\n");
   });
 
   test("struct with bool and int fields", () => {
-    const r = run("struct_mixed", `
+    const r = run(
+      "struct_mixed",
+      `
       import { print } from io;
       struct Config {
         debug: bool;
@@ -207,13 +240,16 @@ describe("e2e: structs", () => {
         print(cfg.level);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("true\n5\n");
   });
 
   test("struct with string fields", () => {
-    const r = run("struct_string", `
+    const r = run(
+      "struct_string",
+      `
       import { print } from io;
       struct Person {
         name: string;
@@ -225,7 +261,8 @@ describe("e2e: structs", () => {
         print(p.age);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("Alice\n30\n");
   });
@@ -235,7 +272,9 @@ describe("e2e: structs", () => {
 
 describe("e2e: control flow", () => {
   test("while loop counting", () => {
-    const r = run("while_count", `
+    const r = run(
+      "while_count",
+      `
       import { print } from io;
       fn main() -> int {
         let sum: int = 0;
@@ -247,13 +286,16 @@ describe("e2e: control flow", () => {
         print(sum);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("55\n");
   });
 
   test("nested if/else", () => {
-    const r = run("nested_if", `
+    const r = run(
+      "nested_if",
+      `
       import { print } from io;
       fn classify(x: int) -> string {
         if x > 100 {
@@ -272,13 +314,16 @@ describe("e2e: control flow", () => {
         print(classify(-5));
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("big\nsmall\nnon-positive\n");
   });
 
   test("break in while loop", () => {
-    const r = run("break_loop", `
+    const r = run(
+      "break_loop",
+      `
       import { print } from io;
       fn main() -> int {
         let i: int = 0;
@@ -289,13 +334,16 @@ describe("e2e: control flow", () => {
         print(i);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("5\n");
   });
 
   test("continue in while loop", () => {
-    const r = run("continue_loop", `
+    const r = run(
+      "continue_loop",
+      `
       import { print } from io;
       fn main() -> int {
         let sum: int = 0;
@@ -308,14 +356,17 @@ describe("e2e: control flow", () => {
         print(sum);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     // sum of odd numbers 1..9 = 1+3+5+7+9 = 25
     expect(r.stdout).toBe("25\n");
   });
 
   test("for range loop", () => {
-    const r = run("for_range", `
+    const r = run(
+      "for_range",
+      `
       import { print } from io;
       fn main() -> int {
         let sum: int = 0;
@@ -325,14 +376,17 @@ describe("e2e: control flow", () => {
         print(sum);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     // 0+1+2+3+4 = 10
     expect(r.stdout).toBe("10\n");
   });
 
   test("early return from function", () => {
-    const r = run("early_return", `
+    const r = run(
+      "early_return",
+      `
       import { print } from io;
       fn check(x: int) -> string {
         if x < 0 { return "negative"; }
@@ -345,7 +399,8 @@ describe("e2e: control flow", () => {
         print(check(10));
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("negative\nzero\npositive\n");
   });
@@ -355,7 +410,9 @@ describe("e2e: control flow", () => {
 
 describe("e2e: arrays", () => {
   test("array literal and indexing", () => {
-    const r = run("array_basic", `
+    const r = run(
+      "array_basic",
+      `
       import { print } from io;
       fn main() -> int {
         let arr = [10, 20, 30];
@@ -366,13 +423,16 @@ describe("e2e: arrays", () => {
         print(length);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("10\n20\n30\n3\n");
   });
 
   test("array index assignment", () => {
-    const r = run("array_assign", `
+    const r = run(
+      "array_assign",
+      `
       import { print } from io;
       fn main() -> int {
         let arr = [1, 2, 3];
@@ -381,13 +441,16 @@ describe("e2e: arrays", () => {
         print(arr[1]);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("99\n2\n");
   });
 
   test("array sum with for range", () => {
-    const r = run("array_sum", `
+    const r = run(
+      "array_sum",
+      `
       import { print } from io;
       fn main() -> int {
         let arr = [1, 2, 3, 4, 5];
@@ -398,13 +461,16 @@ describe("e2e: arrays", () => {
         print(sum);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("15\n");
   });
 
   test("array of booleans", () => {
-    const r = run("array_bool", `
+    const r = run(
+      "array_bool",
+      `
       import { print } from io;
       fn main() -> int {
         let flags = [true, false, true];
@@ -413,7 +479,8 @@ describe("e2e: arrays", () => {
         print(flags[2]);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("true\nfalse\ntrue\n");
   });
@@ -423,7 +490,9 @@ describe("e2e: arrays", () => {
 
 describe("e2e: error handling", () => {
   test("function that throws, caller catches", () => {
-    const r = run("throws_catch", `
+    const r = run(
+      "throws_catch",
+      `
       import { print } from io;
       struct NotFound {
         code: int;
@@ -449,13 +518,16 @@ describe("e2e: error handling", () => {
         print(result2);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("50\n404\n");
   });
 
   test("catch panic converts any error to panic", () => {
-    const r = run("catch_panic", `
+    const r = run(
+      "catch_panic",
+      `
       struct Oops { msg: int; }
       fn bad() -> int throws Oops {
         throw Oops{ msg: 1 };
@@ -464,13 +536,16 @@ describe("e2e: error handling", () => {
         let x = bad() catch panic;
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).not.toBe(0);
     expect(r.stderr).toContain("panic");
   });
 
   test("multiple catch branches", () => {
-    const r = run("multi_catch", `
+    const r = run(
+      "multi_catch",
+      `
       import { print } from io;
       struct ErrA { val: int; }
       struct ErrB { val: int; }
@@ -492,13 +567,16 @@ describe("e2e: error handling", () => {
         };
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("10\n");
   });
 
   test("catch throw re-propagates error", () => {
-    const r = run("catch_throw", `
+    const r = run(
+      "catch_throw",
+      `
       import { print } from io;
       struct Fail { code: int; }
       fn inner() -> int throws Fail {
@@ -517,7 +595,8 @@ describe("e2e: error handling", () => {
         };
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("42\n");
   });
@@ -527,7 +606,9 @@ describe("e2e: error handling", () => {
 
 describe("e2e: generics", () => {
   test("generic struct Pair<A,B> with different instantiations", () => {
-    const r = run("generic_pair", `
+    const r = run(
+      "generic_pair",
+      `
       import { print } from io;
       struct Pair<A, B> {
         first: A;
@@ -543,13 +624,16 @@ describe("e2e: generics", () => {
         print(p2.second);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("10\n20\n99\ntrue\n");
   });
 
   test("generic function identity<T> with i32 and string", () => {
-    const r = run("generic_fn", `
+    const r = run(
+      "generic_fn",
+      `
       import { print } from io;
       fn identity<T>(x: T) -> T {
         return x;
@@ -559,13 +643,16 @@ describe("e2e: generics", () => {
         print(identity<string>("hello"));
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("42\nhello\n");
   });
 
   test("generic function with multiple type params", () => {
-    const r = run("generic_multi", `
+    const r = run(
+      "generic_multi",
+      `
       import { print } from io;
       fn first<A, B>(a: A, b: B) -> A {
         return a;
@@ -578,7 +665,8 @@ describe("e2e: generics", () => {
         print(second<i32, string>(42, "world"));
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("42\nworld\n");
   });
@@ -588,7 +676,9 @@ describe("e2e: generics", () => {
 
 describe("e2e: operator overloading", () => {
   test("struct with + operator", () => {
-    const r = run("op_add", `
+    const r = run(
+      "op_add",
+      `
       import { print } from io;
       struct Vec2 {
         x: int;
@@ -606,13 +696,16 @@ describe("e2e: operator overloading", () => {
         print(c.y);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("4\n6\n");
   });
 
   test("struct with * operator", () => {
-    const r = run("op_mul", `
+    const r = run(
+      "op_mul",
+      `
       import { print } from io;
       struct Vec2 {
         x: int;
@@ -629,14 +722,17 @@ describe("e2e: operator overloading", () => {
         print(dot);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     // 2*4 + 3*5 = 8 + 15 = 23
     expect(r.stdout).toBe("23\n");
   });
 
   test("struct with - operator", () => {
-    const r = run("op_sub", `
+    const r = run(
+      "op_sub",
+      `
       import { print } from io;
       struct Vec2 {
         x: int;
@@ -654,7 +750,8 @@ describe("e2e: operator overloading", () => {
         print(c.y);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("7\n13\n");
   });
@@ -664,7 +761,9 @@ describe("e2e: operator overloading", () => {
 
 describe("e2e: advanced", () => {
   test("mutual recursion (is_even / is_odd)", () => {
-    const r = run("mutual_rec", `
+    const r = run(
+      "mutual_rec",
+      `
       import { print } from io;
       fn is_even(n: int) -> bool {
         if n == 0 { return true; }
@@ -681,13 +780,16 @@ describe("e2e: advanced", () => {
         print(is_odd(7));
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("true\nfalse\nfalse\ntrue\n");
   });
 
   test("compound assignment operators", () => {
-    const r = run("compound_assign", `
+    const r = run(
+      "compound_assign",
+      `
       import { print } from io;
       fn main() -> int {
         let x: int = 10;
@@ -701,13 +803,16 @@ describe("e2e: advanced", () => {
         print(x);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("15\n12\n24\n4\n");
   });
 
   test("type casting", () => {
-    const r = run("cast", `
+    const r = run(
+      "cast",
+      `
       import { print } from io;
       fn main() -> int {
         let x: i32 = 42;
@@ -715,22 +820,28 @@ describe("e2e: advanced", () => {
         print(y);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("42\n");
   });
 
   test("exit code from main", () => {
-    const r = run("exit_code", `
+    const r = run(
+      "exit_code",
+      `
       fn main() -> int {
         return 42;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(42);
   });
 
   test("float arithmetic", () => {
-    const r = run("float_arith", `
+    const r = run(
+      "float_arith",
+      `
       import { print } from io;
       fn main() -> int {
         let x: f64 = 3.14;
@@ -739,13 +850,16 @@ describe("e2e: advanced", () => {
         print(z);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("6.28\n");
   });
 
   test("string comparison", () => {
-    const r = run("str_cmp", `
+    const r = run(
+      "str_cmp",
+      `
       import { print } from io;
       fn main() -> int {
         let a: string = "hello";
@@ -763,13 +877,16 @@ describe("e2e: advanced", () => {
         }
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("equal\nnot equal\n");
   });
 
   test("nested function calls", () => {
-    const r = run("nested_calls", `
+    const r = run(
+      "nested_calls",
+      `
       import { print } from io;
       fn add(a: int, b: int) -> int { return a + b; }
       fn mul(a: int, b: int) -> int { return a * b; }
@@ -777,14 +894,17 @@ describe("e2e: advanced", () => {
         print(add(mul(3, 4), mul(5, 6)));
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     // 3*4 + 5*6 = 12 + 30 = 42
     expect(r.stdout).toBe("42\n");
   });
 
   test("chained comparisons with boolean vars", () => {
-    const r = run("comparisons", `
+    const r = run(
+      "comparisons",
+      `
       import { print } from io;
       fn main() -> int {
         let x: int = 5;
@@ -796,20 +916,24 @@ describe("e2e: advanced", () => {
         print(x != 4);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toBe("true\ntrue\ntrue\ntrue\ntrue\ntrue\n");
   });
 
   test("deeply nested expressions", () => {
-    const r = run("deep_expr", `
+    const r = run(
+      "deep_expr",
+      `
       import { print } from io;
       fn main() -> int {
         let result: int = (1 + 2) * (3 + 4) - (5 - 6);
         print(result);
         return 0;
       }
-    `);
+    `
+    );
     expect(r.exitCode).toBe(0);
     // (1+2)*(3+4) - (5-6) = 3*7 - (-1) = 21 + 1 = 22
     expect(r.stdout).toBe("22\n");

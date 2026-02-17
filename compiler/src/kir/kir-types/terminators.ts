@@ -1,15 +1,9 @@
-import type { VarId, BlockId } from "./identifiers";
+import type { BlockId, VarId } from "./identifiers";
 
 // ─── Terminators ─────────────────────────────────────────────────────────────
 
 /** Union of all block terminators — exactly one per basic block. */
-export type KirTerminator =
-  | KirRet
-  | KirRetVoid
-  | KirJump
-  | KirBranch
-  | KirSwitch
-  | KirUnreachable;
+export type KirTerminator = KirRet | KirRetVoid | KirJump | KirBranch | KirSwitch | KirUnreachable;
 
 /** Return a value from the function. */
 export interface KirRet {

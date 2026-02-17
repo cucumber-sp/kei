@@ -2,8 +2,15 @@
  * Instruction and terminator emission for the C backend.
  */
 
-import type { KirInst, KirTerminator, KirType, VarId, BinOp } from "../kir/kir-types.ts";
-import { emitCType, sanitizeName, varName, cStringLiteral, I32_MIN, I32_MAX } from "./c-emitter-types.ts";
+import type { BinOp, KirInst, KirTerminator, KirType, VarId } from "../kir/kir-types.ts";
+import {
+  cStringLiteral,
+  emitCType,
+  I32_MAX,
+  I32_MIN,
+  sanitizeName,
+  varName,
+} from "./c-emitter-types.ts";
 
 // ─── Instruction emission ───────────────────────────────────────────────────
 
@@ -86,7 +93,14 @@ function emitCallTarget(func: string): string {
   return sanitizeName(func);
 }
 
-function emitBinOp(dest: VarId, op: BinOp, lhs: VarId, rhs: VarId, type: KirType, operandType?: KirType): string {
+function emitBinOp(
+  dest: VarId,
+  op: BinOp,
+  lhs: VarId,
+  rhs: VarId,
+  type: KirType,
+  operandType?: KirType
+): string {
   const d = varName(dest);
   const l = varName(lhs);
   const r = varName(rhs);
@@ -146,7 +160,9 @@ export function emitTerminator(term: KirTerminator): string {
       for (let i = 0; i < term.cases.length; i++) {
         const c = term.cases[i];
         const prefix = i === 0 ? "if" : "else if";
-        lines.push(`${prefix} (${varName(term.value)} == ${varName(c.value)}) goto ${sanitizeName(c.target)};`);
+        lines.push(
+          `${prefix} (${varName(term.value)} == ${varName(c.value)}) goto ${sanitizeName(c.target)};`
+        );
       }
       lines.push(`else goto ${sanitizeName(term.defaultBlock)};`);
       return lines.join("\n    ");

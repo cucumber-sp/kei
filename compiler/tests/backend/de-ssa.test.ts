@@ -1,15 +1,15 @@
-import { test, expect, describe } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { runDeSsa } from "../../src/backend/de-ssa.ts";
-import { runMem2Reg } from "../../src/kir/mem2reg.ts";
 import type {
-  KirModule,
-  KirFunction,
+  BlockId,
   KirBlock,
+  KirFunction,
+  KirModule,
   KirPhi,
   KirType,
   VarId,
-  BlockId,
 } from "../../src/kir/kir-types.ts";
+import { runMem2Reg } from "../../src/kir/mem2reg.ts";
 import { lower } from "../kir/helpers.ts";
 
 /** Lower source, run mem2reg (to get phis), then run de-ssa */
@@ -80,7 +80,7 @@ describe("de-ssa", () => {
     if (totalPhis > 0) {
       const totalCasts = fn.blocks.reduce(
         (sum, b) => sum + b.instructions.filter((i) => i.kind === "cast").length,
-        0,
+        0
       );
       expect(totalCasts).toBeGreaterThan(0);
     }
@@ -280,9 +280,7 @@ describe("de-ssa: lost-copy regression", () => {
 
     // Verify the second copy (%3 = ...) doesn't directly reference %2,
     // because %2 gets overwritten. It should use a temp instead.
-    const copyForB = casts.find(
-      (i) => i.kind === "cast" && i.dest === "%3",
-    );
+    const copyForB = casts.find((i) => i.kind === "cast" && i.dest === "%3");
     expect(copyForB).toBeDefined();
     if (copyForB && copyForB.kind === "cast") {
       // The source should be a temp variable (not %2 directly, since

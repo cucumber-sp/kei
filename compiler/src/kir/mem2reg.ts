@@ -16,20 +16,19 @@
  * pointers). Address-taken allocas remain in memory.
  */
 
+import { buildCFG, type CFG } from "./cfg.ts";
+import { buildDomTree, computeDomFrontiers, computeDominators } from "./dominance.ts";
 import type {
-  KirModule,
-  KirFunction,
+  BlockId,
   KirBlock,
+  KirFunction,
   KirInst,
-  KirTerminator,
+  KirModule,
   KirPhi,
+  KirTerminator,
   KirType,
   VarId,
-  BlockId,
 } from "./kir-types.ts";
-
-import { buildCFG, type CFG } from "./cfg.ts";
-import { computeDominators, computeDomFrontiers, buildDomTree } from "./dominance.ts";
 
 // ─── Promotable alloca identification ───────────────────────────────────────
 
@@ -118,7 +117,7 @@ function insertPhis(
   fn: KirFunction,
   cfg: CFG,
   domFrontiers: Map<BlockId, Set<BlockId>>,
-  allocas: Map<VarId, AllocaInfo>,
+  allocas: Map<VarId, AllocaInfo>
 ): Map<BlockId, Map<VarId, KirPhi>> {
   // Map: blockId → allocaVar → phi node
   const phis = new Map<BlockId, Map<VarId, KirPhi>>();
@@ -174,10 +173,7 @@ function insertPhis(
  * function. This is the single source of truth for which fields are
  * operands for each instruction kind.
  */
-function mapInstOperands(
-  inst: KirInst,
-  mapVar: (v: VarId) => VarId,
-): KirInst {
+function mapInstOperands(inst: KirInst, mapVar: (v: VarId) => VarId): KirInst {
   switch (inst.kind) {
     case "bin_op":
       return { ...inst, lhs: mapVar(inst.lhs), rhs: mapVar(inst.rhs) };
@@ -242,10 +238,7 @@ function mapInstOperands(
 }
 
 /** Rewrite all VarId operands in a terminator using the given mapping. */
-function mapTerminatorOperands(
-  term: KirTerminator,
-  mapVar: (v: VarId) => VarId,
-): KirTerminator {
+function mapTerminatorOperands(term: KirTerminator, mapVar: (v: VarId) => VarId): KirTerminator {
   switch (term.kind) {
     case "ret":
       return { ...term, value: mapVar(term.value) };
@@ -282,7 +275,7 @@ function renameVariables(
   cfg: CFG,
   idom: Map<BlockId, BlockId>,
   allocas: Map<VarId, AllocaInfo>,
-  phiMap: Map<BlockId, Map<VarId, KirPhi>>,
+  phiMap: Map<BlockId, Map<VarId, KirPhi>>
 ): KirBlock[] {
   const domChildren = buildDomTree(cfg, idom);
 
@@ -393,10 +386,7 @@ function renameVariables(
     newBlock.instructions = keptInsts;
 
     // Step 3: Rewrite terminator operands
-    newBlock.terminator = mapTerminatorOperands(
-      block.terminator,
-      resolveValue,
-    );
+    newBlock.terminator = mapTerminatorOperands(block.terminator, resolveValue);
 
     // Step 4: Fill in phi incoming values in each successor block.
     // The current def for each alloca at this point is what flows
@@ -459,9 +449,7 @@ function eliminateDeadPhis(blocks: KirBlock[]): void {
       const survivingPhis: KirPhi[] = [];
       for (const phi of block.phis) {
         // Filter out self-references (phi.dest appearing in its own incoming)
-        const nonSelfValues = phi.incoming
-          .filter((e) => e.value !== phi.dest)
-          .map((e) => e.value);
+        const nonSelfValues = phi.incoming.filter((e) => e.value !== phi.dest).map((e) => e.value);
 
         const uniqueValues = [...new Set(nonSelfValues)];
 
@@ -484,9 +472,7 @@ function eliminateDeadPhis(blocks: KirBlock[]): void {
                 if (inc.value === from) inc.value = replacement;
               }
             }
-            b.instructions = b.instructions.map((inst) =>
-              mapInstOperands(inst, mapVar),
-            );
+            b.instructions = b.instructions.map((inst) => mapInstOperands(inst, mapVar));
             b.terminator = mapTerminatorOperands(b.terminator, mapVar);
           }
           changed = true;

@@ -3,7 +3,7 @@
  */
 
 import type { KirType, VarId } from "../kir/kir-types.ts";
-import { I32_MIN, I32_MAX } from "../utils/constants.ts";
+import { I32_MAX, I32_MIN } from "../utils/constants.ts";
 
 export { I32_MIN, I32_MAX };
 
@@ -39,7 +39,7 @@ export function emitCTypeForDecl(t: KirType, varName: string): string {
     return `${emitCType(t.element)} ${varName}[${t.length}]`;
   }
   if (t.kind === "struct" && t.name.startsWith("__err_union_")) {
-    const members = t.fields.map(f => `${emitCType(f.type)} ${sanitizeName(f.name)};`).join(" ");
+    const members = t.fields.map((f) => `${emitCType(f.type)} ${sanitizeName(f.name)};`).join(" ");
     return `union { ${members} } ${varName}`;
   }
   return `${emitCType(t)} ${varName}`;
@@ -67,15 +67,27 @@ export function cStringLiteral(s: string): string {
     const ch = s[i];
     const code = s.charCodeAt(i);
     switch (ch) {
-      case '"': out += '\\"'; break;
-      case '\\': out += '\\\\'; break;
-      case '\n': out += '\\n'; break;
-      case '\r': out += '\\r'; break;
-      case '\t': out += '\\t'; break;
-      case '\0': out += '\\0'; break;
+      case '"':
+        out += '\\"';
+        break;
+      case "\\":
+        out += "\\\\";
+        break;
+      case "\n":
+        out += "\\n";
+        break;
+      case "\r":
+        out += "\\r";
+        break;
+      case "\t":
+        out += "\\t";
+        break;
+      case "\0":
+        out += "\\0";
+        break;
       default:
         if (code < 0x20 || code > 0x7e) {
-          out += '\\' + code.toString(8).padStart(3, '0');
+          out += "\\" + code.toString(8).padStart(3, "0");
         } else {
           out += ch;
         }

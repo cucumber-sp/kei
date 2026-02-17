@@ -3,10 +3,10 @@
  * resolver, multi-module checker, and module KIR lowering.
  */
 
-import { test, expect, describe } from "bun:test";
-import { resolve, join } from "node:path";
-import { Checker } from "../../src/checker/checker.ts";
+import { describe, expect, test } from "bun:test";
+import { join, resolve } from "node:path";
 import type { ModuleCheckInfo } from "../../src/checker/checker.ts";
+import { Checker } from "../../src/checker/checker.ts";
 import { lowerModulesToKir } from "../../src/kir/lowering.ts";
 import { ModuleResolver } from "../../src/modules/resolver.ts";
 
@@ -118,9 +118,7 @@ describe("Module system (comprehensive)", () => {
       const result = checkMultiModule("main_import_nonexistent_symbol.kei");
       const errors = result.diagnostics.filter((d) => d.severity === "error");
       expect(errors.length).toBeGreaterThan(0);
-      const hasExpectedError = errors.some((d) =>
-        d.message.includes("is not exported by module")
-      );
+      const hasExpectedError = errors.some((d) => d.message.includes("is not exported by module"));
       expect(hasExpectedError).toBe(true);
     });
   });
@@ -143,9 +141,7 @@ describe("Module system (comprehensive)", () => {
       const result = resolver.resolve(join(FIXTURES_DIR, "cycle_a.kei"));
 
       expect(result.errors.length).toBeGreaterThan(0);
-      const hasCycleError = result.errors.some((e) =>
-        e.includes("Circular dependency")
-      );
+      const hasCycleError = result.errors.some((e) => e.includes("Circular dependency"));
       expect(hasCycleError).toBe(true);
     });
   });

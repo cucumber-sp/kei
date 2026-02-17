@@ -6,14 +6,7 @@
 import type { CatchExpr, ThrowExpr } from "../ast/nodes.ts";
 import type { Checker } from "./checker.ts";
 import type { Type } from "./types";
-import {
-  ERROR_TYPE,
-  isErrorType,
-  TypeKind,
-  typesEqual,
-  typeToString,
-  VOID_TYPE,
-} from "./types";
+import { ERROR_TYPE, isErrorType, TypeKind, typesEqual, typeToString, VOID_TYPE } from "./types";
 
 export function checkCatchExpression(checker: Checker, expr: CatchExpr): Type {
   // The operand should be a function call that throws
@@ -42,10 +35,7 @@ export function checkCatchExpression(checker: Checker, expr: CatchExpr): Type {
       return ERROR_TYPE;
     }
     if (enclosingFn.throwsTypes.length === 0) {
-      checker.error(
-        "cannot use 'catch throw' — function does not declare 'throws'",
-        expr.span
-      );
+      checker.error("cannot use 'catch throw' — function does not declare 'throws'", expr.span);
       return ERROR_TYPE;
     }
     // Check that all thrown types are in the enclosing function's throws
@@ -78,13 +68,7 @@ export function checkCatchExpression(checker: Checker, expr: CatchExpr): Type {
           const unhandledTypes = throwsInfo.filter((t) => !handledTypes.has(typeToString(t)));
           const firstUnhandled = unhandledTypes[0];
           if (firstUnhandled) {
-            checker.defineVariable(
-              clause.varName,
-              firstUnhandled,
-              false,
-              false,
-              clause.span
-            );
+            checker.defineVariable(clause.varName, firstUnhandled, false, false, clause.span);
           }
         }
         for (const stmt of clause.body) {
@@ -103,10 +87,7 @@ export function checkCatchExpression(checker: Checker, expr: CatchExpr): Type {
       );
 
       if (!errorType) {
-        checker.error(
-          `error type '${errorTypeName}' is not thrown by the callee`,
-          clause.span
-        );
+        checker.error(`error type '${errorTypeName}' is not thrown by the callee`, clause.span);
         continue;
       }
 

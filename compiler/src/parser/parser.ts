@@ -372,7 +372,6 @@ export class Parser implements ParserContext {
   parseExpression(): Expression {
     return parseExpression(this);
   }
-
 }
 
 class ParseError extends Error {

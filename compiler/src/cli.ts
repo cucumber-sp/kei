@@ -1,23 +1,31 @@
-import { Checker } from "./checker/checker.ts";
-import type { CheckResult, ModuleCheckInfo } from "./checker/checker.ts";
-import { lowerToKir, lowerModulesToKir } from "./kir/lowering.ts";
-import type { KirModule } from "./kir/kir-types.ts";
-import { printKir } from "./kir/printer.ts";
-import { runMem2Reg } from "./kir/mem2reg.ts";
-import { runDeSsa } from "./backend/de-ssa.ts";
+import type { Program } from "./ast/nodes.ts";
 import { emitC } from "./backend/c-emitter.ts";
+import { runDeSsa } from "./backend/de-ssa.ts";
+import type { CheckResult, ModuleCheckInfo } from "./checker/checker.ts";
+import { Checker } from "./checker/checker.ts";
+import type { Diagnostic } from "./errors/index.ts";
+import type { KirModule } from "./kir/kir-types.ts";
+import { lowerModulesToKir, lowerToKir } from "./kir/lowering.ts";
+import { runMem2Reg } from "./kir/mem2reg.ts";
+import { printKir } from "./kir/printer.ts";
 import { Lexer } from "./lexer/index.ts";
+import { ModuleResolver } from "./modules/index.ts";
 import { Parser } from "./parser/index.ts";
 import { SourceFile } from "./utils/source.ts";
-import { ModuleResolver } from "./modules/index.ts";
-import type { Diagnostic } from "./errors/index.ts";
-import type { Program } from "./ast/nodes.ts";
 
 const VERSION = "0.1.0";
 
 const KNOWN_FLAGS = new Set([
-  "--ast", "--ast-json", "--check", "--kir", "--kir-opt",
-  "--emit-c", "--build", "--run", "--help", "--version",
+  "--ast",
+  "--ast-json",
+  "--check",
+  "--kir",
+  "--kir-opt",
+  "--emit-c",
+  "--build",
+  "--run",
+  "--help",
+  "--version",
 ]);
 
 // ─── Argument parsing ────────────────────────────────────────────────────────
@@ -85,7 +93,11 @@ function formatDiagnostic(diag: Diagnostic, source?: SourceFile): string {
 }
 
 /** Print all diagnostics with source context. Returns the error count. */
-function reportDiagnostics(diagnostics: readonly Diagnostic[], source?: SourceFile, sourceMap?: Map<string, SourceFile>): number {
+function reportDiagnostics(
+  diagnostics: readonly Diagnostic[],
+  source?: SourceFile,
+  sourceMap?: Map<string, SourceFile>
+): number {
   let errorCount = 0;
   for (const diag of diagnostics) {
     // Use per-file source map if available, otherwise fall back to single source
@@ -141,7 +153,16 @@ const allDiagnostics: Diagnostic[] = [];
 const lexerDiagnostics = lexer.getDiagnostics();
 allDiagnostics.push(...lexerDiagnostics);
 
-if (showAst || showAstJson || runCheck || showKir || showKirOpt || emitCFlag || buildFlag || runFlag) {
+if (
+  showAst ||
+  showAstJson ||
+  runCheck ||
+  showKir ||
+  showKirOpt ||
+  emitCFlag ||
+  buildFlag ||
+  runFlag
+) {
   const parser = new Parser(tokens);
   const program = parser.parse();
 
@@ -320,7 +341,11 @@ if (showAst || showAstJson || runCheck || showKir || showKirOpt || emitCFlag || 
 // ─── Multi-module build ──────────────────────────────────────────────────────
 
 /** Build a KIR module from a multi-file project with imports. */
-function buildMultiModule(mainFilePath: string, _mainProgram: Program, mainSource: SourceFile): KirModule {
+function buildMultiModule(
+  mainFilePath: string,
+  _mainProgram: Program,
+  mainSource: SourceFile
+): KirModule {
   const resolver = new ModuleResolver(mainFilePath);
   const resolverResult = resolver.resolve(mainFilePath);
 
