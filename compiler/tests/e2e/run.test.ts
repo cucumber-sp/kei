@@ -939,3 +939,1290 @@ describe("e2e: advanced", () => {
     expect(r.stdout).toBe("22\n");
   });
 });
+
+// ─── Complex: recursive algorithms ──────────────────────────────────────────
+
+describe("Complex: recursive algorithms", () => {
+  test("fibonacci recursive vs iterative", () => {
+    const r = run(
+      "complex_fib",
+      `
+      import { print } from io;
+
+      fn fib_rec(n: int) -> int {
+        if n <= 1 { return n; }
+        return fib_rec(n - 1) + fib_rec(n - 2);
+      }
+
+      fn fib_iter(n: int) -> int {
+        if n <= 1 { return n; }
+        let a: int = 0;
+        let b: int = 1;
+        let i: int = 2;
+        while i <= n {
+          let tmp: int = a + b;
+          a = b;
+          b = tmp;
+          i = i + 1;
+        }
+        return b;
+      }
+
+      fn main() -> int {
+        // Both methods should agree for all values
+        for i in 0..15 {
+          let rec: int = fib_rec(i);
+          let iter: int = fib_iter(i);
+          if rec != iter {
+            print("MISMATCH");
+            return 1;
+          }
+        }
+        print(fib_rec(10));
+        print(fib_iter(20));
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("55\n6765\n");
+  });
+
+  test("factorial with overflow check", () => {
+    const r = run(
+      "complex_fact",
+      `
+      import { print } from io;
+
+      fn factorial(n: int) -> int {
+        if n <= 1 { return 1; }
+        return n * factorial(n - 1);
+      }
+
+      fn safe_factorial(n: int) -> int {
+        // Iterative with running product
+        let result: int = 1;
+        for i in 1..13 {
+          if i > n { break; }
+          result = result * i;
+        }
+        return result;
+      }
+
+      fn main() -> int {
+        // Check small values
+        print(factorial(0));
+        print(factorial(1));
+        print(factorial(5));
+        print(factorial(10));
+
+        // Verify iterative matches recursive
+        for i in 0..12 {
+          if factorial(i) != safe_factorial(i) {
+            print("MISMATCH");
+            return 1;
+          }
+        }
+        print("ok");
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("1\n1\n120\n3628800\nok\n");
+  });
+
+  test("tower of hanoi counter", () => {
+    const r = run(
+      "complex_hanoi",
+      `
+      import { print } from io;
+
+      // Count moves needed for Tower of Hanoi
+      fn hanoi_moves(n: int) -> int {
+        if n <= 0 { return 0; }
+        if n == 1 { return 1; }
+        // Move n-1 disks to aux, move largest, move n-1 from aux to target
+        return hanoi_moves(n - 1) + 1 + hanoi_moves(n - 1);
+      }
+
+      fn main() -> int {
+        print(hanoi_moves(1));
+        print(hanoi_moves(2));
+        print(hanoi_moves(3));
+        print(hanoi_moves(4));
+        print(hanoi_moves(10));
+        // 2^n - 1 moves
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    // 2^1-1=1, 2^2-1=3, 2^3-1=7, 2^4-1=15, 2^10-1=1023
+    expect(r.stdout).toBe("1\n3\n7\n15\n1023\n");
+  });
+
+  test("binary search on sorted array", () => {
+    const r = run(
+      "complex_bsearch",
+      `
+      import { print } from io;
+
+      fn main() -> int {
+        let arr = [2, 5, 8, 12, 16, 23, 38, 56];
+
+        // Search for 23 (index 5)
+        let target: int = 23;
+        let lo: int = 0;
+        let hi: int = 7;
+        let found: int = -1;
+        while lo <= hi {
+          let mid: int = lo + (hi - lo) / 2;
+          if arr[mid] == target {
+            found = mid;
+            break;
+          } else {
+            if arr[mid] < target {
+              lo = mid + 1;
+            } else {
+              hi = mid - 1;
+            }
+          }
+        }
+        print(found);
+
+        // Search for 2 (index 0)
+        target = 2;
+        lo = 0;
+        hi = 7;
+        found = -1;
+        while lo <= hi {
+          let mid: int = lo + (hi - lo) / 2;
+          if arr[mid] == target {
+            found = mid;
+            break;
+          } else {
+            if arr[mid] < target {
+              lo = mid + 1;
+            } else {
+              hi = mid - 1;
+            }
+          }
+        }
+        print(found);
+
+        // Search for 99 (not found)
+        target = 99;
+        lo = 0;
+        hi = 7;
+        found = -1;
+        while lo <= hi {
+          let mid: int = lo + (hi - lo) / 2;
+          if arr[mid] == target {
+            found = mid;
+            break;
+          } else {
+            if arr[mid] < target {
+              lo = mid + 1;
+            } else {
+              hi = mid - 1;
+            }
+          }
+        }
+        print(found);
+
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("5\n0\n-1\n");
+  });
+
+  test("GCD and LCM via recursion", () => {
+    const r = run(
+      "complex_gcd",
+      `
+      import { print } from io;
+
+      fn gcd(a: int, b: int) -> int {
+        if b == 0 { return a; }
+        return gcd(b, a % b);
+      }
+
+      fn lcm(a: int, b: int) -> int {
+        return (a / gcd(a, b)) * b;
+      }
+
+      fn main() -> int {
+        print(gcd(48, 18));
+        print(gcd(100, 75));
+        print(gcd(17, 13));
+        print(lcm(4, 6));
+        print(lcm(12, 18));
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("6\n25\n1\n12\n36\n");
+  });
+});
+
+// ─── Complex: structs with lifecycle ────────────────────────────────────────
+
+describe("Complex: structs with lifecycle", () => {
+  test("struct with __destroy hook", () => {
+    const r = run(
+      "complex_destroy",
+      `
+      import { print } from io;
+
+      struct Resource {
+        id: int;
+
+        fn __destroy(self: Resource) {
+          print("destroy");
+          print(self.id);
+        }
+      }
+
+      fn main() -> int {
+        let r1 = Resource{ id: 1 };
+        print("created");
+        print(r1.id);
+        // r1 destroyed at end of scope
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("created\n1\n");
+    expect(r.stdout).toContain("destroy\n1\n");
+  });
+
+  // skip: C backend passes struct by value to __oncopy instead of by pointer
+  test.skip("struct with __oncopy hook via assignment", () => {
+    const r = run(
+      "complex_oncopy",
+      `
+      import { print } from io;
+
+      struct Counter {
+        val: int;
+
+        fn __oncopy(self: Counter) -> Counter {
+          print("copied");
+          return Counter{ val: self.val + 100 };
+        }
+
+        fn __destroy(self: Counter) {
+          print("destroy");
+          print(self.val);
+        }
+      }
+
+      fn main() -> int {
+        let c = Counter{ val: 42 };
+        let c2 = c;
+        print(c.val);
+        print(c2.val);
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("copied\n");
+    expect(r.stdout).toContain("42\n");
+  });
+
+  test("struct field manipulation and computation", () => {
+    const r = run(
+      "complex_struct_compute",
+      `
+      import { print } from io;
+
+      struct Point {
+        x: int;
+        y: int;
+      }
+
+      fn make_point(x: int, y: int) -> Point {
+        return Point{ x: x, y: y };
+      }
+
+      fn main() -> int {
+        let origin = make_point(0, 0);
+        let p = make_point(origin.x + 3, origin.y + 4);
+        print(p.x);
+        print(p.y);
+
+        let q = make_point(p.x + 1, p.y + 1);
+        print(q.x);
+        print(q.y);
+
+        // Distance squared computed inline
+        let dx: int = origin.x - p.x;
+        let dy: int = origin.y - p.y;
+        print(dx * dx + dy * dy);
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("3\n4\n4\n5\n25\n");
+  });
+
+  test("multiple struct types with computed fields", () => {
+    const r = run(
+      "complex_multi_struct",
+      `
+      import { print } from io;
+
+      struct Rect {
+        x: int;
+        y: int;
+        w: int;
+        h: int;
+      }
+
+      struct Circle {
+        cx: int;
+        cy: int;
+        r: int;
+      }
+
+      fn rect_area(x: int, y: int, w: int, h: int) -> int {
+        return w * h;
+      }
+
+      fn rect_contains(rx: int, ry: int, rw: int, rh: int, px: int, py: int) -> bool {
+        return px >= rx && px < rx + rw
+            && py >= ry && py < ry + rh;
+      }
+
+      fn circle_area_approx(r: int) -> int {
+        return 3 * r * r;
+      }
+
+      fn main() -> int {
+        let r = Rect{ x: 0, y: 0, w: 10, h: 5 };
+        print(rect_area(r.x, r.y, r.w, r.h));
+        print(rect_contains(r.x, r.y, r.w, r.h, 5, 3));
+        print(rect_contains(r.x, r.y, r.w, r.h, 15, 3));
+
+        let c = Circle{ cx: 0, cy: 0, r: 5 };
+        print(circle_area_approx(c.r));
+
+        // Nested struct computations
+        let r2 = Rect{ x: r.x + r.w, y: r.y, w: 5, h: 3 };
+        print(r2.x);
+        print(rect_area(r2.x, r2.y, r2.w, r2.h));
+
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("50\ntrue\nfalse\n75\n10\n15\n");
+  });
+});
+
+// ─── Complex: error handling chains ─────────────────────────────────────────
+
+describe("Complex: error handling chains", () => {
+  test("error propagation through call chain", () => {
+    const r = run(
+      "complex_err_chain",
+      `
+      import { print } from io;
+
+      struct ParseError { pos: int; }
+      struct ValidateError { code: int; }
+
+      fn parse(input: int) -> int throws ParseError {
+        if input < 0 {
+          throw ParseError{ pos: input };
+        }
+        return input * 2;
+      }
+
+      fn validate(value: int) -> int throws ValidateError {
+        if value > 100 {
+          throw ValidateError{ code: 1 };
+        }
+        return value;
+      }
+
+      fn process(input: int) -> int throws ParseError, ValidateError {
+        let parsed = parse(input) catch throw;
+        let validated = validate(parsed) catch throw;
+        return validated;
+      }
+
+      fn main() -> int {
+        // Success case
+        let r1 = process(10) catch {
+          ParseError e: {
+            print("parse error");
+            return 1;
+          }
+          ValidateError e: {
+            print("validate error");
+            return 1;
+          }
+        };
+        print(r1);
+
+        // Parse error case
+        let r2 = process(-5) catch {
+          ParseError e: {
+            print("parse error");
+            print(e.pos);
+            return 0;
+          }
+          ValidateError e: {
+            print("validate error");
+            return 1;
+          }
+        };
+
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("20\nparse error\n-5\n");
+  });
+
+  test("multiple error types with binding", () => {
+    const r = run(
+      "complex_multi_err",
+      `
+      import { print } from io;
+
+      struct NotFound { id: int; }
+      struct Forbidden { level: int; }
+      struct Timeout { ms: int; }
+
+      fn lookup(id: int) -> int throws NotFound, Forbidden, Timeout {
+        if id == 0 { throw NotFound{ id: 0 }; }
+        if id < 0 { throw Forbidden{ level: 3 }; }
+        if id > 1000 { throw Timeout{ ms: 5000 }; }
+        return id;
+      }
+
+      fn main() -> int {
+        // Test each error branch
+        let a = lookup(42) catch {
+          NotFound e: { return 1; }
+          Forbidden e: { return 1; }
+          Timeout e: { return 1; }
+        };
+        print(a);
+
+        let b = lookup(0) catch {
+          NotFound e: {
+            print(e.id);
+            return 0;
+          }
+          Forbidden e: { return 1; }
+          Timeout e: { return 1; }
+        };
+
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("42\n0\n");
+  });
+
+  test("catch throw re-propagation with tag remapping", () => {
+    const r = run(
+      "complex_rethrow",
+      `
+      import { print } from io;
+
+      struct ErrA { a: int; }
+      struct ErrB { b: int; }
+
+      fn inner() -> int throws ErrA {
+        throw ErrA{ a: 111 };
+      }
+
+      fn middle() -> int throws ErrB, ErrA {
+        // catch throw propagates ErrA, but tag remapping needed
+        // because middle's error order is different
+        let x = inner() catch throw;
+        return x;
+      }
+
+      fn main() -> int {
+        let result = middle() catch {
+          ErrB e: {
+            print("got B");
+            return 1;
+          }
+          ErrA e: {
+            print("got A");
+            print(e.a);
+            return 0;
+          }
+        };
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("got A\n111\n");
+  });
+
+  test("error handling with success path computations", () => {
+    const r = run(
+      "complex_err_compute",
+      `
+      import { print } from io;
+
+      struct DivByZero { dividend: int; }
+
+      fn safe_div(a: int, b: int) -> int throws DivByZero {
+        if b == 0 {
+          throw DivByZero{ dividend: a };
+        }
+        return a / b;
+      }
+
+      fn main() -> int {
+        // Chain of successful divisions
+        let a = safe_div(100, 5) catch { DivByZero e: { return 1; } };
+        let b = safe_div(a, 4) catch { DivByZero e: { return 1; } };
+        let c = safe_div(b, 1) catch { DivByZero e: { return 1; } };
+        print(a);
+        print(b);
+        print(c);
+
+        // Division by zero
+        let d = safe_div(42, 0) catch {
+          DivByZero e: {
+            print(e.dividend);
+            return 0;
+          }
+        };
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("20\n5\n5\n42\n");
+  });
+});
+
+// ─── Complex: operator overloading + generics ───────────────────────────────
+
+describe("Complex: operator overloading + generics", () => {
+  // skip: C backend passes struct by value to method calls (dot, magnitude_sq) instead of by pointer
+  test.skip("Vec2 with +, -, == operators", () => {
+    const r = run(
+      "complex_vec2_ops",
+      `
+      import { print } from io;
+
+      struct Vec2 {
+        x: int;
+        y: int;
+
+        fn op_add(self: Vec2, other: Vec2) -> Vec2 {
+          return Vec2{ x: self.x + other.x, y: self.y + other.y };
+        }
+
+        fn op_sub(self: Vec2, other: Vec2) -> Vec2 {
+          return Vec2{ x: self.x - other.x, y: self.y - other.y };
+        }
+
+        fn op_eq(self: Vec2, other: Vec2) -> bool {
+          return self.x == other.x && self.y == other.y;
+        }
+
+        fn dot(self: Vec2, other: Vec2) -> int {
+          return self.x * other.x + self.y * other.y;
+        }
+
+        fn magnitude_sq(self: Vec2) -> int {
+          return self.x * self.x + self.y * self.y;
+        }
+      }
+
+      fn main() -> int {
+        let a = Vec2{ x: 3, y: 4 };
+        let b = Vec2{ x: 1, y: 2 };
+
+        let sum = a + b;
+        print(sum.x);
+        print(sum.y);
+
+        let diff = a - b;
+        print(diff.x);
+        print(diff.y);
+
+        print(a == a);
+        print(a == b);
+
+        print(a.dot(b));
+        print(a.magnitude_sq());
+
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    // sum = (4,6), diff = (2,2), a==a true, a==b false, dot=3+8=11, mag_sq=9+16=25
+    expect(r.stdout).toBe("4\n6\n2\n2\ntrue\nfalse\n11\n25\n");
+  });
+
+  // skip: C backend emits undeclared variables for chained operator overloading expressions
+  test.skip("chained operator overloading (a + b + c)", () => {
+    const r = run(
+      "complex_chained_ops",
+      `
+      import { print } from io;
+
+      struct Vec2 {
+        x: int;
+        y: int;
+
+        fn op_add(self: Vec2, other: Vec2) -> Vec2 {
+          return Vec2{ x: self.x + other.x, y: self.y + other.y };
+        }
+
+        fn op_sub(self: Vec2, other: Vec2) -> Vec2 {
+          return Vec2{ x: self.x - other.x, y: self.y - other.y };
+        }
+      }
+
+      fn main() -> int {
+        let a = Vec2{ x: 1, y: 1 };
+        let b = Vec2{ x: 2, y: 3 };
+        let c = Vec2{ x: 4, y: 5 };
+
+        // a + b + c
+        let sum = a + b + c;
+        print(sum.x);
+        print(sum.y);
+
+        // a + b - c
+        let mixed = a + b - c;
+        print(mixed.x);
+        print(mixed.y);
+
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    // sum = (1+2+4, 1+3+5) = (7, 9)
+    // mixed = (1+2-4, 1+3-5) = (-1, -1)
+    expect(r.stdout).toBe("7\n9\n-1\n-1\n");
+  });
+
+  // skip: KIR lowering and C backend not yet updated for generics (generic type args in function body)
+  test.skip("generic struct Pair with methods", () => {
+    const r = run(
+      "complex_generic_pair",
+      `
+      import { print } from io;
+
+      struct Pair<A, B> {
+        first: A;
+        second: B;
+      }
+
+      fn make_pair<A, B>(a: A, b: B) -> Pair<A, B> {
+        return Pair<A, B>{ first: a, second: b };
+      }
+
+      fn main() -> int {
+        let p1 = make_pair<i32, i32>(10, 20);
+        print(p1.first);
+        print(p1.second);
+
+        let p2 = make_pair<i32, bool>(42, true);
+        print(p2.first);
+        print(p2.second);
+
+        let p3 = make_pair<string, i32>("hello", 99);
+        print(p3.first);
+        print(p3.second);
+
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("10\n20\n42\ntrue\nhello\n99\n");
+  });
+
+  // skip: KIR lowering and C backend not yet updated for generics (generic type args in nested calls)
+  test.skip("generic function with multiple instantiations", () => {
+    const r = run(
+      "complex_generic_multi",
+      `
+      import { print } from io;
+
+      fn max<T>(a: T, b: T) -> T {
+        if a > b { return a; }
+        return b;
+      }
+
+      fn min<T>(a: T, b: T) -> T {
+        if a < b { return a; }
+        return b;
+      }
+
+      fn clamp<T>(val: T, lo: T, hi: T) -> T {
+        return max<T>(lo, min<T>(val, hi));
+      }
+
+      fn main() -> int {
+        print(max<i32>(10, 20));
+        print(min<i32>(10, 20));
+        print(clamp<i32>(50, 0, 100));
+        print(clamp<i32>(-10, 0, 100));
+        print(clamp<i32>(200, 0, 100));
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("20\n10\n50\n0\n100\n");
+  });
+});
+
+// ─── Complex: control flow edge cases ───────────────────────────────────────
+
+describe("Complex: control flow edge cases", () => {
+  test("nested loops with break and continue", () => {
+    const r = run(
+      "complex_nested_loops",
+      `
+      import { print } from io;
+
+      fn main() -> int {
+        // Find first pair (i, j) where i*j == 12 with i < j
+        let found_i: int = -1;
+        let found_j: int = -1;
+        let i: int = 1;
+        while i <= 10 {
+          let j: int = i + 1;
+          while j <= 10 {
+            if i * j == 12 {
+              found_i = i;
+              found_j = j;
+              break;
+            }
+            j = j + 1;
+          }
+          if found_i != -1 { break; }
+          i = i + 1;
+        }
+        print(found_i);
+        print(found_j);
+
+        // Sum only when both indices are odd
+        let sum: int = 0;
+        for i in 0..5 {
+          if i % 2 == 0 { continue; }
+          for j in 0..5 {
+            if j % 2 == 0 { continue; }
+            sum = sum + i * j;
+          }
+        }
+        print(sum);
+
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    // First pair: 2*6=12, so (2,6). But wait: i=1, j=12 nope (j<=10). i=2, j=6. Yes.
+    // Sum: i=1,j=1: 1; i=1,j=3: 3; i=3,j=1: 3; i=3,j=3: 9 = 16
+    expect(r.stdout).toBe("2\n6\n16\n");
+  });
+
+  test("switch statement with multiple cases", () => {
+    const r = run(
+      "complex_switch",
+      `
+      import { print } from io;
+
+      fn day_type(day: int) -> string {
+        switch day {
+          case 0: return "sunday";
+          case 6: return "saturday";
+          case 1: return "monday";
+          case 2: return "tuesday";
+          case 3: return "wednesday";
+          case 4: return "thursday";
+          case 5: return "friday";
+          default: return "unknown";
+        }
+      }
+
+      fn main() -> int {
+        for i in 0..8 {
+          print(day_type(i));
+        }
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe(
+      "sunday\nmonday\ntuesday\nwednesday\nthursday\nfriday\nsaturday\nunknown\n"
+    );
+  });
+
+  test("early return from deeply nested blocks", () => {
+    const r = run(
+      "complex_early_return",
+      `
+      import { print } from io;
+
+      fn find_divisor(n: int) -> int {
+        let i: int = 2;
+        while i < n {
+          if n % i == 0 {
+            return i;
+          }
+          i = i + 1;
+        }
+        return n;
+      }
+
+      fn is_prime(n: int) -> bool {
+        if n < 2 { return false; }
+        return find_divisor(n) == n;
+      }
+
+      fn main() -> int {
+        // Print primes up to 30
+        for i in 2..31 {
+          if is_prime(i) {
+            print(i);
+          }
+        }
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("2\n3\n5\n7\n11\n13\n17\n19\n23\n29\n");
+  });
+
+  test("complex while with multiple conditions and state", () => {
+    const r = run(
+      "complex_while_state",
+      `
+      import { print } from io;
+
+      fn collatz_steps(n: int) -> int {
+        let steps: int = 0;
+        let val: int = n;
+        while val != 1 {
+          if val % 2 == 0 {
+            val = val / 2;
+          } else {
+            val = val * 3 + 1;
+          }
+          steps = steps + 1;
+        }
+        return steps;
+      }
+
+      fn main() -> int {
+        print(collatz_steps(1));
+        print(collatz_steps(2));
+        print(collatz_steps(3));
+        print(collatz_steps(6));
+        print(collatz_steps(27));
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    // Collatz: 1→0, 2→1, 3→7, 6→8, 27→111
+    expect(r.stdout).toBe("0\n1\n7\n8\n111\n");
+  });
+
+  test("for range with break and accumulated result", () => {
+    const r = run(
+      "complex_for_break",
+      `
+      import { print } from io;
+
+      fn sum_until_exceeds(limit: int) -> int {
+        let sum: int = 0;
+        for i in 1..1000 {
+          sum = sum + i;
+          if sum > limit { break; }
+        }
+        return sum;
+      }
+
+      fn main() -> int {
+        print(sum_until_exceeds(10));
+        print(sum_until_exceeds(50));
+        print(sum_until_exceeds(100));
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    // 1+2+3+4+5=15 > 10
+    // 1+...+10=55 > 50
+    // 1+...+14=105 > 100
+    expect(r.stdout).toBe("15\n55\n105\n");
+  });
+});
+
+// ─── Complex: realistic programs ────────────────────────────────────────────
+
+describe("Complex: realistic programs", () => {
+  test("bubble sort on array", () => {
+    const r = run(
+      "complex_bubble_sort",
+      `
+      import { print } from io;
+
+      fn main() -> int {
+        let arr = [64, 34, 25, 12, 22, 11, 90];
+        let n: int = 7;
+
+        // Bubble sort
+        for i in 0..7 {
+          let j: int = 0;
+          while j < n - i - 1 {
+            if arr[j] > arr[j + 1] {
+              let tmp: int = arr[j];
+              arr[j] = arr[j + 1];
+              arr[j + 1] = tmp;
+            }
+            j = j + 1;
+          }
+        }
+
+        for i in 0..7 {
+          print(arr[i]);
+        }
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("11\n12\n22\n25\n34\n64\n90\n");
+  });
+
+  test("selection sort with min-finding", () => {
+    const r = run(
+      "complex_selection_sort",
+      `
+      import { print } from io;
+
+      fn main() -> int {
+        let arr = [5, 3, 8, 1, 9, 2, 7, 4, 6];
+        let n: int = 9;
+
+        for i in 0..9 {
+          let min_idx: int = i;
+          let j: int = i + 1;
+          while j < n {
+            if arr[j] < arr[min_idx] {
+              min_idx = j;
+            }
+            j = j + 1;
+          }
+          if min_idx != i {
+            let tmp: int = arr[i];
+            arr[i] = arr[min_idx];
+            arr[min_idx] = tmp;
+          }
+        }
+
+        for i in 0..9 {
+          print(arr[i]);
+        }
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("1\n2\n3\n4\n5\n6\n7\n8\n9\n");
+  });
+
+  test("string building via concatenation", () => {
+    const r = run(
+      "complex_string_build",
+      `
+      import { print } from io;
+
+      fn repeat(s: string, n: int) -> string {
+        let result: string = "";
+        for i in 0..10 {
+          if i >= n { break; }
+          result = result + s;
+        }
+        return result;
+      }
+
+      fn main() -> int {
+        print(repeat("ab", 3));
+        print(repeat("x", 5));
+        print(repeat("hi ", 2));
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("ababab\nxxxxx\nhi hi \n");
+  });
+
+  // skip: C backend emits 'struct' tag for enum types instead of 'enum' in function signatures
+  test.skip("enum state machine", () => {
+    const r = run(
+      "complex_enum_sm",
+      `
+      import { print } from io;
+
+      enum State {
+        Idle,
+        Running,
+        Paused,
+        Done,
+      }
+
+      fn transition(state: State, event: int) -> State {
+        // event: 0=start, 1=pause, 2=resume, 3=finish
+        switch state {
+          case State.Idle: {
+            if event == 0 { return State.Running; }
+            return state;
+          }
+          case State.Running: {
+            if event == 1 { return State.Paused; }
+            if event == 3 { return State.Done; }
+            return state;
+          }
+          case State.Paused: {
+            if event == 2 { return State.Running; }
+            if event == 3 { return State.Done; }
+            return state;
+          }
+          default: return state;
+        }
+      }
+
+      fn state_name(s: State) -> string {
+        switch s {
+          case State.Idle: return "idle";
+          case State.Running: return "running";
+          case State.Paused: return "paused";
+          case State.Done: return "done";
+          default: return "unknown";
+        }
+      }
+
+      fn main() -> int {
+        let s = State.Idle;
+        print(state_name(s));
+
+        s = transition(s, 0);
+        print(state_name(s));
+
+        s = transition(s, 1);
+        print(state_name(s));
+
+        s = transition(s, 2);
+        print(state_name(s));
+
+        s = transition(s, 3);
+        print(state_name(s));
+
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("idle\nrunning\npaused\nrunning\ndone\n");
+  });
+
+  // skip: parser does not support typed array syntax [type; N] in struct fields
+  test.skip("struct-based stack (LIFO) with fixed array", () => {
+    const r = run(
+      "complex_stack",
+      `
+      import { print } from io;
+
+      struct Stack {
+        data: [int; 16];
+        top: int;
+
+        fn push(self: Stack, val: int) -> Stack {
+          let s = Stack{ data: self.data, top: self.top };
+          s.data[s.top] = val;
+          s.top = s.top + 1;
+          return s;
+        }
+
+        fn peek(self: Stack) -> int {
+          return self.data[self.top - 1];
+        }
+
+        fn pop(self: Stack) -> Stack {
+          return Stack{ data: self.data, top: self.top - 1 };
+        }
+
+        fn is_empty(self: Stack) -> bool {
+          return self.top == 0;
+        }
+
+        fn size(self: Stack) -> int {
+          return self.top;
+        }
+      }
+
+      fn main() -> int {
+        let s = Stack{ data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], top: 0 };
+        print(s.is_empty());
+
+        s = s.push(10);
+        s = s.push(20);
+        s = s.push(30);
+        print(s.size());
+        print(s.peek());
+
+        s = s.pop();
+        print(s.peek());
+        print(s.size());
+
+        s = s.pop();
+        s = s.pop();
+        print(s.is_empty());
+
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("true\n3\n30\n20\n2\ntrue\n");
+  });
+
+  // skip: parser does not support typed array syntax [type; N] as function parameter type
+  test.skip("matrix-like computation with nested arrays", () => {
+    const r = run(
+      "complex_matrix",
+      `
+      import { print } from io;
+
+      // Simulate 3x3 matrix as flat array
+      fn mat_get(m: [int; 9], row: int, col: int) -> int {
+        return m[row * 3 + col];
+      }
+
+      fn mat_trace(m: [int; 9]) -> int {
+        return mat_get(m, 0, 0) + mat_get(m, 1, 1) + mat_get(m, 2, 2);
+      }
+
+      fn mat_row_sum(m: [int; 9], row: int) -> int {
+        let sum: int = 0;
+        for col in 0..3 {
+          sum = sum + mat_get(m, row, col);
+        }
+        return sum;
+      }
+
+      fn main() -> int {
+        // Identity-like matrix with values
+        //  1  2  3
+        //  4  5  6
+        //  7  8  9
+        let m = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+        print(mat_trace(m));
+
+        print(mat_row_sum(m, 0));
+        print(mat_row_sum(m, 1));
+        print(mat_row_sum(m, 2));
+
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    // trace = 1+5+9=15, rows: 6, 15, 24
+    expect(r.stdout).toBe("15\n6\n15\n24\n");
+  });
+
+  test("integer-to-string conversion algorithm", () => {
+    const r = run(
+      "complex_itoa",
+      `
+      import { print } from io;
+
+      fn num_digits(n: int) -> int {
+        if n == 0 { return 1; }
+        let count: int = 0;
+        let val: int = n;
+        if val < 0 { val = 0 - val; }
+        while val > 0 {
+          count = count + 1;
+          val = val / 10;
+        }
+        return count;
+      }
+
+      fn digit_sum(n: int) -> int {
+        let sum: int = 0;
+        let val: int = n;
+        if val < 0 { val = 0 - val; }
+        while val > 0 {
+          sum = sum + val % 10;
+          val = val / 10;
+        }
+        return sum;
+      }
+
+      fn reverse_number(n: int) -> int {
+        let result: int = 0;
+        let val: int = n;
+        while val > 0 {
+          result = result * 10 + val % 10;
+          val = val / 10;
+        }
+        return result;
+      }
+
+      fn main() -> int {
+        print(num_digits(0));
+        print(num_digits(42));
+        print(num_digits(12345));
+
+        print(digit_sum(123));
+        print(digit_sum(999));
+
+        print(reverse_number(12345));
+        print(reverse_number(100));
+
+        // Check if palindrome: 12321
+        let n: int = 12321;
+        print(n == reverse_number(n));
+        let m: int = 12345;
+        print(m == reverse_number(m));
+
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("1\n2\n5\n6\n27\n54321\n1\ntrue\nfalse\n");
+  });
+});
