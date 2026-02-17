@@ -3,56 +3,53 @@
  */
 
 import type {
-  ArrayLiteral,
-  AssignExpr,
-  BinaryExpr,
-  BoolLiteral,
   CallExpr,
   CastExpr,
   CatchExpr,
-  DecrementExpr,
   DerefExpr,
   Expression,
-  FloatLiteral,
   GroupExpr,
   Identifier,
   IfExpr,
-  IncrementExpr,
   IndexExpr,
-  IntLiteral,
   MemberExpr,
   MoveExpr,
-  NullLiteral,
   RangeExpr,
-  StringLiteral,
-  StructLiteral,
   ThrowExpr,
-  UnaryExpr,
   UnsafeExpr,
 } from "../ast/nodes.ts";
 import type { Checker } from "./checker.ts";
-import { mangleGenericName, substituteType, substituteFunctionType } from "./generics.ts";
+import { mangleGenericName, substituteFunctionType } from "./generics.ts";
+import {
+  checkArrayLiteral,
+  checkBoolLiteral,
+  checkFloatLiteral,
+  checkIntLiteral,
+  checkNullLiteral,
+  checkStringLiteral,
+  checkStructLiteral,
+  extractTypeParamSubs,
+} from "./literal-checker.ts";
+import {
+  checkAssignExpression,
+  checkAssignTarget,
+  checkBinaryExpression,
+  checkDecrementExpression,
+  checkIncrementExpression,
+  checkUnaryExpression,
+} from "./operator-checker.ts";
 import type { FunctionOverload } from "./symbols.ts";
 import { SymbolKind } from "./symbols.ts";
-import type { ArrayType, FunctionType, PtrType, RangeType, SliceType, StructType, Type } from "./types.ts";
+import type { FunctionType, Type } from "./types.ts";
 import {
-  arrayType,
-  BOOL_TYPE,
   ERROR_TYPE,
   extractLiteralInfo,
-  F64_TYPE,
-  I32_TYPE,
-  I64_TYPE,
   isAssignableTo,
-  isBoolType,
   isErrorType,
-  isFloatType,
   isIntegerType,
   isLiteralAssignableTo,
   isNumericType,
   isPtrType,
-  isStructType,
-  NULL_TYPE,
   ptrType,
   rangeType,
   STRING_TYPE,
@@ -61,30 +58,9 @@ import {
   typeToString,
   USIZE_TYPE,
   VOID_TYPE,
+  BOOL_TYPE,
+  isBoolType,
 } from "./types.ts";
-
-const ARITHMETIC_OPS = new Set(["+", "-", "*", "/", "%"]);
-const COMPARISON_OPS = new Set(["<", ">", "<=", ">="]);
-const EQUALITY_OPS = new Set(["==", "!="]);
-const LOGICAL_OPS = new Set(["&&", "||"]);
-const BITWISE_OPS = new Set(["&", "|", "^", "<<", ">>"]);
-const COMPOUND_ASSIGN_OPS = new Set(["+=", "-=", "*=", "/=", "%="]);
-const COMPOUND_BITWISE_OPS = new Set(["&=", "|=", "^=", "<<=", ">>="]);
-
-/** Maps binary operators to their corresponding operator method names on structs. */
-const BINARY_OP_METHODS: Record<string, string> = {
-  "+": "op_add",
-  "-": "op_sub",
-  "*": "op_mul",
-  "/": "op_div",
-  "%": "op_mod",
-  "==": "op_eq",
-  "!=": "op_neq",
-  "<": "op_lt",
-  ">": "op_gt",
-  "<=": "op_le",
-  ">=": "op_ge",
-};
 
 export class ExpressionChecker {
   private checker: Checker;
@@ -103,21 +79,21 @@ export class ExpressionChecker {
   private checkExpressionInner(expr: Expression): Type {
     switch (expr.kind) {
       case "IntLiteral":
-        return this.checkIntLiteral(expr);
+        return checkIntLiteral(expr);
       case "FloatLiteral":
-        return this.checkFloatLiteral(expr);
+        return checkFloatLiteral(expr);
       case "StringLiteral":
-        return this.checkStringLiteral(expr);
+        return checkStringLiteral(expr);
       case "BoolLiteral":
-        return this.checkBoolLiteral(expr);
+        return checkBoolLiteral(expr);
       case "NullLiteral":
-        return this.checkNullLiteral(expr);
+        return checkNullLiteral(expr);
       case "Identifier":
         return this.checkIdentifier(expr);
       case "BinaryExpr":
-        return this.checkBinaryExpression(expr);
+        return checkBinaryExpression(this.checker, expr);
       case "UnaryExpr":
-        return this.checkUnaryExpression(expr);
+        return checkUnaryExpression(this.checker, expr);
       case "CallExpr":
         return this.checkCallExpression(expr);
       case "MemberExpr":
@@ -127,9 +103,9 @@ export class ExpressionChecker {
       case "DerefExpr":
         return this.checkDerefExpression(expr);
       case "AssignExpr":
-        return this.checkAssignExpression(expr);
+        return checkAssignExpression(this.checker, expr);
       case "StructLiteral":
-        return this.checkStructLiteral(expr);
+        return checkStructLiteral(this.checker, expr);
       case "IfExpr":
         return this.checkIfExpression(expr);
       case "MoveExpr":
@@ -141,9 +117,9 @@ export class ExpressionChecker {
       case "GroupExpr":
         return this.checkGroupExpression(expr);
       case "IncrementExpr":
-        return this.checkIncrementExpression(expr);
+        return checkIncrementExpression(this.checker, expr);
       case "DecrementExpr":
-        return this.checkDecrementExpression(expr);
+        return checkDecrementExpression(this.checker, expr);
       case "RangeExpr":
         return this.checkRangeExpression(expr);
       case "UnsafeExpr":
@@ -151,32 +127,8 @@ export class ExpressionChecker {
       case "CastExpr":
         return this.checkCastExpression(expr);
       case "ArrayLiteral":
-        return this.checkArrayLiteral(expr);
+        return checkArrayLiteral(this.checker, expr);
     }
-  }
-
-  private checkIntLiteral(expr: IntLiteral): Type {
-    const v = expr.value;
-    if (v >= -2147483648 && v <= 2147483647) {
-      return I32_TYPE;
-    }
-    return I64_TYPE;
-  }
-
-  private checkFloatLiteral(_expr: FloatLiteral): Type {
-    return F64_TYPE;
-  }
-
-  private checkStringLiteral(_expr: StringLiteral): Type {
-    return STRING_TYPE;
-  }
-
-  private checkBoolLiteral(_expr: BoolLiteral): Type {
-    return BOOL_TYPE;
-  }
-
-  private checkNullLiteral(_expr: NullLiteral): Type {
-    return NULL_TYPE;
   }
 
   private checkIdentifier(expr: Identifier): Type {
@@ -208,194 +160,6 @@ export class ExpressionChecker {
     }
 
     return ERROR_TYPE;
-  }
-
-  private checkBinaryExpression(expr: BinaryExpr): Type {
-    const left = this.checkExpression(expr.left);
-    const right = this.checkExpression(expr.right);
-
-    if (isErrorType(left) || isErrorType(right)) return ERROR_TYPE;
-
-    const op = expr.operator;
-
-    // String concatenation
-    if (op === "+" && left.kind === TypeKind.String && right.kind === TypeKind.String) {
-      return STRING_TYPE;
-    }
-
-    // Operator overloading: if left operand is a struct, look for operator method
-    const opMethodName = BINARY_OP_METHODS[op];
-    if (opMethodName && left.kind === TypeKind.Struct) {
-      const method = left.methods.get(opMethodName);
-      if (method) {
-        return this.resolveOperatorMethod(expr, left, method, opMethodName, right);
-      }
-    }
-
-    // Arithmetic operators
-    if (ARITHMETIC_OPS.has(op)) {
-      if (!isNumericType(left)) {
-        this.checker.error(
-          `operator '${op}' requires numeric operands, got '${typeToString(left)}'`,
-          expr.span
-        );
-        return ERROR_TYPE;
-      }
-      if (!typesEqual(left, right)) {
-        this.checker.error(
-          `operator '${op}' requires same types, got '${typeToString(left)}' and '${typeToString(right)}'`,
-          expr.span
-        );
-        return ERROR_TYPE;
-      }
-      return left;
-    }
-
-    // Comparison operators
-    if (COMPARISON_OPS.has(op)) {
-      if (!isNumericType(left)) {
-        this.checker.error(
-          `operator '${op}' requires numeric operands, got '${typeToString(left)}'`,
-          expr.span
-        );
-        return ERROR_TYPE;
-      }
-      if (!typesEqual(left, right)) {
-        this.checker.error(
-          `operator '${op}' requires same types, got '${typeToString(left)}' and '${typeToString(right)}'`,
-          expr.span
-        );
-        return ERROR_TYPE;
-      }
-      return BOOL_TYPE;
-    }
-
-    // Equality operators
-    if (EQUALITY_OPS.has(op)) {
-      // Allow equality between same types, or ptr and null
-      if (
-        !typesEqual(left, right) &&
-        !(isPtrType(left) && right.kind === TypeKind.Null) &&
-        !(left.kind === TypeKind.Null && isPtrType(right))
-      ) {
-        this.checker.error(
-          `operator '${op}' requires same types, got '${typeToString(left)}' and '${typeToString(right)}'`,
-          expr.span
-        );
-        return ERROR_TYPE;
-      }
-      return BOOL_TYPE;
-    }
-
-    // Logical operators
-    if (LOGICAL_OPS.has(op)) {
-      if (left.kind !== TypeKind.Bool) {
-        this.checker.error(
-          `operator '${op}' requires bool operands, got '${typeToString(left)}'`,
-          expr.span
-        );
-        return ERROR_TYPE;
-      }
-      if (right.kind !== TypeKind.Bool) {
-        this.checker.error(
-          `operator '${op}' requires bool operands, got '${typeToString(right)}'`,
-          expr.span
-        );
-        return ERROR_TYPE;
-      }
-      return BOOL_TYPE;
-    }
-
-    // Bitwise operators
-    if (BITWISE_OPS.has(op)) {
-      if (!isIntegerType(left)) {
-        this.checker.error(
-          `operator '${op}' requires integer operands, got '${typeToString(left)}'`,
-          expr.span
-        );
-        return ERROR_TYPE;
-      }
-      if (!typesEqual(left, right)) {
-        this.checker.error(
-          `operator '${op}' requires same types, got '${typeToString(left)}' and '${typeToString(right)}'`,
-          expr.span
-        );
-        return ERROR_TYPE;
-      }
-      return left;
-    }
-
-    this.checker.error(`unknown binary operator '${op}'`, expr.span);
-    return ERROR_TYPE;
-  }
-
-  private checkUnaryExpression(expr: UnaryExpr): Type {
-    const operand = this.checkExpression(expr.operand);
-    if (isErrorType(operand)) return ERROR_TYPE;
-
-    switch (expr.operator) {
-      case "-":
-        // Operator overloading: unary minus on struct → op_neg
-        if (operand.kind === TypeKind.Struct) {
-          const method = operand.methods.get("op_neg");
-          if (method) {
-            // op_neg takes only self, no extra args
-            if (method.params.length !== 1) {
-              this.checker.error(
-                `'op_neg' method must take exactly 1 parameter (self), got ${method.params.length}`,
-                expr.span
-              );
-              return ERROR_TYPE;
-            }
-            this.checker.operatorMethods.set(expr, { methodName: "op_neg", structType: operand });
-            return method.returnType;
-          }
-          this.checker.error(
-            `unary '-' requires numeric operand, got '${typeToString(operand)}'`,
-            expr.span
-          );
-          return ERROR_TYPE;
-        }
-        if (!isNumericType(operand)) {
-          this.checker.error(
-            `unary '-' requires numeric operand, got '${typeToString(operand)}'`,
-            expr.span
-          );
-          return ERROR_TYPE;
-        }
-        return operand;
-
-      case "!":
-        if (operand.kind !== TypeKind.Bool) {
-          this.checker.error(
-            `unary '!' requires bool operand, got '${typeToString(operand)}'`,
-            expr.span
-          );
-          return ERROR_TYPE;
-        }
-        return BOOL_TYPE;
-
-      case "~":
-        if (!isIntegerType(operand)) {
-          this.checker.error(
-            `unary '~' requires integer operand, got '${typeToString(operand)}'`,
-            expr.span
-          );
-          return ERROR_TYPE;
-        }
-        return operand;
-
-      case "&":
-        if (!this.checker.currentScope.isInsideUnsafe()) {
-          this.checker.error("address-of operator '&' requires unsafe block", expr.span);
-          return ERROR_TYPE;
-        }
-        return ptrType(operand);
-
-      default:
-        this.checker.error(`unknown unary operator '${expr.operator}'`, expr.span);
-        return ERROR_TYPE;
-    }
   }
 
   private checkCallExpression(expr: CallExpr): Type {
@@ -610,7 +374,7 @@ export class ExpressionChecker {
       for (let i = 0; i < expr.args.length; i++) {
         const arg = expr.args[i];
         if (matched.type.params[i]?.isMove && arg?.kind === "MoveExpr") {
-          const moveExpr = arg as MoveExpr;
+          const moveExpr = arg;
           if (moveExpr.operand.kind === "Identifier") {
             this.checker.markVariableMoved(moveExpr.operand.name);
           }
@@ -665,7 +429,7 @@ export class ExpressionChecker {
       for (let i = 0; i < expr.args.length; i++) {
         const arg = expr.args[i];
         if (matched.type.params[i]?.isMove && arg?.kind === "MoveExpr") {
-          const moveExpr = arg as MoveExpr;
+          const moveExpr = arg;
           if (moveExpr.operand.kind === "Identifier") {
             this.checker.markVariableMoved(moveExpr.operand.name);
           }
@@ -727,7 +491,7 @@ export class ExpressionChecker {
 
       // Handle move params
       if (expectedParams[i]?.isMove && currentArg.kind === "MoveExpr") {
-        const moveExpr = currentArg as MoveExpr;
+        const moveExpr = currentArg;
         if (moveExpr.operand.kind === "Identifier") {
           this.checker.markVariableMoved(moveExpr.operand.name);
         }
@@ -829,7 +593,7 @@ export class ExpressionChecker {
     for (let i = 0; i < expectedParams.length; i++) {
       const paramType = expectedParams[i]!.type;
       const argType = argTypes[i]!;
-      this.extractTypeParamSubs(paramType, argType, subs);
+      extractTypeParamSubs(paramType, argType, subs);
     }
 
     // Check that all type params were inferred
@@ -1019,461 +783,6 @@ export class ExpressionChecker {
     }
 
     return operandType.pointee;
-  }
-
-  private checkAssignExpression(expr: AssignExpr): Type {
-    const targetType = this.checkExpression(expr.target);
-    const valueType = this.checkExpression(expr.value);
-
-    if (isErrorType(targetType) || isErrorType(valueType)) return ERROR_TYPE;
-
-    // Check mutability
-    this.checkAssignTarget(expr.target);
-
-    const op = expr.operator;
-
-    if (op === "=") {
-      // Operator overloading: a[i] = v → op_index_set(self, index, value)
-      if (expr.target.kind === "IndexExpr") {
-        const indexExpr = expr.target;
-        const objectType = this.checker.typeMap.get(indexExpr.object);
-        if (objectType && objectType.kind === TypeKind.Struct) {
-          const method = objectType.methods.get("op_index_set");
-          if (method) {
-            // op_index_set takes self + index + value (3 params)
-            if (method.params.length !== 3) {
-              this.checker.error(
-                `'op_index_set' method must take exactly 3 parameters (self, index, value), got ${method.params.length}`,
-                expr.span
-              );
-              return ERROR_TYPE;
-            }
-            const indexType = this.checker.typeMap.get(indexExpr.index);
-            const indexParam = method.params[1]!;
-            if (indexType && !isAssignableTo(indexType, indexParam.type)) {
-              this.checker.error(
-                `index type mismatch: expected '${typeToString(indexParam.type)}', got '${typeToString(indexType)}'`,
-                expr.span
-              );
-              return ERROR_TYPE;
-            }
-            const valueParam = method.params[2]!;
-            if (!isAssignableTo(valueType, valueParam.type)) {
-              this.checker.error(
-                `value type mismatch: expected '${typeToString(valueParam.type)}', got '${typeToString(valueType)}'`,
-                expr.span
-              );
-              return ERROR_TYPE;
-            }
-            this.checker.operatorMethods.set(expr, { methodName: "op_index_set", structType: objectType });
-            return method.returnType;
-          }
-        }
-      }
-
-      if (!isAssignableTo(valueType, targetType)) {
-        // Check if this is a literal that can be implicitly converted
-        const litInfo = extractLiteralInfo(expr.value);
-        const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, targetType);
-        if (!isLiteralOk) {
-          this.checker.error(
-            `type mismatch: expected '${typeToString(targetType)}', got '${typeToString(valueType)}'`,
-            expr.span
-          );
-          return ERROR_TYPE;
-        }
-      }
-      return targetType;
-    }
-
-    // Compound assignment
-    if (COMPOUND_ASSIGN_OPS.has(op)) {
-      if (!isNumericType(targetType)) {
-        this.checker.error(
-          `operator '${op}' requires numeric type, got '${typeToString(targetType)}'`,
-          expr.span
-        );
-        return ERROR_TYPE;
-      }
-      if (!typesEqual(targetType, valueType)) {
-        this.checker.error(
-          `operator '${op}' requires same types, got '${typeToString(targetType)}' and '${typeToString(valueType)}'`,
-          expr.span
-        );
-        return ERROR_TYPE;
-      }
-      return targetType;
-    }
-
-    if (COMPOUND_BITWISE_OPS.has(op)) {
-      if (!isIntegerType(targetType)) {
-        this.checker.error(
-          `operator '${op}' requires integer type, got '${typeToString(targetType)}'`,
-          expr.span
-        );
-        return ERROR_TYPE;
-      }
-      if (!typesEqual(targetType, valueType)) {
-        this.checker.error(
-          `operator '${op}' requires same types, got '${typeToString(targetType)}' and '${typeToString(valueType)}'`,
-          expr.span
-        );
-        return ERROR_TYPE;
-      }
-      return targetType;
-    }
-
-    this.checker.error(`unknown assignment operator '${op}'`, expr.span);
-    return ERROR_TYPE;
-  }
-
-  private checkAssignTarget(target: Expression): void {
-    if (target.kind === "Identifier") {
-      const sym = this.checker.currentScope.lookup(target.name);
-      if (sym && sym.kind === SymbolKind.Variable) {
-        if (!sym.isMutable) {
-          this.checker.error(`cannot assign to immutable variable '${target.name}'`, target.span);
-        }
-      }
-    }
-    // MemberExpr and IndexExpr and DerefExpr — check the root object is mutable
-    if (target.kind === "MemberExpr") {
-      this.checkAssignTarget(target.object);
-    }
-    if (target.kind === "DerefExpr") {
-      // Deref assignment is allowed in unsafe
-      if (!this.checker.currentScope.isInsideUnsafe()) {
-        this.checker.error("pointer dereference assignment requires unsafe block", target.span);
-      }
-    }
-  }
-
-  private checkStructLiteral(expr: StructLiteral): Type {
-    // Look up the struct type
-    const sym = this.checker.currentScope.lookupType(expr.name);
-    if (!sym || sym.kind !== SymbolKind.Type) {
-      this.checker.error(`undeclared type '${expr.name}'`, expr.span);
-      return ERROR_TYPE;
-    }
-
-    let structType = sym.type;
-
-    // Handle generic struct instantiation with explicit type args
-    if (structType.kind === TypeKind.Struct && expr.typeArgs.length > 0) {
-      if (structType.genericParams.length === 0) {
-        this.checker.error(
-          `type '${expr.name}' expects 0 type argument(s), got ${expr.typeArgs.length}`,
-          expr.span
-        );
-        return ERROR_TYPE;
-      }
-      const result = this.instantiateGenericStruct(structType, expr);
-      if (isErrorType(result)) return ERROR_TYPE;
-      structType = result;
-    }
-
-    if (structType.kind !== TypeKind.Struct) {
-      this.checker.error(`'${expr.name}' is not a struct type`, expr.span);
-      return ERROR_TYPE;
-    }
-
-    // Infer generic type params from field values when no explicit type args
-    if (structType.genericParams.length > 0 && expr.typeArgs.length === 0) {
-      return this.checkGenericStructLiteralInferred(structType, expr);
-    }
-
-    // Check all fields are provided
-    const providedFields = new Set<string>();
-    for (const field of expr.fields) {
-      if (providedFields.has(field.name)) {
-        this.checker.error(`duplicate field '${field.name}' in struct literal`, field.span);
-        continue;
-      }
-      providedFields.add(field.name);
-
-      const expectedType = structType.fields.get(field.name);
-      if (!expectedType) {
-        this.checker.error(`struct '${structType.name}' has no field '${field.name}'`, field.span);
-        continue;
-      }
-
-      const valueType = this.checkExpression(field.value);
-      if (!isErrorType(valueType) && !isAssignableTo(valueType, expectedType)) {
-        // Check if this is a literal that can be implicitly converted
-        const litInfo = extractLiteralInfo(field.value);
-        const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, expectedType);
-        if (!isLiteralOk) {
-          this.checker.error(
-            `field '${field.name}': expected '${typeToString(expectedType)}', got '${typeToString(valueType)}'`,
-            field.span
-          );
-        }
-      }
-    }
-
-    // Check all required fields are present
-    for (const [fieldName] of structType.fields) {
-      if (!providedFields.has(fieldName)) {
-        this.checker.error(
-          `missing field '${fieldName}' in struct literal '${structType.name}'`,
-          expr.span
-        );
-      }
-    }
-
-    return structType;
-  }
-
-  /** Instantiate a generic struct with explicit type args, using the monomorphization cache. */
-  private instantiateGenericStruct(
-    baseStruct: StructType,
-    expr: StructLiteral
-  ): Type {
-    if (expr.typeArgs.length !== baseStruct.genericParams.length) {
-      this.checker.error(
-        `type '${baseStruct.name}' expects ${baseStruct.genericParams.length} type argument(s), got ${expr.typeArgs.length}`,
-        expr.span
-      );
-      return ERROR_TYPE;
-    }
-
-    // Resolve type args
-    const resolvedTypeArgs: Type[] = [];
-    const typeMap = new Map<string, Type>();
-    for (let i = 0; i < expr.typeArgs.length; i++) {
-      const typeArg = expr.typeArgs[i]!;
-      const resolved = this.checker.resolveType(typeArg);
-      if (isErrorType(resolved)) return ERROR_TYPE;
-      resolvedTypeArgs.push(resolved);
-      typeMap.set(baseStruct.genericParams[i]!, resolved);
-    }
-
-    const mangledName = mangleGenericName(baseStruct.name, resolvedTypeArgs);
-
-    // Check cache first
-    const cached = this.checker.getMonomorphizedStruct(mangledName);
-    if (cached) return cached.concrete;
-
-    // Create concrete struct type
-    const concreteFields = new Map<string, Type>();
-    for (const [fieldName, fieldType] of baseStruct.fields) {
-      concreteFields.set(fieldName, substituteType(fieldType, typeMap));
-    }
-
-    // Create concrete struct first (methods added after so self-references resolve)
-    const concreteStruct: StructType = {
-      kind: TypeKind.Struct,
-      name: mangledName,
-      fields: concreteFields,
-      methods: new Map(),
-      isUnsafe: baseStruct.isUnsafe,
-      genericParams: [],
-    };
-
-    // Substitute method types, replacing self-referential struct types with the concrete struct
-    const isSelfRef = (t: Type) =>
-      t.kind === TypeKind.Struct &&
-      (t.name === baseStruct.name || t.name.startsWith(baseStruct.name + "_"));
-    for (const [methodName, methodType] of baseStruct.methods) {
-      const subbed = substituteFunctionType(methodType, typeMap);
-      const fixedParams = subbed.params.map((p) =>
-        isSelfRef(p.type) ? { ...p, type: concreteStruct } : p
-      );
-      const fixedReturn = isSelfRef(subbed.returnType) ? concreteStruct : subbed.returnType;
-      concreteStruct.methods.set(methodName, {
-        ...subbed,
-        params: fixedParams,
-        returnType: fixedReturn,
-      });
-    }
-
-    this.checker.registerMonomorphizedStruct(mangledName, {
-      original: baseStruct,
-      typeArgs: resolvedTypeArgs,
-      concrete: concreteStruct,
-      // originalDecl will be resolved later in checkMonomorphizedBodies
-    });
-
-    // Store generic resolution for the struct literal
-    this.checker.genericResolutions.set(expr, mangledName);
-
-    return concreteStruct;
-  }
-
-  /** Handle generic struct literal where type params are inferred from field values. */
-  private checkGenericStructLiteralInferred(
-    structType: StructType,
-    expr: StructLiteral
-  ): Type {
-    // First, check all field values to get their types
-    const fieldValueTypes = new Map<string, Type>();
-    const providedFields = new Set<string>();
-
-    for (const field of expr.fields) {
-      if (providedFields.has(field.name)) {
-        this.checker.error(`duplicate field '${field.name}' in struct literal`, field.span);
-        continue;
-      }
-      providedFields.add(field.name);
-
-      if (!structType.fields.has(field.name)) {
-        this.checker.error(`struct '${structType.name}' has no field '${field.name}'`, field.span);
-        continue;
-      }
-
-      const valueType = this.checkExpression(field.value);
-      fieldValueTypes.set(field.name, valueType);
-    }
-
-    // Check all required fields are present
-    for (const [fieldName] of structType.fields) {
-      if (!providedFields.has(fieldName)) {
-        this.checker.error(
-          `missing field '${fieldName}' in struct literal '${structType.name}'`,
-          expr.span
-        );
-      }
-    }
-
-    // Infer type param substitutions from field types (recursive)
-    const subs = new Map<string, Type>();
-    for (const [fieldName, fieldType] of structType.fields) {
-      const valueType = fieldValueTypes.get(fieldName);
-      if (valueType && !isErrorType(valueType)) {
-        this.extractTypeParamSubs(fieldType, valueType, subs);
-      }
-    }
-
-    // Build resolved type args from inferred subs
-    const resolvedTypeArgs = structType.genericParams.map((gp) => subs.get(gp)!);
-    const allInferred = resolvedTypeArgs.every((t) => t !== undefined);
-
-    if (allInferred) {
-      const mangledName = mangleGenericName(structType.name, resolvedTypeArgs);
-
-      // Check cache
-      const cached = this.checker.getMonomorphizedStruct(mangledName);
-      if (cached) return cached.concrete;
-
-      // Create concrete struct type (methods added after so self-references resolve)
-      const newFields = new Map<string, Type>();
-      for (const [fieldName, fieldType] of structType.fields) {
-        newFields.set(fieldName, substituteType(fieldType, subs));
-      }
-
-      const concreteStruct: StructType = {
-        kind: TypeKind.Struct,
-        name: mangledName,
-        fields: newFields,
-        methods: new Map(),
-        isUnsafe: structType.isUnsafe,
-        genericParams: [],
-      };
-
-      // Substitute method types, replacing self-referential struct types with the concrete struct
-      const isSelfRef = (t: Type) =>
-        t.kind === TypeKind.Struct &&
-        (t.name === structType.name || t.name.startsWith(structType.name + "_"));
-      for (const [methodName, methodType] of structType.methods) {
-        const subbed = substituteFunctionType(methodType, subs);
-        const fixedParams = subbed.params.map((p) =>
-          isSelfRef(p.type) ? { ...p, type: concreteStruct } : p
-        );
-        const fixedReturn = isSelfRef(subbed.returnType) ? concreteStruct : subbed.returnType;
-        concreteStruct.methods.set(methodName, {
-          ...subbed,
-          params: fixedParams,
-          returnType: fixedReturn,
-        });
-      }
-
-      this.checker.registerMonomorphizedStruct(mangledName, {
-        original: structType,
-        typeArgs: resolvedTypeArgs,
-        concrete: concreteStruct,
-      });
-
-      // Store generic resolution for the struct literal
-      this.checker.genericResolutions.set(expr, mangledName);
-
-      return concreteStruct;
-    }
-
-    // Fallback: could not fully infer all type params
-    const newFields = new Map<string, Type>();
-    for (const [fieldName, fieldType] of structType.fields) {
-      newFields.set(fieldName, substituteType(fieldType, subs));
-    }
-
-    const typeArgStrs = structType.genericParams.map((gp) => {
-      const sub = subs.get(gp);
-      return sub ? typeToString(sub) : gp;
-    });
-
-    return {
-      kind: TypeKind.Struct,
-      name: `${structType.name}<${typeArgStrs.join(", ")}>`,
-      fields: newFields,
-      methods: structType.methods,
-      isUnsafe: structType.isUnsafe,
-      genericParams: [],
-    };
-  }
-
-  /** Recursively extract TypeParam→concrete type mappings by walking declared and concrete types. */
-  private extractTypeParamSubs(declared: Type, concrete: Type, subs: Map<string, Type>): void {
-    if (declared.kind === TypeKind.TypeParam) {
-      if (!subs.has(declared.name)) {
-        subs.set(declared.name, concrete);
-      }
-      return;
-    }
-    if (declared.kind !== concrete.kind) return;
-    switch (declared.kind) {
-      case TypeKind.Ptr:
-        this.extractTypeParamSubs(declared.pointee, (concrete as PtrType).pointee, subs);
-        break;
-      case TypeKind.Array:
-        this.extractTypeParamSubs(declared.element, (concrete as ArrayType).element, subs);
-        break;
-      case TypeKind.Slice:
-        this.extractTypeParamSubs(declared.element, (concrete as SliceType).element, subs);
-        break;
-      case TypeKind.Range:
-        this.extractTypeParamSubs(declared.element, (concrete as RangeType).element, subs);
-        break;
-      case TypeKind.Struct: {
-        const concreteStruct = concrete as StructType;
-        for (const [fieldName, fieldType] of declared.fields) {
-          const concreteField = concreteStruct.fields.get(fieldName);
-          if (concreteField) {
-            this.extractTypeParamSubs(fieldType, concreteField, subs);
-          }
-        }
-        break;
-      }
-    }
-  }
-
-  /** Recursively substitute TypeParam types using the given substitution map. */
-  private substituteTypeParams(type: Type, subs: Map<string, Type>): Type {
-    if (subs.size === 0) return type;
-    switch (type.kind) {
-      case TypeKind.TypeParam: {
-        const sub = subs.get(type.name);
-        return sub ?? type;
-      }
-      case TypeKind.Ptr:
-        return ptrType(this.substituteTypeParams(type.pointee, subs));
-      case TypeKind.Array:
-        return { kind: TypeKind.Array, element: this.substituteTypeParams(type.element, subs) };
-      case TypeKind.Slice:
-        return { kind: TypeKind.Slice, element: this.substituteTypeParams(type.element, subs) };
-      case TypeKind.Range:
-        return rangeType(this.substituteTypeParams(type.element, subs));
-      default:
-        return type;
-    }
   }
 
   private checkIfExpression(expr: IfExpr): Type {
@@ -1671,38 +980,6 @@ export class ExpressionChecker {
     return this.checkExpression(expr.expression);
   }
 
-  private checkIncrementExpression(expr: IncrementExpr): Type {
-    const operandType = this.checkExpression(expr.operand);
-    if (isErrorType(operandType)) return ERROR_TYPE;
-
-    if (!isIntegerType(operandType)) {
-      this.checker.error(
-        `increment operator requires integer type, got '${typeToString(operandType)}'`,
-        expr.span
-      );
-      return ERROR_TYPE;
-    }
-
-    this.checkAssignTarget(expr.operand);
-    return operandType;
-  }
-
-  private checkDecrementExpression(expr: DecrementExpr): Type {
-    const operandType = this.checkExpression(expr.operand);
-    if (isErrorType(operandType)) return ERROR_TYPE;
-
-    if (!isIntegerType(operandType)) {
-      this.checker.error(
-        `decrement operator requires integer type, got '${typeToString(operandType)}'`,
-        expr.span
-      );
-      return ERROR_TYPE;
-    }
-
-    this.checkAssignTarget(expr.operand);
-    return operandType;
-  }
-
   private checkRangeExpression(expr: RangeExpr): Type {
     const startType = this.checkExpression(expr.start);
     const endType = this.checkExpression(expr.end);
@@ -1775,67 +1052,5 @@ export class ExpressionChecker {
       expr.span
     );
     return ERROR_TYPE;
-  }
-
-  private checkArrayLiteral(expr: ArrayLiteral): Type {
-    if (expr.elements.length === 0) {
-      this.checker.error("empty array literal — cannot infer element type", expr.span);
-      return ERROR_TYPE;
-    }
-
-    const firstType = this.checkExpression(expr.elements[0]!);
-    if (isErrorType(firstType)) return ERROR_TYPE;
-
-    for (let i = 1; i < expr.elements.length; i++) {
-      const elemType = this.checkExpression(expr.elements[i]!);
-      if (isErrorType(elemType)) continue;
-      if (!isAssignableTo(elemType, firstType)) {
-        // Check literal assignability
-        const litInfo = extractLiteralInfo(expr.elements[i]!);
-        const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, firstType);
-        if (!isLiteralOk) {
-          this.checker.error(
-            `array element ${i}: expected '${typeToString(firstType)}', got '${typeToString(elemType)}'`,
-            expr.elements[i]!.span
-          );
-        }
-      }
-    }
-
-    return arrayType(firstType, expr.elements.length);
-  }
-
-  /**
-   * Resolve a binary operator overload method call on a struct.
-   * Validates the right operand against the method's second parameter,
-   * records the resolution in operatorMethods, and returns the method's return type.
-   */
-  private resolveOperatorMethod(
-    expr: Expression,
-    structType: StructType,
-    method: FunctionType,
-    methodName: string,
-    rightType: Type
-  ): Type {
-    // Operator method should have exactly 2 params: self + rhs
-    if (method.params.length !== 2) {
-      this.checker.error(
-        `'${methodName}' method must take exactly 2 parameters (self, rhs), got ${method.params.length}`,
-        expr.span
-      );
-      return ERROR_TYPE;
-    }
-
-    const rhsParam = method.params[1]!;
-    if (!isAssignableTo(rightType, rhsParam.type)) {
-      this.checker.error(
-        `operator method '${methodName}': expected '${typeToString(rhsParam.type)}' for right operand, got '${typeToString(rightType)}'`,
-        expr.span
-      );
-      return ERROR_TYPE;
-    }
-
-    this.checker.operatorMethods.set(expr, { methodName, structType });
-    return method.returnType;
   }
 }
