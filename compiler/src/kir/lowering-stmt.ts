@@ -381,6 +381,21 @@ export function lowerSwitchStmt(this: KirLowerer, stmt: SwitchStmt): void {
   const subjectId = this.lowerExpr(stmt.subject);
   const endLabel = this.freshBlockId("switch.end");
 
+  // Check if this is a switch on a data-variant (tagged union) enum
+  const subjectType = this.checkResult.typeMap.get(stmt.subject);
+  const isTaggedUnionEnum =
+    subjectType?.kind === "enum" &&
+    subjectType.variants.some((v) => v.fields.length > 0);
+
+  // For tagged union enums, compare on the .tag field instead of the whole value
+  let switchValue: VarId;
+  if (isTaggedUnionEnum) {
+    const tagType: KirType = { kind: "int", bits: 32, signed: true };
+    switchValue = this.emitFieldLoad(subjectId, "tag", tagType);
+  } else {
+    switchValue = subjectId;
+  }
+
   const caseLabels: { value: VarId; target: string }[] = [];
   let defaultLabel = endLabel;
   const caseBlocks: { label: string; stmts: Statement[]; isDefault: boolean }[] = [];
@@ -395,6 +410,23 @@ export function lowerSwitchStmt(this: KirLowerer, stmt: SwitchStmt): void {
     }
 
     for (const val of c.values) {
+      // For tagged union enums, case values are variant names — emit const_int tag
+      if (isTaggedUnionEnum && subjectType?.kind === "enum" && val.kind === "Identifier") {
+        const variantIndex = subjectType.variants.findIndex((v) => v.name === val.name);
+        if (variantIndex >= 0) {
+          const variant = subjectType.variants[variantIndex];
+          const tagValue = variant.value ?? variantIndex;
+          const tagId = this.freshVar();
+          this.emit({
+            kind: "const_int",
+            dest: tagId,
+            type: { kind: "int", bits: 32, signed: true },
+            value: tagValue,
+          });
+          caseLabels.push({ value: tagId, target: label });
+          continue;
+        }
+      }
       const valId = this.lowerExpr(val);
       caseLabels.push({ value: valId, target: label });
     }
@@ -404,7 +436,7 @@ export function lowerSwitchStmt(this: KirLowerer, stmt: SwitchStmt): void {
 
   this.setTerminator({
     kind: "switch",
-    value: subjectId,
+    value: switchValue,
     cases: caseLabels,
     defaultBlock: defaultLabel,
   });

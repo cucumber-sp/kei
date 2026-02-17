@@ -203,4 +203,22 @@ describe("c-emitter", () => {
     expect(c).toContain("->tag");
     expect(c).toContain("->data.Circle.radius");
   });
+
+  test("switch on tagged union enum compares .tag field", () => {
+    const c = compileToC(`
+      enum Shape { Circle(radius: f64), Point }
+      fn main() -> int {
+        let s: Shape = Shape.Circle(3.14);
+        switch s {
+          case Circle: return 1;
+          case Point: return 2;
+        }
+        return 0;
+      }
+    `);
+    // The switch should load the tag and compare against tag constants
+    expect(c).toContain("->tag");
+    // Should produce if/else if chain comparing tag values
+    expect(c).toMatch(/if \(/);
+  });
 });
