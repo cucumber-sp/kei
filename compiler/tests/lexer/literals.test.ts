@@ -110,3 +110,102 @@ describe("float literals", () => {
     expect(tokens[0]?.value).toBeCloseTo(1234.5678);
   });
 });
+
+describe("numeric literal suffixes", () => {
+  test("integer with i32 suffix", () => {
+    const { tokens } = tokenize("42i32");
+    expect(tokens[0]?.kind).toBe(TokenKind.IntLiteral);
+    expect(tokens[0]?.value).toBe(42);
+    expect(tokens[0]?.suffix).toBe("i32");
+  });
+
+  test("integer with u8 suffix", () => {
+    const { tokens } = tokenize("255u8");
+    expect(tokens[0]?.kind).toBe(TokenKind.IntLiteral);
+    expect(tokens[0]?.value).toBe(255);
+    expect(tokens[0]?.suffix).toBe("u8");
+  });
+
+  test("integer with i64 suffix", () => {
+    const { tokens } = tokenize("100i64");
+    expect(tokens[0]?.kind).toBe(TokenKind.IntLiteral);
+    expect(tokens[0]?.value).toBe(100);
+    expect(tokens[0]?.suffix).toBe("i64");
+  });
+
+  test("integer with usize suffix", () => {
+    const { tokens } = tokenize("10usize");
+    expect(tokens[0]?.kind).toBe(TokenKind.IntLiteral);
+    expect(tokens[0]?.value).toBe(10);
+    expect(tokens[0]?.suffix).toBe("usize");
+  });
+
+  test("integer with isize suffix", () => {
+    const { tokens } = tokenize("10isize");
+    expect(tokens[0]?.kind).toBe(TokenKind.IntLiteral);
+    expect(tokens[0]?.value).toBe(10);
+    expect(tokens[0]?.suffix).toBe("isize");
+  });
+
+  test("integer with f32 suffix promotes to float", () => {
+    const { tokens } = tokenize("42f32");
+    expect(tokens[0]?.kind).toBe(TokenKind.FloatLiteral);
+    expect(tokens[0]?.value).toBe(42);
+    expect(tokens[0]?.suffix).toBe("f32");
+  });
+
+  test("integer with f64 suffix promotes to float", () => {
+    const { tokens } = tokenize("42f64");
+    expect(tokens[0]?.kind).toBe(TokenKind.FloatLiteral);
+    expect(tokens[0]?.value).toBe(42);
+    expect(tokens[0]?.suffix).toBe("f64");
+  });
+
+  test("float with f32 suffix", () => {
+    const { tokens } = tokenize("2.5f32");
+    expect(tokens[0]?.kind).toBe(TokenKind.FloatLiteral);
+    expect(tokens[0]?.value).toBeCloseTo(2.5);
+    expect(tokens[0]?.suffix).toBe("f32");
+  });
+
+  test("float with f64 suffix", () => {
+    const { tokens } = tokenize("3.14f64");
+    expect(tokens[0]?.kind).toBe(TokenKind.FloatLiteral);
+    expect(tokens[0]?.value).toBeCloseTo(3.14);
+    expect(tokens[0]?.suffix).toBe("f64");
+  });
+
+  test("hex with suffix", () => {
+    const { tokens } = tokenize("0xFFu32");
+    expect(tokens[0]?.kind).toBe(TokenKind.IntLiteral);
+    expect(tokens[0]?.value).toBe(255);
+    expect(tokens[0]?.suffix).toBe("u32");
+  });
+
+  test("binary with suffix", () => {
+    const { tokens } = tokenize("0b1010i8");
+    expect(tokens[0]?.kind).toBe(TokenKind.IntLiteral);
+    expect(tokens[0]?.value).toBe(10);
+    expect(tokens[0]?.suffix).toBe("i8");
+  });
+
+  test("no suffix produces undefined", () => {
+    const { tokens } = tokenize("42");
+    expect(tokens[0]?.suffix).toBeUndefined();
+  });
+
+  test("suffix not consumed when followed by alphanumeric", () => {
+    const { tokens } = tokenize("42i32x");
+    // "42" should be IntLiteral (no suffix), "i32x" should be Identifier
+    expect(tokens[0]?.kind).toBe(TokenKind.IntLiteral);
+    expect(tokens[0]?.suffix).toBeUndefined();
+    expect(tokens[1]?.kind).toBe(TokenKind.Identifier);
+  });
+
+  test("integer with underscores and suffix", () => {
+    const { tokens } = tokenize("1_000u32");
+    expect(tokens[0]?.kind).toBe(TokenKind.IntLiteral);
+    expect(tokens[0]?.value).toBe(1000);
+    expect(tokens[0]?.suffix).toBe("u32");
+  });
+});

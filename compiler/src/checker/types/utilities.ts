@@ -100,14 +100,18 @@ export function isAssignableTo(source: Type, target: Type): boolean {
 export function extractLiteralInfo(expr: {
   kind: string;
   value?: number;
+  suffix?: string;
   operator?: string;
-  operand?: { kind: string; value?: number };
+  operand?: { kind: string; value?: number; suffix?: string };
 }): { kind: "IntLiteral" | "FloatLiteral"; value: number } | null {
   if (expr.kind === "IntLiteral" || expr.kind === "FloatLiteral") {
+    // Suffixed literals have an explicit type — don't allow implicit conversion
+    if (expr.suffix) return null;
     return { kind: expr.kind, value: expr.value as number };
   }
   // Handle unary minus: -(IntLiteral) or -(FloatLiteral)
   if (expr.kind === "UnaryExpr" && expr.operator === "-" && expr.operand) {
+    if (expr.operand.suffix) return null;
     if (expr.operand.kind === "IntLiteral") {
       return { kind: "IntLiteral", value: -(expr.operand.value as number) };
     }

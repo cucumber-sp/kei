@@ -360,12 +360,53 @@ export class Lexer {
     return true;
   }
 
+  private static readonly NUMERIC_SUFFIXES: ReadonlySet<string> = new Set([
+    "i8", "i16", "i32", "i64",
+    "u8", "u16", "u32", "u64",
+    "isize", "usize",
+    "f32", "f64",
+  ]);
+
+  private static readonly FLOAT_SUFFIXES: ReadonlySet<string> = new Set(["f32", "f64"]);
+
+  private consumeSuffix(): string | undefined {
+    // Try to match a type suffix immediately after the number digits.
+    // We look ahead without advancing, then consume if we find a valid suffix.
+    const remaining = this.source.content.slice(this.pos);
+
+    // Try longest suffixes first (isize, usize are 5 chars; others are 2-3)
+    for (const len of [5, 3, 2]) {
+      const candidate = remaining.slice(0, len);
+      if (Lexer.NUMERIC_SUFFIXES.has(candidate)) {
+        // Make sure the suffix isn't followed by more alphanumeric chars
+        // (e.g. `42i32x` should NOT match `i32` as a suffix)
+        const afterSuffix = remaining.charAt(len);
+        if (afterSuffix === "" || !isAlphaNumeric(afterSuffix)) {
+          this.pos += len;
+          return candidate;
+        }
+      }
+    }
+    return undefined;
+  }
+
   private makeNumberToken(kind: TokenKind, start: number): Token {
+    // Try to consume a type suffix
+    const suffix = this.consumeSuffix();
+
+    // If an integer literal has a float suffix, promote to FloatLiteral
+    let effectiveKind = kind;
+    if (suffix && kind === TokenKind.IntLiteral && Lexer.FLOAT_SUFFIXES.has(suffix)) {
+      effectiveKind = TokenKind.FloatLiteral;
+    }
+
     const lexeme = this.source.content.slice(start, this.pos);
-    const cleaned = lexeme.replace(/_/g, "");
+    // Strip both underscores and suffix from the numeric part for parsing
+    const numericPart = suffix ? lexeme.slice(0, lexeme.length - suffix.length) : lexeme;
+    const cleaned = numericPart.replace(/_/g, "");
     let value: number;
 
-    if (kind === TokenKind.FloatLiteral) {
+    if (effectiveKind === TokenKind.FloatLiteral) {
       value = Number.parseFloat(cleaned);
     } else if (cleaned.startsWith("0x") || cleaned.startsWith("0X")) {
       value = Number.parseInt(cleaned.slice(2), 16);
@@ -378,14 +419,18 @@ export class Lexer {
     }
 
     const { line, column } = this.source.lineCol(start);
-    return {
-      kind,
+    const token: Token = {
+      kind: effectiveKind,
       lexeme,
       span: { start, end: this.pos },
       line,
       column,
       value,
     };
+    if (suffix) {
+      token.suffix = suffix;
+    }
+    return token;
   }
 
   private readString(): Token {

@@ -22,9 +22,13 @@ import {
   BOOL_TYPE,
   ERROR_TYPE,
   extractLiteralInfo,
+  F32_TYPE,
   F64_TYPE,
+  I8_TYPE,
+  I16_TYPE,
   I32_TYPE,
   I64_TYPE,
+  ISIZE_TYPE,
   isAssignableTo,
   isErrorType,
   isLiteralAssignableTo,
@@ -32,9 +36,35 @@ import {
   STRING_TYPE,
   TypeKind,
   typeToString,
+  U8_TYPE,
+  U16_TYPE,
+  U32_TYPE,
+  U64_TYPE,
+  USIZE_TYPE,
 } from "./types";
 
+const SUFFIX_TYPE_MAP: ReadonlyMap<string, Type> = new Map([
+  ["i8", I8_TYPE],
+  ["i16", I16_TYPE],
+  ["i32", I32_TYPE],
+  ["i64", I64_TYPE],
+  ["u8", U8_TYPE],
+  ["u16", U16_TYPE],
+  ["u32", U32_TYPE],
+  ["u64", U64_TYPE],
+  ["isize", ISIZE_TYPE],
+  ["usize", USIZE_TYPE],
+  ["f32", F32_TYPE],
+  ["f64", F64_TYPE],
+]);
+
+const FLOAT_SUFFIXES: ReadonlySet<string> = new Set(["f32", "f64"]);
+
 export function checkIntLiteral(expr: IntLiteral): Type {
+  if (expr.suffix) {
+    const t = SUFFIX_TYPE_MAP.get(expr.suffix);
+    if (t) return t;
+  }
   const v = expr.value;
   if (v >= I32_MIN && v <= I32_MAX) {
     return I32_TYPE;
@@ -42,7 +72,18 @@ export function checkIntLiteral(expr: IntLiteral): Type {
   return I64_TYPE;
 }
 
-export function checkFloatLiteral(_expr: FloatLiteral): Type {
+export function checkFloatLiteral(expr: FloatLiteral, checker?: Checker): Type {
+  if (expr.suffix) {
+    if (!FLOAT_SUFFIXES.has(expr.suffix)) {
+      checker?.error(
+        `integer suffix '${expr.suffix}' cannot be applied to a float literal`,
+        expr.span
+      );
+      return ERROR_TYPE;
+    }
+    const t = SUFFIX_TYPE_MAP.get(expr.suffix);
+    if (t) return t;
+  }
   return F64_TYPE;
 }
 

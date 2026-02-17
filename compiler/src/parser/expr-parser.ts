@@ -3,7 +3,7 @@
  * Extracted from parser.ts — all methods operate on a ParserContext.
  */
 
-import type { ArrayLiteral, AssignExpr, BlockStmt, Expression, Statement, SwitchCase } from "../ast/nodes.ts";
+import type { ArrayLiteral, AssignExpr, BlockStmt, Expression, FloatLiteral, IntLiteral, Statement, SwitchCase } from "../ast/nodes.ts";
 import { TokenKind } from "../lexer/token.ts";
 import type { ParserContext } from "./parser.ts";
 import { parsePostfixExpression } from "./postfix-parser.ts";
@@ -236,21 +236,25 @@ function parsePrimaryExpression(ctx: ParserContext): Expression {
   // Integer literal
   if (token.kind === TokenKind.IntLiteral) {
     ctx.advance();
-    return {
+    const node: IntLiteral = {
       kind: "IntLiteral",
       value: token.value as number,
       span: token.span,
     };
+    if (token.suffix) node.suffix = token.suffix;
+    return node;
   }
 
   // Float literal
   if (token.kind === TokenKind.FloatLiteral) {
     ctx.advance();
-    return {
+    const node: FloatLiteral = {
       kind: "FloatLiteral",
       value: token.value as number,
       span: token.span,
     };
+    if (token.suffix) node.suffix = token.suffix;
+    return node;
   }
 
   // String literal

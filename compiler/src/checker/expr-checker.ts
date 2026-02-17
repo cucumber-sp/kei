@@ -73,7 +73,7 @@ export class ExpressionChecker {
       case "IntLiteral":
         return checkIntLiteral(expr);
       case "FloatLiteral":
-        return checkFloatLiteral(expr);
+        return checkFloatLiteral(expr, this.checker);
       case "StringLiteral":
         return checkStringLiteral(expr);
       case "BoolLiteral":

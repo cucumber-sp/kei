@@ -106,16 +106,18 @@ export interface IfExpr extends BaseNode {
   elseBlock: BlockStmt;
 }
 
-/** Integer literal (e.g. `42`, `0xFF`). */
+/** Integer literal (e.g. `42`, `0xFF`, `255u8`). */
 export interface IntLiteral extends BaseNode {
   kind: "IntLiteral";
   value: number;
+  suffix?: string;
 }
 
-/** Floating-point literal (e.g. `3.14`). */
+/** Floating-point literal (e.g. `3.14`, `2.5f32`). */
 export interface FloatLiteral extends BaseNode {
   kind: "FloatLiteral";
   value: number;
+  suffix?: string;
 }
 
 /** String literal (e.g. `"hello"`). */

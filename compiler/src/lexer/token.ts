@@ -195,6 +195,8 @@ export interface Token {
   column: number;
   /** Pre-parsed literal value (numbers, strings, booleans). */
   value?: number | string | boolean;
+  /** Type suffix on numeric literals (e.g. `i32`, `u8`, `f64`). */
+  suffix?: string;
 }
 
 /** Active keywords — identifiers that map to a specific {@link TokenKind}. */
