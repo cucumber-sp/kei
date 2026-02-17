@@ -51,7 +51,7 @@ import type {
   UnsafeExpr,
   UnsafeStructDecl,
   WhileStmt,
-} from "./nodes.ts";
+} from "./nodes/index.ts";
 
 export interface AstVisitor<T = void> {
   visitProgram(node: Program): T;

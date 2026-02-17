@@ -59,8 +59,8 @@ export type {
   UnsafeBlock,
   UnsafeStructDecl,
   WhileStmt,
-} from "./nodes.ts";
+} from "./nodes/index.ts";
 
-export { DeclKind, ExprKind, StmtKind, TypeNodeKind } from "./nodes.ts";
+export { DeclKind, ExprKind, StmtKind, TypeNodeKind } from "./nodes/index.ts";
 
 export type { AstVisitor } from "./visitor.ts";
