@@ -2,32 +2,17 @@
  * Recursive descent parser with Pratt expression parsing for Kei.
  *
  * Expression parsing lives in expr-parser.ts, declaration parsing in
- * decl-parser.ts. Both operate on the ParserContext interface implemented
- * by the Parser class below.
+ * decl-parser.ts, statement parsing in stmt-parser.ts. All operate on the
+ * ParserContext interface implemented by the Parser class below.
  */
 
 import type {
-  AssertStmt,
   BlockStmt,
-  BreakStmt,
-  ConstStmt,
-  ContinueStmt,
   Declaration,
-  DeferStmt,
   Expression,
-  ExprStmt,
-  ForStmt,
-  IfStmt,
-  LetStmt,
   Program,
-  RequireStmt,
-  ReturnStmt,
   Statement,
-  SwitchCase,
-  SwitchStmt,
   TypeNode,
-  UnsafeBlock,
-  WhileStmt,
 } from "../ast/nodes.ts";
 import type { Diagnostic } from "../errors/diagnostic.ts";
 import { Severity } from "../errors/diagnostic.ts";
@@ -35,6 +20,22 @@ import type { Token } from "../lexer/token.ts";
 import { TokenKind } from "../lexer/token.ts";
 import { parseDeclaration } from "./decl-parser.ts";
 import { parseExpression } from "./expr-parser.ts";
+import {
+  parseAssertStatement,
+  parseBreakStatement,
+  parseConstStatement,
+  parseContinueStatement,
+  parseDeferStatement,
+  parseExpressionStatement,
+  parseForStatement,
+  parseIfStatement,
+  parseLetStatement,
+  parseRequireStatement,
+  parseReturnStatement,
+  parseSwitchStatement,
+  parseUnsafeBlockStatement,
+  parseWhileStatement,
+} from "./stmt-parser.ts";
 
 /** Token kinds that start a type annotation (used for type parsing context) */
 const TYPE_KEYWORDS: ReadonlySet<TokenKind> = new Set([
@@ -330,22 +331,22 @@ export class Parser implements ParserContext {
   // ─── Statements ─────────────────────────────────────────────────────
 
   parseStatement(): Statement {
-    if (this.check(TokenKind.Let)) return this.parseLetStatement();
-    if (this.check(TokenKind.Const)) return this.parseConstStatement();
-    if (this.check(TokenKind.Return)) return this.parseReturnStatement();
-    if (this.check(TokenKind.If)) return this.parseIfStatement();
-    if (this.check(TokenKind.While)) return this.parseWhileStatement();
-    if (this.check(TokenKind.For)) return this.parseForStatement();
-    if (this.check(TokenKind.Switch)) return this.parseSwitchStatement();
-    if (this.check(TokenKind.Defer)) return this.parseDeferStatement();
-    if (this.check(TokenKind.Break)) return this.parseBreakStatement();
-    if (this.check(TokenKind.Continue)) return this.parseContinueStatement();
-    if (this.check(TokenKind.Assert)) return this.parseAssertStatement();
-    if (this.check(TokenKind.Require)) return this.parseRequireStatement();
-    if (this.check(TokenKind.Unsafe)) return this.parseUnsafeBlockStatement();
+    if (this.check(TokenKind.Let)) return parseLetStatement(this);
+    if (this.check(TokenKind.Const)) return parseConstStatement(this);
+    if (this.check(TokenKind.Return)) return parseReturnStatement(this);
+    if (this.check(TokenKind.If)) return parseIfStatement(this);
+    if (this.check(TokenKind.While)) return parseWhileStatement(this);
+    if (this.check(TokenKind.For)) return parseForStatement(this);
+    if (this.check(TokenKind.Switch)) return parseSwitchStatement(this);
+    if (this.check(TokenKind.Defer)) return parseDeferStatement(this);
+    if (this.check(TokenKind.Break)) return parseBreakStatement(this);
+    if (this.check(TokenKind.Continue)) return parseContinueStatement(this);
+    if (this.check(TokenKind.Assert)) return parseAssertStatement(this);
+    if (this.check(TokenKind.Require)) return parseRequireStatement(this);
+    if (this.check(TokenKind.Unsafe)) return parseUnsafeBlockStatement(this);
     if (this.check(TokenKind.LeftBrace)) return this.parseBlockStatement();
 
-    return this.parseExpressionStatement();
+    return parseExpressionStatement(this);
   }
 
   parseBlockStatement(): BlockStmt {
@@ -372,267 +373,6 @@ export class Parser implements ParserContext {
     return parseExpression(this);
   }
 
-  private parseLetStatement(): LetStmt {
-    const start = this.expect(TokenKind.Let);
-    const name = this.expectIdentifier().lexeme;
-    let typeAnnotation: TypeNode | null = null;
-    if (this.match(TokenKind.Colon)) {
-      typeAnnotation = this.parseType();
-    }
-    this.expect(TokenKind.Equal);
-    const initializer = this.parseExpression();
-    const end = this.expect(TokenKind.Semicolon);
-
-    return {
-      kind: "LetStmt",
-      name,
-      typeAnnotation,
-      initializer,
-      span: { start: start.span.start, end: end.span.end },
-    };
-  }
-
-  private parseConstStatement(): ConstStmt {
-    const start = this.expect(TokenKind.Const);
-    const name = this.expectIdentifier().lexeme;
-    let typeAnnotation: TypeNode | null = null;
-    if (this.match(TokenKind.Colon)) {
-      typeAnnotation = this.parseType();
-    }
-    this.expect(TokenKind.Equal);
-    const initializer = this.parseExpression();
-    const end = this.expect(TokenKind.Semicolon);
-
-    return {
-      kind: "ConstStmt",
-      name,
-      typeAnnotation,
-      initializer,
-      span: { start: start.span.start, end: end.span.end },
-    };
-  }
-
-  private parseReturnStatement(): ReturnStmt {
-    const start = this.expect(TokenKind.Return);
-    let value: Expression | null = null;
-    if (!this.check(TokenKind.Semicolon)) {
-      value = this.parseExpression();
-    }
-    const end = this.expect(TokenKind.Semicolon);
-
-    return {
-      kind: "ReturnStmt",
-      value,
-      span: { start: start.span.start, end: end.span.end },
-    };
-  }
-
-  private parseIfStatement(): IfStmt {
-    const start = this.expect(TokenKind.If);
-    const condition = this.parseExpression();
-    const thenBlock = this.parseBlockStatement();
-
-    let elseBlock: BlockStmt | IfStmt | null = null;
-    if (this.match(TokenKind.Else)) {
-      if (this.check(TokenKind.If)) {
-        elseBlock = this.parseIfStatement();
-      } else {
-        elseBlock = this.parseBlockStatement();
-      }
-    }
-
-    return {
-      kind: "IfStmt",
-      condition,
-      thenBlock,
-      elseBlock,
-      span: { start: start.span.start, end: (elseBlock ?? thenBlock).span.end },
-    };
-  }
-
-  private parseWhileStatement(): WhileStmt {
-    const start = this.expect(TokenKind.While);
-    const condition = this.parseExpression();
-    const body = this.parseBlockStatement();
-
-    return {
-      kind: "WhileStmt",
-      condition,
-      body,
-      span: { start: start.span.start, end: body.span.end },
-    };
-  }
-
-  private parseForStatement(): ForStmt {
-    const start = this.expect(TokenKind.For);
-    const variable = this.expectIdentifier().lexeme;
-
-    let index: string | null = null;
-    if (this.match(TokenKind.Comma)) {
-      index = this.expectIdentifier().lexeme;
-    }
-
-    this.expect(TokenKind.In);
-    const iterable = this.parseExpression();
-    const body = this.parseBlockStatement();
-
-    return {
-      kind: "ForStmt",
-      variable,
-      index,
-      iterable,
-      body,
-      span: { start: start.span.start, end: body.span.end },
-    };
-  }
-
-  private parseSwitchStatement(): SwitchStmt {
-    const start = this.expect(TokenKind.Switch);
-    const subject = this.parseExpression();
-    this.expect(TokenKind.LeftBrace);
-
-    const cases: SwitchCase[] = [];
-    while (!this.check(TokenKind.RightBrace) && !this.isAtEnd()) {
-      cases.push(this.parseSwitchCase());
-    }
-
-    const end = this.expect(TokenKind.RightBrace);
-    return {
-      kind: "SwitchStmt",
-      subject,
-      cases,
-      span: { start: start.span.start, end: end.span.end },
-    };
-  }
-
-  private parseSwitchCase(): SwitchCase {
-    if (this.match(TokenKind.Default)) {
-      this.expect(TokenKind.Colon);
-      const body = this.parseCaseBody();
-      return {
-        kind: "SwitchCase",
-        values: [],
-        body,
-        isDefault: true,
-        span: {
-          start: this.previous().span.start,
-          end: body.length > 0 ? body[body.length - 1]?.span.end : this.previous().span.end,
-        },
-      };
-    }
-
-    const startToken = this.expect(TokenKind.Case);
-    const values: Expression[] = [this.parseExpression()];
-    while (this.match(TokenKind.Comma)) {
-      values.push(this.parseExpression());
-    }
-    this.expect(TokenKind.Colon);
-    const body = this.parseCaseBody();
-
-    return {
-      kind: "SwitchCase",
-      values,
-      body,
-      isDefault: false,
-      span: {
-        start: startToken.span.start,
-        end: body.length > 0 ? body[body.length - 1]?.span.end : this.previous().span.end,
-      },
-    };
-  }
-
-  private parseCaseBody(): Statement[] {
-    const stmts: Statement[] = [];
-    while (
-      !this.check(TokenKind.Case) &&
-      !this.check(TokenKind.Default) &&
-      !this.check(TokenKind.RightBrace) &&
-      !this.isAtEnd()
-    ) {
-      stmts.push(this.parseStatement());
-    }
-    return stmts;
-  }
-
-  private parseDeferStatement(): DeferStmt {
-    const start = this.expect(TokenKind.Defer);
-    const statement = this.parseStatement();
-    return {
-      kind: "DeferStmt",
-      statement,
-      span: { start: start.span.start, end: statement.span.end },
-    };
-  }
-
-  private parseBreakStatement(): BreakStmt {
-    const start = this.expect(TokenKind.Break);
-    const end = this.expect(TokenKind.Semicolon);
-    return { kind: "BreakStmt", span: { start: start.span.start, end: end.span.end } };
-  }
-
-  private parseContinueStatement(): ContinueStmt {
-    const start = this.expect(TokenKind.Continue);
-    const end = this.expect(TokenKind.Semicolon);
-    return { kind: "ContinueStmt", span: { start: start.span.start, end: end.span.end } };
-  }
-
-  private parseAssertStatement(): AssertStmt {
-    const start = this.expect(TokenKind.Assert);
-    this.expect(TokenKind.LeftParen);
-    const condition = this.parseExpression();
-    let message: Expression | null = null;
-    if (this.match(TokenKind.Comma)) {
-      message = this.parseExpression();
-    }
-    this.expect(TokenKind.RightParen);
-    const end = this.expect(TokenKind.Semicolon);
-
-    return {
-      kind: "AssertStmt",
-      condition,
-      message,
-      span: { start: start.span.start, end: end.span.end },
-    };
-  }
-
-  private parseRequireStatement(): RequireStmt {
-    const start = this.expect(TokenKind.Require);
-    this.expect(TokenKind.LeftParen);
-    const condition = this.parseExpression();
-    let message: Expression | null = null;
-    if (this.match(TokenKind.Comma)) {
-      message = this.parseExpression();
-    }
-    this.expect(TokenKind.RightParen);
-    const end = this.expect(TokenKind.Semicolon);
-
-    return {
-      kind: "RequireStmt",
-      condition,
-      message,
-      span: { start: start.span.start, end: end.span.end },
-    };
-  }
-
-  private parseUnsafeBlockStatement(): UnsafeBlock {
-    const start = this.expect(TokenKind.Unsafe);
-    const body = this.parseBlockStatement();
-    return {
-      kind: "UnsafeBlock",
-      body,
-      span: { start: start.span.start, end: body.span.end },
-    };
-  }
-
-  private parseExpressionStatement(): ExprStmt {
-    const expression = this.parseExpression();
-    const end = this.expect(TokenKind.Semicolon);
-    return {
-      kind: "ExprStmt",
-      expression,
-      span: { start: expression.span.start, end: end.span.end },
-    };
-  }
 }
 
 class ParseError extends Error {
