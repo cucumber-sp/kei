@@ -1,0 +1,6 @@
+// Imports only a single symbol from math
+import { add } from math;
+
+fn main() -> i32 {
+    return add(10, 20);
+}

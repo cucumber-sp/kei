@@ -1,0 +1,7 @@
+// Imports a symbol that doesn't exist in the math module
+import { add, nonexistent_func } from math;
+
+fn main() -> i32 {
+    let result = add(1, 2);
+    return result;
+}

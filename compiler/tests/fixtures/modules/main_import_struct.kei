@@ -1,0 +1,8 @@
+// Imports and uses a struct type from math module
+import { Point, add } from math;
+
+fn main() -> i32 {
+    let p = Point{ x: 1.0, y: 2.0 };
+    let sum = add(3, 4);
+    return sum;
+}

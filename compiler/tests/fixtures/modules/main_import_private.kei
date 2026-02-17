@@ -1,0 +1,6 @@
+// Tries to import a private (non-pub) function from math
+import { helper } from math;
+
+fn main() -> i32 {
+    return helper();
+}
