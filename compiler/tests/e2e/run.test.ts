@@ -1660,7 +1660,7 @@ describe("Complex: operator overloading + generics", () => {
   });
 
   // skip: KIR lowering and C backend not yet updated for generics (generic type args in nested calls)
-  test.skip("generic function with multiple instantiations", () => {
+  test("generic function with multiple instantiations", () => {
     const r = run(
       "complex_generic_multi",
       `
