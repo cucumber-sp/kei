@@ -348,7 +348,7 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
   return ERROR_TYPE;
 }
 
-export function checkAssignTarget(checker: Checker, target: Expression): void {
+function checkAssignTarget(checker: Checker, target: Expression): void {
   if (target.kind === "Identifier") {
     const sym = checker.currentScope.lookup(target.name);
     if (sym && sym.kind === SymbolKind.Variable) {

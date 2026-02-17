@@ -20,7 +20,7 @@ import {
   typeToString,
 } from "./types";
 
-export interface TypeResolverDiagnostic {
+interface TypeResolverDiagnostic {
   message: string;
   span: Span;
 }

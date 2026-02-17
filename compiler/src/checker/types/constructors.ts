@@ -15,7 +15,6 @@ import type {
   SliceType,
   RangeType,
   FunctionType,
-  TypeParamType,
   Type,
   ParamInfo,
 } from "./definitions";
@@ -66,10 +65,6 @@ export function functionType(
     genericParams,
     isExtern,
   };
-}
-
-export function typeParamType(name: string): TypeParamType {
-  return { kind: TypeKind.TypeParam, name };
 }
 
 // ─── Commonly Used Int Types ────────────────────────────────────────────────

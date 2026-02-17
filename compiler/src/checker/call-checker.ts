@@ -204,7 +204,7 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
 }
 
 /** Resolve an overloaded function call by matching argument types exactly. */
-export function resolveOverloadedCall(
+function resolveOverloadedCall(
   checker: Checker,
   overloads: FunctionOverload[],
   expr: CallExpr
@@ -325,7 +325,7 @@ export function resolveOverloadedCall(
   return ERROR_TYPE;
 }
 
-export function checkFunctionCallArgs(
+function checkFunctionCallArgs(
   checker: Checker,
   funcType: FunctionType,
   args: Expression[],
@@ -381,7 +381,7 @@ export function checkFunctionCallArgs(
 }
 
 /** Handle generic function call with explicit type args: max<i32>(a, b) */
-export function checkGenericFunctionCall(checker: Checker, expr: CallExpr): Type {
+function checkGenericFunctionCall(checker: Checker, expr: CallExpr): Type {
   if (expr.callee.kind !== "Identifier") return ERROR_TYPE;
   const name = expr.callee.name;
 
@@ -444,7 +444,7 @@ export function checkGenericFunctionCall(checker: Checker, expr: CallExpr): Type
 }
 
 /** Handle generic function call with inferred type args: max(10, 20) → infer T=i32 */
-export function checkGenericFunctionCallInferred(
+function checkGenericFunctionCallInferred(
   checker: Checker,
   funcType: FunctionType,
   expr: CallExpr

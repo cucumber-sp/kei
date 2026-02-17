@@ -71,7 +71,7 @@ export function buildCFG(blocks: KirBlock[]): CFG {
 }
 
 /** Extract branch targets from a terminator instruction. */
-export function terminatorTargets(term: KirTerminator): BlockId[] {
+function terminatorTargets(term: KirTerminator): BlockId[] {
   switch (term.kind) {
     case "jump":
       return [term.target];

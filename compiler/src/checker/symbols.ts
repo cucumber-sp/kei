@@ -23,7 +23,7 @@ export const SymbolKind = {
 // ─── Symbol Definitions ─────────────────────────────────────────────────────
 
 /** A local or global variable (including `let`, `const`, `static`, and function params). */
-export interface VariableSymbol {
+interface VariableSymbol {
   kind: typeof SymbolKind.Variable;
   name: string;
   type: Type;
@@ -55,7 +55,7 @@ export interface FunctionSymbol {
 }
 
 /** A named type: struct, enum, type alias, or generic type parameter. */
-export interface TypeSymbol {
+interface TypeSymbol {
   kind: typeof SymbolKind.Type;
   name: string;
   type: Type;
@@ -63,7 +63,7 @@ export interface TypeSymbol {
 }
 
 /** An imported module, providing qualified access to its exported symbols. */
-export interface ModuleSymbol {
+interface ModuleSymbol {
   kind: typeof SymbolKind.Module;
   name: string;
   type: ModuleType;
