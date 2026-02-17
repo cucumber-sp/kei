@@ -79,6 +79,8 @@ export interface StructType {
   genericTypeArgs?: Type[];
   /** True if __destroy was auto-generated (not defined in source). */
   autoDestroy?: boolean;
+  /** True if __oncopy was auto-generated (not defined in source). */
+  autoOncopy?: boolean;
 }
 
 /** Variant info for an enum — name, optional fields, optional explicit discriminant. */

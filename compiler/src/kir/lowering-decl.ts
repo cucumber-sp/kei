@@ -56,6 +56,12 @@ export function lowerDeclaration(this: KirLowerer, decl: Declaration): void {
         const structPrefix = this.modulePrefix ? `${this.modulePrefix}_${decl.name}` : decl.name;
         this.functions.push(lowerAutoDestroy(this, decl.name, structType, structPrefix));
       }
+      // Generate auto __oncopy if the checker flagged this struct
+      if (this.checkResult.autoOncopyStructs.has(decl.name)) {
+        const structType = this.checkResult.autoOncopyStructs.get(decl.name)!;
+        const structPrefix = this.modulePrefix ? `${this.modulePrefix}_${decl.name}` : decl.name;
+        this.functions.push(lowerAutoOncopy(this, decl.name, structType, structPrefix));
+      }
       break;
     case "EnumDecl":
       this.typeDecls.push(this.lowerEnumDecl(decl));
@@ -444,6 +450,79 @@ function lowerAutoDestroy(
     name: mangledName,
     params: [{ name: "self", type: selfType }],
     returnType: { kind: "void" },
+    blocks: [entryBlock],
+    localCount: varCounter,
+  };
+}
+
+/**
+ * Synthesize an __oncopy KIR function for a struct with auto-generated oncopy.
+ * Takes self by pointer, increments refcounts for string fields via kei_string_copy,
+ * calls nested __oncopy for struct fields, then loads and returns the modified struct.
+ */
+function lowerAutoOncopy(
+  lowerer: KirLowerer,
+  structName: string,
+  structType: StructType,
+  structPrefix: string
+): KirFunction {
+  const mangledName = `${structPrefix}___oncopy`;
+  const structKirType: KirType = { kind: "struct", name: structName, fields: [] };
+  const selfType: KirType = { kind: "ptr", pointee: structKirType };
+
+  const insts: KirInst[] = [];
+  let varCounter = 0;
+  const freshVar = (): VarId => `%_v${varCounter++}` as VarId;
+
+  const selfVar: VarId = "%self" as VarId;
+
+  for (const [fieldName, fieldType] of structType.fields) {
+    if (fieldType.kind === "string") {
+      // fieldPtr = &self->fieldName; val = *fieldPtr; copied = kei_string_copy(val); *fieldPtr = copied;
+      const fieldPtr = freshVar();
+      const kirStringType: KirType = { kind: "string" };
+      insts.push({
+        kind: "field_ptr", dest: fieldPtr, base: selfVar, field: fieldName,
+        type: kirStringType,
+      });
+      const loaded = freshVar();
+      insts.push({ kind: "load", dest: loaded, ptr: fieldPtr, type: kirStringType });
+      const copied = freshVar();
+      insts.push({
+        kind: "call_extern", dest: copied, func: "kei_string_copy",
+        args: [loaded], type: kirStringType,
+      });
+      insts.push({ kind: "store", ptr: fieldPtr, value: copied });
+    } else if (fieldType.kind === "struct" && fieldType.methods.has("__oncopy")) {
+      // fieldPtr = &self->fieldName; val = *fieldPtr; oncopy val; *fieldPtr = val;
+      const fieldPtr = freshVar();
+      const kirFieldType: KirType = { kind: "struct", name: fieldType.name, fields: [] };
+      insts.push({
+        kind: "field_ptr", dest: fieldPtr, base: selfVar, field: fieldName,
+        type: kirFieldType,
+      });
+      const loaded = freshVar();
+      insts.push({ kind: "load", dest: loaded, ptr: fieldPtr, type: kirFieldType });
+      insts.push({ kind: "oncopy", value: loaded, structName: fieldType.name });
+      insts.push({ kind: "store", ptr: fieldPtr, value: loaded });
+    }
+  }
+
+  // Load the modified struct and return it
+  const result = freshVar();
+  insts.push({ kind: "load", dest: result, ptr: selfVar, type: structKirType });
+
+  const entryBlock: KirBlock = {
+    id: "entry",
+    phis: [],
+    instructions: insts,
+    terminator: { kind: "ret", value: result },
+  };
+
+  return {
+    name: mangledName,
+    params: [{ name: "self", type: selfType }],
+    returnType: structKirType,
     blocks: [entryBlock],
     localCount: varCounter,
   };

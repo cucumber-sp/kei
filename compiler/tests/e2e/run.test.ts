@@ -1235,6 +1235,32 @@ describe("Complex: structs with lifecycle", () => {
     expect(r.stdout).toContain("42\n");
   });
 
+  test("auto-generated __oncopy for struct with string field", () => {
+    const r = run(
+      "auto_oncopy_string",
+      `
+      import { print } from io;
+
+      struct Wrapper {
+        text: string;
+        id: int;
+      }
+
+      fn main() -> int {
+        let a = Wrapper{ text: "hello", id: 1 };
+        let b = a;
+        print(a.text);
+        print(b.text);
+        print(a.id);
+        print(b.id);
+        return 0;
+      }
+    `
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe("hello\nhello\n1\n1\n");
+  });
+
   test("struct field manipulation and computation", () => {
     const r = run(
       "complex_struct_compute",
