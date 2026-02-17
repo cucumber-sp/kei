@@ -1,31 +1,29 @@
 /**
  * Declaration lowering methods for KirLowerer.
- * Extracted from lowering.ts for modularity.
+ * Handles the main declaration dispatch, function declarations,
+ * extern functions, and static declarations.
+ *
+ * Struct/method/lifecycle lowering: lowering-struct.ts
+ * Enum declaration lowering: lowering-enum-decl.ts
  */
 
 import type {
   Declaration,
-  EnumDecl,
   ExternFunctionDecl,
   FunctionDecl,
   StaticDecl,
-  StructDecl,
-  UnsafeStructDecl,
 } from "../ast/nodes.ts";
-import type { MonomorphizedFunction, MonomorphizedStruct } from "../checker/generics.ts";
-import type { StructType } from "../checker/types";
+import type { MonomorphizedFunction } from "../checker/generics.ts";
 import type {
-  KirBlock,
   KirExtern,
   KirFunction,
   KirGlobal,
-  KirInst,
   KirParam,
   KirType,
-  KirTypeDecl,
   VarId,
 } from "./kir-types.ts";
 import type { KirLowerer } from "./lowering.ts";
+import { lowerAutoDestroy, lowerAutoOncopy } from "./lowering-struct.ts";
 
 // ─── Declarations ────────────────────────────────────────────────────────
 
@@ -77,48 +75,48 @@ export function lowerDeclaration(this: KirLowerer, decl: Declaration): void {
 }
 
 /** Reset per-function state to prepare for lowering a new function body. */
-function resetFunctionState(self: KirLowerer): void {
-  self.blocks = [];
-  self.currentInsts = [];
-  self.varCounter = 0;
-  self.blockCounter = 0;
-  self.varMap = new Map();
-  self.currentBlockId = "entry";
-  self.loopBreakTarget = null;
-  self.loopContinueTarget = null;
-  self.scopeStack = [];
-  self.movedVars = new Set();
+export function resetFunctionState(this: KirLowerer): void {
+  this.blocks = [];
+  this.currentInsts = [];
+  this.varCounter = 0;
+  this.blockCounter = 0;
+  this.varMap = new Map();
+  this.currentBlockId = "entry";
+  this.loopBreakTarget = null;
+  this.loopContinueTarget = null;
+  this.scopeStack = [];
+  this.movedVars = new Set();
 }
 
 /** Finalize function body: pop scope, add terminator, seal last block. */
-function finalizeFunctionBody(self: KirLowerer, isThrows: boolean, returnType: KirType): void {
+export function finalizeFunctionBody(this: KirLowerer, isThrows: boolean, returnType: KirType): void {
   // Emit destroy for function-scope variables before implicit return
-  if (!self.isBlockTerminated()) {
-    self.popScopeWithDestroy();
+  if (!this.isBlockTerminated()) {
+    this.popScopeWithDestroy();
   } else {
-    self.scopeStack.pop(); // discard without emitting (already returned)
+    this.scopeStack.pop(); // discard without emitting (already returned)
   }
 
   // Ensure the last block has a terminator
   if (isThrows) {
-    if (!self.isBlockTerminated()) {
-      const zeroTag = self.emitConstInt(0);
-      self.setTerminator({ kind: "ret", value: zeroTag });
+    if (!this.isBlockTerminated()) {
+      const zeroTag = this.emitConstInt(0);
+      this.setTerminator({ kind: "ret", value: zeroTag });
     }
   } else {
-    self.ensureTerminator(returnType);
+    this.ensureTerminator(returnType);
   }
 
   // Seal last block
-  self.sealCurrentBlock();
+  this.sealCurrentBlock();
 }
 
 /** Add __out and __err pointer params for throws functions. */
-function addThrowsParams(self: KirLowerer, params: KirParam[], originalReturnType: KirType): void {
+export function addThrowsParams(this: KirLowerer, params: KirParam[], originalReturnType: KirType): void {
   const outParamId: VarId = `%__out`;
   const errParamId: VarId = `%__err`;
-  self.varMap.set("__out", outParamId);
-  self.varMap.set("__err", errParamId);
+  this.varMap.set("__out", outParamId);
+  this.varMap.set("__err", errParamId);
   params.push({
     name: "__out",
     type: {
@@ -133,7 +131,7 @@ function addThrowsParams(self: KirLowerer, params: KirParam[], originalReturnTyp
 }
 
 export function lowerFunction(this: KirLowerer, decl: FunctionDecl): KirFunction {
-  resetFunctionState(this);
+  this.resetFunctionState();
 
   // Detect throws function
   const isThrows = decl.throwsTypes.length > 0;
@@ -157,7 +155,7 @@ export function lowerFunction(this: KirLowerer, decl: FunctionDecl): KirFunction
 
   // For throws functions: add __out and __err pointer params
   if (isThrows) {
-    addThrowsParams(this, params, originalReturnType);
+    this.addThrowsParams(params, originalReturnType);
   }
 
   // Track params with lifecycle hooks for destroy on function exit
@@ -174,7 +172,7 @@ export function lowerFunction(this: KirLowerer, decl: FunctionDecl): KirFunction
   // Lower body
   this.lowerBlock(decl.body);
 
-  finalizeFunctionBody(this, isThrows, returnType);
+  this.finalizeFunctionBody(isThrows, returnType);
 
   // Clear throws state
   this.currentFunctionThrowsTypes = [];
@@ -201,46 +199,6 @@ export function lowerFunction(this: KirLowerer, decl: FunctionDecl): KirFunction
   };
 }
 
-export function lowerMethod(
-  this: KirLowerer,
-  decl: FunctionDecl,
-  mangledName: string,
-  _structName: string
-): KirFunction {
-  resetFunctionState(this);
-
-  // Push function-level scope
-  this.pushScope();
-
-  const params: KirParam[] = decl.params.map((p) => {
-    const type = this.resolveParamType(decl, p.name);
-    // The self parameter is passed as a pointer to the struct
-    const paramType: KirType =
-      p.name === "self" || type.kind === "struct" ? { kind: "ptr", pointee: type } : type;
-    const varId: VarId = `%${p.name}`;
-    this.varMap.set(p.name, varId);
-    return { name: p.name, type: paramType };
-  });
-
-  const returnType = this.lowerCheckerType(this.getFunctionReturnType(decl));
-
-  // Set current function return type so lowerReturnStmt can add struct loads
-  this.currentFunctionOrigReturnType = returnType;
-
-  // Lower body
-  this.lowerBlock(decl.body);
-
-  finalizeFunctionBody(this, false, returnType);
-
-  return {
-    name: mangledName,
-    params,
-    returnType,
-    blocks: this.blocks,
-    localCount: this.varCounter,
-  };
-}
-
 export function lowerExternFunction(this: KirLowerer, decl: ExternFunctionDecl): KirExtern {
   const params: KirParam[] = decl.params.map((p) => ({
     name: p.name,
@@ -254,37 +212,6 @@ export function lowerExternFunction(this: KirLowerer, decl: ExternFunctionDecl):
   return { name: decl.name, params, returnType };
 }
 
-export function lowerStructDecl(
-  this: KirLowerer,
-  decl: StructDecl | UnsafeStructDecl
-): KirTypeDecl {
-  const fields = decl.fields.map((f) => ({
-    name: f.name,
-    type: this.lowerTypeNode(f.typeAnnotation),
-  }));
-
-  return {
-    name: decl.name,
-    type: { kind: "struct", name: decl.name, fields },
-  };
-}
-
-export function lowerMonomorphizedStruct(
-  this: KirLowerer,
-  mangledName: string,
-  monoStruct: MonomorphizedStruct
-): KirTypeDecl {
-  const concrete = monoStruct.concrete;
-  const fields = Array.from(concrete.fields.entries()).map(([name, fieldType]) => ({
-    name,
-    type: this.lowerCheckerType(fieldType),
-  }));
-  return {
-    name: mangledName,
-    type: { kind: "struct", name: mangledName, fields },
-  };
-}
-
 export function lowerMonomorphizedFunction(
   this: KirLowerer,
   monoFunc: MonomorphizedFunction
@@ -293,7 +220,7 @@ export function lowerMonomorphizedFunction(
   const decl = monoFunc.declaration!;
   const concreteType = monoFunc.concrete;
 
-  resetFunctionState(this);
+  this.resetFunctionState();
 
   // Detect throws function
   const isThrows = concreteType.throwsTypes.length > 0;
@@ -322,7 +249,7 @@ export function lowerMonomorphizedFunction(
 
   // For throws functions: add __out and __err pointer params
   if (isThrows) {
-    addThrowsParams(this, params, originalReturnType);
+    this.addThrowsParams(params, originalReturnType);
   }
 
   // For throws functions, the actual return type is i32 (tag)
@@ -345,7 +272,7 @@ export function lowerMonomorphizedFunction(
   this.currentBodyTypeMap = null;
   this.currentBodyGenericResolutions = null;
 
-  finalizeFunctionBody(this, isThrows, returnType);
+  this.finalizeFunctionBody(isThrows, returnType);
 
   // Clear throws state
   this.currentFunctionThrowsTypes = [];
@@ -367,22 +294,6 @@ export function lowerMonomorphizedFunction(
   };
 }
 
-export function lowerEnumDecl(this: KirLowerer, decl: EnumDecl): KirTypeDecl {
-  const variants = decl.variants.map((v) => ({
-    name: v.name,
-    fields: v.fields.map((f) => ({
-      name: f.name,
-      type: this.lowerTypeNode(f.typeAnnotation),
-    })),
-    value: v.value?.kind === "IntLiteral" ? v.value.value : null,
-  }));
-
-  return {
-    name: decl.name,
-    type: { kind: "enum", name: decl.name, variants },
-  };
-}
-
 export function lowerStaticDecl(this: KirLowerer, decl: StaticDecl): KirGlobal {
   const type = decl.typeAnnotation
     ? this.lowerTypeNode(decl.typeAnnotation)
@@ -392,153 +303,5 @@ export function lowerStaticDecl(this: KirLowerer, decl: StaticDecl): KirGlobal {
     name: decl.name,
     type,
     initializer: null,
-  };
-}
-
-/**
- * Synthesize a __destroy KIR function for a struct with auto-generated destroy.
- * Emits field_ptr + call_extern_void("kei_string_destroy") for string fields,
- * and field_ptr + destroy for struct fields that have __destroy.
- */
-function lowerAutoDestroy(
-  lowerer: KirLowerer,
-  structName: string,
-  structType: StructType,
-  structPrefix: string
-): KirFunction {
-  const mangledName = `${structPrefix}___destroy`;
-  const structKirType: KirType = { kind: "struct", name: structName, fields: [] };
-  const selfType: KirType = { kind: "ptr", pointee: structKirType };
-
-  // Build instructions for the entry block
-  const insts: KirInst[] = [];
-  let varCounter = 0;
-  const freshVar = (): VarId => `%_v${varCounter++}` as VarId;
-
-  const selfVar: VarId = "%self" as VarId;
-
-  for (const [fieldName, fieldType] of structType.fields) {
-    if (fieldType.kind === "string") {
-      // Emit: fieldPtr = &self->fieldName; kei_string_destroy(fieldPtr);
-      const fieldPtr = freshVar();
-      const kirStringType: KirType = { kind: "string" };
-      insts.push({
-        kind: "field_ptr",
-        dest: fieldPtr,
-        base: selfVar,
-        field: fieldName,
-        type: kirStringType,
-      });
-      insts.push({ kind: "call_extern_void", func: "kei_string_destroy", args: [fieldPtr] });
-    } else if (fieldType.kind === "struct" && fieldType.methods.has("__destroy")) {
-      // Emit: fieldPtr = &self->fieldName; destroy fieldPtr (pointer to nested struct)
-      const fieldPtr = freshVar();
-      const kirFieldType: KirType = { kind: "struct", name: fieldType.name, fields: [] };
-      insts.push({
-        kind: "field_ptr",
-        dest: fieldPtr,
-        base: selfVar,
-        field: fieldName,
-        type: kirFieldType,
-      });
-      insts.push({ kind: "destroy", value: fieldPtr, structName: fieldType.name });
-    }
-  }
-
-  const entryBlock: KirBlock = {
-    id: "entry",
-    phis: [],
-    instructions: insts,
-    terminator: { kind: "ret_void" },
-  };
-
-  return {
-    name: mangledName,
-    params: [{ name: "self", type: selfType }],
-    returnType: { kind: "void" },
-    blocks: [entryBlock],
-    localCount: varCounter,
-  };
-}
-
-/**
- * Synthesize an __oncopy KIR function for a struct with auto-generated oncopy.
- * Takes self by pointer, increments refcounts for string fields via kei_string_copy,
- * calls nested __oncopy for struct fields, then loads and returns the modified struct.
- */
-function lowerAutoOncopy(
-  lowerer: KirLowerer,
-  structName: string,
-  structType: StructType,
-  structPrefix: string
-): KirFunction {
-  const mangledName = `${structPrefix}___oncopy`;
-  const structKirType: KirType = { kind: "struct", name: structName, fields: [] };
-  const selfType: KirType = { kind: "ptr", pointee: structKirType };
-
-  const insts: KirInst[] = [];
-  let varCounter = 0;
-  const freshVar = (): VarId => `%_v${varCounter++}` as VarId;
-
-  const selfVar: VarId = "%self" as VarId;
-
-  for (const [fieldName, fieldType] of structType.fields) {
-    if (fieldType.kind === "string") {
-      // fieldPtr = &self->fieldName; val = *fieldPtr; copied = kei_string_copy(val); *fieldPtr = copied;
-      const fieldPtr = freshVar();
-      const kirStringType: KirType = { kind: "string" };
-      insts.push({
-        kind: "field_ptr",
-        dest: fieldPtr,
-        base: selfVar,
-        field: fieldName,
-        type: kirStringType,
-      });
-      const loaded = freshVar();
-      insts.push({ kind: "load", dest: loaded, ptr: fieldPtr, type: kirStringType });
-      const copied = freshVar();
-      insts.push({
-        kind: "call_extern",
-        dest: copied,
-        func: "kei_string_copy",
-        args: [loaded],
-        type: kirStringType,
-      });
-      insts.push({ kind: "store", ptr: fieldPtr, value: copied });
-    } else if (fieldType.kind === "struct" && fieldType.methods.has("__oncopy")) {
-      // fieldPtr = &self->fieldName; val = *fieldPtr; oncopy val; *fieldPtr = val;
-      const fieldPtr = freshVar();
-      const kirFieldType: KirType = { kind: "struct", name: fieldType.name, fields: [] };
-      insts.push({
-        kind: "field_ptr",
-        dest: fieldPtr,
-        base: selfVar,
-        field: fieldName,
-        type: kirFieldType,
-      });
-      const loaded = freshVar();
-      insts.push({ kind: "load", dest: loaded, ptr: fieldPtr, type: kirFieldType });
-      insts.push({ kind: "oncopy", value: loaded, structName: fieldType.name });
-      insts.push({ kind: "store", ptr: fieldPtr, value: loaded });
-    }
-  }
-
-  // Load the modified struct and return it
-  const result = freshVar();
-  insts.push({ kind: "load", dest: result, ptr: selfVar, type: structKirType });
-
-  const entryBlock: KirBlock = {
-    id: "entry",
-    phis: [],
-    instructions: insts,
-    terminator: { kind: "ret", value: result },
-  };
-
-  return {
-    name: mangledName,
-    params: [{ name: "self", type: selfType }],
-    returnType: structKirType,
-    blocks: [entryBlock],
-    localCount: varCounter,
   };
 }

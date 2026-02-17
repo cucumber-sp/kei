@@ -5,7 +5,9 @@
  * Uses simple per-block variable tracking (no phi nodes / full SSA yet).
  *
  * Method implementations are split across:
- *   - lowering-decl.ts       (declaration lowering)
+ *   - lowering-decl.ts       (declaration dispatch, function/extern/static lowering)
+ *   - lowering-struct.ts     (struct declaration, method, lifecycle lowering)
+ *   - lowering-enum-decl.ts  (enum declaration lowering)
  *   - lowering-stmt.ts       (statement lowering)
  *   - lowering-expr.ts       (expression lowering)
  *   - lowering-literals.ts   (literal expression lowering)
@@ -36,12 +38,14 @@ import type {
 // Import extracted method implementations
 import * as declMethods from "./lowering-decl.ts";
 import * as enumMethods from "./lowering-enum.ts";
+import * as enumDeclMethods from "./lowering-enum-decl.ts";
 import * as errorMethods from "./lowering-error.ts";
 import * as exprMethods from "./lowering-expr.ts";
 import * as literalMethods from "./lowering-literals.ts";
 import * as operatorMethods from "./lowering-operators.ts";
 import * as scopeMethods from "./lowering-scope.ts";
 import * as stmtMethods from "./lowering-stmt.ts";
+import * as structMethods from "./lowering-struct.ts";
 import * as switchMethods from "./lowering-switch.ts";
 import * as typeMethods from "./lowering-types.ts";
 import * as utilMethods from "./lowering-utils.ts";
@@ -210,13 +214,20 @@ export class KirLowerer {
   // ─── Declaration methods (from lowering-decl.ts) ────────────────────────
   declare lowerDeclaration: typeof declMethods.lowerDeclaration;
   declare lowerFunction: typeof declMethods.lowerFunction;
-  declare lowerMethod: typeof declMethods.lowerMethod;
   declare lowerExternFunction: typeof declMethods.lowerExternFunction;
-  declare lowerStructDecl: typeof declMethods.lowerStructDecl;
-  declare lowerMonomorphizedStruct: typeof declMethods.lowerMonomorphizedStruct;
   declare lowerMonomorphizedFunction: typeof declMethods.lowerMonomorphizedFunction;
-  declare lowerEnumDecl: typeof declMethods.lowerEnumDecl;
   declare lowerStaticDecl: typeof declMethods.lowerStaticDecl;
+  declare resetFunctionState: typeof declMethods.resetFunctionState;
+  declare finalizeFunctionBody: typeof declMethods.finalizeFunctionBody;
+  declare addThrowsParams: typeof declMethods.addThrowsParams;
+
+  // ─── Struct methods (from lowering-struct.ts) ──────────────────────────
+  declare lowerStructDecl: typeof structMethods.lowerStructDecl;
+  declare lowerMonomorphizedStruct: typeof structMethods.lowerMonomorphizedStruct;
+  declare lowerMethod: typeof structMethods.lowerMethod;
+
+  // ─── Enum declaration methods (from lowering-enum-decl.ts) ─────────────
+  declare lowerEnumDecl: typeof enumDeclMethods.lowerEnumDecl;
 
   // ─── Statement methods (from lowering-stmt.ts) ─────────────────────────
   declare lowerBlock: typeof stmtMethods.lowerBlock;
@@ -329,13 +340,20 @@ export class KirLowerer {
 // Declaration methods
 KirLowerer.prototype.lowerDeclaration = declMethods.lowerDeclaration;
 KirLowerer.prototype.lowerFunction = declMethods.lowerFunction;
-KirLowerer.prototype.lowerMethod = declMethods.lowerMethod;
 KirLowerer.prototype.lowerExternFunction = declMethods.lowerExternFunction;
-KirLowerer.prototype.lowerStructDecl = declMethods.lowerStructDecl;
-KirLowerer.prototype.lowerMonomorphizedStruct = declMethods.lowerMonomorphizedStruct;
 KirLowerer.prototype.lowerMonomorphizedFunction = declMethods.lowerMonomorphizedFunction;
-KirLowerer.prototype.lowerEnumDecl = declMethods.lowerEnumDecl;
 KirLowerer.prototype.lowerStaticDecl = declMethods.lowerStaticDecl;
+KirLowerer.prototype.resetFunctionState = declMethods.resetFunctionState;
+KirLowerer.prototype.finalizeFunctionBody = declMethods.finalizeFunctionBody;
+KirLowerer.prototype.addThrowsParams = declMethods.addThrowsParams;
+
+// Struct methods
+KirLowerer.prototype.lowerStructDecl = structMethods.lowerStructDecl;
+KirLowerer.prototype.lowerMonomorphizedStruct = structMethods.lowerMonomorphizedStruct;
+KirLowerer.prototype.lowerMethod = structMethods.lowerMethod;
+
+// Enum declaration methods
+KirLowerer.prototype.lowerEnumDecl = enumDeclMethods.lowerEnumDecl;
 
 // Statement methods
 KirLowerer.prototype.lowerBlock = stmtMethods.lowerBlock;
