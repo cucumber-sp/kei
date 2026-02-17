@@ -14,6 +14,7 @@ const CHAR_a = 97;
 const CHAR_f = 102;
 const CHAR_A = 65;
 const CHAR_F = 70;
+const CHAR_7 = 55;
 const CHAR_UNDERSCORE = 95;
 
 function isDigit(ch: string): boolean {
@@ -47,7 +48,7 @@ function isBinaryDigit(ch: string): boolean {
 
 function isOctalDigit(ch: string): boolean {
   const code = ch.charCodeAt(0);
-  return code >= CHAR_0 && code <= 55; // '7' = 55
+  return code >= CHAR_0 && code <= CHAR_7;
 }
 
 export class Lexer {

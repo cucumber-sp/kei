@@ -3,9 +3,9 @@
  * Implements nested lexical scopes with symbol lookup.
  */
 
-import type { FunctionOverload, FunctionSymbol, ScopeSymbol } from "./symbols.ts";
+import type { FunctionSymbol, ScopeSymbol } from "./symbols.ts";
 import { SymbolKind } from "./symbols.ts";
-import type { FunctionType } from "./types.ts";
+import { typesEqual, type FunctionType } from "./types.ts";
 
 export class Scope {
   readonly parent: Scope | null;
@@ -65,30 +65,9 @@ export class Scope {
       const ap = a.params[i];
       const bp = b.params[i];
       if (!ap || !bp) return false;
-      if (!this.typesEqualForOverload(ap.type, bp.type)) return false;
+      if (!typesEqual(ap.type, bp.type)) return false;
     }
     return true;
-  }
-
-  /** Structural type equality check for overload resolution. */
-  private typesEqualForOverload(a: import("./types.ts").Type, b: import("./types.ts").Type): boolean {
-    if (a.kind !== b.kind) return false;
-    switch (a.kind) {
-      case "int":
-        return a.bits === (b as any).bits && a.signed === (b as any).signed;
-      case "float":
-        return a.bits === (b as any).bits;
-      case "bool": case "void": case "string": case "null": case "error": case "c_char":
-        return true;
-      case "struct":
-        return a.name === (b as any).name;
-      case "enum":
-        return a.name === (b as any).name;
-      case "type_param":
-        return a.name === (b as any).name;
-      default:
-        return a.kind === b.kind;
-    }
   }
 
   /** Look up a symbol by name, searching up through parent scopes. */

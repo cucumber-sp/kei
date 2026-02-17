@@ -35,9 +35,12 @@ import {
   typeToString,
 } from "./types.ts";
 
+const I32_MIN = -2147483648;
+const I32_MAX = 2147483647;
+
 export function checkIntLiteral(expr: IntLiteral): Type {
   const v = expr.value;
-  if (v >= -2147483648 && v <= 2147483647) {
+  if (v >= I32_MIN && v <= I32_MAX) {
     return I32_TYPE;
   }
   return I64_TYPE;
