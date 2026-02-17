@@ -144,7 +144,10 @@ export function checkStructLiteral(checker: Checker, expr: StructLiteral): Type 
       // Check if this is a literal that can be implicitly converted
       const litInfo = extractLiteralInfo(field.value);
       const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, expectedType);
-      if (!isLiteralOk) {
+      if (isLiteralOk) {
+        // Update typeMap so KIR lowering uses the correct type (e.g. i32 literal → f64)
+        checker.setExprType(field.value, expectedType);
+      } else {
         checker.error(
           `field '${field.name}': expected '${typeToString(expectedType)}', got '${typeToString(valueType)}'`,
           field.span
