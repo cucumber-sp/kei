@@ -2,6 +2,7 @@
 
 Compiler implementation audited against `spec/01-design.md` through `spec/13-grammar.md`.
 Date: 2026-02-17
+Last updated: 2026-02-18
 
 Legend:
 - **MISSING** — spec describes it, compiler doesn't implement it
@@ -15,8 +16,8 @@ Legend:
 
 Design principles document — no testable features. Used as reference for intent.
 
-- DIVERGENT: Spec describes `unsafe struct` requiring `__destroy` when `ptr<T>` fields present, but regular `struct` is not prevented from containing `ptr<T>` fields. The compiler should reject `ptr<T>` in regular structs but doesn't.
-- MISSING: Auto-generated `__oncopy`/`__destroy` for value structs with managed fields (e.g., struct containing `string`). Compiler does not auto-generate lifecycle hooks — they must be defined explicitly.
+- ~~DIVERGENT~~ **FIXED**: Regular `struct` now correctly rejects `ptr<T>` fields (requires `unsafe struct`).
+- ~~MISSING~~ **FIXED**: Auto-generated `__oncopy`/`__destroy` for value structs with managed fields is now implemented.
 - MISSING: `move` keyword for zero-cost ownership transfer is parsed and checked but has no effect in codegen (no lifecycle elision in KIR/backend).
 
 ---
@@ -68,12 +69,12 @@ Design principles document — no testable features. Used as reference for inten
 - User-defined type aliases (`type UserId = int;` — fully transparent)
 
 ### Findings
-- MISSING: Numeric literal suffixes (`42u32`, `2.5f32`). Lexer doesn't parse type suffixes on literals. All integer literals default to `int` (i32), all float literals default to `double` (f64).
+- ~~MISSING~~ **FIXED**: Numeric literal suffixes (`42u32`, `2.5f32`) are now supported.
 - DIVERGENT: `array<T, N>` fixed-size array type — spec says `let a: array<int, 3> = [1, 2, 3]` with explicit length parameter. Compiler uses array literal syntax `[1, 2, 3]` with length inferred; cannot write `array<int, 3>` as a type annotation.
 - MISSING: `array<T>` heap-allocated dynamic array with COW semantics — type parses but no stdlib implementation exists (no `__oncopy`/`__destroy` for refcounted arrays).
 - MISSING: `List<T>` growable collection — not in compiler or stdlib.
 - MISSING: `slice<T>` semantics — type exists in checker, range syntax `arr[1..4]` parses, but automatic array→slice conversion not implemented. Slices are not usable end-to-end.
-- MISSING: `uint` type alias — keyword is tokenized but not registered in the primitive type map in `builtins.ts`. Using `uint` in code will fail type resolution.
+- ~~MISSING~~ **FIXED**: `uint` type alias is now registered in the primitive type map.
 - DIVERGENT: `string` is a builtin type in the compiler, not an `unsafe struct` in stdlib as spec describes. No COW semantics, no refcounting — string literals work but the memory model described in spec is not implemented.
 
 ---
@@ -111,7 +112,7 @@ No divergences found. All variable features match spec.
 - `require(cond)` and `require(cond, "message")` — always-on check
 
 ### Findings
-- MISSING: `switch` as expression — spec shows `let x = switch val { case 1: "a"; default: "b"; }` but only `SwitchStmt` exists in AST, no `SwitchExpr`. Cannot use switch in expression position.
+- ~~MISSING~~ **FIXED**: `switch` as expression is now implemented.
 - MISSING: `switch` range matching — spec shows `case 4..10:` but no evidence this is handled in KIR lowering/backend (parser may accept range expressions as case values but semantics unclear).
 
 ---
@@ -150,8 +151,8 @@ No divergences found. All variable features match spec.
 - Struct literal syntax (`Point{ x: 1.0, y: 2.0 }`)
 
 ### Findings
-- DIVERGENT: Regular `struct` can contain `ptr<T>` fields without error. Spec (01-design.md line 71) says regular structs "Cannot contain `ptr<T>`" — this should be a compile error but isn't enforced.
-- MISSING: Auto-generated `__destroy`/`__oncopy` for regular structs with managed fields. Spec says compiler auto-generates recursive lifecycle hooks for structs containing fields with hooks (e.g., a struct with a `string` field). Not implemented.
+- ~~DIVERGENT~~ **FIXED**: Regular `struct` now correctly rejects `ptr<T>` fields (requires `unsafe struct`).
+- ~~MISSING~~ **FIXED**: Auto-generated `__destroy`/`__oncopy` for regular structs with managed fields is now implemented.
 
 ---
 
@@ -168,9 +169,9 @@ No divergences found. All variable features match spec.
 - Scope-exit `__destroy` calls (KIR emits destroy in reverse declaration order)
 
 ### Findings
-- DIVERGENT: `alloc<T>(count)` returns `ptr<void>` instead of `ptr<T>`. Spec signature is `alloc<T>(count: usize) -> ptr<T>` but implementation ignores the type parameter for the return type. Users must cast the result.
-- MISSING: Auto-generated lifecycle hooks for value structs (same as 07-structures finding).
-- MISSING: Reassignment calling `__destroy` on old value. Spec says `user.name = "Bob"` should call `__destroy` on old `user.name` first, then copy+`__oncopy` new value. Only scope-exit destroys are implemented, not field/variable reassignment destroys.
+- ~~DIVERGENT~~ **FIXED**: `alloc<T>(count)` now returns `ptr<T>` as spec requires.
+- ~~MISSING~~ **FIXED**: Auto-generated lifecycle hooks for value structs (same as 07-structures fix).
+- ~~MISSING~~ **FIXED**: Reassignment now calls `__destroy` on old value before storing the new value.
 
 ---
 
@@ -189,7 +190,7 @@ No divergences found. All variable features match spec.
 - `enum` with data variants (`enum Shape { Circle(radius: f64), Point }`) — parsing and type checking
 
 ### Findings
-- PARTIAL: Enum with data variants — parser and checker handle the syntax, KIR lowering produces type declarations, but C backend only emits simple C enums (no tagged unions for data variants). Cannot compile programs using data variant enums end-to-end.
+- ~~PARTIAL~~ **FIXED**: Enum data variants now fully work end-to-end — tagged union C structs, construction, switch on tags, and variant destructuring are all implemented.
 - PARTIAL: Simple numeric enums — type declarations are lowered and emitted as C enums, but switch-on-enum codegen may have gaps for complex patterns.
 
 ---
@@ -254,7 +255,7 @@ Skipping deep KIR internals audit per instructions. High-level:
 
 ### Findings
 - MISSING: `dynarray<T>` — listed in grammar type production but not implemented. `array<T>` is used instead as the dynamic array syntax.
-- MISSING: `uint` primitive type — listed in grammar but not registered in checker (keyword exists, type resolution fails).
+- ~~MISSING~~ **FIXED**: `uint` primitive type is now registered in the checker.
 - DIVERGENT: Keyword list differences between spec sections — `02-lexical.md` has a smaller keyword list than `13-grammar.md`. The compiler follows the larger list from `13-grammar.md`.
 
 ---
@@ -263,42 +264,42 @@ Skipping deep KIR internals audit per instructions. High-level:
 
 ### MISSING (spec says X, compiler doesn't implement it)
 
-| # | Feature | Spec Section | Severity |
-|---|---------|-------------|----------|
-| 1 | Numeric literal suffixes (`42u32`, `2.5f32`) | 03-types | Medium |
-| 2 | `array<T>` heap array with COW stdlib | 03-types | High |
-| 3 | `List<T>` growable collection | 03-types | Medium |
-| 4 | `slice<T>` usable semantics + array→slice conversion | 03-types | High |
-| 5 | `uint` type mapping in checker | 03-types, 13-grammar | Low |
-| 6 | `switch` as expression | 05-control | Medium |
-| 7 | `switch` range matching (`case 4..10:`) | 05-control | Low |
-| 8 | `main()` must return `int` validation | 06-functions | Low |
-| 9 | Variadic extern (`...`) | 06-functions | Low |
-| 10 | Auto-generated `__destroy`/`__oncopy` for value structs | 07-structures, 08-memory | High |
-| 11 | Reassignment `__destroy` on old value | 08-memory | High |
-| 12 | `alloc<T>` returning `ptr<T>` (not `ptr<void>`) | 08-memory | Medium |
-| 13 | Debug checks: overflow, null, move | 11-compilation | Medium |
-| 14 | Optimization passes (constant folding, inlining, etc.) | 11-compilation, 12-kir | Low |
-| 15 | `dynarray<T>` type from grammar | 13-grammar | Low |
+| # | Feature | Spec Section | Severity | Status |
+|---|---------|-------------|----------|--------|
+| 1 | ~~Numeric literal suffixes (`42u32`, `2.5f32`)~~ | 03-types | Medium | **FIXED** |
+| 2 | `array<T>` heap array with COW stdlib | 03-types | High | |
+| 3 | `List<T>` growable collection | 03-types | Medium | |
+| 4 | `slice<T>` usable semantics + array→slice conversion | 03-types | High | |
+| 5 | ~~`uint` type mapping in checker~~ | 03-types, 13-grammar | Low | **FIXED** |
+| 6 | ~~`switch` as expression~~ | 05-control | Medium | **FIXED** |
+| 7 | `switch` range matching (`case 4..10:`) | 05-control | Low | |
+| 8 | `main()` must return `int` validation | 06-functions | Low | |
+| 9 | Variadic extern (`...`) | 06-functions | Low | |
+| 10 | ~~Auto-generated `__destroy`/`__oncopy` for value structs~~ | 07-structures, 08-memory | High | **FIXED** |
+| 11 | ~~Reassignment `__destroy` on old value~~ | 08-memory | High | **FIXED** |
+| 12 | ~~`alloc<T>` returning `ptr<T>` (not `ptr<void>`)~~ | 08-memory | Medium | **FIXED** |
+| 13 | Debug checks: overflow, null, move | 11-compilation | Medium | |
+| 14 | Optimization passes (constant folding, inlining, etc.) | 11-compilation, 12-kir | Low | |
+| 15 | `dynarray<T>` type from grammar | 13-grammar | Low | |
 
 ### DIVERGENT (compiler implements it differently from spec)
 
-| # | Feature | Spec Says | Compiler Does |
-|---|---------|-----------|---------------|
-| 1 | `array<T, N>` type syntax | `array<int, 3>` with explicit length | Length inferred from literal only |
-| 2 | `string` implementation | `unsafe struct` in stdlib with COW | Builtin type, no COW |
-| 3 | Regular struct with `ptr<T>` | Forbidden (requires `unsafe struct`) | Allowed without error |
-| 4 | `alloc<T>` return type | `ptr<T>` | `ptr<void>` |
-| 5 | Keyword list (02-lexical) | 25 keywords | 60+ keywords (includes types, builtins) |
+| # | Feature | Spec Says | Compiler Does | Status |
+|---|---------|-----------|---------------|--------|
+| 1 | `array<T, N>` type syntax | `array<int, 3>` with explicit length | Length inferred from literal only | |
+| 2 | `string` implementation | `unsafe struct` in stdlib with COW | Builtin type, no COW | |
+| 3 | ~~Regular struct with `ptr<T>`~~ | ~~Forbidden (requires `unsafe struct`)~~ | ~~Allowed without error~~ | **FIXED** |
+| 4 | ~~`alloc<T>` return type~~ | ~~`ptr<T>`~~ | ~~`ptr<void>`~~ | **FIXED** |
+| 5 | Keyword list (02-lexical) | 25 keywords | 60+ keywords (includes types, builtins) | |
 
 ### PARTIAL (parser/checker work, backend doesn't)
 
-| # | Feature | What Works | What Doesn't |
-|---|---------|-----------|--------------|
-| 1 | Enum data variants | Parsing, type checking | KIR lowers type only, C backend emits simple enum (no tagged union) |
-| 2 | Generic monomorphization | Checker-level substitution, name mangling | KIR/C backend not updated for generics |
-| 3 | Operator overloading | Checker resolution (`operatorMethods` map) | KIR/C backend not updated |
-| 4 | `move` keyword | Parsing, use-after-move detection | No lifecycle elision in codegen |
+| # | Feature | What Works | What Doesn't | Status |
+|---|---------|-----------|--------------|--------|
+| 1 | ~~Enum data variants~~ | ~~Parsing, type checking~~ | ~~KIR lowers type only, C backend emits simple enum (no tagged union)~~ | **FIXED** |
+| 2 | Generic monomorphization | Checker-level substitution, name mangling, generic struct literals in generic functions, generic function chains | KIR/C backend not updated for generics | **PARTIAL FIX** |
+| 3 | Operator overloading | Checker resolution (`operatorMethods` map) | KIR/C backend not updated | |
+| 4 | `move` keyword | Parsing, use-after-move detection | No lifecycle elision in codegen | |
 
 ### EXTRA (compiler implements what's not in spec)
 
