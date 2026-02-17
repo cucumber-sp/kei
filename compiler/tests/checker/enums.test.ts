@@ -267,4 +267,75 @@ describe("Checker — Enums", () => {
       "has no variant 'Triangle'"
     );
   });
+
+  test("switch with destructuring: single binding → ok", () => {
+    checkOk(`
+      enum Shape { Circle(radius: f64), Point }
+      fn main() -> int {
+        let s: Shape = Shape.Circle(3.14);
+        switch s {
+          case Circle(r): return 1;
+          case Point: return 0;
+        }
+      }
+    `);
+  });
+
+  test("switch with destructuring: multiple bindings → ok", () => {
+    checkOk(`
+      enum Shape { Circle(radius: f64), Rect(w: f64, h: f64), Point }
+      fn main() -> int {
+        let s: Shape = Shape.Rect(1.0, 2.0);
+        switch s {
+          case Circle(r): return 1;
+          case Rect(w, h): return 2;
+          case Point: return 0;
+        }
+      }
+    `);
+  });
+
+  test("switch with destructuring: wrong binding count → error", () => {
+    checkError(
+      `
+        enum Shape { Circle(radius: f64), Point }
+        fn main() -> int {
+          let s: Shape = Shape.Circle(3.14);
+          switch s {
+            case Circle(r, extra): return 1;
+            case Point: return 0;
+          }
+        }
+      `,
+      "has 1 field(s), but 2 binding(s) provided"
+    );
+  });
+
+  test("switch with destructuring: binding type is correct", () => {
+    checkOk(`
+      enum Shape { Circle(radius: f64), Point }
+      fn area(s: Shape) -> f64 {
+        switch s {
+          case Circle(r): return r;
+          case Point: return 0.0;
+        }
+      }
+    `);
+  });
+
+  test("switch with destructuring: fieldless variant with bindings → error", () => {
+    checkError(
+      `
+        enum Shape { Circle(radius: f64), Point }
+        fn main() -> int {
+          let s: Shape = Shape.Point;
+          switch s {
+            case Circle(r): return 1;
+            case Point(x): return 0;
+          }
+        }
+      `,
+      "has 0 field(s), but 1 binding(s) provided"
+    );
+  });
 });

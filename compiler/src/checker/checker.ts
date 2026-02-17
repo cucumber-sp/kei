@@ -10,6 +10,7 @@ import type {
   ImportDecl,
   Program,
   Statement,
+  SwitchCase,
   TypeNode,
 } from "../ast/nodes.ts";
 import type { Diagnostic, SourceLocation } from "../errors/diagnostic.ts";
@@ -40,6 +41,8 @@ export interface CheckResult {
   autoDestroyStructs: Map<string, StructType>;
   /** Struct types that have auto-generated __oncopy (name → checker StructType) */
   autoOncopyStructs: Map<string, StructType>;
+  /** Destructuring bindings for switch cases on data enum variants */
+  switchCaseBindings: Map<SwitchCase, { variantName: string; fieldNames: string[]; fieldTypes: Type[] }>;
 }
 
 /** Info about a module to check in multi-module mode */
@@ -72,6 +75,8 @@ export interface MultiModuleCheckResult {
   autoDestroyStructs: Map<string, StructType>;
   /** Combined auto-oncopy struct types */
   autoOncopyStructs: Map<string, StructType>;
+  /** Combined switch case destructuring bindings */
+  switchCaseBindings: Map<SwitchCase, { variantName: string; fieldNames: string[]; fieldTypes: Type[] }>;
 }
 
 export class Checker {
@@ -102,6 +107,9 @@ export class Checker {
 
   /** Maps generic call/struct literal expressions to their resolved mangled names */
   genericResolutions: Map<Expression, string> = new Map();
+
+  /** Destructuring bindings for switch cases on data enum variants */
+  switchCaseBindings: Map<SwitchCase, { variantName: string; fieldNames: string[]; fieldTypes: Type[] }> = new Map();
 
   /** Per-instantiation type map, set during checkMonomorphizedBodies */
   private currentBodyTypeMap: Map<Expression, Type> | null = null;
@@ -243,6 +251,7 @@ export class Checker {
       genericResolutions: this.genericResolutions,
       autoDestroyStructs,
       autoOncopyStructs,
+      switchCaseBindings: this.switchCaseBindings,
     };
   }
 
@@ -345,6 +354,7 @@ export class Checker {
     const combinedGenericResolutions = new Map<Expression, string>();
     const combinedAutoDestroy = new Map<string, StructType>();
     const combinedAutoOncopy = new Map<string, StructType>();
+    const combinedSwitchCaseBindings = new Map<SwitchCase, { variantName: string; fieldNames: string[]; fieldTypes: Type[] }>();
 
     for (const mod of modules) {
       const checker = new Checker(mod.program, mod.source);
@@ -375,6 +385,9 @@ export class Checker {
       for (const [name, st] of result.autoOncopyStructs) {
         combinedAutoOncopy.set(name, st);
       }
+      for (const [sc, info] of result.switchCaseBindings) {
+        combinedSwitchCaseBindings.set(sc, info);
+      }
       combinedDiags.push(...result.diagnostics);
 
       // Collect this module's public symbols for use by later modules
@@ -393,6 +406,7 @@ export class Checker {
       genericResolutions: combinedGenericResolutions,
       autoDestroyStructs: combinedAutoDestroy,
       autoOncopyStructs: combinedAutoOncopy,
+      switchCaseBindings: combinedSwitchCaseBindings,
     };
   }
 

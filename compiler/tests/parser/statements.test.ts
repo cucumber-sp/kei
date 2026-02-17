@@ -93,8 +93,29 @@ describe("Parser — Statements", () => {
     if (stmt.kind !== "SwitchStmt") return;
     expect(stmt.cases).toHaveLength(3);
     expect(stmt.cases[0]?.values).toHaveLength(1);
+    expect(stmt.cases[0]?.bindings).toBeNull();
     expect(stmt.cases[1]?.values).toHaveLength(2);
+    expect(stmt.cases[1]?.bindings).toBeNull();
     expect(stmt.cases[2]?.isDefault).toBe(true);
+    expect(stmt.cases[2]?.bindings).toBeNull();
+  });
+
+  test("switch case with destructuring bindings", () => {
+    const stmt = parseFirst("switch val { case Circle(r): x = r; case Point: x = 0; }");
+    expect(stmt.kind).toBe("SwitchStmt");
+    if (stmt.kind !== "SwitchStmt") return;
+    expect(stmt.cases).toHaveLength(2);
+    expect(stmt.cases[0]?.values).toHaveLength(1);
+    expect(stmt.cases[0]?.values[0]?.kind).toBe("Identifier");
+    expect(stmt.cases[0]?.bindings).toEqual(["r"]);
+    expect(stmt.cases[1]?.bindings).toBeNull();
+  });
+
+  test("switch case with multiple destructuring bindings", () => {
+    const stmt = parseFirst("switch val { case Rect(w, h): x = w; }");
+    expect(stmt.kind).toBe("SwitchStmt");
+    if (stmt.kind !== "SwitchStmt") return;
+    expect(stmt.cases[0]?.bindings).toEqual(["w", "h"]);
   });
 
   test("defer", () => {

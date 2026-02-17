@@ -14,6 +14,7 @@ import type {
   RequireStmt,
   ReturnStmt,
   Statement,
+  SwitchCase,
   SwitchStmt,
   WhileStmt,
 } from "../ast/nodes.ts";
@@ -398,7 +399,7 @@ export function lowerSwitchStmt(this: KirLowerer, stmt: SwitchStmt): void {
 
   const caseLabels: { value: VarId; target: string }[] = [];
   let defaultLabel = endLabel;
-  const caseBlocks: { label: string; stmts: Statement[]; isDefault: boolean }[] = [];
+  const caseBlocks: { label: string; stmts: Statement[]; isDefault: boolean; astCase: SwitchCase }[] = [];
 
   for (const c of stmt.cases) {
     const label = c.isDefault
@@ -431,7 +432,7 @@ export function lowerSwitchStmt(this: KirLowerer, stmt: SwitchStmt): void {
       caseLabels.push({ value: valId, target: label });
     }
 
-    caseBlocks.push({ label, stmts: c.body, isDefault: c.isDefault });
+    caseBlocks.push({ label, stmts: c.body, isDefault: c.isDefault, astCase: c });
   }
 
   this.setTerminator({
@@ -445,6 +446,18 @@ export function lowerSwitchStmt(this: KirLowerer, stmt: SwitchStmt): void {
   for (const cb of caseBlocks) {
     this.sealCurrentBlock();
     this.startBlock(cb.label);
+
+    // Emit destructuring bindings: load variant fields from the enum subject
+    const bindingInfo = this.checkResult.switchCaseBindings?.get(cb.astCase);
+    if (bindingInfo && cb.astCase.bindings) {
+      for (let i = 0; i < cb.astCase.bindings.length; i++) {
+        const fieldPath = `data.${bindingInfo.variantName}.${bindingInfo.fieldNames[i]}`;
+        const fieldType = this.lowerCheckerType(bindingInfo.fieldTypes[i]);
+        const loadedVal = this.emitFieldLoad(subjectId, fieldPath, fieldType);
+        this.varMap.set(cb.astCase.bindings[i], loadedVal);
+      }
+    }
+
     for (const s of cb.stmts) {
       this.lowerStatement(s);
     }

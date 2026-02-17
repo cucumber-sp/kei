@@ -166,6 +166,7 @@ export function parseSwitchCase(ctx: ParserContext): SwitchCase {
     return {
       kind: "SwitchCase",
       values: [],
+      bindings: null,
       body,
       isDefault: true,
       span: {
@@ -176,16 +177,43 @@ export function parseSwitchCase(ctx: ParserContext): SwitchCase {
   }
 
   const startToken = ctx.expect(TokenKind.Case);
-  const values: Expression[] = [ctx.parseExpression()];
-  while (ctx.match(TokenKind.Comma)) {
+
+  // Check for destructuring: case VariantName(binding1, binding2):
+  // Must lookahead before parseExpression, which would consume `Name(...)` as CallExpr
+  let bindings: string[] | null = null;
+  const values: Expression[] = [];
+
+  if (ctx.check(TokenKind.Identifier) && ctx.peekNext()?.kind === TokenKind.LeftParen) {
+    // Parse as destructuring: identifier + parenthesized bindings
+    const identToken = ctx.expectIdentifier();
+    values.push({
+      kind: "Identifier",
+      name: identToken.lexeme,
+      span: identToken.span,
+    } as Expression);
+    ctx.expect(TokenKind.LeftParen);
+    bindings = [];
+    while (!ctx.check(TokenKind.RightParen) && !ctx.isAtEnd()) {
+      bindings.push(ctx.expectIdentifier().lexeme);
+      if (!ctx.check(TokenKind.RightParen)) {
+        ctx.expect(TokenKind.Comma);
+      }
+    }
+    ctx.expect(TokenKind.RightParen);
+  } else {
     values.push(ctx.parseExpression());
+    while (ctx.match(TokenKind.Comma)) {
+      values.push(ctx.parseExpression());
+    }
   }
+
   ctx.expect(TokenKind.Colon);
   const body = parseCaseBody(ctx);
 
   return {
     kind: "SwitchCase",
     values,
+    bindings,
     body,
     isDefault: false,
     span: {

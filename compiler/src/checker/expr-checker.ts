@@ -334,6 +334,19 @@ export class ExpressionChecker {
                 `enum '${subjectType.name}' has no variant '${value.name}'`,
                 value.span
               );
+            } else if (switchCase.bindings) {
+              if (switchCase.bindings.length !== variant.fields.length) {
+                this.checker.error(
+                  `variant '${variant.name}' has ${variant.fields.length} field(s), but ${switchCase.bindings.length} binding(s) provided`,
+                  value.span
+                );
+              } else {
+                this.checker.switchCaseBindings.set(switchCase, {
+                  variantName: variant.name,
+                  fieldNames: variant.fields.map((f) => f.name),
+                  fieldTypes: variant.fields.map((f) => f.type),
+                });
+              }
             }
           } else {
             const valueType = this.checker.checkExpression(value);
@@ -351,6 +364,23 @@ export class ExpressionChecker {
 
       // Get the type of the last expression in the case body
       this.checker.pushScope({});
+
+      // Define destructuring bindings in the case scope
+      if (switchCase.bindings && !switchCase.isDefault) {
+        const bindingInfo = this.checker.switchCaseBindings.get(switchCase);
+        if (bindingInfo) {
+          for (let i = 0; i < switchCase.bindings.length; i++) {
+            this.checker.defineVariable(
+              switchCase.bindings[i],
+              bindingInfo.fieldTypes[i],
+              false,
+              true,
+              switchCase.span
+            );
+          }
+        }
+      }
+
       let caseType: Type = VOID_TYPE;
       for (const s of switchCase.body) {
         if (s.kind === "ExprStmt") {

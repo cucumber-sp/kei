@@ -79,6 +79,8 @@ export interface SwitchCase extends BaseNode {
   kind: "SwitchCase";
   /** Match values (empty when `isDefault` is true). */
   values: Expression[];
+  /** Destructuring bindings for data enum variants: `case Circle(r):` → ["r"] */
+  bindings: string[] | null;
   body: Statement[];
   isDefault: boolean;
 }

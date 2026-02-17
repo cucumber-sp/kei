@@ -295,6 +295,21 @@ export class StatementChecker {
                 `enum '${subjectType.name}' has no variant '${value.name}'`,
                 value.span
               );
+            } else if (switchCase.bindings) {
+              // Validate destructuring bindings against variant fields
+              if (switchCase.bindings.length !== variant.fields.length) {
+                this.checker.error(
+                  `variant '${variant.name}' has ${variant.fields.length} field(s), but ${switchCase.bindings.length} binding(s) provided`,
+                  value.span
+                );
+              } else {
+                // Store binding info for KIR lowering
+                this.checker.switchCaseBindings.set(switchCase, {
+                  variantName: variant.name,
+                  fieldNames: variant.fields.map((f) => f.name),
+                  fieldTypes: variant.fields.map((f) => f.type),
+                });
+              }
             }
           } else {
             const valueType = this.checker.checkExpression(value);
@@ -312,6 +327,23 @@ export class StatementChecker {
 
       // Check case body
       this.checker.pushScope({});
+
+      // Define destructuring bindings in the case scope
+      if (switchCase.bindings && !switchCase.isDefault) {
+        const bindingInfo = this.checker.switchCaseBindings.get(switchCase);
+        if (bindingInfo) {
+          for (let i = 0; i < switchCase.bindings.length; i++) {
+            this.checker.defineVariable(
+              switchCase.bindings[i],
+              bindingInfo.fieldTypes[i],
+              false, // not mutable
+              true,  // const
+              switchCase.span
+            );
+          }
+        }
+      }
+
       let caseReturns = false;
       for (const s of switchCase.body) {
         if (caseReturns) {

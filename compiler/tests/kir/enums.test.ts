@@ -220,3 +220,87 @@ describe("KIR — Switch on data variant enum tags", () => {
     expect(switches.length).toBe(1);
   });
 });
+
+describe("KIR — Enum variant destructuring in switch", () => {
+  test("destructuring single field emits field_ptr to data.VariantName.fieldName", () => {
+    const fn = lowerFunction(
+      `
+      enum Shape { Circle(radius: f64), Point }
+      fn main() -> int {
+        let s: Shape = Shape.Circle(3.14);
+        switch s {
+          case Circle(r): return 1;
+          case Point: return 0;
+        }
+        return 0;
+      }
+      `,
+      "main"
+    );
+
+    const fieldPtrs = getInstructions(fn, "field_ptr");
+    const dataPtr = fieldPtrs.find(
+      (i) => i.kind === "field_ptr" && i.field === "data.Circle.radius"
+    );
+    // At least one for construction + one for destructuring
+    expect(dataPtr).toBeDefined();
+
+    // Should have loads for the destructured field
+    const loads = getInstructions(fn, "load");
+    expect(loads.length).toBeGreaterThan(0);
+  });
+
+  test("destructuring multiple fields emits field_ptrs for each field", () => {
+    const fn = lowerFunction(
+      `
+      enum Shape { Circle(radius: f64), Rect(w: f64, h: f64), Point }
+      fn main() -> int {
+        let s: Shape = Shape.Rect(1.0, 2.0);
+        switch s {
+          case Circle(r): return 1;
+          case Rect(w, h): return 2;
+          case Point: return 0;
+        }
+        return 0;
+      }
+      `,
+      "main"
+    );
+
+    const fieldPtrs = getInstructions(fn, "field_ptr");
+    // Should have field_ptrs for data.Rect.w and data.Rect.h from destructuring
+    const wPtrs = fieldPtrs.filter(
+      (i) => i.kind === "field_ptr" && i.field === "data.Rect.w"
+    );
+    const hPtrs = fieldPtrs.filter(
+      (i) => i.kind === "field_ptr" && i.field === "data.Rect.h"
+    );
+    // At least 1 from construction + 1 from destructuring for each
+    expect(wPtrs.length).toBeGreaterThanOrEqual(2);
+    expect(hPtrs.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test("non-destructuring case has no extra field_ptrs for data fields", () => {
+    const fn = lowerFunction(
+      `
+      enum Shape { Circle(radius: f64), Point }
+      fn main() -> int {
+        let s: Shape = Shape.Circle(3.14);
+        switch s {
+          case Circle: return 1;
+          case Point: return 0;
+        }
+        return 0;
+      }
+      `,
+      "main"
+    );
+
+    const fieldPtrs = getInstructions(fn, "field_ptr");
+    // Only the construction field_ptrs for data.Circle.radius (1) + tag (2)
+    const dataRadiusPtrs = fieldPtrs.filter(
+      (i) => i.kind === "field_ptr" && i.field === "data.Circle.radius"
+    );
+    expect(dataRadiusPtrs.length).toBe(1); // Only from construction
+  });
+});
