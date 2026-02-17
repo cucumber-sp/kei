@@ -4,8 +4,10 @@ import { parse } from "./helpers.ts";
 
 function parseExpr(exprStr: string): Expression {
   const program = parse(`fn test() { let _r = ${exprStr}; }`);
+  // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
   const fn = program.declarations[0]!;
   if (fn.kind !== "FunctionDecl") throw new Error("Expected FunctionDecl");
+  // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one statement
   const stmt = fn.body.statements[0]!;
   if (stmt.kind !== "LetStmt") throw new Error("Expected LetStmt");
   return stmt.initializer;

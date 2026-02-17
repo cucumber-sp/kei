@@ -5,6 +5,7 @@ describe("Parser — Declarations", () => {
   test("simple function", () => {
     const program = parse("fn add(a: int, b: int) -> int { return a + b; }");
     expect(program.declarations).toHaveLength(1);
+    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const fn = program.declarations[0]!;
     expect(fn.kind).toBe("FunctionDecl");
     if (fn.kind !== "FunctionDecl") return;
@@ -18,6 +19,7 @@ describe("Parser — Declarations", () => {
 
   test("void function", () => {
     const program = parse("fn greet() { }");
+    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const fn = program.declarations[0]!;
     expect(fn.kind).toBe("FunctionDecl");
     if (fn.kind !== "FunctionDecl") return;
@@ -28,6 +30,7 @@ describe("Parser — Declarations", () => {
 
   test("function with throws", () => {
     const program = parse("fn get() -> int throws NotFound, DbError { return 0; }");
+    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const fn = program.declarations[0]!;
     if (fn.kind !== "FunctionDecl") return;
     expect(fn.throwsTypes).toHaveLength(2);
@@ -36,6 +39,7 @@ describe("Parser — Declarations", () => {
 
   test("pub function", () => {
     const program = parse("pub fn helper() -> int { return 1; }");
+    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const fn = program.declarations[0]!;
     if (fn.kind !== "FunctionDecl") return;
     expect(fn.isPublic).toBe(true);
@@ -43,6 +47,7 @@ describe("Parser — Declarations", () => {
 
   test("generic function", () => {
     const program = parse("fn identity<T>(x: T) -> T { return x; }");
+    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const fn = program.declarations[0]!;
     if (fn.kind !== "FunctionDecl") return;
     expect(fn.genericParams).toEqual(["T"]);
@@ -51,6 +56,7 @@ describe("Parser — Declarations", () => {
 
   test("extern function", () => {
     const program = parse("extern fn malloc(size: usize) -> ptr<u8>;");
+    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const fn = program.declarations[0]!;
     expect(fn.kind).toBe("ExternFunctionDecl");
     if (fn.kind !== "ExternFunctionDecl") return;

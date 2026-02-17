@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { KirBinOp } from "../../src/kir/kir-types.ts";
-import { countInstructions, getInstructions, getTerminators, lowerFunction } from "./helpers.ts";
+import { getInstructions, lowerFunction } from "./helpers.ts";
 
 describe("KIR: nested expressions", () => {
   test("deeply nested arithmetic", () => {

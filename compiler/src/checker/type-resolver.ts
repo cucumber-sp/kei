@@ -14,15 +14,7 @@ import {
 import type { Scope } from "./scope.ts";
 import { SymbolKind } from "./symbols.ts";
 import type { FunctionType, Type } from "./types";
-import {
-  arrayType,
-  ERROR_TYPE,
-  isStructType,
-  ptrType,
-  sliceType,
-  TypeKind,
-  typeToString,
-} from "./types";
+import { arrayType, ERROR_TYPE, isStructType, ptrType, sliceType, TypeKind } from "./types";
 
 interface TypeResolverDiagnostic {
   message: string;

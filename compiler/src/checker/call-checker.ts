@@ -235,6 +235,7 @@ function resolveOverloadedCall(
   }
 
   if (matches.length === 1) {
+    // biome-ignore lint/style/noNonNullAssertion: length === 1 check just above
     const matched = matches[0]!;
     checker.setExprType(expr.callee, matched.type);
     applyMoveParams(checker, expr, matched.type);
@@ -279,6 +280,7 @@ function resolveOverloadedCall(
   }
 
   if (wideMatches.length === 1) {
+    // biome-ignore lint/style/noNonNullAssertion: length === 1 check just above
     const matched = wideMatches[0]!;
     checker.setExprType(expr.callee, matched.type);
     applyMoveParams(checker, expr, matched.type);
@@ -423,10 +425,12 @@ function checkGenericFunctionCall(checker: Checker, expr: CallExpr): Type {
   const resolvedTypeArgs: Type[] = [];
   const typeMap = new Map<string, Type>();
   for (let i = 0; i < expr.typeArgs.length; i++) {
+    // biome-ignore lint/style/noNonNullAssertion: loop bounded by typeArgs.length
     const typeArg = expr.typeArgs[i]!;
     const resolved = checker.resolveType(typeArg);
     if (isErrorType(resolved)) return ERROR_TYPE;
     resolvedTypeArgs.push(resolved);
+    // biome-ignore lint/style/noNonNullAssertion: loop bounded by typeArgs.length
     typeMap.set(funcType.genericParams[i]!, resolved);
   }
 
@@ -474,7 +478,9 @@ function checkGenericFunctionCallInferred(
   // Infer type params from arguments
   const subs = new Map<string, Type>();
   for (let i = 0; i < expectedParams.length; i++) {
+    // biome-ignore lint/style/noNonNullAssertion: loop bounded by expectedParams.length
     const paramType = expectedParams[i]!.type;
+    // biome-ignore lint/style/noNonNullAssertion: loop bounded by expectedParams.length
     const argType = argTypes[i]!;
     extractTypeParamSubs(paramType, argType, subs);
   }
@@ -492,6 +498,7 @@ function checkGenericFunctionCallInferred(
 
   // Create concrete function type
   const concreteType = substituteFunctionType(funcType, subs);
+  // biome-ignore lint/style/noNonNullAssertion: all generic params guaranteed to be in subs map
   const resolvedTypeArgs = funcType.genericParams.map((gp) => subs.get(gp)!);
   const name = (expr.callee as { name: string }).name;
   const mangledName = mangleGenericName(name, resolvedTypeArgs);
@@ -500,14 +507,18 @@ function checkGenericFunctionCallInferred(
 
   // Validate args against concrete param types
   for (let i = 0; i < argTypes.length; i++) {
+    // biome-ignore lint/style/noNonNullAssertion: loop bounded by argTypes.length
     const argType = argTypes[i]!;
+    // biome-ignore lint/style/noNonNullAssertion: loop bounded by argTypes.length
     const paramType = concreteType.params[i]!.type;
     if (!isAssignableTo(argType, paramType)) {
+      // biome-ignore lint/style/noNonNullAssertion: loop bounded by argTypes.length
       const litInfo = extractLiteralInfo(expr.args[i]!);
       const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, paramType);
       if (!isLiteralOk) {
         checker.error(
           `argument ${i + 1}: expected '${typeToString(paramType)}', got '${typeToString(argType)}'`,
+          // biome-ignore lint/style/noNonNullAssertion: loop bounded by argTypes.length
           expr.args[i]!.span
         );
       }

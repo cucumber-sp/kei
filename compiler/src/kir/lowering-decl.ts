@@ -13,7 +13,6 @@ import type {
   UnsafeStructDecl,
 } from "../ast/nodes.ts";
 import type { MonomorphizedFunction, MonomorphizedStruct } from "../checker/generics.ts";
-import type { FunctionType } from "../checker/types";
 import type {
   KirExtern,
   KirFunction,
@@ -191,7 +190,7 @@ export function lowerMethod(
   this: KirLowerer,
   decl: FunctionDecl,
   mangledName: string,
-  structName: string
+  _structName: string
 ): KirFunction {
   resetFunctionState(this);
 
@@ -275,6 +274,7 @@ export function lowerMonomorphizedFunction(
   this: KirLowerer,
   monoFunc: MonomorphizedFunction
 ): KirFunction {
+  // biome-ignore lint/style/noNonNullAssertion: monomorphized functions always have a declaration set before lowering
   const decl = monoFunc.declaration!;
   const concreteType = monoFunc.concrete;
 
@@ -297,8 +297,9 @@ export function lowerMonomorphizedFunction(
 
   const params: KirParam[] = [];
   for (let i = 0; i < decl.params.length; i++) {
+    // biome-ignore lint/style/noNonNullAssertion: index i is bounded by decl.params.length
     const p = decl.params[i]!;
-    const type = this.lowerCheckerType(concreteType.params[i]!.type);
+    const type = this.lowerCheckerType(concreteType.params[i]?.type);
     const varId: VarId = `%${p.name}`;
     this.varMap.set(p.name, varId);
     params.push({ name: p.name, type });

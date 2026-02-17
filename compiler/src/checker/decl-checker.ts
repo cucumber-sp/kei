@@ -14,7 +14,6 @@ import type {
   UnsafeStructDecl,
 } from "../ast/nodes.ts";
 import type { Checker } from "./checker.ts";
-import type { ScopeSymbol } from "./symbols.ts";
 import { functionSymbol, moduleSymbol, typeSymbol, variableSymbol } from "./symbols.ts";
 import type {
   EnumVariantInfo,

@@ -202,22 +202,22 @@ describe("Module system (comprehensive)", () => {
       const result = checkMultiModule("main_imports_math.kei");
       const mathExports = result.moduleExports.get("math");
       expect(mathExports).toBeDefined();
-      expect(mathExports!.has("add")).toBe(true);
-      expect(mathExports!.has("multiply")).toBe(true);
+      expect(mathExports?.has("add")).toBe(true);
+      expect(mathExports?.has("multiply")).toBe(true);
     });
 
     test("pub structs are exported", () => {
       const result = checkMultiModule("main_imports_math.kei");
       const mathExports = result.moduleExports.get("math");
       expect(mathExports).toBeDefined();
-      expect(mathExports!.has("Point")).toBe(true);
+      expect(mathExports?.has("Point")).toBe(true);
     });
 
     test("private functions are not exported", () => {
       const result = checkMultiModule("main_imports_math.kei");
       const mathExports = result.moduleExports.get("math");
       expect(mathExports).toBeDefined();
-      expect(mathExports!.has("helper")).toBe(false);
+      expect(mathExports?.has("helper")).toBe(false);
     });
 
     test("importing private symbol → checker error", () => {

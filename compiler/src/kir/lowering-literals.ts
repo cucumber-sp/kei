@@ -87,6 +87,7 @@ export function lowerArrayLiteral(this: KirLowerer, expr: ArrayLiteral): VarId {
 
   // Store each element at its index
   for (let i = 0; i < expr.elements.length; i++) {
+    // biome-ignore lint/style/noNonNullAssertion: index i is bounded by expr.elements.length
     const valueId = this.lowerExpr(expr.elements[i]!);
     const idxId = this.freshVar();
     this.emit({

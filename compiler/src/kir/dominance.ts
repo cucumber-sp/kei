@@ -44,13 +44,17 @@ export function computeDominators(cfg: CFG): Map<BlockId, BlockId> {
    * higher index is farther from the entry, so we step it upward.
    */
   function intersect(b1: BlockId, b2: BlockId): BlockId {
+    // biome-ignore lint/style/noNonNullAssertion: b1 is always a block from blockOrder, so rpoIndex always has it
     let idx1 = rpoIndex.get(b1)!;
+    // biome-ignore lint/style/noNonNullAssertion: b2 is always a block from blockOrder, so rpoIndex always has it
     let idx2 = rpoIndex.get(b2)!;
     while (idx1 !== idx2) {
       while (idx1 > idx2) {
+        // biome-ignore lint/style/noNonNullAssertion: blockOrder[idx1] is always in idom (algorithm invariant) and rpoIndex covers all blocks
         idx1 = rpoIndex.get(idom.get(blockOrder[idx1])!)!;
       }
       while (idx2 > idx1) {
+        // biome-ignore lint/style/noNonNullAssertion: blockOrder[idx2] is always in idom (algorithm invariant) and rpoIndex covers all blocks
         idx2 = rpoIndex.get(idom.get(blockOrder[idx2])!)!;
       }
     }
@@ -128,8 +132,9 @@ export function computeDomFrontiers(
 
       let runner = pred;
       while (runner !== idom.get(blockId) && runner !== undefined) {
-        domFrontiers.get(runner)!.add(blockId);
+        domFrontiers.get(runner)?.add(blockId);
         if (runner === idom.get(runner)) break; // entry node
+        // biome-ignore lint/style/noNonNullAssertion: runner is always in idom here — it was confirmed present before entering the loop and the entry-node break prevents going past it
         runner = idom.get(runner)!;
       }
     }
@@ -149,7 +154,7 @@ export function buildDomTree(cfg: CFG, idom: Map<BlockId, BlockId>): Map<BlockId
   for (const id of cfg.blockOrder) {
     const parent = idom.get(id);
     if (parent !== undefined && parent !== id) {
-      children.get(parent)!.push(id);
+      children.get(parent)?.push(id);
     }
   }
   return children;

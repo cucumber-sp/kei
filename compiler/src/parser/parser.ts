@@ -155,10 +155,12 @@ export class Parser implements ParserContext {
   // ─── Helpers (ParserContext implementation) ────────────────────────
 
   current(): Token {
+    // biome-ignore lint/style/noNonNullAssertion: tokens always has at least an EOF token, so the last element is always defined
     return this.tokens[this.pos] ?? this.tokens[this.tokens.length - 1]!;
   }
 
   previous(): Token {
+    // biome-ignore lint/style/noNonNullAssertion: tokens is always non-empty, so index 0 and pos-1 are always valid
     return this.tokens[this.pos > 0 ? this.pos - 1 : 0]!;
   }
 

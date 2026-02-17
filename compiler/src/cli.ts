@@ -1,7 +1,7 @@
 import type { Program } from "./ast/nodes.ts";
 import { emitC } from "./backend/c-emitter.ts";
 import { runDeSsa } from "./backend/de-ssa.ts";
-import type { CheckResult, ModuleCheckInfo } from "./checker/checker.ts";
+import type { ModuleCheckInfo } from "./checker/checker.ts";
 import { Checker } from "./checker/checker.ts";
 import type { Diagnostic } from "./errors/index.ts";
 import type { KirModule } from "./kir/kir-types.ts";
@@ -87,7 +87,7 @@ function formatDiagnostic(diag: Diagnostic, source?: SourceFile): string {
 
   const srcLine = lines[lineIdx];
   const trimmed = srcLine;
-  const caret = " ".repeat(loc.column - 1) + "^";
+  const caret = `${" ".repeat(loc.column - 1)}^`;
 
   return `${header}\n  ${trimmed}\n  ${caret}`;
 }

@@ -27,15 +27,18 @@ export function emitConstInt(this: KirLowerer, value: number): VarId {
 export function setTerminator(this: KirLowerer, term: KirTerminator): void {
   // Only set terminator if block hasn't been terminated yet
   if (!this.isBlockTerminated()) {
+    // biome-ignore lint/suspicious/noExplicitAny: _pendingTerminator is a private field not declared on KirLowerer's interface
     (this as any)._pendingTerminator = term;
   }
 }
 
 export function isBlockTerminated(this: KirLowerer): boolean {
+  // biome-ignore lint/suspicious/noExplicitAny: _pendingTerminator is a private field not declared on KirLowerer's interface
   return (this as any)._pendingTerminator != null;
 }
 
 export function sealCurrentBlock(this: KirLowerer): void {
+  // biome-ignore lint/suspicious/noExplicitAny: _pendingTerminator is a private field not declared on KirLowerer's interface
   const terminator: KirTerminator = (this as any)._pendingTerminator ?? { kind: "unreachable" };
   this.blocks.push({
     id: this.currentBlockId,
@@ -44,12 +47,14 @@ export function sealCurrentBlock(this: KirLowerer): void {
     terminator,
   });
   this.currentInsts = [];
+  // biome-ignore lint/suspicious/noExplicitAny: _pendingTerminator is a private field not declared on KirLowerer's interface
   (this as any)._pendingTerminator = null;
 }
 
 export function startBlock(this: KirLowerer, id: BlockId): void {
   this.currentBlockId = id;
   this.currentInsts = [];
+  // biome-ignore lint/suspicious/noExplicitAny: _pendingTerminator is a private field not declared on KirLowerer's interface
   (this as any)._pendingTerminator = null;
 }
 

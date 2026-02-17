@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { tmpdir } from "os";
-import { join } from "path";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { emitC } from "../../src/backend/c-emitter.ts";
 import { runDeSsa } from "../../src/backend/de-ssa.ts";
 import { runMem2Reg } from "../../src/kir/mem2reg.ts";
@@ -70,7 +70,7 @@ async function compileAndRun(
 
   // Clean up
   try {
-    const { unlinkSync } = require("fs");
+    const { unlinkSync } = require("node:fs");
     unlinkSync(cPath);
     unlinkSync(binPath);
   } catch {
@@ -290,7 +290,7 @@ describe("integration: .kei → C → binary", () => {
     });
 
     try {
-      const { unlinkSync } = require("fs");
+      const { unlinkSync } = require("node:fs");
       unlinkSync(cPath);
     } catch {
       // ignore

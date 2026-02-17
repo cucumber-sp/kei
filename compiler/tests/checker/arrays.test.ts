@@ -4,7 +4,7 @@ import type { Type } from "../../src/checker/types";
 import { Lexer } from "../../src/lexer/index.ts";
 import { Parser } from "../../src/parser/index.ts";
 import { SourceFile } from "../../src/utils/source.ts";
-import { check, checkError, checkOk } from "./helpers.ts";
+import { checkError, checkOk } from "./helpers.ts";
 
 /** Get type of a let-binding by name from checked source */
 function typeOfLet(source: string, varName: string): Type {

@@ -14,7 +14,6 @@ import type {
   KirTerminator,
   KirType,
   KirTypeDecl,
-  VarId,
 } from "./kir-types.ts";
 
 export function printKir(module: KirModule): string {
@@ -46,7 +45,7 @@ export function printKir(module: KirModule): string {
     lines.push(printFunction(fn));
   }
 
-  return lines.join("\n") + "\n";
+  return `${lines.join("\n")}\n`;
 }
 
 function printTypeDecl(td: KirTypeDecl): string {

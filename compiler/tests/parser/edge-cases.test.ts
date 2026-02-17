@@ -28,10 +28,10 @@ describe("Parser — Edge Cases", () => {
       const expr = parseExpr("f(g(h(x)))");
       expect(expr.kind).toBe("CallExpr");
       if (expr.kind !== "CallExpr") return;
-      expect(expr.args[0]!.kind).toBe("CallExpr");
+      expect(expr.args[0]?.kind).toBe("CallExpr");
       const inner = expr.args[0]!;
       if (inner.kind !== "CallExpr") return;
-      expect(inner.args[0]!.kind).toBe("CallExpr");
+      expect(inner.args[0]?.kind).toBe("CallExpr");
     });
 
     test("nested member access + index: a.b[0].c.d[1]", () => {
@@ -45,7 +45,7 @@ describe("Parser — Edge Cases", () => {
       const expr = parseExpr("if true { if false { 1 } else { 2 } } else { 3 }");
       expect(expr.kind).toBe("IfExpr");
       if (expr.kind !== "IfExpr") return;
-      expect(expr.thenBlock.statements[0]!.kind).toBe("ExprStmt");
+      expect(expr.thenBlock.statements[0]?.kind).toBe("ExprStmt");
     });
   });
 
@@ -220,7 +220,7 @@ describe("Parser — Edge Cases", () => {
       const fn = program.declarations[0]!;
       if (fn.kind !== "FunctionDecl") return;
       expect(fn.body.statements).toHaveLength(1);
-      expect(fn.body.statements[0]!.kind).toBe("ReturnStmt");
+      expect(fn.body.statements[0]?.kind).toBe("ReturnStmt");
     });
   });
 
@@ -317,8 +317,8 @@ describe("Parser — Edge Cases", () => {
       const fn = program.declarations[0]!;
       if (fn.kind !== "FunctionDecl") return;
       expect(fn.name).toBe("_my_func");
-      expect(fn.params[0]!.name).toBe("_a");
-      expect(fn.params[1]!.name).toBe("__b");
+      expect(fn.params[0]?.name).toBe("_a");
+      expect(fn.params[1]?.name).toBe("__b");
     });
 
     test("single character identifier", () => {
@@ -392,7 +392,7 @@ describe("Parser — Edge Cases", () => {
       expect(expr.kind).toBe("CallExpr");
       if (expr.kind !== "CallExpr") return;
       expect(expr.args).toHaveLength(1);
-      expect(expr.args[0]!.kind).toBe("StructLiteral");
+      expect(expr.args[0]?.kind).toBe("StructLiteral");
     });
 
     test("if expression as function argument", () => {
@@ -400,7 +400,7 @@ describe("Parser — Edge Cases", () => {
       expect(expr.kind).toBe("CallExpr");
       if (expr.kind !== "CallExpr") return;
       expect(expr.args).toHaveLength(1);
-      expect(expr.args[0]!.kind).toBe("IfExpr");
+      expect(expr.args[0]?.kind).toBe("IfExpr");
     });
 
     test("inclusive range: 0..=10", () => {
@@ -512,9 +512,9 @@ describe("Parser — Edge Cases", () => {
       const e = program.declarations[0]!;
       if (e.kind !== "EnumDecl") return;
       expect(e.variants).toHaveLength(3);
-      expect(e.variants[0]!.fields).toHaveLength(1);
-      expect(e.variants[1]!.fields).toHaveLength(2);
-      expect(e.variants[2]!.fields).toHaveLength(0);
+      expect(e.variants[0]?.fields).toHaveLength(1);
+      expect(e.variants[1]?.fields).toHaveLength(2);
+      expect(e.variants[2]?.fields).toHaveLength(0);
     });
 
     test("type alias for pointer type", () => {

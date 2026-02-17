@@ -153,6 +153,7 @@ export function lowerReturnStmt(this: KirLowerer, stmt: ReturnStmt): void {
       this.emitAllScopeDestroysExceptNamed(returnedVarName);
       // Store success value through __out pointer
       if (this.currentFunctionOrigReturnType.kind !== "void") {
+        // biome-ignore lint/style/noNonNullAssertion: __out is always present in a throws function when the return type is non-void
         const outPtr = this.varMap.get("__out")!;
         this.emit({ kind: "store", ptr: outPtr, value: valueId });
       }
@@ -279,7 +280,7 @@ export function lowerForStmt(this: KirLowerer, stmt: ForStmt): void {
   this.sealCurrentBlock();
   this.startBlock(initLabel);
 
-  const iterableType = this.getExprKirType(stmt.iterable);
+  const _iterableType = this.getExprKirType(stmt.iterable);
 
   // For range-based: iterable is a RangeExpr, we extract start/end
   if (stmt.iterable.kind === "RangeExpr") {
@@ -349,6 +350,7 @@ export function lowerForStmt(this: KirLowerer, stmt: ForStmt): void {
 
     // Increment index if present
     if (stmt.index) {
+      // biome-ignore lint/style/noNonNullAssertion: stmt.index is a declared loop variable guaranteed to be in varMap
       const indexPtr = this.varMap.get(stmt.index)!;
       const oneId2 = this.emitConstInt(1);
       this.emitLoadModifyStore(indexPtr, "add", oneId2, loopVarType);

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { countInstructions, getInstructions, lowerFunction } from "./helpers.ts";
+import { getInstructions, lowerFunction } from "./helpers.ts";
 
 describe("KIR: variable declarations", () => {
   test("let generates stack_alloc + store", () => {

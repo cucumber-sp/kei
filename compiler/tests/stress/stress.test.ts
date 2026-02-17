@@ -117,11 +117,11 @@ describe("stress: deeply nested blocks", () => {
   test("25 levels of nested if blocks", () => {
     let source = "fn main() -> i32 {\n  let x: i32 = 0;\n";
     for (let i = 0; i < 25; i++) {
-      source += "  ".repeat(i + 1) + `if x == 0 {\n`;
+      source += `${"  ".repeat(i + 1)}if x == 0 {\n`;
     }
-    source += "  ".repeat(26) + "x = 1;\n";
+    source += `${"  ".repeat(26)}x = 1;\n`;
     for (let i = 24; i >= 0; i--) {
-      source += "  ".repeat(i + 1) + "}\n";
+      source += `${"  ".repeat(i + 1)}}\n`;
     }
     source += "  return x;\n}";
     const c = compileFull(source);
@@ -131,11 +131,11 @@ describe("stress: deeply nested blocks", () => {
   test("30 levels of nested blocks (plain scopes)", () => {
     let source = "fn main() -> i32 {\n  let x: i32 = 0;\n";
     for (let i = 0; i < 30; i++) {
-      source += "  ".repeat(i + 1) + "{\n";
+      source += `${"  ".repeat(i + 1)}{\n`;
     }
-    source += "  ".repeat(31) + "x = 42;\n";
+    source += `${"  ".repeat(31)}x = 42;\n`;
     for (let i = 29; i >= 0; i--) {
-      source += "  ".repeat(i + 1) + "}\n";
+      source += `${"  ".repeat(i + 1)}}\n`;
     }
     source += "  return x;\n}";
     const c = compileFull(source);
@@ -145,11 +145,11 @@ describe("stress: deeply nested blocks", () => {
   test("20 levels of nested while loops", () => {
     let source = "fn main() -> i32 {\n  let x: i32 = 0;\n";
     for (let i = 0; i < 20; i++) {
-      source += "  ".repeat(i + 1) + `while x == 0 {\n`;
+      source += `${"  ".repeat(i + 1)}while x == 0 {\n`;
     }
-    source += "  ".repeat(21) + "x = 1;\n";
+    source += `${"  ".repeat(21)}x = 1;\n`;
     for (let i = 19; i >= 0; i--) {
-      source += "  ".repeat(i + 1) + "}\n";
+      source += `${"  ".repeat(i + 1)}}\n`;
     }
     source += "  return x;\n}";
     const c = compileFull(source);

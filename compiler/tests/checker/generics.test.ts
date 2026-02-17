@@ -1,5 +1,5 @@
 import { describe, test } from "bun:test";
-import { checkError, checkErrors, checkOk } from "./helpers.ts";
+import { checkError, checkOk } from "./helpers.ts";
 
 describe("Checker: Generics", () => {
   // ─── Generic Structs with Explicit Type Args ──────────────────────────

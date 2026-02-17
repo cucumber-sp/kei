@@ -87,7 +87,7 @@ export function cStringLiteral(s: string): string {
         break;
       default:
         if (code < 0x20 || code > 0x7e) {
-          out += "\\" + code.toString(8).padStart(3, "0");
+          out += `\\${code.toString(8).padStart(3, "0")}`;
         } else {
           out += ch;
         }

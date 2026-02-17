@@ -42,11 +42,11 @@ describe("Multi-module checker", () => {
       const result = checkMultiModule("main_imports_math.kei");
       const mathExports = result.moduleExports.get("math");
       expect(mathExports).toBeDefined();
-      expect(mathExports!.has("add")).toBe(true);
-      expect(mathExports!.has("multiply")).toBe(true);
-      expect(mathExports!.has("Point")).toBe(true);
+      expect(mathExports?.has("add")).toBe(true);
+      expect(mathExports?.has("multiply")).toBe(true);
+      expect(mathExports?.has("Point")).toBe(true);
       // helper is private
-      expect(mathExports!.has("helper")).toBe(false);
+      expect(mathExports?.has("helper")).toBe(false);
     });
   });
 
@@ -72,7 +72,7 @@ describe("Multi-module checker", () => {
       const mathExports = result.moduleExports.get("math");
       expect(mathExports).toBeDefined();
       // helper is not pub, should not be exported
-      expect(mathExports!.has("helper")).toBe(false);
+      expect(mathExports?.has("helper")).toBe(false);
     });
   });
 });

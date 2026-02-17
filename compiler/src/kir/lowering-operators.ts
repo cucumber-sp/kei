@@ -82,7 +82,7 @@ export function lowerShortCircuitOr(this: KirLowerer, expr: BinaryExpr): VarId {
 
   this.sealCurrentBlock();
   this.startBlock(rhsLabel);
-  const rhs = this.lowerExpr(expr.right);
+  const _rhs = this.lowerExpr(expr.right);
   this.setTerminator({ kind: "jump", target: endLabel });
 
   this.sealCurrentBlock();

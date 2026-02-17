@@ -233,6 +233,7 @@ export class ExpressionChecker {
           );
           return ERROR_TYPE;
         }
+        // biome-ignore lint/style/noNonNullAssertion: params.length === 2 is guaranteed by the guard above
         const indexParam = method.params[1]!;
         if (!isAssignableTo(indexType, indexParam.type)) {
           this.checker.error(

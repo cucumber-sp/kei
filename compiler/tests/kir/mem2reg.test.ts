@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import type { KirBlock, KirFunction, KirPhi } from "../../src/kir/kir-types.ts";
+import type { KirFunction, KirPhi } from "../../src/kir/kir-types.ts";
 import { runMem2Reg } from "../../src/kir/mem2reg.ts";
 import { printKir } from "../../src/kir/printer.ts";
-import { countInstructions, getInstructions, lower, lowerFunction } from "./helpers.ts";
+import { getInstructions, lower } from "./helpers.ts";
 
 /** Lower source, run mem2reg, return module. */
 function lowerOpt(source: string) {
@@ -211,7 +211,7 @@ describe("mem2reg: if/else with phi nodes", () => {
     const phis = getPhis(fn);
     const phi = phis.find((p) => p.incoming.length === 2);
     expect(phi).toBeDefined();
-    expect(phi!.type.kind).toBe("int");
+    expect(phi?.type.kind).toBe("int");
   });
 });
 

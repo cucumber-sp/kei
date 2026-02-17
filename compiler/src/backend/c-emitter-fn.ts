@@ -11,7 +11,7 @@ import { emitCTypeForDecl, sanitizeName, varName } from "./c-emitter-types.ts";
 
 export function emitFunction(fn: KirFunction): string {
   const out: string[] = [];
-  out.push(emitFunctionPrototype(fn) + " {");
+  out.push(`${emitFunctionPrototype(fn)} {`);
 
   const varDecls = collectVarDecls(fn);
   for (const [name, type] of varDecls) {

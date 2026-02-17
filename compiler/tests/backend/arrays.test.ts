@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { tmpdir } from "os";
-import { join } from "path";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { emitC } from "../../src/backend/c-emitter.ts";
 import { runDeSsa } from "../../src/backend/de-ssa.ts";
 import { runMem2Reg } from "../../src/kir/mem2reg.ts";
@@ -54,8 +54,8 @@ async function compileAndRun(
   }
   const run = Bun.spawnSync({ cmd: [binPath], stdout: "pipe", stderr: "pipe" });
   try {
-    require("fs").unlinkSync(cPath);
-    require("fs").unlinkSync(binPath);
+    require("node:fs").unlinkSync(cPath);
+    require("node:fs").unlinkSync(binPath);
   } catch {}
   return {
     compiled: true,

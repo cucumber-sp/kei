@@ -12,7 +12,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import type { ImportDecl, Program } from "../ast/nodes.ts";
 import { Lexer } from "../lexer/index.ts";
 import { Parser } from "../parser/index.ts";
@@ -235,7 +235,7 @@ export class ModuleResolver {
    */
   resolveImportPath(importPath: string): string | null {
     const parts = importPath.split(".");
-    const relPath = parts.join("/") + ".kei";
+    const relPath = `${parts.join("/")}.kei`;
 
     // 1. Source root
     const srcPath = join(this.sourceRoot, relPath);
@@ -324,7 +324,7 @@ export class ModuleResolver {
    */
   private describeSearchPaths(importPath: string): string {
     const parts = importPath.split(".");
-    const relPath = parts.join("/") + ".kei";
+    const relPath = `${parts.join("/")}.kei`;
     const paths: string[] = [];
 
     paths.push(`    ${join(this.sourceRoot, relPath)}`);
@@ -368,7 +368,7 @@ export class ModuleResolver {
   /** Read a file, returning null if it doesn't exist or can't be read. */
   private readFile(filePath: string): string | null {
     try {
-      return require("fs").readFileSync(filePath, "utf-8");
+      return require("node:fs").readFileSync(filePath, "utf-8");
     } catch {
       return null;
     }

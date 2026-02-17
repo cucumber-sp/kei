@@ -75,11 +75,11 @@ function findPromotableAllocas(fn: KirFunction): Map<VarId, AllocaInfo> {
     for (const inst of block.instructions) {
       if (inst.kind === "store") {
         if (allocas.has(inst.ptr)) {
-          allocas.get(inst.ptr)!.defBlocks.add(block.id);
+          allocas.get(inst.ptr)?.defBlocks.add(block.id);
         }
       } else if (inst.kind === "load") {
         if (allocas.has(inst.ptr)) {
-          allocas.get(inst.ptr)!.useBlocks.add(block.id);
+          allocas.get(inst.ptr)?.useBlocks.add(block.id);
         }
       } else if (inst.kind === "field_ptr") {
         if (allocas.has(inst.base)) addressTaken.add(inst.base);
@@ -114,7 +114,7 @@ function findPromotableAllocas(fn: KirFunction): Map<VarId, AllocaInfo> {
  * the rename pass.
  */
 function insertPhis(
-  fn: KirFunction,
+  _fn: KirFunction,
   cfg: CFG,
   domFrontiers: Map<BlockId, Set<BlockId>>,
   allocas: Map<VarId, AllocaInfo>
@@ -132,6 +132,7 @@ function insertPhis(
     const visited = new Set<BlockId>();
 
     while (worklist.length > 0) {
+      // biome-ignore lint/style/noNonNullAssertion: worklist.length > 0 guarantees pop() returns a value
       const defBlock = worklist.pop()!;
       if (visited.has(defBlock)) continue;
       visited.add(defBlock);
@@ -145,7 +146,7 @@ function insertPhis(
           phis.set(frontierBlock, new Map());
         }
         const predList = cfg.preds.get(frontierBlock) ?? [];
-        phis.get(frontierBlock)!.set(allocaVar, {
+        phis.get(frontierBlock)?.set(allocaVar, {
           dest: "", // assigned during rename
           type: info.type,
           incoming: predList.map((pred) => ({
@@ -299,7 +300,7 @@ function renameVariables(
   }
 
   function pushDef(allocaVar: VarId, value: VarId): void {
-    defStacks.get(allocaVar)!.push(value);
+    defStacks.get(allocaVar)?.push(value);
   }
 
   // Map from removed load destinations to their SSA replacement values.
@@ -333,7 +334,9 @@ function renameVariables(
    *   6. Pop def stacks to restore parent state
    */
   function renameBlock(blockId: BlockId): void {
+    // biome-ignore lint/style/noNonNullAssertion: blockId comes from CFG's own blockOrder, so blockMap always has it
     const block = cfg.blockMap.get(blockId)!;
+    // biome-ignore lint/style/noNonNullAssertion: newBlocks is populated from all fn.blocks before this walk begins
     const newBlock = newBlocks.get(blockId)!;
 
     // Track how many defs we push per alloca, so we can pop exactly
@@ -350,6 +353,7 @@ function renameVariables(
         const ssaName = freshVar();
         phi.dest = ssaName;
         pushDef(allocaVar, ssaName);
+        // biome-ignore lint/style/noNonNullAssertion: pushCounts is initialized for every allocaVar before this loop
         pushCounts.set(allocaVar, pushCounts.get(allocaVar)! + 1);
         newBlock.phis.push(phi);
       }
@@ -367,6 +371,7 @@ function renameVariables(
         // Resolve first: the value might reference an eliminated load.
         const resolvedValue = resolveValue(inst.value);
         pushDef(inst.ptr, resolvedValue);
+        // biome-ignore lint/style/noNonNullAssertion: pushCounts is initialized for every allocaVar and inst.ptr is a known alloca
         pushCounts.set(inst.ptr, pushCounts.get(inst.ptr)! + 1);
         continue;
       }
@@ -411,6 +416,7 @@ function renameVariables(
 
     // Step 6: Pop definitions to restore parent's state
     for (const [allocaVar, count] of pushCounts) {
+      // biome-ignore lint/style/noNonNullAssertion: defStacks is initialized for every allocaVar before the rename walk
       const stack = defStacks.get(allocaVar)!;
       for (let i = 0; i < count; i++) {
         stack.pop();
@@ -426,6 +432,7 @@ function renameVariables(
   fn.localCount = varCounter;
 
   // Return blocks in original order (preserving layout)
+  // biome-ignore lint/style/noNonNullAssertion: newBlocks is populated from all fn.blocks so every block id is present
   return fn.blocks.map((b) => newBlocks.get(b.id)!);
 }
 

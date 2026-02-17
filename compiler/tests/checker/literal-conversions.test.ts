@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, test } from "bun:test";
 import { checkError, checkOk } from "./helpers.ts";
 
 describe("Checker — Implicit Literal Conversions", () => {

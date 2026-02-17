@@ -1,12 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  countInstructions,
-  getInstructions,
-  getTerminators,
-  lower,
-  lowerAndPrint,
-  lowerFunction,
-} from "./helpers.ts";
+import { getInstructions, getTerminators, lower, lowerFunction } from "./helpers.ts";
 
 describe("KIR: basic function lowering", () => {
   test("empty void function", () => {

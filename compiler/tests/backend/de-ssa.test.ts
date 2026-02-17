@@ -1,14 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { runDeSsa } from "../../src/backend/de-ssa.ts";
-import type {
-  BlockId,
-  KirBlock,
-  KirFunction,
-  KirModule,
-  KirPhi,
-  KirType,
-  VarId,
-} from "../../src/kir/kir-types.ts";
+import type { KirFunction, KirModule, KirType, VarId } from "../../src/kir/kir-types.ts";
 import { runMem2Reg } from "../../src/kir/mem2reg.ts";
 import { lower } from "../kir/helpers.ts";
 

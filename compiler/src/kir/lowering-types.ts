@@ -5,7 +5,7 @@
 
 import type { Expression, FunctionDecl } from "../ast/nodes.ts";
 import type { FunctionType, Type } from "../checker/types";
-import type { BinOp, KirType } from "./kir-types.ts";
+import type { KirType } from "./kir-types.ts";
 import type { KirLowerer } from "./lowering.ts";
 
 export function getExprKirType(this: KirLowerer, expr: Expression): KirType {

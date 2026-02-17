@@ -7,7 +7,6 @@ import type {
   CallExpr,
   Declaration,
   Expression,
-  FunctionDecl,
   ImportDecl,
   Program,
   Statement,
@@ -24,9 +23,9 @@ import type { MonomorphizedFunction, MonomorphizedStruct } from "./generics.ts";
 import { Scope } from "./scope.ts";
 import { StatementChecker } from "./stmt-checker.ts";
 import type { ScopeSymbol } from "./symbols.ts";
-import { moduleSymbol, SymbolKind, typeSymbol, variableSymbol } from "./symbols.ts";
+import { SymbolKind, typeSymbol, variableSymbol } from "./symbols.ts";
 import { TypeResolver } from "./type-resolver.ts";
-import type { FunctionType, ModuleType, StructType, Type } from "./types";
+import type { FunctionType, StructType, Type } from "./types";
 import { TypeKind, typeToString } from "./types";
 
 export interface CheckResult {
@@ -234,6 +233,7 @@ export class Checker {
       this.pushScope({ functionContext: concreteType });
 
       for (let i = 0; i < decl.params.length; i++) {
+        // biome-ignore lint/style/noNonNullAssertion: index is bounded by decl.params.length
         const param = decl.params[i]!;
         const paramType = concreteType.params[i]?.type ?? ({ kind: TypeKind.Void } as Type);
         this.defineVariable(param.name, paramType, param.isMut, false, param.span);

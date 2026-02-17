@@ -96,7 +96,7 @@ describe("ModuleResolver", () => {
       const resolver = new ModuleResolver(join(FIXTURES_DIR, "math.kei"));
       const resolved = resolver.resolveImportPath("math");
       expect(resolved).toBeTruthy();
-      expect(resolved!.endsWith("math.kei")).toBe(true);
+      expect(resolved?.endsWith("math.kei")).toBe(true);
     });
 
     test("resolves std/ imports", () => {

@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Severity } from "../../src/errors/diagnostic.ts";
-import { check, checkError, checkErrors, checkOk } from "./helpers.ts";
+import { checkError, checkOk } from "./helpers.ts";
 
 describe("Checker: Generics (comprehensive)", () => {
   // ─── Generic struct with double fields ──────────────────────────────

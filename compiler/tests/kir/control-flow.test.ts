@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getBlock, getTerminators, lowerFunction } from "./helpers.ts";
+import { getTerminators, lowerFunction } from "./helpers.ts";
 
 describe("KIR: if/else", () => {
   test("if creates branch terminator", () => {

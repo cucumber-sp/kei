@@ -11,6 +11,7 @@ import type { KirLowerer } from "./lowering.ts";
 export function lowerThrowExpr(this: KirLowerer, expr: ThrowExpr): VarId {
   // throw ErrorType{} → cast __err to typed pointer, store error value, return error tag
   const valueId = this.lowerExpr(expr.value);
+  // biome-ignore lint/style/noNonNullAssertion: __err is always present in a throws function context
   const errPtr = this.varMap.get("__err")!;
 
   // Determine the error type for casting
@@ -115,6 +116,7 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
     // Remove the previous call_throws (it was the last emitted instruction)
     this.currentInsts.pop(); // remove the call_throws we just emitted
 
+    // biome-ignore lint/style/noNonNullAssertion: __err is always present when inside a throws function (catch throw requires it)
     const callerErrPtr = this.varMap.get("__err")!;
     this.emit({
       kind: "call_throws",
@@ -284,7 +286,7 @@ export function resolveCallThrowsInfo(
   if (callExpr.kind !== "CallExpr") return null;
 
   const args = callExpr.args.map((a) => this.lowerExpr(a));
-  const resultType = this.getExprKirType(callExpr);
+  const _resultType = this.getExprKirType(callExpr);
 
   // Resolve function name (same logic as lowerCallExpr)
   let funcName: string;

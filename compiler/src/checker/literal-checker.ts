@@ -29,8 +29,6 @@ import {
   isErrorType,
   isLiteralAssignableTo,
   NULL_TYPE,
-  ptrType,
-  rangeType,
   STRING_TYPE,
   TypeKind,
   typeToString,
@@ -66,20 +64,23 @@ export function checkArrayLiteral(checker: Checker, expr: ArrayLiteral): Type {
     return ERROR_TYPE;
   }
 
+  // biome-ignore lint/style/noNonNullAssertion: length > 0 is checked above
   const firstType = checker.checkExpression(expr.elements[0]!);
   if (isErrorType(firstType)) return ERROR_TYPE;
 
   for (let i = 1; i < expr.elements.length; i++) {
+    // biome-ignore lint/style/noNonNullAssertion: i is within bounds of expr.elements (loop guard)
     const elemType = checker.checkExpression(expr.elements[i]!);
     if (isErrorType(elemType)) continue;
     if (!isAssignableTo(elemType, firstType)) {
       // Check literal assignability
+      // biome-ignore lint/style/noNonNullAssertion: i is within bounds of expr.elements (loop guard)
       const litInfo = extractLiteralInfo(expr.elements[i]!);
       const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, firstType);
       if (!isLiteralOk) {
         checker.error(
           `array element ${i}: expected '${typeToString(firstType)}', got '${typeToString(elemType)}'`,
-          expr.elements[i]!.span
+          expr.elements[i]?.span
         );
       }
     }
@@ -188,10 +189,12 @@ function instantiateGenericStruct(
   const resolvedTypeArgs: Type[] = [];
   const typeMap = new Map<string, Type>();
   for (let i = 0; i < expr.typeArgs.length; i++) {
+    // biome-ignore lint/style/noNonNullAssertion: i is within bounds of expr.typeArgs (loop guard)
     const typeArg = expr.typeArgs[i]!;
     const resolved = checker.resolveType(typeArg);
     if (isErrorType(resolved)) return ERROR_TYPE;
     resolvedTypeArgs.push(resolved);
+    // biome-ignore lint/style/noNonNullAssertion: i is within bounds of genericParams (length equality asserted above)
     typeMap.set(baseStruct.genericParams[i]!, resolved);
   }
 
@@ -278,6 +281,7 @@ function checkGenericStructLiteralInferred(
   }
 
   // Build resolved type args from inferred subs
+  // biome-ignore lint/style/noNonNullAssertion: allInferred check below guards against undefined entries
   const resolvedTypeArgs = structType.genericParams.map((gp) => subs.get(gp)!);
   const allInferred = resolvedTypeArgs.every((t) => t !== undefined);
 
@@ -333,7 +337,7 @@ function substituteStructMethods(
   typeMap: Map<string, Type>
 ): void {
   const isSelfRef = (t: Type) =>
-    t.kind === TypeKind.Struct && (t.name === base.name || t.name.startsWith(base.name + "_"));
+    t.kind === TypeKind.Struct && (t.name === base.name || t.name.startsWith(`${base.name}_`));
   for (const [methodName, methodType] of base.methods) {
     const subbed = substituteFunctionType(methodType, typeMap);
     const fixedParams = subbed.params.map((p) =>
