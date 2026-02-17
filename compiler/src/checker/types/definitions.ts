@@ -77,6 +77,8 @@ export interface StructType {
   genericBaseName?: string;
   /** Original type args for generic instantiations (needed for re-mangling after substitution). */
   genericTypeArgs?: Type[];
+  /** True if __destroy was auto-generated (not defined in source). */
+  autoDestroy?: boolean;
 }
 
 /** Variant info for an enum — name, optional fields, optional explicit discriminant. */
