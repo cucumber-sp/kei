@@ -239,6 +239,7 @@ export class KirLowerer {
   declare lowerIfStmt: typeof stmtMethods.lowerIfStmt;
   declare lowerWhileStmt: typeof stmtMethods.lowerWhileStmt;
   declare lowerForStmt: typeof stmtMethods.lowerForStmt;
+  declare lowerCForStmt: typeof stmtMethods.lowerCForStmt;
   declare lowerSwitchStmt: typeof stmtMethods.lowerSwitchStmt;
   declare lowerExprStmt: typeof stmtMethods.lowerExprStmt;
   declare lowerAssertStmt: typeof stmtMethods.lowerAssertStmt;
@@ -365,6 +366,7 @@ KirLowerer.prototype.lowerReturnStmt = stmtMethods.lowerReturnStmt;
 KirLowerer.prototype.lowerIfStmt = stmtMethods.lowerIfStmt;
 KirLowerer.prototype.lowerWhileStmt = stmtMethods.lowerWhileStmt;
 KirLowerer.prototype.lowerForStmt = stmtMethods.lowerForStmt;
+KirLowerer.prototype.lowerCForStmt = stmtMethods.lowerCForStmt;
 KirLowerer.prototype.lowerSwitchStmt = stmtMethods.lowerSwitchStmt;
 KirLowerer.prototype.lowerExprStmt = stmtMethods.lowerExprStmt;
 KirLowerer.prototype.lowerAssertStmt = stmtMethods.lowerAssertStmt;

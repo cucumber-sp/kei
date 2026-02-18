@@ -120,8 +120,8 @@ let c = 10 % 3;       // 1 (modulo)
 - `||` only evaluates right operand if left is `false`
 
 ```kei
-if (ptr != null && ptr.*.value > 0) {
-    // ptr.*.value only evaluated if ptr != null
+if (ptr != null && ptr->value > 0) {
+    // ptr->value only evaluated if ptr != null
 }
 ```
 
@@ -148,7 +148,8 @@ x <<= 2;              // equivalent to x = x << 2
 ### Memory and access operators
 ```kei
 &                     // Address-of
-.*                    // Dereference
+*                     // Dereference (prefix)
+->                    // Dereference + member access
 []                    // Index access
 .                     // Member access
 ```
@@ -156,7 +157,7 @@ x <<= 2;              // equivalent to x = x << 2
 ```kei
 let x = 42;
 let p = &x;           // address-of
-let val = p.*;        // dereference
+let val = *p;         // dereference
 
 let arr = [1, 2, 3];
 let first = arr[0];   // index access
@@ -181,8 +182,8 @@ let slice2 = arr[1..=4];  // elements 1, 2, 3, 4
 
 From highest to lowest precedence:
 
-1. `.` `.*` `[]` `()` (postfix operators)
-2. `!` `~` `-` `&` (unary prefix operators)  
+1. `.` `->` `[]` `()` (postfix operators)
+2. `*` `!` `~` `-` `&` (unary prefix operators)
 3. `*` `/` `%` (multiplicative)
 4. `+` `-` (additive)
 5. `<<` `>>` (shift)
@@ -204,7 +205,7 @@ From highest to lowest precedence:
 a + b * c          // a + (b * c)
 a < b && c > d     // (a < b) && (c > d)  
 a = b += c         // a = (b += c)
-p.*.field          // (p.*).field
+p->field           // (*p).field
 arr[i + 1]         // arr[(i + 1)]
 !flag && condition // (!flag) && condition
 ```

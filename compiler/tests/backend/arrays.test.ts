@@ -274,7 +274,7 @@ describe("arrays: integration", () => {
     const c = compileToC(`
       fn main() -> int {
         let sum = 0;
-        for i in 0..5 {
+        for (let i = 0; i < 5; i = i + 1) {
           sum = sum + i;
         }
         return sum;

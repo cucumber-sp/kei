@@ -51,6 +51,7 @@ export type {
   AssertStmt,
   BlockStmt,
   BreakStmt,
+  CForStmt,
   ConstStmt,
   ContinueStmt,
   DeferStmt,

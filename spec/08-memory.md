@@ -363,7 +363,7 @@ unsafe struct array<T> {
     fn __destroy(self: array<T>) {
         self.count.decrement();
         if (self.count.value == 0) {
-            for i in 0..self.len {
+            for (let i = 0; i < self.len; i = i + 1) {
                 self.data[i].__destroy();
             }
             free(self.data);
@@ -373,9 +373,9 @@ unsafe struct array<T> {
 
     // Element mutation triggers COW
     fn set(self: ptr<array<T>>, index: usize, value: T) {
-        self.*.ensure_unique();  // copy buffer if refcount > 1
-        self.*.data[index].__destroy();
-        self.*.data[index] = value;
+        self->ensure_unique();  // copy buffer if refcount > 1
+        self->data[index].__destroy();
+        self->data[index] = value;
         value.__oncopy();
     }
 }
@@ -393,7 +393,7 @@ unsafe struct List<T> {
     fn __oncopy(self: List<T>) -> List<T> {
         // Deep copy — allocates new buffer, copies all elements
         let new_data = alloc<T>(self.cap);
-        for i in 0..self.len {
+        for (let i = 0; i < self.len; i = i + 1) {
             new_data[i] = self.data[i];
             new_data[i].__oncopy();
         }
@@ -401,7 +401,7 @@ unsafe struct List<T> {
     }
 
     fn __destroy(self: List<T>) {
-        for i in 0..self.len {
+        for (let i = 0; i < self.len; i = i + 1) {
             self.data[i].__destroy();
         }
         free(self.data);

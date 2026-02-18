@@ -29,13 +29,19 @@ export function parsePostfixExpression(ctx: ParserContext, left: Expression): Ex
       continue;
     }
 
-    // Dereference: .*
-    if (ctx.check(TokenKind.DotStar)) {
-      const end = ctx.advance();
+    // Arrow access: ptr->field (sugar for (*ptr).field)
+    if (ctx.check(TokenKind.Arrow)) {
+      ctx.advance();
+      const prop = ctx.expectIdentifier();
       left = {
-        kind: "DerefExpr",
-        operand: left,
-        span: { start: left.span.start, end: end.span.end },
+        kind: "MemberExpr",
+        object: {
+          kind: "DerefExpr",
+          operand: left,
+          span: { start: left.span.start, end: prop.span.end },
+        } as Expression,
+        property: prop.lexeme,
+        span: { start: left.span.start, end: prop.span.end },
       };
       continue;
     }

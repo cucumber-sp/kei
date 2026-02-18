@@ -71,13 +71,15 @@ describe("Parser — Statements", () => {
     expect(stmt.body.statements).toHaveLength(1);
   });
 
-  test("for with range", () => {
-    const stmt = parseFirst("for i in 0..10 { x = i; }");
-    expect(stmt.kind).toBe("ForStmt");
-    if (stmt.kind !== "ForStmt") return;
-    expect(stmt.variable).toBe("i");
-    expect(stmt.index).toBeNull();
-    expect(stmt.iterable.kind).toBe("RangeExpr");
+  test("c-style for", () => {
+    const stmt = parseFirst("for (let i = 0; i < 10; i = i + 1) { x = i; }");
+    expect(stmt.kind).toBe("CForStmt");
+    if (stmt.kind !== "CForStmt") return;
+    expect(stmt.init.kind).toBe("LetStmt");
+    expect(stmt.init.name).toBe("i");
+    expect(stmt.condition.kind).toBe("BinaryExpr");
+    expect(stmt.update.kind).toBe("AssignExpr");
+    expect(stmt.body.statements).toHaveLength(1);
   });
 
   test("for with index", () => {

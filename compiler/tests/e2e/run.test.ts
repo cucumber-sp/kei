@@ -370,7 +370,7 @@ describe("e2e: control flow", () => {
       import { print } from io;
       fn main() -> int {
         let sum: int = 0;
-        for i in 0..5 {
+        for (let i = 0; i < 5; i = i + 1) {
           sum = sum + i;
         }
         print(sum);
@@ -455,7 +455,7 @@ describe("e2e: arrays", () => {
       fn main() -> int {
         let arr = [1, 2, 3, 4, 5];
         let sum: int = 0;
-        for i in 0..5 {
+        for (let i = 0; i < 5; i = i + 1) {
           sum = sum + arr[i];
         }
         print(sum);
@@ -970,7 +970,7 @@ describe("Complex: recursive algorithms", () => {
 
       fn main() -> int {
         // Both methods should agree for all values
-        for i in 0..15 {
+        for (let i = 0; i < 15; i = i + 1) {
           let rec: int = fib_rec(i);
           let iter: int = fib_iter(i);
           if rec != iter {
@@ -1002,7 +1002,7 @@ describe("Complex: recursive algorithms", () => {
       fn safe_factorial(n: int) -> int {
         // Iterative with running product
         let result: int = 1;
-        for i in 1..13 {
+        for (let i = 1; i < 13; i = i + 1) {
           if i > n { break; }
           result = result * i;
         }
@@ -1017,7 +1017,7 @@ describe("Complex: recursive algorithms", () => {
         print(factorial(10));
 
         // Verify iterative matches recursive
-        for i in 0..12 {
+        for (let i = 0; i < 12; i = i + 1) {
           if factorial(i) != safe_factorial(i) {
             print("MISMATCH");
             return 1;
@@ -1753,9 +1753,9 @@ describe("Complex: control flow edge cases", () => {
 
         // Sum only when both indices are odd
         let sum: int = 0;
-        for i in 0..5 {
+        for (let i = 0; i < 5; i = i + 1) {
           if i % 2 == 0 { continue; }
-          for j in 0..5 {
+          for (let j = 0; j < 5; j = j + 1) {
             if j % 2 == 0 { continue; }
             sum = sum + i * j;
           }
@@ -1792,7 +1792,7 @@ describe("Complex: control flow edge cases", () => {
       }
 
       fn main() -> int {
-        for i in 0..8 {
+        for (let i = 0; i < 8; i = i + 1) {
           print(day_type(i));
         }
         return 0;
@@ -1881,7 +1881,7 @@ describe("Complex: control flow edge cases", () => {
 
       fn main() -> int {
         // Print primes up to 30
-        for i in 2..31 {
+        for (let i = 2; i < 31; i = i + 1) {
           if is_prime(i) {
             print(i);
           }
@@ -1937,7 +1937,7 @@ describe("Complex: control flow edge cases", () => {
 
       fn sum_until_exceeds(limit: int) -> int {
         let sum: int = 0;
-        for i in 1..1000 {
+        for (let i = 1; i < 1000; i = i + 1) {
           sum = sum + i;
           if sum > limit { break; }
         }
@@ -1974,7 +1974,7 @@ describe("Complex: realistic programs", () => {
         let n: int = 7;
 
         // Bubble sort
-        for i in 0..7 {
+        for (let i = 0; i < 7; i = i + 1) {
           let j: int = 0;
           while j < n - i - 1 {
             if arr[j] > arr[j + 1] {
@@ -1986,7 +1986,7 @@ describe("Complex: realistic programs", () => {
           }
         }
 
-        for i in 0..7 {
+        for (let i = 0; i < 7; i = i + 1) {
           print(arr[i]);
         }
         return 0;
@@ -2007,7 +2007,7 @@ describe("Complex: realistic programs", () => {
         let arr = [5, 3, 8, 1, 9, 2, 7, 4, 6];
         let n: int = 9;
 
-        for i in 0..9 {
+        for (let i = 0; i < 9; i = i + 1) {
           let min_idx: int = i;
           let j: int = i + 1;
           while j < n {
@@ -2023,7 +2023,7 @@ describe("Complex: realistic programs", () => {
           }
         }
 
-        for i in 0..9 {
+        for (let i = 0; i < 9; i = i + 1) {
           print(arr[i]);
         }
         return 0;
@@ -2042,7 +2042,7 @@ describe("Complex: realistic programs", () => {
 
       fn repeat(s: string, n: int) -> string {
         let result: string = "";
-        for i in 0..10 {
+        for (let i = 0; i < 10; i = i + 1) {
           if i >= n { break; }
           result = result + s;
         }
@@ -2208,7 +2208,7 @@ describe("Complex: realistic programs", () => {
 
       fn mat_row_sum(m: [int; 9], row: int) -> int {
         let sum: int = 0;
-        for col in 0..3 {
+        for (let col = 0; col < 3; col = col + 1) {
           sum = sum + mat_get(m, row, col);
         }
         return sum;

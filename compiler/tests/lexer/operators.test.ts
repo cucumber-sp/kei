@@ -45,7 +45,6 @@ const OPERATOR_TESTS: [string, TokenKind][] = [
   [".", TokenKind.Dot],
   ["->", TokenKind.Arrow],
   ["=>", TokenKind.FatArrow],
-  [".*", TokenKind.DotStar],
   ["{", TokenKind.LeftBrace],
   ["}", TokenKind.RightBrace],
   ["(", TokenKind.LeftParen],

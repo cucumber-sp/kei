@@ -24,6 +24,7 @@ export type {
   Field,
   FieldInit,
   FloatLiteral,
+  CForStmt,
   ForStmt,
   FunctionDecl,
   GenericType,

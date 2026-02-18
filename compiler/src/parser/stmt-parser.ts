@@ -6,6 +6,7 @@
 import type {
   AssertStmt,
   BreakStmt,
+  CForStmt,
   ConstStmt,
   ContinueStmt,
   DeferStmt,
@@ -117,8 +118,15 @@ export function parseWhileStatement(ctx: ParserContext): WhileStmt {
   };
 }
 
-export function parseForStatement(ctx: ParserContext): ForStmt {
+export function parseForStatement(ctx: ParserContext): ForStmt | CForStmt {
   const start = ctx.expect(TokenKind.For);
+
+  // C-style for: for (let i = 0; i < 10; i = i + 1) { }
+  if (ctx.check(TokenKind.LeftParen)) {
+    return parseCForStatement(ctx, start);
+  }
+
+  // For-in loop: for item in collection { }
   const variable = ctx.expectIdentifier().lexeme;
 
   let index: string | null = null;
@@ -135,6 +143,51 @@ export function parseForStatement(ctx: ParserContext): ForStmt {
     variable,
     index,
     iterable,
+    body,
+    span: { start: start.span.start, end: body.span.end },
+  };
+}
+
+function parseCForStatement(
+  ctx: ParserContext,
+  start: { span: { start: number } }
+): CForStmt {
+  ctx.expect(TokenKind.LeftParen);
+
+  // Init: let i = 0 (or let i: int = 0)
+  ctx.expect(TokenKind.Let);
+  const name = ctx.expectIdentifier().lexeme;
+  let typeAnnotation: TypeNode | null = null;
+  if (ctx.match(TokenKind.Colon)) {
+    typeAnnotation = ctx.parseType();
+  }
+  ctx.expect(TokenKind.Equal);
+  const initializer = ctx.parseExpression();
+  const initEnd = ctx.expect(TokenKind.Semicolon);
+
+  const init = {
+    kind: "LetStmt" as const,
+    name,
+    typeAnnotation,
+    initializer,
+    span: { start: start.span.start, end: initEnd.span.end },
+  };
+
+  // Condition: i < 10
+  const condition = ctx.parseExpression();
+  ctx.expect(TokenKind.Semicolon);
+
+  // Update: i = i + 1
+  const update = ctx.parseExpression();
+  ctx.expect(TokenKind.RightParen);
+
+  const body = ctx.parseBlockStatement();
+
+  return {
+    kind: "CForStmt",
+    init,
+    condition,
+    update,
     body,
     span: { start: start.span.start, end: body.span.end },
   };

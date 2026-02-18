@@ -61,7 +61,8 @@ unsafe_block     = "unsafe" block ;
 
 (* Expressions *)
 expr             = literal | IDENT | expr bin_op expr | unary_op expr
-                 | expr "." IDENT | expr ".*" | expr "[" expr "]"
+                 | expr "." IDENT | "*" expr | expr "->" IDENT
+                 | expr "[" expr "]"
                  | expr "(" [arg_list] ")" | "if" expr block "else" block
                  | struct_literal | "(" expr ")" | "&" expr
                  | "move" expr

@@ -66,15 +66,15 @@ while condition {
 
 ### `for` loops
 
-Kei provides iterator-based for loops that work with ranges and collections:
+Kei provides C-style for loops and collection-based for loops:
 
-#### Range iteration
+#### C-style For Loop
 ```kei
-for i in 0..10 {       // 0 to 9 (exclusive)
+for (let i = 0; i < 10; i = i + 1) {       // 0 to 9 (exclusive end)
     print(i);
 }
 
-for i in 0..=10 {      // 0 to 10 (inclusive)
+for (let i = 0; i <= 10; i = i + 1) {      // 0 to 10 (inclusive end)
     print(i);
 }
 ```
@@ -103,7 +103,7 @@ for item, index in numbers {
 Loop variables are scoped to the loop body:
 
 ```kei
-for i in 0..5 {
+for (let i = 0; i < 5; i = i + 1) {
     let doubled = i * 2;  // i is accessible here
 }
 // i and doubled not accessible here
@@ -128,7 +128,7 @@ while true {
 Skip the rest of the current iteration and continue with the next:
 
 ```kei
-for i in 0..10 {
+for (let i = 0; i < 10; i = i + 1) {
     if i % 2 == 0 {
         continue;  // skip even numbers
     }

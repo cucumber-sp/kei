@@ -361,10 +361,6 @@ export class Lexer {
           }
           return this.makeToken(TokenKind.DotDot, start, this.pos);
         }
-        if (this.peek() === "*") {
-          this.pos++;
-          return this.makeToken(TokenKind.DotStar, start, this.pos);
-        }
         return this.makeToken(TokenKind.Dot, start, this.pos);
       case "{":
         return this.makeToken(TokenKind.LeftBrace, start, this.pos);

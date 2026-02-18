@@ -109,7 +109,7 @@ describe("Checker — Integration", () => {
     checkOk(`
       fn main() -> int {
         let sum = 0;
-        for i in 0..10 {
+        for (let i = 0; i < 10; i = i + 1) {
           if i == 3 { continue; }
           if i == 8 { break; }
           sum = sum + i;
@@ -226,7 +226,7 @@ describe("Checker — Integration", () => {
 
         let safe = getUser(5) catch panic;
 
-        for i in 0..10 {
+        for (let i = 0; i < 10; i = i + 1) {
           assert(i >= 0);
         }
 

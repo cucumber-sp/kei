@@ -37,7 +37,8 @@ Design principles document — no testable features. Used as reference for inten
 - Logical operators: `&&`, `||`, `!`
 - Bitwise operators: `&`, `|`, `^`, `~`, `<<`, `>>`
 - All assignment operators: `=`, `+=`, `-=`, `*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, `>>=`
-- Member access: `.`, `.*` (dereference), `->` (arrow)
+- Member access: `.`, `->` (arrow/dereference+member)
+- Prefix dereference: `*` (prefix)
 - Address-of: `&`
 - Range operators: `..`, `..=`
 - Fat arrow: `=>` (tokenized, reserved for future `match`)
@@ -87,7 +88,7 @@ Design principles document — no testable features. Used as reference for inten
 - `static` — compile-time constants, parsed and lowered to KIR
 - Uninitialized variables forbidden (parser requires initializer)
 - Variable shadowing allowed in nested scopes, forbidden in same scope
-- Dereference syntax is `p.*` (postfix, matches spec)
+- Dereference syntax is `*p` (prefix) and `p->field` (arrow access)
 - Range operators `..` (exclusive) and `..=` (inclusive) both implemented
 - `move` keyword parsed, checked (marks variable as moved, prevents reuse)
 
@@ -102,7 +103,7 @@ No divergences found. All variable features match spec.
 - `if`/`else` with optional parentheses around condition
 - `if` as expression (`let x = if a > b { a } else { b }`)
 - `while` loops with `break`/`continue`
-- `for i in 0..10` range iteration (both `..` and `..=`)
+- C-style for loops: `for (let i = 0; i < 10; i = i + 1) { }`
 - `for item in collection` array iteration
 - `for item, index in collection` iteration with index variable
 - `switch` with no fall-through, multiple values per case (`case 2, 3:`), `default` clause
@@ -164,7 +165,8 @@ No divergences found. All variable features match spec.
 - `sizeof(T)` builtin — returns `usize`
 - `unsafe` blocks with scope tracking
 - Address-of `&` operator (requires unsafe)
-- Dereference `.*` operator (requires unsafe)
+- Dereference `*` prefix operator (requires unsafe)
+- Arrow access `->` operator (requires unsafe, sugar for `(*p).field`)
 - `move` keyword (parsing and use-after-move detection)
 - Scope-exit `__destroy` calls (KIR emits destroy in reverse declaration order)
 

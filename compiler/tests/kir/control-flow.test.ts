@@ -222,18 +222,16 @@ describe("KIR: for loops", () => {
     const fn = lowerFunction(
       `
       fn foo() {
-        for i in 0..10 {
+        for (let i = 0; i < 10; i = i + 1) {
           let x: int = i;
         }
       }
     `,
       "foo"
     );
-    const initBlock = fn.blocks.find((b) => b.id.startsWith("for.init"));
-    const headerBlock = fn.blocks.find((b) => b.id.startsWith("for.header"));
-    const bodyBlock = fn.blocks.find((b) => b.id.startsWith("for.body"));
-    const latchBlock = fn.blocks.find((b) => b.id.startsWith("for.latch"));
-    expect(initBlock).toBeDefined();
+    const headerBlock = fn.blocks.find((b) => b.id.startsWith("cfor.header"));
+    const bodyBlock = fn.blocks.find((b) => b.id.startsWith("cfor.body"));
+    const latchBlock = fn.blocks.find((b) => b.id.startsWith("cfor.latch"));
     expect(headerBlock).toBeDefined();
     expect(bodyBlock).toBeDefined();
     expect(latchBlock).toBeDefined();
@@ -243,7 +241,7 @@ describe("KIR: for loops", () => {
     const fn = lowerFunction(
       `
       fn foo() {
-        for i in 0..10 {
+        for (let i = 0; i < 10; i = i + 1) {
           let x: int = i;
         }
       }
@@ -251,7 +249,7 @@ describe("KIR: for loops", () => {
       "foo"
     );
     // biome-ignore lint/style/noNonNullAssertion: test setup guarantees block exists
-    const headerBlock = fn.blocks.find((b) => b.id.startsWith("for.header"))!;
+    const headerBlock = fn.blocks.find((b) => b.id.startsWith("cfor.header"))!;
     expect(headerBlock.terminator.kind).toBe("br");
   });
 
@@ -259,7 +257,7 @@ describe("KIR: for loops", () => {
     const fn = lowerFunction(
       `
       fn foo() {
-        for i in 0..5 {
+        for (let i = 0; i < 5; i = i + 1) {
           let x: int = i;
         }
       }
@@ -267,10 +265,10 @@ describe("KIR: for loops", () => {
       "foo"
     );
     // biome-ignore lint/style/noNonNullAssertion: test setup guarantees block exists
-    const latchBlock = fn.blocks.find((b) => b.id.startsWith("for.latch"))!;
+    const latchBlock = fn.blocks.find((b) => b.id.startsWith("cfor.latch"))!;
     expect(latchBlock.terminator.kind).toBe("jump");
     if (latchBlock.terminator.kind === "jump") {
-      expect(latchBlock.terminator.target).toMatch(/^for\.header/);
+      expect(latchBlock.terminator.target).toMatch(/^cfor\.header/);
     }
   });
 });

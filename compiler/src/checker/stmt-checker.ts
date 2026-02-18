@@ -6,6 +6,7 @@ import type {
   AssertStmt,
   BlockStmt,
   BreakStmt,
+  CForStmt,
   ConstStmt,
   ContinueStmt,
   DeferStmt,
@@ -58,6 +59,8 @@ export class StatementChecker {
         return this.checkWhileStatement(stmt);
       case "ForStmt":
         return this.checkForStatement(stmt);
+      case "CForStmt":
+        return this.checkCForStatement(stmt);
       case "SwitchStmt":
         return this.checkSwitchStatement(stmt);
       case "DeferStmt":
@@ -263,6 +266,38 @@ export class StatementChecker {
       }
     }
 
+    let bodyDiverges = false;
+    for (const s of stmt.body.statements) {
+      if (bodyDiverges) {
+        this.checker.warning("unreachable code after return", s.span);
+        break;
+      }
+      bodyDiverges = this.checkStatement(s);
+    }
+    this.checker.popScope();
+
+    return false;
+  }
+
+  private checkCForStatement(stmt: CForStmt): boolean {
+    this.checker.pushScope({ isLoop: true });
+
+    // Check init (let statement)
+    this.checkVariableDeclaration(stmt.init, true, false);
+
+    // Check condition — must be bool
+    const condType = this.checker.checkExpression(stmt.condition);
+    if (!isErrorType(condType) && condType.kind !== TypeKind.Bool) {
+      this.checker.error(
+        `for condition must be bool, got '${typeToString(condType)}'`,
+        stmt.condition.span
+      );
+    }
+
+    // Check update expression
+    this.checker.checkExpression(stmt.update);
+
+    // Check body
     let bodyDiverges = false;
     for (const s of stmt.body.statements) {
       if (bodyDiverges) {

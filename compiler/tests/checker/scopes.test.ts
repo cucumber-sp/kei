@@ -71,7 +71,7 @@ describe("Checker — Scopes", () => {
 
   test("for loop variable scoped to loop body", () => {
     checkError(
-      `fn main() -> int { for i in 0..10 { let x = i; } return i; }`,
+      `fn main() -> int { for (let i = 0; i < 10; i = i + 1) { let x = i; } return i; }`,
       "undeclared variable 'i'"
     );
   });
@@ -79,7 +79,7 @@ describe("Checker — Scopes", () => {
   test("for loop index variable scoped to loop body", () => {
     checkOk(`
       fn main() -> int {
-        for item, idx in 0..10 {
+        for (let item = 0; item < 10; item = item + 1) {
           let x = item;
         }
         return 0;
@@ -233,7 +233,7 @@ describe("Checker — Scopes", () => {
     checkError(
       `
         fn main() -> int {
-          for item, idx in 0..5 { let x = idx; }
+          for (let idx = 0; idx < 5; idx = idx + 1) { let x = idx; }
           return idx;
         }
       `,

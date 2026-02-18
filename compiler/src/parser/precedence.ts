@@ -19,7 +19,7 @@ export enum Precedence {
   Additive = 10, // + -
   Multiplicative = 11, // * / %
   Unary = 12, // ! ~ - &
-  Postfix = 13, // . .* [] () ++ --
+  Postfix = 13, // . -> [] () ++ --
 }
 
 export enum Associativity {

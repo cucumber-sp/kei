@@ -66,7 +66,7 @@ describe("Checker — Unsafe", () => {
     checkOk(`
       fn main() -> int {
         let p: ptr<int> = null;
-        unsafe { let x = p.*; }
+        unsafe { let x = *p; }
         return 0;
       }
     `);
@@ -74,7 +74,7 @@ describe("Checker — Unsafe", () => {
 
   test("ptr dereference outside unsafe → error", () => {
     checkError(
-      `fn main() -> int { let p: ptr<int> = null; let x = p.*; return 0; }`,
+      `fn main() -> int { let p: ptr<int> = null; let x = *p; return 0; }`,
       "pointer dereference requires unsafe block"
     );
   });

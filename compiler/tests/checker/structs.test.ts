@@ -49,7 +49,7 @@ describe("Checker — Structs", () => {
       struct Counter {
         value: int;
         fn increment(self: ptr<Counter>) {
-          unsafe { self.*.value = self.*.value + 1; }
+          unsafe { self->value = self->value + 1; }
         }
       }
       fn main() -> int { return 0; }

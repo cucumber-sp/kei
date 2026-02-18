@@ -128,7 +128,7 @@ fn fibonacci(n: int) -> int throws InvalidInput {
     }
     let a: int = 0;
     let b: int = 1;
-    for i in 2..=n {
+    for (let i = 2; i <= n; i = i + 1) {
         let tmp = a + b;
         a = b;
         b = tmp;
@@ -138,7 +138,7 @@ fn fibonacci(n: int) -> int throws InvalidInput {
 
 fn main() -> int {
     // Print the first 10 Fibonacci numbers
-    for i in 0..10 {
+    for (let i = 0; i < 10; i = i + 1) {
         let result = fibonacci(i) catch panic;
         print(result);
         print(" ");
@@ -175,7 +175,7 @@ Error: invalid input -1
 This program demonstrates several Kei features:
 - **Structs** (`InvalidInput`) used as error types
 - **Error handling** (`throws`, `throw`, `catch`, `catch panic`)
-- **For-range loops** with both exclusive (`0..10`) and inclusive (`2..=n`) ranges
+- **C-style for loops** (`for (let i = 0; i < 10; i = i + 1)`)
 - **The standard library** (`import { print, newline } from io`)
 
 ## Common Errors and What They Mean

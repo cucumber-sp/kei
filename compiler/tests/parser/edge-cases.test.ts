@@ -447,8 +447,8 @@ describe("Parser — Edge Cases", () => {
       expect(fn.body.statements).toHaveLength(11);
     });
 
-    test("deref then index: p.*.arr[0]", () => {
-      const expr = parseExpr("p.*.arr[0]");
+    test("deref then index: p->arr[0]", () => {
+      const expr = parseExpr("p->arr[0]");
       expect(expr.kind).toBe("IndexExpr");
       if (expr.kind !== "IndexExpr") return;
       expect(expr.object.kind).toBe("MemberExpr");

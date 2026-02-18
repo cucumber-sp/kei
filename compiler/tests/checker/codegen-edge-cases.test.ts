@@ -245,8 +245,8 @@ describe("Checker — Codegen Edge Cases", () => {
     test("break in inner loop, continue in outer → ok", () => {
       checkOk(`
         fn main() -> int {
-          for i in 0..10 {
-            for j in 0..10 {
+          for (let i = 0; i < 10; i = i + 1) {
+            for (let j = 0; j < 10; j = j + 1) {
               if j == 3 { break; }
             }
             if i == 5 { continue; }
@@ -259,7 +259,7 @@ describe("Checker — Codegen Edge Cases", () => {
     test("continue in inner while, break in outer for → ok", () => {
       checkOk(`
         fn main() -> int {
-          for i in 0..5 {
+          for (let i = 0; i < 5; i = i + 1) {
             let j = 0;
             while j < 5 {
               j = j + 1;
@@ -680,7 +680,7 @@ describe("Checker — Codegen Edge Cases", () => {
       checkOk(`
         fn main() -> int {
           let sum = 0;
-          for i in 0..10 {
+          for (let i = 0; i < 10; i = i + 1) {
             sum = sum + i;
           }
           return sum;
@@ -691,7 +691,8 @@ describe("Checker — Codegen Edge Cases", () => {
     test("for with index variable → ok", () => {
       checkOk(`
         fn main() -> int {
-          for item, idx in 0..5 {
+          for (let item = 0; item < 5; item = item + 1) {
+            let idx = item;
             let x = item + idx;
           }
           return 0;
@@ -700,7 +701,7 @@ describe("Checker — Codegen Edge Cases", () => {
     });
 
     test("for loop variable not accessible outside → error", () => {
-      checkError(`fn main() -> int { for i in 0..10 {} return i; }`, "undeclared variable 'i'");
+      checkError(`fn main() -> int { for (let i = 0; i < 10; i = i + 1) {} return i; }`, "undeclared variable 'i'");
     });
   });
 });

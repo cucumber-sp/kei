@@ -75,7 +75,7 @@ describe("Parser — Expressions", () => {
   });
 
   test("dereference", () => {
-    const expr = parseExpr("a.*");
+    const expr = parseExpr("*a");
     expect(expr.kind).toBe("DerefExpr");
   });
 
@@ -326,8 +326,8 @@ describe("Parser — Expressions", () => {
     expect(inner.expression.kind).toBe("UnaryExpr");
   });
 
-  test("deref then member: a.*.x", () => {
-    const expr = parseExpr("a.*.x");
+  test("arrow access: a->x", () => {
+    const expr = parseExpr("a->x");
     expect(expr.kind).toBe("MemberExpr");
     if (expr.kind !== "MemberExpr") return;
     expect(expr.property).toBe("x");

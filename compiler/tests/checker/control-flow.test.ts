@@ -18,7 +18,7 @@ describe("Checker — Control Flow", () => {
   test("continue inside for → ok", () => {
     checkOk(`
       fn main() -> int {
-        for i in 0..10 { continue; }
+        for (let i = 0; i < 10; i = i + 1) { continue; }
         return 0;
       }
     `);
@@ -76,8 +76,8 @@ describe("Checker — Control Flow", () => {
   test("nested loops: break/continue affect innermost", () => {
     checkOk(`
       fn main() -> int {
-        for i in 0..10 {
-          for j in 0..10 {
+        for (let i = 0; i < 10; i = i + 1) {
+          for (let j = 0; j < 10; j = j + 1) {
             if j == 5 { break; }
           }
         }
@@ -216,7 +216,7 @@ describe("Checker — Control Flow", () => {
   test("for loop over range → ok", () => {
     checkOk(`
       fn main() -> int {
-        for i in 0..10 { let x = i; }
+        for (let i = 0; i < 10; i = i + 1) { let x = i; }
         return 0;
       }
     `);
@@ -278,7 +278,7 @@ describe("Checker — Control Flow", () => {
     checkWarning(
       `
         fn main() -> int {
-          for i in 0..10 {
+          for (let i = 0; i < 10; i = i + 1) {
             continue;
             let x = 42;
           }

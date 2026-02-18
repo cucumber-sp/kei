@@ -33,7 +33,7 @@ function parsePrattExpression(ctx: ParserContext, minPrecedence: Precedence): Ex
   let left = parsePrefixExpression(ctx);
 
   while (true) {
-    // Postfix: . .* [] () ++ -- catch
+    // Postfix: . -> [] () ++ -- catch
     left = parsePostfixExpression(ctx, left);
 
     // Range operators (.., ..=)
@@ -98,6 +98,17 @@ function parseRangeExpression(ctx: ParserContext, left: Expression): Expression 
 
 function parsePrefixExpression(ctx: ParserContext): Expression {
   const token = ctx.current();
+
+  // Prefix dereference: *ptr
+  if (token.kind === TokenKind.Star) {
+    ctx.advance();
+    const operand = parsePrattExpression(ctx, Precedence.Unary);
+    return {
+      kind: "DerefExpr",
+      operand,
+      span: { start: token.span.start, end: operand.span.end },
+    };
+  }
 
   // Unary prefix operators
   if (

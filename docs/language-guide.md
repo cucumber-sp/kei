@@ -107,7 +107,7 @@ Raw pointers are available but require `unsafe` to use:
 fn main() -> int {
     let x: int = 42;
     let p: ptr<int> = unsafe { &x };   // address-of requires unsafe
-    let val = unsafe { p.* };          // dereference requires unsafe (postfix .*)
+    let val = unsafe { *p };           // dereference requires unsafe (prefix *)
     print(val);                        // 42
     return 0;
 }
@@ -318,7 +318,7 @@ struct Counter {
 
     fn increment(self: ptr<Counter>) {
         unsafe {
-            self.*.value = self.*.value + 1;
+            self->value = self->value + 1;
         }
     }
 
@@ -540,16 +540,16 @@ while i < 10 {
 
 `break` exits the loop. `continue` skips to the next iteration.
 
-### For-Range Loop
+### C-style For Loop
 
 ```kei
-// Exclusive range: 0, 1, 2, ..., 9
-for i in 0..10 {
+// Exclusive: 0, 1, 2, ..., 9
+for (let i = 0; i < 10; i = i + 1) {
     print(i);
 }
 
-// Inclusive range: 0, 1, 2, ..., 10
-for i in 0..=10 {
+// Inclusive: 0, 1, 2, ..., 10
+for (let i = 0; i <= 10; i = i + 1) {
     print(i);
 }
 ```
@@ -1046,7 +1046,7 @@ These operations require `unsafe`:
 - `alloc` / `free`
 - Calling `extern fn` functions
 - Address-of (`&x`)
-- Pointer dereference (`p.*`)
+- Pointer dereference (`*p`)
 - Pointer casts
 
 ```kei
@@ -1055,7 +1055,7 @@ fn main() -> int {
 
     unsafe {
         let p: ptr<int> = &x;     // address-of
-        let val = p.*;             // dereference
+        let val = *p;              // dereference
         print(val);                // 42
     }
 
@@ -1238,7 +1238,8 @@ These are safe wrappers — they call C stdlib functions internally so callers d
 | Operator | Description |
 |----------|-------------|
 | `.` | Field access |
-| `.*` | Pointer dereference |
+| `*` | Pointer dereference (prefix) |
+| `->` | Arrow member access (pointer) |
 | `&` | Address-of (unsafe) |
 | `as` | Type cast |
 | `..` | Exclusive range |

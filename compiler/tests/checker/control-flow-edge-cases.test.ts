@@ -6,8 +6,8 @@ describe("Checker — Control Flow Edge Cases", () => {
     test("break in inner loop doesn't affect outer → ok", () => {
       checkOk(`
         fn main() -> int {
-          for i in 0..10 {
-            for j in 0..10 {
+          for (let i = 0; i < 10; i = i + 1) {
+            for (let j = 0; j < 10; j = j + 1) {
               if j == 3 { break; }
             }
           }
@@ -19,8 +19,8 @@ describe("Checker — Control Flow Edge Cases", () => {
     test("continue in inner loop doesn't affect outer → ok", () => {
       checkOk(`
         fn main() -> int {
-          for i in 0..5 {
-            for j in 0..5 {
+          for (let i = 0; i < 5; i = i + 1) {
+            for (let j = 0; j < 5; j = j + 1) {
               if j == 2 { continue; }
             }
           }
@@ -32,7 +32,7 @@ describe("Checker — Control Flow Edge Cases", () => {
     test("break in while inside for → ok", () => {
       checkOk(`
         fn main() -> int {
-          for i in 0..10 {
+          for (let i = 0; i < 10; i = i + 1) {
             let x = 0;
             while x < 5 {
               if x == 3 { break; }
@@ -134,7 +134,7 @@ describe("Checker — Control Flow Edge Cases", () => {
       checkOk(`
         fn main() -> int {
           let sum = 0;
-          for i in 0..10 {
+          for (let i = 0; i < 10; i = i + 1) {
             sum = sum + i;
           }
           return sum;
@@ -145,7 +145,8 @@ describe("Checker — Control Flow Edge Cases", () => {
     test("for with index variable → ok", () => {
       checkOk(`
         fn main() -> int {
-          for item, idx in 0..10 {
+          for (let item = 0; item < 10; item = item + 1) {
+            let idx = item;
             let x = idx;
           }
           return 0;
@@ -161,15 +162,15 @@ describe("Checker — Control Flow Edge Cases", () => {
     });
 
     test("for loop variable not accessible after loop", () => {
-      checkError(`fn main() -> int { for i in 0..10 { } return i; }`, "undeclared variable 'i'");
+      checkError(`fn main() -> int { for (let i = 0; i < 10; i = i + 1) { } return i; }`, "undeclared variable 'i'");
     });
 
     test("nested for loops → ok", () => {
       checkOk(`
         fn main() -> int {
           let sum = 0;
-          for i in 0..5 {
-            for j in 0..5 {
+          for (let i = 0; i < 5; i = i + 1) {
+            for (let j = 0; j < 5; j = j + 1) {
               sum = sum + 1;
             }
           }
@@ -416,7 +417,7 @@ describe("Checker — Control Flow Edge Cases", () => {
       checkWarning(
         `
           fn main() -> int {
-            for i in 0..10 {
+            for (let i = 0; i < 10; i = i + 1) {
               continue;
               let x = 42;
             }
@@ -544,7 +545,7 @@ describe("Checker — Control Flow Edge Cases", () => {
       checkOk(`
         fn main() -> int {
           let sum = 0;
-          for i in 0..10 {
+          for (let i = 0; i < 10; i = i + 1) {
             sum = sum + i;
           }
           return sum;

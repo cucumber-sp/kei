@@ -57,8 +57,8 @@ struct Point {
     // by-pointer method (mutates in place)
     fn translate(self: ptr<Point>, dx: f64, dy: f64) {
         unsafe {
-            self.*.x = self.*.x + dx;
-            self.*.y = self.*.y + dy;
+            self->x = self->x + dx;
+            self->y = self->y + dy;
         }
     }
 }
@@ -156,9 +156,9 @@ fn main() -> int {
 // if/else (works as expression)
 let max = if a > b { a } else { b };
 
-// for loops
-for i in 0..10 { }          // 0 to 9
-for i in 0..=10 { }         // 0 to 10
+// C-style for loops
+for (let i = 0; i < 10; i = i + 1) { }   // 0 to 9
+for (let i = 0; i <= 10; i = i + 1) { }  // 0 to 10
 
 // while
 while count < 10 {

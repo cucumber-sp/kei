@@ -12,7 +12,7 @@ describe("Checker — Unsafe Edge Cases", () => {
       checkOk(`
         fn main() -> int {
           let p: ptr<int> = null;
-          unsafe { let x = p.*; }
+          unsafe { let x = *p; }
           return 0;
         }
       `);
@@ -20,14 +20,14 @@ describe("Checker — Unsafe Edge Cases", () => {
 
     test("deref outside unsafe → error", () => {
       checkError(
-        `fn main() -> int { let p: ptr<int> = null; let x = p.*; return 0; }`,
+        `fn main() -> int { let p: ptr<int> = null; let x = *p; return 0; }`,
         "requires unsafe block"
       );
     });
 
     test("deref of non-pointer → error", () => {
       checkError(
-        `fn main() -> int { unsafe { let x = 42; let y = x.*; } return 0; }`,
+        `fn main() -> int { unsafe { let x = 42; let y = *x; } return 0; }`,
         "cannot dereference non-pointer"
       );
     });
@@ -39,7 +39,7 @@ describe("Checker — Unsafe Edge Cases", () => {
           unsafe {
             let p = &x;
             let pp = &p;
-            let val = pp.*.*;
+            let val = **pp;
           }
           return 0;
         }
@@ -53,7 +53,7 @@ describe("Checker — Unsafe Edge Cases", () => {
           let p = Point{ x: 1.0, y: 2.0 };
           unsafe {
             let pp = &p;
-            let val = pp.*.x;
+            let val = pp->x;
           }
           return 0;
         }
@@ -351,7 +351,7 @@ describe("Checker — Unsafe Edge Cases", () => {
         struct Counter {
           value: int;
           fn increment(self: ptr<Counter>) {
-            unsafe { self.*.value = self.*.value + 1; }
+            unsafe { self->value = self->value + 1; }
           }
         }
         fn main() -> int { return 0; }

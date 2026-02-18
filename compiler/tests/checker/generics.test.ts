@@ -366,7 +366,7 @@ describe("Checker: Generics", () => {
     test("generic function with ptr param", () => {
       checkOk(`
         fn deref<T>(p: ptr<T>) -> T {
-          return unsafe { p.* };
+          return unsafe { *p };
         }
         fn main() -> i32 {
           let x: i32 = 42;

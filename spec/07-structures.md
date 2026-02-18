@@ -27,8 +27,8 @@ struct Point {
     }
 
     fn translate(self: ptr<Point>, dx: f64, dy: f64) {
-        self.*.x += dx;
-        self.*.y += dy;
+        self->x += dx;
+        self->y += dy;
     }
 
     fn Point(x: f64, y: f64) -> Point {
@@ -245,7 +245,7 @@ struct Counter {
     value: int;
 
     fn increment(self: ptr<Counter>) {
-        self.*.value += 1;
+        self->value += 1;
     }
 
     fn get(self: Counter) -> int {

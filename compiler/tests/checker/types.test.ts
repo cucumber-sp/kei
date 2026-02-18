@@ -149,14 +149,14 @@ describe("Checker — Types", () => {
 
   test("deref outside unsafe → error", () => {
     checkError(
-      `fn main() -> int { let p: ptr<int> = null; let x = p.*; return 0; }`,
+      `fn main() -> int { let p: ptr<int> = null; let x = *p; return 0; }`,
       "requires unsafe block"
     );
   });
 
   test("deref of non-pointer → error", () => {
     checkError(
-      `fn main() -> int { unsafe { let x = 42; let y = x.*; } return 0; }`,
+      `fn main() -> int { unsafe { let x = 42; let y = *x; } return 0; }`,
       "cannot dereference non-pointer"
     );
   });

@@ -21,6 +21,7 @@ import type {
   ExprStmt,
   ExternFunctionDecl,
   FloatLiteral,
+  CForStmt,
   ForStmt,
   FunctionDecl,
   GroupExpr,
@@ -75,6 +76,7 @@ export interface AstVisitor<T = void> {
   visitIfStmt(node: IfStmt): T;
   visitWhileStmt(node: WhileStmt): T;
   visitForStmt(node: ForStmt): T;
+  visitCForStmt(node: CForStmt): T;
   visitSwitchStmt(node: SwitchStmt): T;
   visitDeferStmt(node: DeferStmt): T;
   visitBreakStmt(node: BreakStmt): T;

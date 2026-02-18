@@ -10,6 +10,7 @@ export enum StmtKind {
   If = "IfStmt",
   While = "WhileStmt",
   For = "ForStmt",
+  CFor = "CForStmt",
   Switch = "SwitchStmt",
   Defer = "DeferStmt",
   Break = "BreakStmt",
@@ -64,13 +65,22 @@ export interface WhileStmt extends BaseNode {
   body: BlockStmt;
 }
 
-/** For-in loop over an iterable (`for x in expr { ... }`). */
+/** For-in loop over an iterable (`for item in expr { ... }`). */
 export interface ForStmt extends BaseNode {
   kind: "ForStmt";
   variable: string;
   /** Optional loop index variable name. */
   index: string | null;
   iterable: Expression;
+  body: BlockStmt;
+}
+
+/** C-style for loop (`for (let i = 0; i < 10; i = i + 1) { ... }`). */
+export interface CForStmt extends BaseNode {
+  kind: "CForStmt";
+  init: LetStmt;
+  condition: Expression;
+  update: Expression;
   body: BlockStmt;
 }
 
@@ -143,6 +153,7 @@ export type Statement =
   | IfStmt
   | WhileStmt
   | ForStmt
+  | CForStmt
   | SwitchStmt
   | DeferStmt
   | BreakStmt

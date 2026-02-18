@@ -6,6 +6,7 @@
 import type {
   AssertStmt,
   BlockStmt,
+  CForStmt,
   ConstStmt,
   ExprStmt,
   ForStmt,
@@ -64,6 +65,9 @@ export function lowerStatement(this: KirLowerer, stmt: Statement): void {
       break;
     case "ForStmt":
       this.lowerForStmt(stmt);
+      break;
+    case "CForStmt":
+      this.lowerCForStmt(stmt);
       break;
     case "SwitchStmt":
       this.lowerSwitchStmt(stmt);
@@ -372,6 +376,62 @@ export function lowerForStmt(this: KirLowerer, stmt: ForStmt): void {
     this.startBlock(headerLabel);
     this.setTerminator({ kind: "jump", target: endLabel });
   }
+
+  // End
+  this.sealCurrentBlock();
+  this.startBlock(endLabel);
+}
+
+export function lowerCForStmt(this: KirLowerer, stmt: CForStmt): void {
+  // C-style for: for (let i = 0; i < 10; i = i + 1) { body }
+  // Lower as: init → header (condition) → body → latch (update) → header → end
+  const headerLabel = this.freshBlockId("cfor.header");
+  const bodyLabel = this.freshBlockId("cfor.body");
+  const latchLabel = this.freshBlockId("cfor.latch");
+  const endLabel = this.freshBlockId("cfor.end");
+
+  // Init: lower the let statement in the current block
+  this.lowerLetStmt(stmt.init);
+
+  this.setTerminator({ kind: "jump", target: headerLabel });
+
+  // Header: evaluate condition
+  this.sealCurrentBlock();
+  this.startBlock(headerLabel);
+  const condId = this.lowerExpr(stmt.condition);
+  this.setTerminator({
+    kind: "br",
+    cond: condId,
+    thenBlock: bodyLabel,
+    elseBlock: endLabel,
+  });
+
+  // Body
+  this.sealCurrentBlock();
+  this.startBlock(bodyLabel);
+
+  const prevBreak = this.loopBreakTarget;
+  const prevContinue = this.loopContinueTarget;
+  const prevScopeDepth = this.loopScopeDepth;
+  this.loopBreakTarget = endLabel;
+  this.loopContinueTarget = latchLabel;
+  this.loopScopeDepth = this.scopeStack.length;
+
+  this.lowerBlock(stmt.body);
+
+  this.loopBreakTarget = prevBreak;
+  this.loopContinueTarget = prevContinue;
+  this.loopScopeDepth = prevScopeDepth;
+
+  if (!this.isBlockTerminated()) {
+    this.setTerminator({ kind: "jump", target: latchLabel });
+  }
+
+  // Latch: evaluate update expression, jump back to header
+  this.sealCurrentBlock();
+  this.startBlock(latchLabel);
+  this.lowerExpr(stmt.update);
+  this.setTerminator({ kind: "jump", target: headerLabel });
 
   // End
   this.sealCurrentBlock();
