@@ -14,8 +14,6 @@ const OPERATOR_TESTS: [string, TokenKind][] = [
   ["*", TokenKind.Star],
   ["/", TokenKind.Slash],
   ["%", TokenKind.Percent],
-  ["++", TokenKind.PlusPlus],
-  ["--", TokenKind.MinusMinus],
   ["==", TokenKind.EqualEqual],
   ["!=", TokenKind.BangEqual],
   ["<", TokenKind.Less],

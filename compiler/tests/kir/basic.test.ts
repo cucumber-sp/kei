@@ -42,7 +42,7 @@ describe("KIR: basic function lowering", () => {
   });
 
   test("module name", () => {
-    const mod = lower(`fn main() {}`);
+    const mod = lower(`fn main() -> int { return 0; }`);
     expect(mod.name).toBe("main");
   });
 });

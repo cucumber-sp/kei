@@ -3,13 +3,7 @@
  * Extracted from lowering-expr.ts for modularity.
  */
 
-import type {
-  BinaryExpr,
-  DecrementExpr,
-  Expression,
-  IncrementExpr,
-  UnaryExpr,
-} from "../ast/nodes.ts";
+import type { BinaryExpr, Expression, UnaryExpr } from "../ast/nodes.ts";
 import type { StructType } from "../checker/types";
 import type { KirType, VarId } from "./kir-types.ts";
 import type { KirLowerer } from "./lowering.ts";
@@ -189,26 +183,3 @@ export function lowerOperatorMethodCall(
   return selfId;
 }
 
-export function lowerIncrementExpr(this: KirLowerer, expr: IncrementExpr): VarId {
-  if (expr.operand.kind === "Identifier") {
-    const ptrId = this.varMap.get(expr.operand.name);
-    if (ptrId) {
-      const type = this.getExprKirType(expr.operand);
-      const oneId = this.emitConstInt(1);
-      return this.emitLoadModifyStore(ptrId, "add", oneId, type); // post-increment: returns old value
-    }
-  }
-  return this.emitConstInt(0);
-}
-
-export function lowerDecrementExpr(this: KirLowerer, expr: DecrementExpr): VarId {
-  if (expr.operand.kind === "Identifier") {
-    const ptrId = this.varMap.get(expr.operand.name);
-    if (ptrId) {
-      const type = this.getExprKirType(expr.operand);
-      const oneId = this.emitConstInt(1);
-      return this.emitLoadModifyStore(ptrId, "sub", oneId, type); // post-decrement: returns old value
-    }
-  }
-  return this.emitConstInt(0);
-}

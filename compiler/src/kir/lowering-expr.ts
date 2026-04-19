@@ -59,10 +59,6 @@ export function lowerExpr(this: KirLowerer, expr: Expression): VarId {
       return this.lowerIfExpr(expr);
     case "GroupExpr":
       return this.lowerExpr(expr.expression);
-    case "IncrementExpr":
-      return this.lowerIncrementExpr(expr);
-    case "DecrementExpr":
-      return this.lowerDecrementExpr(expr);
     case "MoveExpr":
       return this.lowerMoveExpr(expr);
     case "ThrowExpr":

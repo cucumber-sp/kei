@@ -217,4 +217,27 @@ describe("Checker — Functions", () => {
       }
     `);
   });
+
+  test("main() -> int → ok", () => {
+    checkOk(`fn main() -> int { return 0; }`);
+  });
+
+  test("main() returning non-int → error", () => {
+    checkError(`fn main() -> bool { return true; }`, "'main' must return 'int'");
+  });
+
+  test("main() returning void → error", () => {
+    checkError(`fn main() { }`, "'main' must return 'int'");
+  });
+
+  test("main() with parameters → error", () => {
+    checkError(`fn main(x: int) -> int { return x; }`, "'main' cannot take parameters");
+  });
+
+  test("main() declaring throws → error", () => {
+    checkError(
+      `struct Bad {} fn main() -> int throws Bad { return 0; }`,
+      "'main' cannot declare 'throws'"
+    );
+  });
 });

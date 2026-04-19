@@ -17,10 +17,6 @@ describe("Checker — Type Edge Cases", () => {
       );
     });
 
-    test("increment const → error", () => {
-      checkError(`fn main() -> int { const x = 5; x++; return x; }`, "cannot assign to immutable");
-    });
-
     test("const in nested scope still immutable", () => {
       checkError(
         `fn main() -> int {

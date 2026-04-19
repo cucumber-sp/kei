@@ -398,9 +398,10 @@ describe("Checker: Generics (comprehensive)", () => {
         struct Box<T> {
           value: T;
         }
-        fn main() {
+        fn main() -> int {
           let a = Box<i32>{ value: 42 };
           let b = Box<bool>{ value: true };
+          return 0;
         }
       `;
       const { Checker } = require("../../src/checker/checker.ts");
@@ -498,8 +499,9 @@ describe("Checker: Generics (comprehensive)", () => {
         struct Box<T> {
           value: T;
         }
-        fn main() {
+        fn main() -> int {
           let b = Box<i32>{ value: "wrong" };
+          return 0;
         }
         `,
         "expected 'i32', got 'string'"
@@ -512,8 +514,9 @@ describe("Checker: Generics (comprehensive)", () => {
         struct Box<T> {
           value: T;
         }
-        fn main() {
+        fn main() -> int {
           let b = Box<bool>{ value: 42 };
+          return 0;
         }
         `,
         "expected 'bool'"
@@ -526,8 +529,9 @@ describe("Checker: Generics (comprehensive)", () => {
         fn identity<T>(x: T) -> T {
           return x;
         }
-        fn main() {
+        fn main() -> int {
           identity<i32, bool>(42);
+          return 0;
         }
         `,
         "expects 1 type argument(s) <T>, got 2"
@@ -541,8 +545,9 @@ describe("Checker: Generics (comprehensive)", () => {
           x: i32;
           y: i32;
         }
-        fn main() {
+        fn main() -> int {
           let p = Point<i32>{ x: 1, y: 2 };
+          return 0;
         }
         `,
         "expects 0 type argument(s), got 1"
@@ -555,8 +560,9 @@ describe("Checker: Generics (comprehensive)", () => {
         struct Box<T> {
           value: T;
         }
-        fn main() {
+        fn main() -> int {
           let b = Box<Unknown>{ value: 42 };
+          return 0;
         }
         `,
         "undeclared type 'Unknown'"
@@ -569,8 +575,9 @@ describe("Checker: Generics (comprehensive)", () => {
         fn identity<T>(x: T) -> T {
           return x;
         }
-        fn main() {
+        fn main() -> int {
           let x: i32 = identity<string>("hello");
+          return 0;
         }
         `,
         "expected 'i32', got 'string'"

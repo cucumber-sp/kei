@@ -124,13 +124,6 @@ describe("Checker — Types", () => {
     checkError(`fn main() -> int { let x = 42; x += 1.0; return x; }`, "requires same types");
   });
 
-  test("increment on non-integer → error", () => {
-    checkError(
-      `fn main() -> int { let x = 1.0; x++; return 0; }`,
-      "increment operator requires integer"
-    );
-  });
-
   test("bitwise on non-integer → error", () => {
     checkError(`fn main() -> int { let x = 1.0 & 2.0; return 0; }`, "requires integer operands");
   });

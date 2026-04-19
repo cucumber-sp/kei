@@ -1,14 +1,12 @@
 /**
- * Type-checks binary, unary, assignment, increment, and decrement expressions,
- * including operator overloading resolution.
+ * Type-checks binary, unary, and assignment expressions, including operator
+ * overloading resolution.
  */
 
 import type {
   AssignExpr,
   BinaryExpr,
-  DecrementExpr,
   Expression,
-  IncrementExpr,
   UnaryExpr,
 } from "../ast/nodes.ts";
 import type { Checker } from "./checker.ts";
@@ -354,38 +352,6 @@ function checkAssignTarget(checker: Checker, target: Expression): void {
       checker.error("pointer dereference assignment requires unsafe block", target.span);
     }
   }
-}
-
-export function checkIncrementExpression(checker: Checker, expr: IncrementExpr): Type {
-  const operandType = checker.checkExpression(expr.operand);
-  if (isErrorType(operandType)) return ERROR_TYPE;
-
-  if (!isIntegerType(operandType)) {
-    checker.error(
-      `increment operator requires integer type, got '${typeToString(operandType)}'`,
-      expr.span
-    );
-    return ERROR_TYPE;
-  }
-
-  checkAssignTarget(checker, expr.operand);
-  return operandType;
-}
-
-export function checkDecrementExpression(checker: Checker, expr: DecrementExpr): Type {
-  const operandType = checker.checkExpression(expr.operand);
-  if (isErrorType(operandType)) return ERROR_TYPE;
-
-  if (!isIntegerType(operandType)) {
-    checker.error(
-      `decrement operator requires integer type, got '${typeToString(operandType)}'`,
-      expr.span
-    );
-    return ERROR_TYPE;
-  }
-
-  checkAssignTarget(checker, expr.operand);
-  return operandType;
 }
 
 /**

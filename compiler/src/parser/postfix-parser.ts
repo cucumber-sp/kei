@@ -120,28 +120,6 @@ export function parsePostfixExpression(ctx: ParserContext, left: Expression): Ex
       continue;
     }
 
-    // Postfix increment: ++
-    if (ctx.check(TokenKind.PlusPlus)) {
-      const end = ctx.advance();
-      left = {
-        kind: "IncrementExpr",
-        operand: left,
-        span: { start: left.span.start, end: end.span.end },
-      };
-      continue;
-    }
-
-    // Postfix decrement: --
-    if (ctx.check(TokenKind.MinusMinus)) {
-      const end = ctx.advance();
-      left = {
-        kind: "DecrementExpr",
-        operand: left,
-        span: { start: left.span.start, end: end.span.end },
-      };
-      continue;
-    }
-
     // cast: expr as Type
     if (ctx.check(TokenKind.As)) {
       left = parseCastExpression(ctx, left);

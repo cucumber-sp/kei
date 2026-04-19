@@ -13,7 +13,6 @@ export type {
   ConstStmt,
   ContinueStmt,
   Declaration,
-  DecrementExpr,
   DeferStmt,
   DerefExpr,
   EnumDecl,
@@ -33,7 +32,6 @@ export type {
   IfExpr,
   IfStmt,
   ImportDecl,
-  IncrementExpr,
   IndexExpr,
   IntLiteral,
   LetStmt,
@@ -63,5 +61,3 @@ export type {
 } from "./nodes/index.ts";
 
 export { DeclKind, ExprKind, StmtKind, TypeNodeKind } from "./nodes/index.ts";
-
-export type { AstVisitor } from "./visitor.ts";

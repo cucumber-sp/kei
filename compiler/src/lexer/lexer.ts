@@ -239,20 +239,12 @@ export class Lexer {
 
     switch (ch) {
       case "+":
-        if (this.peek() === "+") {
-          this.pos++;
-          return this.makeToken(TokenKind.PlusPlus, start, this.pos);
-        }
         if (this.peek() === "=") {
           this.pos++;
           return this.makeToken(TokenKind.PlusEqual, start, this.pos);
         }
         return this.makeToken(TokenKind.Plus, start, this.pos);
       case "-":
-        if (this.peek() === "-") {
-          this.pos++;
-          return this.makeToken(TokenKind.MinusMinus, start, this.pos);
-        }
         if (this.peek() === "=") {
           this.pos++;
           return this.makeToken(TokenKind.MinusEqual, start, this.pos);

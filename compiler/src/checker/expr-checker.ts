@@ -31,8 +31,6 @@ import {
 import {
   checkAssignExpression,
   checkBinaryExpression,
-  checkDecrementExpression,
-  checkIncrementExpression,
   checkUnaryExpression,
 } from "./operator-checker.ts";
 import { SymbolKind } from "./symbols.ts";
@@ -108,10 +106,6 @@ export class ExpressionChecker {
         return checkThrowExpression(this.checker, expr);
       case "GroupExpr":
         return this.checkGroupExpression(expr);
-      case "IncrementExpr":
-        return checkIncrementExpression(this.checker, expr);
-      case "DecrementExpr":
-        return checkDecrementExpression(this.checker, expr);
       case "RangeExpr":
         return this.checkRangeExpression(expr);
       case "UnsafeExpr":

@@ -22,8 +22,6 @@ export enum ExprKind {
   Catch = "CatchExpr",
   Throw = "ThrowExpr",
   Group = "GroupExpr",
-  Increment = "IncrementExpr",
-  Decrement = "DecrementExpr",
   Range = "RangeExpr",
   Unsafe = "UnsafeExpr",
   Cast = "CastExpr",
@@ -185,18 +183,6 @@ export interface GroupExpr extends BaseNode {
   expression: Expression;
 }
 
-/** Post-increment (`x++`). */
-export interface IncrementExpr extends BaseNode {
-  kind: "IncrementExpr";
-  operand: Expression;
-}
-
-/** Post-decrement (`x--`). */
-export interface DecrementExpr extends BaseNode {
-  kind: "DecrementExpr";
-  operand: Expression;
-}
-
 /** Range expression (`start..end` or `start..=end`). */
 export interface RangeExpr extends BaseNode {
   kind: "RangeExpr";
@@ -253,8 +239,6 @@ export type Expression =
   | CatchExpr
   | ThrowExpr
   | GroupExpr
-  | IncrementExpr
-  | DecrementExpr
   | RangeExpr
   | UnsafeExpr
   | CastExpr

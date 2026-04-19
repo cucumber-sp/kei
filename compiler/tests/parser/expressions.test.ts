@@ -86,16 +86,6 @@ describe("Parser — Expressions", () => {
     expect(expr.args).toHaveLength(2);
   });
 
-  test("postfix increment", () => {
-    const expr = parseExprStmt("a++;");
-    expect(expr.kind).toBe("IncrementExpr");
-  });
-
-  test("postfix decrement", () => {
-    const expr = parseExprStmt("a--;");
-    expect(expr.kind).toBe("DecrementExpr");
-  });
-
   test("chaining: a.b.c", () => {
     const expr = parseExpr("a.b.c");
     expect(expr.kind).toBe("MemberExpr");

@@ -10,8 +10,9 @@ describe("Checker: Generics", () => {
         struct Box<T> {
           value: T;
         }
-        fn main() {
+        fn main() -> int {
           let b = Box<i32>{ value: 42 };
+          return 0;
         }
       `);
     });
@@ -22,8 +23,9 @@ describe("Checker: Generics", () => {
           first: A;
           second: B;
         }
-        fn main() {
+        fn main() -> int {
           let p = Pair<i32, bool>{ first: 1, second: true };
+          return 0;
         }
       `);
     });
@@ -45,8 +47,9 @@ describe("Checker: Generics", () => {
         struct Box<T> {
           value: T;
         }
-        fn main() {
+        fn main() -> int {
           let b = Box<string>{ value: "hello" };
+          return 0;
         }
       `);
     });
@@ -58,8 +61,9 @@ describe("Checker: Generics", () => {
           first: A;
           second: B;
         }
-        fn main() {
+        fn main() -> int {
           let p = Pair<i32>{ first: 1, second: true };
+          return 0;
         }
         `,
         "expects 2 type argument(s) <A, B>, got 1"
@@ -72,8 +76,9 @@ describe("Checker: Generics", () => {
         struct Box<T> {
           value: T;
         }
-        fn main() {
+        fn main() -> int {
           let b = Box<i32>{ value: "hello" };
+          return 0;
         }
         `,
         "expected 'i32', got 'string'"
@@ -89,8 +94,9 @@ describe("Checker: Generics", () => {
         struct Box<T> {
           value: T;
         }
-        fn main() {
+        fn main() -> int {
           let b = Box{ value: 42 };
+          return 0;
         }
       `);
     });
@@ -101,8 +107,9 @@ describe("Checker: Generics", () => {
           first: A;
           second: B;
         }
-        fn main() {
+        fn main() -> int {
           let p = Pair{ first: 42, second: true };
+          return 0;
         }
       `);
     });
@@ -116,10 +123,11 @@ describe("Checker: Generics", () => {
         struct Box<T> {
           value: T;
         }
-        fn main() {
+        fn main() -> int {
           let a = Box<i32>{ value: 42 };
           let b = Box<bool>{ value: true };
           let c = Box<string>{ value: "hi" };
+          return 0;
         }
       `);
     });
@@ -129,9 +137,10 @@ describe("Checker: Generics", () => {
         struct Box<T> {
           value: T;
         }
-        fn main() {
+        fn main() -> int {
           let a = Box<i32>{ value: 1 };
           let b = Box<i32>{ value: 2 };
+          return 0;
         }
       `);
     });
@@ -168,8 +177,9 @@ describe("Checker: Generics", () => {
         fn identity<T>(x: T) -> T {
           return x;
         }
-        fn main() {
+        fn main() -> int {
           identity<i32, bool>(42);
+          return 0;
         }
         `,
         "expects 1 type argument(s) <T>, got 2"
@@ -182,8 +192,9 @@ describe("Checker: Generics", () => {
         fn identity<T>(x: T) -> T {
           return x;
         }
-        fn main() {
+        fn main() -> int {
           identity<i32>("hello");
+          return 0;
         }
         `,
         "expected 'i32', got 'string'"
@@ -196,8 +207,9 @@ describe("Checker: Generics", () => {
         fn add(a: i32, b: i32) -> i32 {
           return a + b;
         }
-        fn main() {
+        fn main() -> int {
           add<i32>(1, 2);
+          return 0;
         }
         `,
         "is not generic"
@@ -250,8 +262,9 @@ describe("Checker: Generics", () => {
         struct Wrapper<T> {
           value: T;
         }
-        fn main() {
+        fn main() -> int {
           let w = Wrapper<bool>{ value: true };
+          return 0;
         }
       `);
     });
@@ -266,8 +279,9 @@ describe("Checker: Generics", () => {
         struct Box<T> {
           value: T;
         }
-        fn main() {
+        fn main() -> int {
           let b = Box<Foo>{ value: 42 };
+          return 0;
         }
         `,
         "undeclared type 'Foo'"
@@ -281,8 +295,9 @@ describe("Checker: Generics", () => {
           x: i32;
           y: i32;
         }
-        fn main() {
+        fn main() -> int {
           let p = Point<i32>{ x: 1, y: 2 };
+          return 0;
         }
         `,
         "expects 0 type argument(s), got 1"
@@ -295,8 +310,9 @@ describe("Checker: Generics", () => {
         fn identity<T>(x: T) -> T {
           return x;
         }
-        fn main() {
+        fn main() -> int {
           let x: i32 = identity<string>("hello");
+          return 0;
         }
         `,
         "expected 'i32', got 'string'"
@@ -314,8 +330,9 @@ describe("Checker: Generics", () => {
           a: T;
           b: T;
         }
-        fn main() {
+        fn main() -> int {
           let b = Bad<i32>{ a: 1, b: 2 };
+          return 0;
         }
         `,
         "duplicate type parameter 'T'"
@@ -328,8 +345,9 @@ describe("Checker: Generics", () => {
         fn bad<T, T>(a: T, b: T) -> T {
           return a;
         }
-        fn main() {
+        fn main() -> int {
           bad<i32>(1, 2);
+          return 0;
         }
         `,
         "duplicate type parameter 'T'"
@@ -342,8 +360,9 @@ describe("Checker: Generics", () => {
         fn add(a: i32, b: i32) -> i32 {
           return a + b;
         }
-        fn main() {
+        fn main() -> int {
           add<i32>(1, 2);
+          return 0;
         }
         `,
         "is not generic but was called with 1 type argument(s)"
@@ -355,10 +374,11 @@ describe("Checker: Generics", () => {
         struct PtrBox<T> {
           value: ptr<T>;
         }
-        fn main() {
+        fn main() -> int {
           let x: i32 = 42;
           let p: ptr<i32> = unsafe { &x };
           let b = PtrBox<i32>{ value: p };
+          return 0;
         }
       `);
     });
@@ -383,8 +403,9 @@ describe("Checker: Generics", () => {
           first: A;
           second: B;
         }
-        fn main() {
+        fn main() -> int {
           let p = Pair{ first: 42 };
+          return 0;
         }
         `,
         "missing field"
@@ -434,8 +455,9 @@ describe("Checker: Generics", () => {
           b: Y;
           c: Z;
         }
-        fn main() {
+        fn main() -> int {
           let t = Triple<i32>{ a: 1, b: true, c: "hi" };
+          return 0;
         }
         `,
         "<X, Y, Z>"
@@ -448,8 +470,9 @@ describe("Checker: Generics", () => {
         fn pair<A, B>(a: A, b: B) -> A {
           return a;
         }
-        fn main() {
+        fn main() -> int {
           pair<i32>(1, true);
+          return 0;
         }
         `,
         "<A, B>"
@@ -481,8 +504,9 @@ describe("Checker: Generics", () => {
             return self.value;
           }
         }
-        fn main() {
+        fn main() -> int {
           let c = Container<i32>{ value: 42 };
+          return 0;
         }
       `);
     });

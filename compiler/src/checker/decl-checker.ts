@@ -240,6 +240,24 @@ export class DeclarationChecker {
     const overload = funcSym.overloads.find((o) => o.declaration === decl);
     const funcType = overload ? overload.type : funcSym.type;
 
+    // main() — entry-point validation (spec/06-functions.md)
+    if (decl.name === "main") {
+      const ret = funcType.returnType;
+      const isI32 = ret.kind === TypeKind.Int && ret.bits === 32 && ret.signed;
+      if (!isI32) {
+        this.checker.error(
+          `'main' must return 'int' (i32), got '${typeToString(ret)}'`,
+          decl.span
+        );
+      }
+      if (decl.params.length > 0) {
+        this.checker.error("'main' cannot take parameters", decl.span);
+      }
+      if (funcType.throwsTypes.length > 0) {
+        this.checker.error("'main' cannot declare 'throws'", decl.span);
+      }
+    }
+
     // Create function scope
     this.checker.pushScope({ functionContext: funcType });
 

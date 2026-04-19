@@ -120,8 +120,6 @@ export enum TokenKind {
   Star = "*",
   Slash = "/",
   Percent = "%",
-  PlusPlus = "++",
-  MinusMinus = "--",
 
   // Comparison operators
   EqualEqual = "==",

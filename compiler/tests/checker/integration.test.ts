@@ -254,8 +254,8 @@ describe("Checker — Integration", () => {
 
         let moved = move p;
 
-        x++;
-        y--;
+        x += 1;
+        y -= 1;
 
         unsafe {
           let addr = &x;

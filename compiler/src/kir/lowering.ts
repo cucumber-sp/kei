@@ -280,8 +280,6 @@ export class KirLowerer {
   declare lowerShortCircuitOr: typeof operatorMethods.lowerShortCircuitOr;
   declare lowerUnaryExpr: typeof operatorMethods.lowerUnaryExpr;
   declare lowerOperatorMethodCall: typeof operatorMethods.lowerOperatorMethodCall;
-  declare lowerIncrementExpr: typeof operatorMethods.lowerIncrementExpr;
-  declare lowerDecrementExpr: typeof operatorMethods.lowerDecrementExpr;
 
   // ─── Error handling methods (from lowering-error.ts) ────────────────────
   declare lowerThrowExpr: typeof errorMethods.lowerThrowExpr;
@@ -407,8 +405,6 @@ KirLowerer.prototype.lowerShortCircuitAnd = operatorMethods.lowerShortCircuitAnd
 KirLowerer.prototype.lowerShortCircuitOr = operatorMethods.lowerShortCircuitOr;
 KirLowerer.prototype.lowerUnaryExpr = operatorMethods.lowerUnaryExpr;
 KirLowerer.prototype.lowerOperatorMethodCall = operatorMethods.lowerOperatorMethodCall;
-KirLowerer.prototype.lowerIncrementExpr = operatorMethods.lowerIncrementExpr;
-KirLowerer.prototype.lowerDecrementExpr = operatorMethods.lowerDecrementExpr;
 
 // Error handling methods
 KirLowerer.prototype.lowerThrowExpr = errorMethods.lowerThrowExpr;
