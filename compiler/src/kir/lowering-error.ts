@@ -1,5 +1,5 @@
 /**
- * Error handling (throw/catch) lowering methods for KirLowerer.
+ * Error handling (throw/catch) lowering — operates on LoweringCtx.
  * Extracted from lowering-expr.ts for modularity.
  */
 

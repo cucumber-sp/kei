@@ -1,5 +1,5 @@
 /**
- * Operator expression lowering methods for KirLowerer.
+ * Operator expression lowering — operates on LoweringCtx.
  * Extracted from lowering-expr.ts for modularity.
  */
 

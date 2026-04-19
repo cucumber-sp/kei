@@ -1,5 +1,5 @@
 /**
- * Scope and lifecycle tracking methods for KirLowerer.
+ * Scope and lifecycle tracking — operates on LoweringCtx.
  * Extracted from lowering.ts for modularity.
  */
 

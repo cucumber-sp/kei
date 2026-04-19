@@ -1,5 +1,5 @@
 /**
- * Statement lowering methods for KirLowerer.
+ * Statement lowering — operates on LoweringCtx.
  * Extracted from lowering.ts for modularity.
  */
 

@@ -1,5 +1,5 @@
 /**
- * Literal and composite expression lowering methods for KirLowerer.
+ * Literal and composite expression lowering — operates on LoweringCtx.
  * Extracted from lowering-expr.ts for modularity.
  */
 

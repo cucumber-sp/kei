@@ -1,5 +1,5 @@
 /**
- * Type conversion and sizeof methods for KirLowerer.
+ * Type conversion and sizeof helpers — operate on LoweringCtx.
  * Extracted from lowering.ts for modularity.
  */
 

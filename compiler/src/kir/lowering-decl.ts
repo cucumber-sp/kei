@@ -1,5 +1,5 @@
 /**
- * Declaration lowering methods for KirLowerer.
+ * Declaration lowering — operates on LoweringCtx.
  * Handles the main declaration dispatch, function declarations,
  * extern functions, and static declarations.
  *

@@ -1,5 +1,5 @@
 /**
- * Enum declaration lowering methods for KirLowerer.
+ * Enum declaration lowering — operates on LoweringCtx.
  * Handles lowering EnumDecl AST nodes to KIR type declarations.
  * Extracted from lowering-decl.ts for modularity.
  *

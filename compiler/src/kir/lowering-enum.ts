@@ -1,5 +1,5 @@
 /**
- * Enum lowering methods for KirLowerer.
+ * Enum lowering — operates on LoweringCtx.
  * Extracted from lowering-expr.ts for modularity.
  *
  * Handles:

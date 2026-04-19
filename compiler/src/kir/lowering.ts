@@ -2,9 +2,13 @@
  * AST → KIR lowering pass.
  *
  * Takes a type-checked AST (Program + CheckResult) and produces a KirModule.
- * Uses simple per-block variable tracking (no phi nodes / full SSA yet).
  *
- * Method implementations are split across:
+ * The lowering is implemented as plain functions over `LoweringCtx` (see
+ * `lowering-ctx.ts`). This file is the orchestrator — it wires together the
+ * per-category modules below and exposes the public entry points
+ * (`lowerToKir`, `lowerModulesToKir`).
+ *
+ * Per-category implementations live in:
  *   - lowering-decl.ts       (declaration dispatch, function/extern/static lowering)
  *   - lowering-struct.ts     (struct declaration, method, lifecycle lowering)
  *   - lowering-enum-decl.ts  (enum declaration lowering)
@@ -22,462 +26,92 @@
 
 import type { Program } from "../ast/nodes.ts";
 import type { CheckResult, ModuleCheckInfo, MultiModuleCheckResult } from "../checker/checker.ts";
-import type {
-  BlockId,
-  KirBlock,
-  KirExtern,
-  KirFunction,
-  KirGlobal,
-  KirInst,
-  KirModule,
-  KirType,
-  KirTypeDecl,
-  VarId,
-} from "./kir-types.ts";
-
-// Import extracted method implementations
-import * as declMethods from "./lowering-decl.ts";
-import * as enumMethods from "./lowering-enum.ts";
-import * as enumDeclMethods from "./lowering-enum-decl.ts";
-import * as errorMethods from "./lowering-error.ts";
-import * as exprMethods from "./lowering-expr.ts";
-import * as literalMethods from "./lowering-literals.ts";
-import * as operatorMethods from "./lowering-operators.ts";
-import * as scopeMethods from "./lowering-scope.ts";
-import * as stmtMethods from "./lowering-stmt.ts";
-import * as structMethods from "./lowering-struct.ts";
-import * as switchMethods from "./lowering-switch.ts";
-import * as typeMethods from "./lowering-types.ts";
-import * as utilMethods from "./lowering-utils.ts";
-
-import type { LoweringCtx, ScopeVar } from "./lowering-ctx.ts";
-import type { KirTerminator } from "./kir-types.ts";
-
-// ─── Lowerer ─────────────────────────────────────────────────────────────────
+import type { KirModule } from "./kir-types.ts";
+import { createLoweringCtx, type LoweringCtx } from "./lowering-ctx.ts";
+import { lowerDeclaration, lowerMonomorphizedFunction } from "./lowering-decl.ts";
+import { lowerMethod, lowerMonomorphizedStruct } from "./lowering-struct.ts";
+import { lowerTypeNode, mangleFunctionName } from "./lowering-types.ts";
 
 /**
- * Migration state, 2026-04: KirLowerer is being converted from a prototype-
- * patched class into the plain functions in `lowering-ctx.ts` + sibling files.
- * During the migration, KirLowerer implements `LoweringCtx` so that converted
- * (`(ctx, args)`) and unconverted (`this: KirLowerer, args`) methods can both
- * dispatch through `KirLowerer.prototype.X(...)`.
+ * Run the full AST → KIR lowering against a prepared context. Mutates `ctx`
+ * by populating `ctx.functions`, `ctx.typeDecls`, etc., and returns the
+ * assembled KirModule.
  */
-export class KirLowerer implements LoweringCtx {
-  program: Program;
-  checkResult: CheckResult;
-
-  // Current function state
-  blocks: KirBlock[] = [];
-  currentBlockId: BlockId = "entry";
-  currentInsts: KirInst[] = [];
-  varCounter = 0;
-  blockCounter = 0;
-  pendingTerminator: KirTerminator | null = null;
-
-  // Variable name → current SSA VarId mapping per scope
-  varMap: Map<string, VarId> = new Map();
-
-  // Track break/continue targets for loops
-  loopBreakTarget: BlockId | null = null;
-  loopContinueTarget: BlockId | null = null;
-  /** Scope stack depth at loop entry — break/continue only destroy scopes from this depth onward */
-  loopScopeDepth: number = 0;
-
-  // Scope stack for lifecycle tracking: each scope has a list of vars needing destroy
-  scopeStack: ScopeVar[][] = [];
-
-  // Set of variable names that have been moved (no destroy on scope exit)
-  movedVars: Set<string> = new Set();
-
-  // Map from struct name → whether it has __destroy/__oncopy methods
-  structLifecycleCache: Map<string, { hasDestroy: boolean; hasOncopy: boolean }> = new Map();
-
-  // Collected module-level items
-  functions: KirFunction[] = [];
-  externs: KirExtern[] = [];
-  typeDecls: KirTypeDecl[] = [];
-  globals: KirGlobal[] = [];
-
-  // Track which function names are overloaded (name → count of declarations)
-  overloadedNames: Set<string> = new Set();
-
-  /** Module prefix for name mangling in multi-module builds (e.g. "math" → "math_add") */
-  modulePrefix: string = "";
-
-  /** Map of imported function names → their mangled names (e.g. "add" → "math_add") */
-  importedNames: Map<string, string> = new Map();
-
-  /** Set of imported function names that are overloaded in their source module */
-  importedOverloads: Set<string> = new Set();
-
-  /** Throws types for the current function being lowered (empty = non-throwing) */
-  currentFunctionThrowsTypes: KirType[] = [];
-  /** Original return type for throws functions (before transformation to i32 tag) */
-  currentFunctionOrigReturnType: KirType = { kind: "void" };
-
-  /** Set of function names known to use the throws protocol */
-  throwsFunctions: Map<string, { throwsTypes: KirType[]; returnType: KirType }> = new Map();
-
-  /** Per-instantiation type map override for monomorphized function bodies */
-  currentBodyTypeMap: Map<
-    import("../ast/nodes.ts").Expression,
-    import("../checker/types").Type
-  > | null = null;
-  /** Per-instantiation generic resolutions override for monomorphized function bodies */
-  currentBodyGenericResolutions: Map<import("../ast/nodes.ts").Expression, string> | null = null;
-
-  constructor(
-    program: Program,
-    checkResult: CheckResult,
-    modulePrefix: string = "",
-    importedNames?: Map<string, string>,
-    importedOverloads?: Set<string>
-  ) {
-    this.program = program;
-    this.checkResult = checkResult;
-    this.modulePrefix = modulePrefix;
-    if (importedNames) this.importedNames = importedNames;
-    if (importedOverloads) this.importedOverloads = importedOverloads;
+export function runLowering(ctx: LoweringCtx): KirModule {
+  // Detect which function names are overloaded
+  const funcNameCounts = new Map<string, number>();
+  for (const decl of ctx.program.declarations) {
+    if (decl.kind === "FunctionDecl") {
+      funcNameCounts.set(decl.name, (funcNameCounts.get(decl.name) ?? 0) + 1);
+    }
+  }
+  for (const [name, count] of funcNameCounts) {
+    if (count > 1) ctx.overloadedNames.add(name);
   }
 
-  lower(): KirModule {
-    // Detect which function names are overloaded
-    const funcNameCounts = new Map<string, number>();
-    for (const decl of this.program.declarations) {
-      if (decl.kind === "FunctionDecl") {
-        funcNameCounts.set(decl.name, (funcNameCounts.get(decl.name) ?? 0) + 1);
-      }
-    }
-    for (const [name, count] of funcNameCounts) {
-      if (count > 1) this.overloadedNames.add(name);
-    }
-
-    // Also mark imported overloaded names (e.g. print from io module)
-    for (const name of this.importedOverloads) {
-      this.overloadedNames.add(name);
-    }
-
-    // Pre-pass: discover which functions use throws protocol
-    for (const decl of this.program.declarations) {
-      if (decl.kind === "FunctionDecl" && decl.throwsTypes.length > 0) {
-        const throwsKirTypes = decl.throwsTypes.map((t) => this.lowerTypeNode(t));
-        const retType = decl.returnType
-          ? this.lowerTypeNode(decl.returnType)
-          : { kind: "void" as const };
-        // Compute the mangled name the same way lowerFunction does
-        let funcName: string;
-        if (this.overloadedNames.has(decl.name)) {
-          const baseName = this.modulePrefix ? `${this.modulePrefix}_${decl.name}` : decl.name;
-          funcName = this.mangleFunctionName(baseName, decl);
-        } else if (this.modulePrefix && decl.name !== "main") {
-          funcName = `${this.modulePrefix}_${decl.name}`;
-        } else {
-          funcName = decl.name;
-        }
-        this.throwsFunctions.set(funcName, { throwsTypes: throwsKirTypes, returnType: retType });
-      }
-    }
-
-    for (const decl of this.program.declarations) {
-      this.lowerDeclaration(decl);
-    }
-
-    // Emit monomorphized struct definitions from generics
-    for (const [mangledName, monoStruct] of this.checkResult.monomorphizedStructs) {
-      this.typeDecls.push(this.lowerMonomorphizedStruct(mangledName, monoStruct));
-      // Lower methods for monomorphized structs
-      if (monoStruct.originalDecl) {
-        for (const method of monoStruct.originalDecl.methods) {
-          const structPrefix = this.modulePrefix
-            ? `${this.modulePrefix}_${mangledName}`
-            : mangledName;
-          const methodMangledName = `${structPrefix}_${method.name}`;
-          this.functions.push(this.lowerMethod(method, methodMangledName, mangledName));
-        }
-      }
-    }
-
-    // Emit monomorphized function definitions from generics
-    for (const [_mangledName, monoFunc] of this.checkResult.monomorphizedFunctions) {
-      if (monoFunc.declaration) {
-        this.functions.push(this.lowerMonomorphizedFunction(monoFunc));
-      }
-    }
-
-    return {
-      name: "main",
-      globals: this.globals,
-      functions: this.functions,
-      types: this.typeDecls,
-      externs: this.externs,
-    };
+  // Also mark imported overloaded names (e.g. print from io module)
+  for (const name of ctx.importedOverloads) {
+    ctx.overloadedNames.add(name);
   }
 
-  // ─── Declaration methods (from lowering-decl.ts) ────────────────────────
-  declare lowerDeclaration: typeof declMethods.lowerDeclaration;
-  declare lowerFunction: typeof declMethods.lowerFunction;
-  declare lowerExternFunction: typeof declMethods.lowerExternFunction;
-  declare lowerMonomorphizedFunction: typeof declMethods.lowerMonomorphizedFunction;
-  declare lowerStaticDecl: typeof declMethods.lowerStaticDecl;
-  declare resetFunctionState: typeof declMethods.resetFunctionState;
-  declare finalizeFunctionBody: typeof declMethods.finalizeFunctionBody;
-  declare addThrowsParams: typeof declMethods.addThrowsParams;
+  // Pre-pass: discover which functions use throws protocol
+  for (const decl of ctx.program.declarations) {
+    if (decl.kind === "FunctionDecl" && decl.throwsTypes.length > 0) {
+      const throwsKirTypes = decl.throwsTypes.map((t) => lowerTypeNode(ctx, t));
+      const retType = decl.returnType
+        ? lowerTypeNode(ctx, decl.returnType)
+        : { kind: "void" as const };
+      // Compute the mangled name the same way lowerFunction does
+      let funcName: string;
+      if (ctx.overloadedNames.has(decl.name)) {
+        const baseName = ctx.modulePrefix ? `${ctx.modulePrefix}_${decl.name}` : decl.name;
+        funcName = mangleFunctionName(ctx, baseName, decl);
+      } else if (ctx.modulePrefix && decl.name !== "main") {
+        funcName = `${ctx.modulePrefix}_${decl.name}`;
+      } else {
+        funcName = decl.name;
+      }
+      ctx.throwsFunctions.set(funcName, { throwsTypes: throwsKirTypes, returnType: retType });
+    }
+  }
 
-  // ─── Struct methods (from lowering-struct.ts) ──────────────────────────
-  declare lowerStructDecl: typeof structMethods.lowerStructDecl;
-  declare lowerMonomorphizedStruct: typeof structMethods.lowerMonomorphizedStruct;
-  declare lowerMethod: typeof structMethods.lowerMethod;
+  for (const decl of ctx.program.declarations) {
+    lowerDeclaration(ctx, decl);
+  }
 
-  // ─── Enum declaration methods (from lowering-enum-decl.ts) ─────────────
-  declare lowerEnumDecl: typeof enumDeclMethods.lowerEnumDecl;
+  // Emit monomorphized struct definitions from generics
+  for (const [mangledName, monoStruct] of ctx.checkResult.monomorphizedStructs) {
+    ctx.typeDecls.push(lowerMonomorphizedStruct(ctx, mangledName, monoStruct));
+    // Lower methods for monomorphized structs
+    if (monoStruct.originalDecl) {
+      for (const method of monoStruct.originalDecl.methods) {
+        const structPrefix = ctx.modulePrefix ? `${ctx.modulePrefix}_${mangledName}` : mangledName;
+        const methodMangledName = `${structPrefix}_${method.name}`;
+        ctx.functions.push(lowerMethod(ctx, method, methodMangledName, mangledName));
+      }
+    }
+  }
 
-  // ─── Statement methods (from lowering-stmt.ts) ─────────────────────────
-  declare lowerBlock: typeof stmtMethods.lowerBlock;
-  declare lowerScopedBlock: typeof stmtMethods.lowerScopedBlock;
-  declare lowerStatement: typeof stmtMethods.lowerStatement;
-  declare lowerLetStmt: typeof stmtMethods.lowerLetStmt;
-  declare lowerConstStmt: typeof stmtMethods.lowerConstStmt;
-  declare lowerReturnStmt: typeof stmtMethods.lowerReturnStmt;
-  declare lowerIfStmt: typeof stmtMethods.lowerIfStmt;
-  declare lowerWhileStmt: typeof stmtMethods.lowerWhileStmt;
-  declare lowerForStmt: typeof stmtMethods.lowerForStmt;
-  declare lowerCForStmt: typeof stmtMethods.lowerCForStmt;
-  declare lowerSwitchStmt: typeof stmtMethods.lowerSwitchStmt;
-  declare lowerExprStmt: typeof stmtMethods.lowerExprStmt;
-  declare lowerAssertStmt: typeof stmtMethods.lowerAssertStmt;
-  declare lowerRequireStmt: typeof stmtMethods.lowerRequireStmt;
+  // Emit monomorphized function definitions from generics
+  for (const [_mangledName, monoFunc] of ctx.checkResult.monomorphizedFunctions) {
+    if (monoFunc.declaration) {
+      ctx.functions.push(lowerMonomorphizedFunction(ctx, monoFunc));
+    }
+  }
 
-  // ─── Expression methods (from lowering-expr.ts) ────────────────────────
-  declare lowerExpr: typeof exprMethods.lowerExpr;
-  declare lowerExprAsPtr: typeof exprMethods.lowerExprAsPtr;
-  declare lowerIdentifier: typeof exprMethods.lowerIdentifier;
-  declare lowerCallExpr: typeof exprMethods.lowerCallExpr;
-  declare lowerMemberExpr: typeof exprMethods.lowerMemberExpr;
-  declare lowerIndexExpr: typeof exprMethods.lowerIndexExpr;
-  declare lowerAssignExpr: typeof exprMethods.lowerAssignExpr;
-  declare lowerIfExpr: typeof exprMethods.lowerIfExpr;
-  declare lowerMoveExpr: typeof exprMethods.lowerMoveExpr;
-  declare lowerCastExpr: typeof exprMethods.lowerCastExpr;
-
-  // ─── Switch methods (from lowering-switch.ts) ─────────────────────────
-  declare lowerSwitchExpr: typeof switchMethods.lowerSwitchExpr;
-  declare findConstIntInst: typeof switchMethods.findConstIntInst;
-
-  // ─── Enum methods (from lowering-enum.ts) ─────────────────────────────
-  declare lowerEnumVariantConstruction: typeof enumMethods.lowerEnumVariantConstruction;
-  declare lowerEnumVariantAccess: typeof enumMethods.lowerEnumVariantAccess;
-
-  // ─── Literal methods (from lowering-literals.ts) ────────────────────────
-  declare lowerIntLiteral: typeof literalMethods.lowerIntLiteral;
-  declare lowerFloatLiteral: typeof literalMethods.lowerFloatLiteral;
-  declare lowerStringLiteral: typeof literalMethods.lowerStringLiteral;
-  declare lowerBoolLiteral: typeof literalMethods.lowerBoolLiteral;
-  declare lowerNullLiteral: typeof literalMethods.lowerNullLiteral;
-  declare lowerStructLiteral: typeof literalMethods.lowerStructLiteral;
-  declare lowerArrayLiteral: typeof literalMethods.lowerArrayLiteral;
-
-  // ─── Operator methods (from lowering-operators.ts) ──────────────────────
-  declare lowerBinaryExpr: typeof operatorMethods.lowerBinaryExpr;
-  declare lowerShortCircuitAnd: typeof operatorMethods.lowerShortCircuitAnd;
-  declare lowerShortCircuitOr: typeof operatorMethods.lowerShortCircuitOr;
-  declare lowerUnaryExpr: typeof operatorMethods.lowerUnaryExpr;
-  declare lowerOperatorMethodCall: typeof operatorMethods.lowerOperatorMethodCall;
-
-  // ─── Error handling methods (from lowering-error.ts) ────────────────────
-  declare lowerThrowExpr: typeof errorMethods.lowerThrowExpr;
-  declare lowerCatchExpr: typeof errorMethods.lowerCatchExpr;
-  declare resolveCallThrowsInfo: typeof errorMethods.resolveCallThrowsInfo;
-  declare lowerCatchThrowPropagation: typeof errorMethods.lowerCatchThrowPropagation;
-
-  // ─── Type conversion methods (from lowering-types.ts) ───────────────────
-  declare getExprKirType: typeof typeMethods.getExprKirType;
-  declare lowerCheckerType: typeof typeMethods.lowerCheckerType;
-  declare lowerTypeNode: typeof typeMethods.lowerTypeNode;
-  declare resolveParamType: typeof typeMethods.resolveParamType;
-  declare resolveParamCheckerType: typeof typeMethods.resolveParamCheckerType;
-  declare getFunctionReturnType: typeof typeMethods.getFunctionReturnType;
-  declare nameToCheckerType: typeof typeMethods.nameToCheckerType;
-  declare resolveSizeofArg: typeof typeMethods.resolveSizeofArg;
-  declare sizeofTypeName: typeof typeMethods.sizeofTypeName;
-  declare sizeofCheckerType: typeof typeMethods.sizeofCheckerType;
-  declare mangleFunctionName: typeof typeMethods.mangleFunctionName;
-  declare mangleFunctionNameFromType: typeof typeMethods.mangleFunctionNameFromType;
-  declare typeNameSuffix: typeof typeMethods.typeNameSuffix;
-  declare checkerTypeSuffix: typeof typeMethods.checkerTypeSuffix;
-
-  // ─── Scope/lifecycle methods (from lowering-scope.ts) ───────────────────
-  declare getStructLifecycle: typeof scopeMethods.getStructLifecycle;
-  declare pushScope: typeof scopeMethods.pushScope;
-  declare popScopeWithDestroy: typeof scopeMethods.popScopeWithDestroy;
-  declare emitScopeDestroys: typeof scopeMethods.emitScopeDestroys;
-  declare emitAllScopeDestroys: typeof scopeMethods.emitAllScopeDestroys;
-  declare emitLoopScopeDestroys: typeof scopeMethods.emitLoopScopeDestroys;
-  declare emitAllScopeDestroysExceptNamed: typeof scopeMethods.emitAllScopeDestroysExceptNamed;
-  declare trackScopeVar: typeof scopeMethods.trackScopeVar;
-  declare trackScopeVarByType: typeof scopeMethods.trackScopeVarByType;
-
-  // ─── Utility methods (from lowering-utils.ts) ──────────────────────────
-  declare freshVar: typeof utilMethods.freshVar;
-  declare freshBlockId: typeof utilMethods.freshBlockId;
-  declare emit: typeof utilMethods.emit;
-  declare emitConstInt: typeof utilMethods.emitConstInt;
-  declare setTerminator: typeof utilMethods.setTerminator;
-  declare isBlockTerminated: typeof utilMethods.isBlockTerminated;
-  declare sealCurrentBlock: typeof utilMethods.sealCurrentBlock;
-  declare startBlock: typeof utilMethods.startBlock;
-  declare ensureTerminator: typeof utilMethods.ensureTerminator;
-  declare isStackAllocVar: typeof utilMethods.isStackAllocVar;
-  declare mapBinOp: typeof utilMethods.mapBinOp;
-  declare mapCompoundAssignOp: typeof utilMethods.mapCompoundAssignOp;
-  declare emitStackAlloc: typeof utilMethods.emitStackAlloc;
-  declare emitFieldLoad: typeof utilMethods.emitFieldLoad;
-  declare emitTagIsSuccess: typeof utilMethods.emitTagIsSuccess;
-  declare emitCastToPtr: typeof utilMethods.emitCastToPtr;
-  declare emitLoadModifyStore: typeof utilMethods.emitLoadModifyStore;
-}
-
-// ─── Attach extracted methods to KirLowerer prototype ─────────────────────────
-
-// All methods are now converted to (ctx, args) free functions. Each prototype
-// patch wraps the free function in `bind()` so legacy `this.X(args)` callers
-// still dispatch correctly.
-// biome-ignore lint/suspicious/noExplicitAny: wrapping converted free functions for legacy `this.X` callers
-function bind<F extends (ctx: LoweringCtx, ...args: any[]) => any>(fn: F) {
-  return function (this: KirLowerer, ...args: unknown[]) {
-    // biome-ignore lint/suspicious/noExplicitAny: forwarded to the typed free function
-    return (fn as any)(this, ...args);
+  return {
+    name: "main",
+    globals: ctx.globals,
+    functions: ctx.functions,
+    types: ctx.typeDecls,
+    externs: ctx.externs,
   };
 }
-
-// Declaration methods
-KirLowerer.prototype.lowerDeclaration = bind(declMethods.lowerDeclaration);
-KirLowerer.prototype.lowerFunction = bind(declMethods.lowerFunction);
-KirLowerer.prototype.lowerExternFunction = bind(declMethods.lowerExternFunction);
-KirLowerer.prototype.lowerMonomorphizedFunction = bind(declMethods.lowerMonomorphizedFunction);
-KirLowerer.prototype.lowerStaticDecl = bind(declMethods.lowerStaticDecl);
-KirLowerer.prototype.resetFunctionState = bind(declMethods.resetFunctionState);
-KirLowerer.prototype.finalizeFunctionBody = bind(declMethods.finalizeFunctionBody);
-KirLowerer.prototype.addThrowsParams = bind(declMethods.addThrowsParams);
-
-// Struct methods
-KirLowerer.prototype.lowerStructDecl = bind(structMethods.lowerStructDecl);
-KirLowerer.prototype.lowerMonomorphizedStruct = bind(structMethods.lowerMonomorphizedStruct);
-KirLowerer.prototype.lowerMethod = bind(structMethods.lowerMethod);
-
-// Enum declaration methods
-KirLowerer.prototype.lowerEnumDecl = bind(enumDeclMethods.lowerEnumDecl);
-
-// Statement methods
-KirLowerer.prototype.lowerBlock = bind(stmtMethods.lowerBlock);
-KirLowerer.prototype.lowerScopedBlock = bind(stmtMethods.lowerScopedBlock);
-KirLowerer.prototype.lowerStatement = bind(stmtMethods.lowerStatement);
-KirLowerer.prototype.lowerLetStmt = bind(stmtMethods.lowerLetStmt);
-KirLowerer.prototype.lowerConstStmt = bind(stmtMethods.lowerConstStmt);
-KirLowerer.prototype.lowerReturnStmt = bind(stmtMethods.lowerReturnStmt);
-KirLowerer.prototype.lowerIfStmt = bind(stmtMethods.lowerIfStmt);
-KirLowerer.prototype.lowerWhileStmt = bind(stmtMethods.lowerWhileStmt);
-KirLowerer.prototype.lowerForStmt = bind(stmtMethods.lowerForStmt);
-KirLowerer.prototype.lowerCForStmt = bind(stmtMethods.lowerCForStmt);
-KirLowerer.prototype.lowerSwitchStmt = bind(stmtMethods.lowerSwitchStmt);
-KirLowerer.prototype.lowerExprStmt = bind(stmtMethods.lowerExprStmt);
-KirLowerer.prototype.lowerAssertStmt = bind(stmtMethods.lowerAssertStmt);
-KirLowerer.prototype.lowerRequireStmt = bind(stmtMethods.lowerRequireStmt);
-
-// Expression methods
-KirLowerer.prototype.lowerExpr = bind(exprMethods.lowerExpr);
-KirLowerer.prototype.lowerExprAsPtr = bind(exprMethods.lowerExprAsPtr);
-KirLowerer.prototype.lowerIdentifier = bind(exprMethods.lowerIdentifier);
-KirLowerer.prototype.lowerCallExpr = bind(exprMethods.lowerCallExpr);
-KirLowerer.prototype.lowerMemberExpr = bind(exprMethods.lowerMemberExpr);
-KirLowerer.prototype.lowerIndexExpr = bind(exprMethods.lowerIndexExpr);
-KirLowerer.prototype.lowerAssignExpr = bind(exprMethods.lowerAssignExpr);
-KirLowerer.prototype.lowerIfExpr = bind(exprMethods.lowerIfExpr);
-KirLowerer.prototype.lowerMoveExpr = bind(exprMethods.lowerMoveExpr);
-KirLowerer.prototype.lowerCastExpr = bind(exprMethods.lowerCastExpr);
-
-// Switch methods
-KirLowerer.prototype.lowerSwitchExpr = bind(switchMethods.lowerSwitchExpr);
-KirLowerer.prototype.findConstIntInst = bind(switchMethods.findConstIntInst);
-
-// Enum methods
-KirLowerer.prototype.lowerEnumVariantConstruction = bind(enumMethods.lowerEnumVariantConstruction);
-KirLowerer.prototype.lowerEnumVariantAccess = bind(enumMethods.lowerEnumVariantAccess);
-
-// Literal methods
-KirLowerer.prototype.lowerIntLiteral = bind(literalMethods.lowerIntLiteral);
-KirLowerer.prototype.lowerFloatLiteral = bind(literalMethods.lowerFloatLiteral);
-KirLowerer.prototype.lowerStringLiteral = bind(literalMethods.lowerStringLiteral);
-KirLowerer.prototype.lowerBoolLiteral = bind(literalMethods.lowerBoolLiteral);
-KirLowerer.prototype.lowerNullLiteral = bind(literalMethods.lowerNullLiteral);
-KirLowerer.prototype.lowerStructLiteral = bind(literalMethods.lowerStructLiteral);
-KirLowerer.prototype.lowerArrayLiteral = bind(literalMethods.lowerArrayLiteral);
-
-// Operator methods
-KirLowerer.prototype.lowerBinaryExpr = bind(operatorMethods.lowerBinaryExpr);
-KirLowerer.prototype.lowerShortCircuitAnd = bind(operatorMethods.lowerShortCircuitAnd);
-KirLowerer.prototype.lowerShortCircuitOr = bind(operatorMethods.lowerShortCircuitOr);
-KirLowerer.prototype.lowerUnaryExpr = bind(operatorMethods.lowerUnaryExpr);
-KirLowerer.prototype.lowerOperatorMethodCall = bind(operatorMethods.lowerOperatorMethodCall);
-
-// Error handling methods
-KirLowerer.prototype.lowerThrowExpr = bind(errorMethods.lowerThrowExpr);
-KirLowerer.prototype.lowerCatchExpr = bind(errorMethods.lowerCatchExpr);
-KirLowerer.prototype.resolveCallThrowsInfo = bind(errorMethods.resolveCallThrowsInfo);
-KirLowerer.prototype.lowerCatchThrowPropagation = bind(errorMethods.lowerCatchThrowPropagation);
-
-// Type conversion methods
-KirLowerer.prototype.getExprKirType = bind(typeMethods.getExprKirType);
-KirLowerer.prototype.lowerCheckerType = bind(typeMethods.lowerCheckerType);
-KirLowerer.prototype.lowerTypeNode = bind(typeMethods.lowerTypeNode);
-KirLowerer.prototype.resolveParamType = bind(typeMethods.resolveParamType);
-KirLowerer.prototype.resolveParamCheckerType = bind(typeMethods.resolveParamCheckerType);
-KirLowerer.prototype.getFunctionReturnType = bind(typeMethods.getFunctionReturnType);
-KirLowerer.prototype.nameToCheckerType = bind(typeMethods.nameToCheckerType);
-KirLowerer.prototype.resolveSizeofArg = bind(typeMethods.resolveSizeofArg);
-KirLowerer.prototype.sizeofTypeName = bind(typeMethods.sizeofTypeName);
-KirLowerer.prototype.sizeofCheckerType = bind(typeMethods.sizeofCheckerType);
-KirLowerer.prototype.mangleFunctionName = bind(typeMethods.mangleFunctionName);
-KirLowerer.prototype.mangleFunctionNameFromType = bind(typeMethods.mangleFunctionNameFromType);
-KirLowerer.prototype.typeNameSuffix = bind(typeMethods.typeNameSuffix);
-KirLowerer.prototype.checkerTypeSuffix = bind(typeMethods.checkerTypeSuffix);
-
-// Scope/lifecycle methods
-KirLowerer.prototype.getStructLifecycle = bind(scopeMethods.getStructLifecycle);
-KirLowerer.prototype.pushScope = bind(scopeMethods.pushScope);
-KirLowerer.prototype.popScopeWithDestroy = bind(scopeMethods.popScopeWithDestroy);
-KirLowerer.prototype.emitScopeDestroys = bind(scopeMethods.emitScopeDestroys);
-KirLowerer.prototype.emitAllScopeDestroys = bind(scopeMethods.emitAllScopeDestroys);
-KirLowerer.prototype.emitLoopScopeDestroys = bind(scopeMethods.emitLoopScopeDestroys);
-KirLowerer.prototype.emitAllScopeDestroysExceptNamed = bind(
-  scopeMethods.emitAllScopeDestroysExceptNamed
-);
-KirLowerer.prototype.trackScopeVar = bind(scopeMethods.trackScopeVar);
-KirLowerer.prototype.trackScopeVarByType = bind(scopeMethods.trackScopeVarByType);
-
-// Utility methods
-KirLowerer.prototype.freshVar = bind(utilMethods.freshVar);
-KirLowerer.prototype.freshBlockId = bind(utilMethods.freshBlockId);
-KirLowerer.prototype.emit = bind(utilMethods.emit);
-KirLowerer.prototype.emitConstInt = bind(utilMethods.emitConstInt);
-KirLowerer.prototype.setTerminator = bind(utilMethods.setTerminator);
-KirLowerer.prototype.isBlockTerminated = bind(utilMethods.isBlockTerminated);
-KirLowerer.prototype.sealCurrentBlock = bind(utilMethods.sealCurrentBlock);
-KirLowerer.prototype.startBlock = bind(utilMethods.startBlock);
-KirLowerer.prototype.ensureTerminator = bind(utilMethods.ensureTerminator);
-KirLowerer.prototype.isStackAllocVar = bind(utilMethods.isStackAllocVar);
-KirLowerer.prototype.mapBinOp = bind(utilMethods.mapBinOp);
-KirLowerer.prototype.mapCompoundAssignOp = bind(utilMethods.mapCompoundAssignOp);
-KirLowerer.prototype.emitStackAlloc = bind(utilMethods.emitStackAlloc);
-KirLowerer.prototype.emitFieldLoad = bind(utilMethods.emitFieldLoad);
-KirLowerer.prototype.emitTagIsSuccess = bind(utilMethods.emitTagIsSuccess);
-KirLowerer.prototype.emitCastToPtr = bind(utilMethods.emitCastToPtr);
-KirLowerer.prototype.emitLoadModifyStore = bind(utilMethods.emitLoadModifyStore);
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export function lowerToKir(program: Program, checkResult: CheckResult): KirModule {
-  const lowerer = new KirLowerer(program, checkResult);
-  return lowerer.lower();
+  return runLowering(createLoweringCtx(program, checkResult));
 }
 
 /**
@@ -539,14 +173,14 @@ export function lowerModulesToKir(
       }
     }
 
-    const lowerer = new KirLowerer(
+    const ctx = createLoweringCtx(
       mod.program,
       result,
       modulePrefix,
       importedNames,
       importedOverloads
     );
-    const kirModule = lowerer.lower();
+    const kirModule = runLowering(ctx);
 
     // Merge globals, functions, types, externs
     combined.globals.push(...kirModule.globals);

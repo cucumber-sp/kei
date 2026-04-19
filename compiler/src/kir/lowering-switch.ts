@@ -1,5 +1,5 @@
 /**
- * Switch expression lowering methods for KirLowerer.
+ * Switch expression lowering — operates on LoweringCtx.
  * Extracted from lowering-expr.ts for modularity.
  */
 

@@ -1,5 +1,5 @@
 /**
- * Struct declaration lowering methods for KirLowerer.
+ * Struct declaration lowering — operates on LoweringCtx.
  * Handles struct declarations, methods, monomorphized structs, and auto lifecycle hooks.
  * Extracted from lowering-decl.ts for modularity.
  */
