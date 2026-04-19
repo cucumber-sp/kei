@@ -184,6 +184,17 @@ Dependencies (.kei source) -> Combined with main -> Full program analysis -> KIR
 
 This approach trades compilation time for runtime performance and simplicity.
 
+## No hidden runtime
+
+Kei emits C. There is no garbage collector, no scheduler, no exception table, no
+managed heap. The stdlib is regular Kei code with `unsafe struct` at its lowest
+level — nothing magic.
+
+**v1 is single-threaded.** Concurrency primitives (threads, async, channels) are
+deliberately out of scope for v1; adding them requires explicit design choices
+and is staged in `spec/08-memory.md` under **Concurrency**. Programs that need
+threads today use FFI and accept the rules there.
+
 ---
 
 These principles guide every decision in Kei's design. Features that conflict with these principles are reconsidered or rejected.

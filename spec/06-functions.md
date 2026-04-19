@@ -96,20 +96,27 @@ consume(move user);  // user becomes invalid after this call
 
 ## Function overloading
 
-Function overloading is **not supported** in version 0.0.1. Functions must have unique names.
+Kei supports function overloading by parameter types. Multiple functions may
+share a name as long as their parameter lists differ:
 
 ```kei
-// Not allowed in v0.0.1
 fn process(data: int) -> int { return data * 2; }
-fn process(data: string) -> string { return data + "!"; }  // ERROR
+fn process(data: string) -> string { return data + "!"; }
+fn process(a: int, b: int) -> int { return a + b; }
+
+let x = process(10);           // picks (int) -> int
+let y = process("hi");         // picks (string) -> string
+let z = process(1, 2);         // picks (int, int) -> int
 ```
 
-Use descriptive names instead:
+**Resolution rules:**
+- Exact type match wins over widening conversions.
+- Ambiguous calls (two equally good matches) are a compile error.
+- Return type is not considered — overloads that differ only by return type are rejected.
+- Methods on a struct share the overload set with that struct's other methods of the same name.
 
-```kei
-fn processInt(data: int) -> int { return data * 2; }
-fn processStr(data: string) -> string { return data + "!"; }
-```
+Prefer distinct names when the operations are semantically different — overloading
+is best for "same operation, several input shapes."
 
 ## Recursion
 
@@ -170,10 +177,13 @@ fn main() -> int {
 }
 ```
 
-**Requirements:**
-- Must be named exactly `main`
-- Must return `int` (exit code)
-- Takes no parameters in v0.0.1 (command-line arguments not yet supported)
+**Requirements (compiler-enforced):**
+- Must be named exactly `main`.
+- Must return `int` — compile error if the return type is anything else.
+- Takes no parameters in v0.0.1. Command-line arguments (likely `args: slice<string>`)
+  will be added in a later version.
+- Cannot declare `throws` — unhandled errors at the entry point are a program
+  termination concern, not a type-system concern.
 
 ## Calling conventions
 
@@ -183,15 +193,79 @@ Kei compiles to C, so calling conventions follow the target C compiler:
 - **Large value types:** Passed by pointer (compiler decision)
 - **Return values:** Small values in registers, large values via RVO
 
-## Function pointers (Future)
+## Function pointers
 
-Function pointers are planned for future versions:
+Function-pointer types use the `fn(...) -> ...` syntax directly as a first-class type:
 
 ```kei
-// Not yet implemented
-type Handler = fn(int) -> bool;
-let callback: Handler = processValue;
+type Handler   = fn(ref App, Request) -> Response;
+type BinaryCmp = fn(int, int) -> bool;
+
+fn isPositive(x: int) -> bool { return x > 0; }
+
+let cb: fn(int) -> bool = isPositive;
+let ok = cb(42);
 ```
+
+Function pointers in Kei are **plain C function pointers** — one word (8 bytes on
+64-bit), no hidden environment, same ABI as a C `bool (*cb)(int)`. Any Kei
+function pointer can be passed across an FFI boundary that expects a C callback;
+and any C callback pointer can be called from Kei.
+
+## No closures
+
+Kei deliberately has no closures. There is no capture list, no hidden environment,
+no heap-promoted closure type. If a function needs additional state, it takes
+that state as an **explicit parameter**:
+
+```kei
+// Bundle state into a struct
+struct App {
+    db: ptr<DB>;
+    config: Config;
+}
+
+// Handlers are module-level functions with explicit state
+fn handleRoot(app: ref App, req: Request) -> Response {
+    return Response{ body: "hello" };
+}
+
+fn handleUser(app: ref App, req: Request) -> Response {
+    let user = app.db.lookup(req.userId);
+    return Response{ body: user.name };
+}
+
+// Registration passes the plain function pointer — no environment bundling
+app.register("/",      handleRoot);
+app.register("/user",  handleUser);
+```
+
+**Why no closures:**
+- Keeps `fn(...) -> ...` values small and C-ABI-compatible at every call site.
+- Eliminates an entire class of "hidden allocations" questions.
+- Makes future async simpler — no captures to track across `await` points.
+- "Polymorphic behaviour with bundled state" will be served by traits when they
+  land (see `SPEC-STATUS.md`).
+
+**For the "same callback shape, different state" case**, use a tagged enum of
+handler structs, or (eventually) a trait object. Never reach for closures.
+
+## No nested functions
+
+`fn` declarations are only valid at **module level** or **inside a struct body**
+(as methods). You cannot declare a function inside a block:
+
+```kei
+fn outer() -> int {
+    fn inner() -> int {     // ERROR: functions cannot be nested inside blocks
+        return 1;
+    }
+    return inner();
+}
+```
+
+Move helpers to module scope. This keeps the compilation model straightforward
+and matches the no-closures decision — there is never an outer scope to capture.
 
 ## Performance considerations
 

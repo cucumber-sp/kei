@@ -22,13 +22,13 @@ struct Point {
     x: f64;
     y: f64;
 
-    fn length(self: Point) -> f64 {
+    fn length(self: ref Point) -> f64 {
         return sqrt(self.x * self.x + self.y * self.y);
     }
 
-    fn translate(self: ptr<Point>, dx: f64, dy: f64) {
-        self->x += dx;
-        self->y += dy;
+    fn translate(self: ref mut Point, dx: f64, dy: f64) {
+        self.x += dx;
+        self.y += dy;
     }
 
     fn Point(x: f64, y: f64) -> Point {
@@ -39,14 +39,23 @@ struct Point {
 
 ### Method self types
 
-- **`self: T`** — Receives a copy of the struct
-- **`self: ptr<T>`** — Receives a mutable pointer (auto address-of at call site)
+Three forms, in preference order:
+
+| Receiver form     | Meaning                                    | Call site compiler does |
+|-------------------|--------------------------------------------|-------------------------|
+| `self: ref T`     | Read-only borrow (default for reads)       | implicit `&p`           |
+| `self: ref mut T` | Mutable borrow (default for mutations)     | implicit `&mut p`       |
+| `self: T`         | By-value (copy, or consume if `move` at call) | copy / move          |
 
 ```kei
 let mut point = Point{ x: 1.0, y: 2.0 };
-let len = point.length();     // copies point to method
-point.translate(5.0, 3.0);    // passes &point to method
+let len = point.length();     // implicit &point (ref Point)
+point.translate(5.0, 3.0);    // implicit &mut point (ref mut Point)
 ```
+
+`self: ptr<Self>` is **not** a valid method receiver. The earlier pattern
+(`self: ptr<Point>` with `unsafe { self->x = … }` in the body) is deprecated —
+use `self: ref mut Self`, which is safe and reads naturally.
 
 ### Auto-generated lifecycle hooks
 
@@ -244,18 +253,18 @@ let p2 = Point.origin();           // static method
 struct Counter {
     value: int;
 
-    fn increment(self: ptr<Counter>) {
-        self->value += 1;
+    fn increment(self: ref mut Counter) {
+        self.value += 1;
     }
 
-    fn get(self: Counter) -> int {
+    fn get(self: ref Counter) -> int {
         return self.value;
     }
 }
 
 let mut counter = Counter{ value: 0 };
-counter.increment();              // modifies counter
-let val = counter.get();          // reads counter (copy)
+counter.increment();              // implicit &mut counter; mutates in place
+let val = counter.get();          // implicit &counter; read-only borrow
 ```
 
 ## Structure literals

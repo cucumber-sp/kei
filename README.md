@@ -1,7 +1,7 @@
 # Kei
 
 A statically-typed systems programming language that compiles to C.
-Rust-like safety, Go-like simplicity, C-level performance.
+C performance, modern ergonomics, no runtime.
 
 ```kei
 import { print, newline } from io;
@@ -16,13 +16,19 @@ fn main() -> int {
 ## What is Kei?
 
 Kei is a compiled systems programming language designed around explicit control.
-There's no garbage collector, no runtime, no hidden allocations. Structs live on
-the stack by default, lifecycle hooks (`__destroy`/`__oncopy`) handle cleanup
-deterministically, and the compiler generates readable C that feeds into any C
-compiler for final optimization.
+No garbage collector, no runtime, no hidden allocations. Structs live on the
+stack by default, lifecycle hooks (`__destroy`/`__oncopy`) handle cleanup
+deterministically, and the compiler emits readable C that any C compiler can
+finish optimising.
 
-The goal: write high-level code that compiles down to the same thing you'd write
-by hand in C.
+**Design bet:** RAII with explicit `move` covers 90% of what a borrow checker
+does, at ~0% of the complexity cost. Kei trades some safety guarantees for
+simplicity and a small language. The result should feel like C with 2026 manners:
+tagged enums, generics, exhaustive errors, nullable types, modules — but still
+a few-KB binary.
+
+**v1 is single-threaded.** Concurrency primitives (`spawn`, atomics, mutexes,
+async) are staged for later — see [SPEC-STATUS.md](./SPEC-STATUS.md).
 
 ## Syntax Tour
 
@@ -328,7 +334,7 @@ cd compiler
 bun test
 ```
 
-1,650+ tests across lexer, parser, type checker, KIR lowering, and C backend.
+1,700+ tests across lexer, parser, type checker, KIR lowering, and C backend.
 
 ## Architecture
 
@@ -382,11 +388,30 @@ bun test
 - Generics (monomorphization works at checker level)
 - Operator overloading (method resolution works at checker level)
 
-### Not yet implemented
+### Spec'd, not yet implemented
 
-- Heap-allocated collections (`List<T>`, `slice<T>`)
-- String methods and operations
-- Closures, traits/interfaces, async/await, macros
+See [SPEC-STATUS.md](./SPEC-STATUS.md) for the full tracking table. Highlights:
+
+- `T?` nullability (suffix syntax with niche optimisation)
+- `ref T` / `ref mut T` — safe, scope-bound references (replace `self: ptr<T>`)
+- Arena allocators (POD-only, stdlib type)
+- `defer` lowering (parsed today, not yet emitted)
+- `move` scope-exit destroy elision
+- Traits with fat-pointer dispatch
+
+### Deliberately not in Kei
+
+- **Closures.** No capture lists, no hidden env. Pass state explicitly, or
+  bundle via a struct + method (or a trait, once those land).
+- **Nested functions.** `fn` only at module level or in a struct body.
+- **Borrow checker.** `ref T` is scope-bound, not lifetime-tracked.
+- **GC, green threads, fibers.**
+
+### Future (post-v1)
+
+- Threading primitives (`spawn`, `Mutex<T>`, `Atomic<T>`)
+- Async via compiler-generated state machines
+- Heap-allocated collections (`List<T>` stdlib promotion)
 
 ## Specification
 
@@ -411,4 +436,7 @@ Full language spec in [`spec/`](spec/):
 - **Simplicity over cleverness** — fully understandable by a single person
 - **Explicit over implicit** — allocations, side effects, and ownership transfers are visible
 - **Zero-cost defaults** — code that doesn't need the heap doesn't touch the heap
-- **Source-only compilation** — all dependencies compiled from source for whole-program optimization
+- **Source-only compilation** — all dependencies compiled from source for whole-program optimisation
+- **Small language, larger library** — only essentials in the compiler; `string`,
+  `array<T>`, `List<T>`, `Shared<T>` and other managed types are written in Kei
+  itself as `unsafe struct`s in stdlib.

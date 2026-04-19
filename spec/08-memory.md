@@ -97,10 +97,15 @@ fn example() {
 }
 ```
 
+**Semantics, exact:**
+1. No `__oncopy` is called on the source — target receives the bitwise representation.
+2. No `__destroy` is emitted at the source's scope exit — ownership has transferred.
+3. Any use of the moved-from variable is a compile-time error (use-after-move check).
+
 **When to use move:**
 - Performance-critical paths where copy overhead matters
 - Transferring ownership to functions that consume the value
-- One-time initialization patterns
+- Returning an owned value out of its construction scope
 
 ## Function parameters
 
@@ -231,6 +236,84 @@ let size = sizeof(int);        // 4
 let user_size = sizeof(User);  // depends on fields
 ```
 
+## Arena allocators (stdlib)
+
+Arenas are the recommended allocation strategy for "many small allocations with
+one shared lifetime" — request handlers, parsing, frame-based loops, scratch
+buffers. The idea: bump-allocate during the scope, free the whole arena in one
+call at the end.
+
+```kei
+fn handle(req: Request) -> Response {
+    let a = Arena.new();
+    defer a.destroy();
+
+    let buf = a.alloc<u8>(4096);
+    let path = a.dup(req.path);
+    return buildResponse(&a, req);
+    // a.destroy() releases everything allocated in a, in one pass
+}
+```
+
+**Three-tier allocation model**, in order of preference:
+
+| Tier | When to use | Cost |
+|------|-------------|------|
+| Stack (default) | value fits, lifetime = enclosing scope | free |
+| Arena | many items, shared scope lifetime | bump alloc, bulk free |
+| General heap (`alloc<T>`/`free`) | outlives any scope, or cross-module ownership | malloc + free per object |
+
+**v1 rule — arenas take POD types only.** If a type has a non-trivial `__destroy`,
+it cannot be arena-allocated (compile error). This avoids the "who runs destructors
+on arena reset" rabbit hole. POD covers the common arena use cases — byte buffers,
+parse nodes, response bodies. Managed types go on the regular heap.
+
+Arenas themselves are `unsafe struct`s in stdlib. The compiler has no special
+knowledge of them beyond the POD restriction check.
+
+## Concurrency
+
+Kei's concurrency story is staged. **v1 is single-threaded.** Everything below
+describes the intended progression; only v1 is implemented today.
+
+### v1 — Single-threaded (current)
+
+The runtime model is strictly single-threaded. Stdlib types (`string`, `array<T>`,
+`List<T>`, `Shared<T>`) use **non-atomic** refcounts — fast, but not safe to
+share across threads. Programs that want concurrency in v1 must use OS-level
+processes or extern FFI to a C threading library, and must not share Kei
+stdlib values across thread boundaries.
+
+### v2 — Explicit `spawn` + wrapper types
+
+Add `spawn fn(args…)` that launches a new thread. Arguments cross the boundary
+by **move** — the spawning thread loses access, matching Kei's existing `move`
+semantics. Sharing mutable state across threads requires an explicit wrapper:
+
+- `Mutex<T>` — locked access
+- `Atomic<T>` — lock-free scalars
+- `Shared<T>` — refcounted handle (the atomic variant)
+- `Immutable<T>` — marker for freely-shareable values (string literals already
+  qualify, no wrapper needed)
+
+The stdlib may grow an atomic variant of CoW types (e.g. `SharedString`) for
+cases where the single-threaded fast path isn't enough.
+
+### v3 — Optional compile-time check
+
+Mark types as `thread-safe` in the type system (a single transitive property,
+not a borrow check). At `spawn` call sites, verify each argument is either
+moved or thread-safe. About 300 lines of checker code; catches "forgot to wrap
+this" at compile time.
+
+**What Kei will not do:**
+- No green threads / goroutines (breaks "few-KB binary" and requires a runtime).
+- No stackful coroutines / fibers.
+- No full Rust `Send`/`Sync` with lifetime tracking.
+
+Async I/O, when it lands, will use compiler-generated stackless state machines
+— zero cost when unused, BYO reactor. See the roadmap in `SPEC-STATUS.md`.
+
 ## `unsafe` blocks
 
 `unsafe` blocks allow operations that bypass the compiler's safety guarantees:
@@ -295,7 +378,24 @@ All checks are **completely removed in release builds** for zero overhead.
 
 ## Standard library managed types
 
-The following types are implemented as `unsafe struct` in the standard library, using lifecycle hooks for automatic resource management:
+The following types are implemented as `unsafe struct` in the standard library, using lifecycle hooks for automatic resource management.
+
+### CoW invariants (contract for stdlib authors)
+
+Types that use Copy-on-Write refcount (`string`, `array<T>`, `Shared<T>` — the
+non-atomic variants) must uphold these invariants so the compiler can, in a
+future pass, elide balanced retain/release pairs:
+
+1. **Thread model is fixed.** v1 refcounts are non-atomic; sharing across
+   threads is undefined behaviour. An atomic variant may be added in v2
+   under a different type name.
+2. **Refcount operations are pure.** `__oncopy` / `__destroy` touch only their
+   own refcount and (on refcount zero) the owned buffer. No logging, no
+   globals, no observable side effects.
+3. **`isUnique` fast path is exposed.** Stdlib must provide a `fn isUnique(self)
+   -> bool` so callers who want to bypass CoW (mutate in place when sole owner)
+   can do so without hand-rolling the check.
+
 
 ### `string` — COW string
 ```kei

@@ -139,11 +139,22 @@ r#"raw string with "quotes" inside"#
 The following identifiers are reserved as keywords:
 
 ```
-break       case        catch       const       continue
-default     else        enum        extern      false
-fn          for         if          import      let
-match       move        null        return      struct
-throw       throws      true        unsafe      while
+as          assert      bool        break       case
+catch       const       continue    default     defer
+else        enum        extern      false       fn
+for         if          import      in          int
+let         match       move        mut         null
+panic       ptr         pub         ref         require
+return      self        slice       static      string
+struct      switch      throw       throws      true
+type        uint        unsafe      void        while
+```
+
+Reserved for future use (not yet usable as identifiers or as syntax):
+
+```
+async       await       impl        macro       shared
+super       trait       where       yield
 ```
 
 ## Operators
@@ -151,8 +162,9 @@ throw       throws      true        unsafe      while
 ### Arithmetic operators
 ```kei
 +   -   *   /   %   // Basic arithmetic
-++  --              // Increment/decrement
 ```
+
+Postfix `++` / `--` are **not** part of Kei. Use `x += 1` / `x -= 1` — one extra keystroke, no evaluation-order surprises.
 
 ### Comparison operators  
 ```kei
@@ -182,11 +194,17 @@ throw       throws      true        unsafe      while
 ### Other operators
 ```kei
 .                   // Member access
-->                  // Pointer dereference and member access
-&                   // Address-of
-*                   // Dereference
-?                   // Optional (future)
+->                  // Pointer dereference and member access (unsafe ptr<T> only)
+&                   // Address-of: `&x` -> ref T (safe), ptr<T> (inside unsafe)
+&mut                // Mutable address-of: `&mut x` -> ref mut T
+*                   // Dereference (prefix) / multiplication (infix)
+as                  // Explicit type cast:  let x = a as i32;
+?                   // Nullable type suffix: string?, ptr<T>?  (see spec/03-types.md)
 ```
+
+**`?` is a type-position suffix only.** Kei does not have a ternary operator —
+`if` as an expression covers that case. The parser only recognises `?` after a
+type (e.g. `string?`, `ptr<T>?`, after `->` or `:` in type position).
 
 ## Separators and punctuation
 
