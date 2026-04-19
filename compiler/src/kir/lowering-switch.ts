@@ -5,15 +5,29 @@
 
 import type { Statement, SwitchCase, SwitchExpr } from "../ast/nodes.ts";
 import type { KirType, VarId } from "./kir-types.ts";
-import type { KirLowerer } from "./lowering.ts";
+import type { LoweringCtx } from "./lowering-ctx.ts";
+import { lowerExpr } from "./lowering-expr.ts";
+import { lowerStatement } from "./lowering-stmt.ts";
+import { getExprKirType, lowerCheckerType } from "./lowering-types.ts";
+import {
+  emit,
+  emitFieldLoad,
+  emitStackAlloc,
+  freshBlockId,
+  freshVar,
+  isBlockTerminated,
+  sealCurrentBlock,
+  setTerminator,
+  startBlock,
+} from "./lowering-utils.ts";
 
-export function lowerSwitchExpr(this: KirLowerer, expr: SwitchExpr): VarId {
-  const subjectId = this.lowerExpr(expr.subject);
-  const resultType = this.getExprKirType(expr);
-  const endLabel = this.freshBlockId("switchexpr.end");
+export function lowerSwitchExpr(ctx: LoweringCtx, expr: SwitchExpr): VarId {
+  const subjectId = lowerExpr(ctx, expr.subject);
+  const resultType = getExprKirType(ctx, expr);
+  const endLabel = freshBlockId(ctx, "switchexpr.end");
 
   // Check if this is a switch on a data-variant (tagged union) enum
-  const subjectType = this.checkResult.typeMap.get(expr.subject);
+  const subjectType = ctx.checkResult.typeMap.get(expr.subject);
   const isTaggedUnionEnum =
     subjectType?.kind === "enum" && subjectType.variants.some((v) => v.fields.length > 0);
 
@@ -21,13 +35,13 @@ export function lowerSwitchExpr(this: KirLowerer, expr: SwitchExpr): VarId {
   let switchValue: VarId;
   if (isTaggedUnionEnum) {
     const tagType: KirType = { kind: "int", bits: 32, signed: true };
-    switchValue = this.emitFieldLoad(subjectId, "tag", tagType);
+    switchValue = emitFieldLoad(ctx, subjectId, "tag", tagType);
   } else {
     switchValue = subjectId;
   }
 
   // Allocate result on stack
-  const resultPtr = this.emitStackAlloc(resultType);
+  const resultPtr = emitStackAlloc(ctx, resultType);
 
   const caseLabels: { value: VarId; target: string }[] = [];
   let defaultLabel = endLabel;
@@ -35,8 +49,8 @@ export function lowerSwitchExpr(this: KirLowerer, expr: SwitchExpr): VarId {
 
   for (const c of expr.cases) {
     const label = c.isDefault
-      ? this.freshBlockId("switchexpr.default")
-      : this.freshBlockId("switchexpr.case");
+      ? freshBlockId(ctx, "switchexpr.default")
+      : freshBlockId(ctx, "switchexpr.case");
 
     if (c.isDefault) {
       defaultLabel = label;
@@ -49,8 +63,8 @@ export function lowerSwitchExpr(this: KirLowerer, expr: SwitchExpr): VarId {
         if (variantIndex >= 0) {
           const variant = subjectType.variants[variantIndex];
           const tagValue = variant.value ?? variantIndex;
-          const tagId = this.freshVar();
-          this.emit({
+          const tagId = freshVar(ctx);
+          emit(ctx, {
             kind: "const_int",
             dest: tagId,
             type: { kind: "int", bits: 32, signed: true },
@@ -60,14 +74,14 @@ export function lowerSwitchExpr(this: KirLowerer, expr: SwitchExpr): VarId {
           continue;
         }
       }
-      const valId = this.lowerExpr(val);
+      const valId = lowerExpr(ctx, val);
       caseLabels.push({ value: valId, target: label });
     }
 
     caseBlocks.push({ label, stmts: c.body, astCase: c });
   }
 
-  this.setTerminator({
+  setTerminator(ctx, {
     kind: "switch",
     value: switchValue,
     cases: caseLabels,
@@ -76,52 +90,52 @@ export function lowerSwitchExpr(this: KirLowerer, expr: SwitchExpr): VarId {
 
   // Emit case blocks — store last expression value into resultPtr
   for (const cb of caseBlocks) {
-    this.sealCurrentBlock();
-    this.startBlock(cb.label);
+    sealCurrentBlock(ctx);
+    startBlock(ctx, cb.label);
 
     // Emit destructuring bindings
-    const bindingInfo = this.checkResult.switchCaseBindings?.get(cb.astCase);
+    const bindingInfo = ctx.checkResult.switchCaseBindings?.get(cb.astCase);
     if (bindingInfo && cb.astCase.bindings) {
       for (let i = 0; i < cb.astCase.bindings.length; i++) {
         const fieldPath = `data.${bindingInfo.variantName}.${bindingInfo.fieldNames[i]}`;
-        const fieldType = this.lowerCheckerType(bindingInfo.fieldTypes[i]);
-        const loadedVal = this.emitFieldLoad(subjectId, fieldPath, fieldType);
-        this.varMap.set(cb.astCase.bindings[i], loadedVal);
+        const fieldType = lowerCheckerType(ctx, bindingInfo.fieldTypes[i]);
+        const loadedVal = emitFieldLoad(ctx, subjectId, fieldPath, fieldType);
+        ctx.varMap.set(cb.astCase.bindings[i], loadedVal);
       }
     }
 
     for (const s of cb.stmts) {
       if (s.kind === "ExprStmt") {
-        const val = this.lowerExpr(s.expression);
-        this.emit({ kind: "store", ptr: resultPtr, value: val });
+        const val = lowerExpr(ctx, s.expression);
+        emit(ctx, { kind: "store", ptr: resultPtr, value: val });
       } else {
-        this.lowerStatement(s);
+        lowerStatement(ctx, s);
       }
     }
-    if (!this.isBlockTerminated()) {
-      this.setTerminator({ kind: "jump", target: endLabel });
+    if (!isBlockTerminated(ctx)) {
+      setTerminator(ctx, { kind: "jump", target: endLabel });
     }
   }
 
   // End block — load and return result
-  this.sealCurrentBlock();
-  this.startBlock(endLabel);
+  sealCurrentBlock(ctx);
+  startBlock(ctx, endLabel);
 
-  const dest = this.freshVar();
-  this.emit({ kind: "load", dest, ptr: resultPtr, type: resultType });
+  const dest = freshVar(ctx);
+  emit(ctx, { kind: "load", dest, ptr: resultPtr, type: resultType });
   return dest;
 }
 
 /** Find a const_int instruction by its dest VarId (for tag matching) */
-export function findConstIntInst(this: KirLowerer, varId: VarId): { value: number } | null {
-  for (const block of this.blocks) {
+export function findConstIntInst(ctx: LoweringCtx, varId: VarId): { value: number } | null {
+  for (const block of ctx.blocks) {
     for (const inst of block.instructions) {
       if (inst.kind === "const_int" && inst.dest === varId) {
         return { value: inst.value };
       }
     }
   }
-  for (const inst of this.currentInsts) {
+  for (const inst of ctx.currentInsts) {
     if (inst.kind === "const_int" && inst.dest === varId) {
       return { value: inst.value };
     }

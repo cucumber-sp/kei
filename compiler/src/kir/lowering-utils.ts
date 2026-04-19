@@ -1,148 +1,151 @@
 /**
- * Basic emit helpers and utility methods for KirLowerer.
- * Extracted from lowering.ts for modularity.
+ * Basic emit helpers and small utilities used across all lowering passes.
+ *
+ * Pure functions over `LoweringCtx`. No `this`. Same-file calls take `ctx`
+ * explicitly (e.g. `freshVar(ctx)`). Cross-file calls would import from
+ * `./lowering-*.ts` siblings; this file happens to be self-contained.
  */
 
 import type { BinOp, BlockId, KirInst, KirTerminator, KirType, VarId } from "./kir-types.ts";
-import type { KirLowerer } from "./lowering.ts";
+import type { LoweringCtx } from "./lowering-ctx.ts";
 
-export function freshVar(this: KirLowerer): VarId {
-  return `%${this.varCounter++}`;
+export function freshVar(ctx: LoweringCtx): VarId {
+  return `%${ctx.varCounter++}`;
 }
 
-export function freshBlockId(this: KirLowerer, prefix: string): BlockId {
-  return `${prefix}.${this.blockCounter++}`;
+export function freshBlockId(ctx: LoweringCtx, prefix: string): BlockId {
+  return `${prefix}.${ctx.blockCounter++}`;
 }
 
-export function emit(this: KirLowerer, inst: KirInst): void {
-  this.currentInsts.push(inst);
+export function emit(ctx: LoweringCtx, inst: KirInst): void {
+  ctx.currentInsts.push(inst);
 }
 
-export function emitConstInt(this: KirLowerer, value: number): VarId {
-  const dest = this.freshVar();
-  this.emit({ kind: "const_int", dest, type: { kind: "int", bits: 32, signed: true }, value });
+export function emitConstInt(ctx: LoweringCtx, value: number): VarId {
+  const dest = freshVar(ctx);
+  emit(ctx, { kind: "const_int", dest, type: { kind: "int", bits: 32, signed: true }, value });
   return dest;
 }
 
-export function setTerminator(this: KirLowerer, term: KirTerminator): void {
-  // Only set terminator if block hasn't been terminated yet
-  if (!this.isBlockTerminated()) {
-    // biome-ignore lint/suspicious/noExplicitAny: _pendingTerminator is a private field not declared on KirLowerer's interface
-    (this as any)._pendingTerminator = term;
+export function setTerminator(ctx: LoweringCtx, term: KirTerminator): void {
+  if (!isBlockTerminated(ctx)) {
+    ctx.pendingTerminator = term;
   }
 }
 
-export function isBlockTerminated(this: KirLowerer): boolean {
-  // biome-ignore lint/suspicious/noExplicitAny: _pendingTerminator is a private field not declared on KirLowerer's interface
-  return (this as any)._pendingTerminator != null;
+export function isBlockTerminated(ctx: LoweringCtx): boolean {
+  return ctx.pendingTerminator != null;
 }
 
-export function sealCurrentBlock(this: KirLowerer): void {
-  // biome-ignore lint/suspicious/noExplicitAny: _pendingTerminator is a private field not declared on KirLowerer's interface
-  const terminator: KirTerminator = (this as any)._pendingTerminator ?? { kind: "unreachable" };
-  this.blocks.push({
-    id: this.currentBlockId,
+export function sealCurrentBlock(ctx: LoweringCtx): void {
+  const terminator: KirTerminator = ctx.pendingTerminator ?? { kind: "unreachable" };
+  ctx.blocks.push({
+    id: ctx.currentBlockId,
     phis: [],
-    instructions: this.currentInsts,
+    instructions: ctx.currentInsts,
     terminator,
   });
-  this.currentInsts = [];
-  // biome-ignore lint/suspicious/noExplicitAny: _pendingTerminator is a private field not declared on KirLowerer's interface
-  (this as any)._pendingTerminator = null;
+  ctx.currentInsts = [];
+  ctx.pendingTerminator = null;
 }
 
-export function startBlock(this: KirLowerer, id: BlockId): void {
-  this.currentBlockId = id;
-  this.currentInsts = [];
-  // biome-ignore lint/suspicious/noExplicitAny: _pendingTerminator is a private field not declared on KirLowerer's interface
-  (this as any)._pendingTerminator = null;
+export function startBlock(ctx: LoweringCtx, id: BlockId): void {
+  ctx.currentBlockId = id;
+  ctx.currentInsts = [];
+  ctx.pendingTerminator = null;
 }
 
-export function ensureTerminator(this: KirLowerer, returnType: KirType): void {
-  if (!this.isBlockTerminated()) {
+export function ensureTerminator(ctx: LoweringCtx, returnType: KirType): void {
+  if (!isBlockTerminated(ctx)) {
     if (returnType.kind === "void") {
-      this.setTerminator({ kind: "ret_void" });
+      setTerminator(ctx, { kind: "ret_void" });
     } else {
-      // Should not happen in well-typed code, but add unreachable as safety
-      this.setTerminator({ kind: "unreachable" });
+      // Should not happen in well-typed code, but add unreachable as safety.
+      setTerminator(ctx, { kind: "unreachable" });
     }
   }
 }
 
-export function isStackAllocVar(this: KirLowerer, varId: VarId): boolean {
-  // Check if any instruction in current block or previous blocks allocated this var
-  for (const block of this.blocks) {
+export function isStackAllocVar(ctx: LoweringCtx, varId: VarId): boolean {
+  for (const block of ctx.blocks) {
     for (const inst of block.instructions) {
       if (inst.kind === "stack_alloc" && inst.dest === varId) return true;
     }
   }
-  for (const inst of this.currentInsts) {
+  for (const inst of ctx.currentInsts) {
     if (inst.kind === "stack_alloc" && inst.dest === varId) return true;
   }
   return false;
 }
 
-export function mapBinOp(this: KirLowerer, op: string): BinOp | null {
-  const map: Record<string, BinOp> = {
-    "+": "add",
-    "-": "sub",
-    "*": "mul",
-    "/": "div",
-    "%": "mod",
-    "==": "eq",
-    "!=": "neq",
-    "<": "lt",
-    ">": "gt",
-    "<=": "lte",
-    ">=": "gte",
-    "&": "bit_and",
-    "|": "bit_or",
-    "^": "bit_xor",
-    "<<": "shl",
-    ">>": "shr",
-    "&&": "and",
-    "||": "or",
-  };
-  return map[op] ?? null;
+const BIN_OP_MAP: Record<string, BinOp> = {
+  "+": "add",
+  "-": "sub",
+  "*": "mul",
+  "/": "div",
+  "%": "mod",
+  "==": "eq",
+  "!=": "neq",
+  "<": "lt",
+  ">": "gt",
+  "<=": "lte",
+  ">=": "gte",
+  "&": "bit_and",
+  "|": "bit_or",
+  "^": "bit_xor",
+  "<<": "shl",
+  ">>": "shr",
+  "&&": "and",
+  "||": "or",
+};
+
+const COMPOUND_ASSIGN_OP_MAP: Record<string, BinOp> = {
+  "+=": "add",
+  "-=": "sub",
+  "*=": "mul",
+  "/=": "div",
+  "%=": "mod",
+  "&=": "bit_and",
+  "|=": "bit_or",
+  "^=": "bit_xor",
+  "<<=": "shl",
+  ">>=": "shr",
+};
+
+export function mapBinOp(_ctx: LoweringCtx, op: string): BinOp | null {
+  return BIN_OP_MAP[op] ?? null;
 }
 
-export function mapCompoundAssignOp(this: KirLowerer, op: string): BinOp | null {
-  const map: Record<string, BinOp> = {
-    "+=": "add",
-    "-=": "sub",
-    "*=": "mul",
-    "/=": "div",
-    "%=": "mod",
-    "&=": "bit_and",
-    "|=": "bit_or",
-    "^=": "bit_xor",
-    "<<=": "shl",
-    ">>=": "shr",
-  };
-  return map[op] ?? null;
+export function mapCompoundAssignOp(_ctx: LoweringCtx, op: string): BinOp | null {
+  return COMPOUND_ASSIGN_OP_MAP[op] ?? null;
 }
 
 /** Emit a stack_alloc and return the pointer VarId. */
-export function emitStackAlloc(this: KirLowerer, type: KirType): VarId {
-  const dest = this.freshVar();
-  this.emit({ kind: "stack_alloc", dest, type });
+export function emitStackAlloc(ctx: LoweringCtx, type: KirType): VarId {
+  const dest = freshVar(ctx);
+  emit(ctx, { kind: "stack_alloc", dest, type });
   return dest;
 }
 
 /** Emit field_ptr + load and return the loaded value VarId. */
-export function emitFieldLoad(this: KirLowerer, base: VarId, field: string, type: KirType): VarId {
-  const ptr = this.freshVar();
-  this.emit({ kind: "field_ptr", dest: ptr, base, field, type });
-  const dest = this.freshVar();
-  this.emit({ kind: "load", dest, ptr, type });
+export function emitFieldLoad(
+  ctx: LoweringCtx,
+  base: VarId,
+  field: string,
+  type: KirType
+): VarId {
+  const ptr = freshVar(ctx);
+  emit(ctx, { kind: "field_ptr", dest: ptr, base, field, type });
+  const dest = freshVar(ctx);
+  emit(ctx, { kind: "load", dest, ptr, type });
   return dest;
 }
 
 /** Compare tag == 0 (success check for error handling). Returns the bool VarId. */
-export function emitTagIsSuccess(this: KirLowerer, tagVar: VarId): VarId {
-  const zeroConst = this.emitConstInt(0);
-  const isOk = this.freshVar();
-  this.emit({
+export function emitTagIsSuccess(ctx: LoweringCtx, tagVar: VarId): VarId {
+  const zeroConst = emitConstInt(ctx, 0);
+  const isOk = freshVar(ctx);
+  emit(ctx, {
     kind: "bin_op",
     op: "eq",
     dest: isOk,
@@ -154,24 +157,24 @@ export function emitTagIsSuccess(this: KirLowerer, tagVar: VarId): VarId {
 }
 
 /** Cast a void* pointer to a typed pointer. Returns the cast VarId. */
-export function emitCastToPtr(this: KirLowerer, value: VarId, pointeeType: KirType): VarId {
-  const dest = this.freshVar();
-  this.emit({ kind: "cast", dest, value, targetType: { kind: "ptr", pointee: pointeeType } });
+export function emitCastToPtr(ctx: LoweringCtx, value: VarId, pointeeType: KirType): VarId {
+  const dest = freshVar(ctx);
+  emit(ctx, { kind: "cast", dest, value, targetType: { kind: "ptr", pointee: pointeeType } });
   return dest;
 }
 
 /** Load current value from ptr, apply binary op with rhs, store result back. Returns the new value. */
 export function emitLoadModifyStore(
-  this: KirLowerer,
+  ctx: LoweringCtx,
   ptr: VarId,
   op: BinOp,
   rhs: VarId,
   type: KirType
 ): VarId {
-  const currentVal = this.freshVar();
-  this.emit({ kind: "load", dest: currentVal, ptr, type });
-  const result = this.freshVar();
-  this.emit({ kind: "bin_op", op, dest: result, lhs: currentVal, rhs, type });
-  this.emit({ kind: "store", ptr, value: result });
+  const currentVal = freshVar(ctx);
+  emit(ctx, { kind: "load", dest: currentVal, ptr, type });
+  const result = freshVar(ctx);
+  emit(ctx, { kind: "bin_op", op, dest: result, lhs: currentVal, rhs, type });
+  emit(ctx, { kind: "store", ptr, value: result });
   return currentVal;
 }

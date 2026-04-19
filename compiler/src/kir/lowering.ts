@@ -50,18 +50,19 @@ import * as switchMethods from "./lowering-switch.ts";
 import * as typeMethods from "./lowering-types.ts";
 import * as utilMethods from "./lowering-utils.ts";
 
-// ─── Scope variable tracking for lifecycle ───────────────────────────────────
-
-interface ScopeVar {
-  name: string;
-  varId: VarId;
-  structName: string; // struct type name (for __destroy/__oncopy dispatch)
-  isString?: boolean; // true for string variables (use kei_string_destroy instead)
-}
+import type { LoweringCtx, ScopeVar } from "./lowering-ctx.ts";
+import type { KirTerminator } from "./kir-types.ts";
 
 // ─── Lowerer ─────────────────────────────────────────────────────────────────
 
-export class KirLowerer {
+/**
+ * Migration state, 2026-04: KirLowerer is being converted from a prototype-
+ * patched class into the plain functions in `lowering-ctx.ts` + sibling files.
+ * During the migration, KirLowerer implements `LoweringCtx` so that converted
+ * (`(ctx, args)`) and unconverted (`this: KirLowerer, args`) methods can both
+ * dispatch through `KirLowerer.prototype.X(...)`.
+ */
+export class KirLowerer implements LoweringCtx {
   program: Program;
   checkResult: CheckResult;
 
@@ -71,6 +72,7 @@ export class KirLowerer {
   currentInsts: KirInst[] = [];
   varCounter = 0;
   blockCounter = 0;
+  pendingTerminator: KirTerminator | null = null;
 
   // Variable name → current SSA VarId mapping per scope
   varMap: Map<string, VarId> = new Map();
@@ -106,7 +108,7 @@ export class KirLowerer {
   importedNames: Map<string, string> = new Map();
 
   /** Set of imported function names that are overloaded in their source module */
-  private importedOverloads: Set<string> = new Set();
+  importedOverloads: Set<string> = new Set();
 
   /** Throws types for the current function being lowered (empty = non-throwing) */
   currentFunctionThrowsTypes: KirType[] = [];
@@ -336,127 +338,140 @@ export class KirLowerer {
 
 // ─── Attach extracted methods to KirLowerer prototype ─────────────────────────
 
+// All methods are now converted to (ctx, args) free functions. Each prototype
+// patch wraps the free function in `bind()` so legacy `this.X(args)` callers
+// still dispatch correctly.
+// biome-ignore lint/suspicious/noExplicitAny: wrapping converted free functions for legacy `this.X` callers
+function bind<F extends (ctx: LoweringCtx, ...args: any[]) => any>(fn: F) {
+  return function (this: KirLowerer, ...args: unknown[]) {
+    // biome-ignore lint/suspicious/noExplicitAny: forwarded to the typed free function
+    return (fn as any)(this, ...args);
+  };
+}
+
 // Declaration methods
-KirLowerer.prototype.lowerDeclaration = declMethods.lowerDeclaration;
-KirLowerer.prototype.lowerFunction = declMethods.lowerFunction;
-KirLowerer.prototype.lowerExternFunction = declMethods.lowerExternFunction;
-KirLowerer.prototype.lowerMonomorphizedFunction = declMethods.lowerMonomorphizedFunction;
-KirLowerer.prototype.lowerStaticDecl = declMethods.lowerStaticDecl;
-KirLowerer.prototype.resetFunctionState = declMethods.resetFunctionState;
-KirLowerer.prototype.finalizeFunctionBody = declMethods.finalizeFunctionBody;
-KirLowerer.prototype.addThrowsParams = declMethods.addThrowsParams;
+KirLowerer.prototype.lowerDeclaration = bind(declMethods.lowerDeclaration);
+KirLowerer.prototype.lowerFunction = bind(declMethods.lowerFunction);
+KirLowerer.prototype.lowerExternFunction = bind(declMethods.lowerExternFunction);
+KirLowerer.prototype.lowerMonomorphizedFunction = bind(declMethods.lowerMonomorphizedFunction);
+KirLowerer.prototype.lowerStaticDecl = bind(declMethods.lowerStaticDecl);
+KirLowerer.prototype.resetFunctionState = bind(declMethods.resetFunctionState);
+KirLowerer.prototype.finalizeFunctionBody = bind(declMethods.finalizeFunctionBody);
+KirLowerer.prototype.addThrowsParams = bind(declMethods.addThrowsParams);
 
 // Struct methods
-KirLowerer.prototype.lowerStructDecl = structMethods.lowerStructDecl;
-KirLowerer.prototype.lowerMonomorphizedStruct = structMethods.lowerMonomorphizedStruct;
-KirLowerer.prototype.lowerMethod = structMethods.lowerMethod;
+KirLowerer.prototype.lowerStructDecl = bind(structMethods.lowerStructDecl);
+KirLowerer.prototype.lowerMonomorphizedStruct = bind(structMethods.lowerMonomorphizedStruct);
+KirLowerer.prototype.lowerMethod = bind(structMethods.lowerMethod);
 
 // Enum declaration methods
-KirLowerer.prototype.lowerEnumDecl = enumDeclMethods.lowerEnumDecl;
+KirLowerer.prototype.lowerEnumDecl = bind(enumDeclMethods.lowerEnumDecl);
 
 // Statement methods
-KirLowerer.prototype.lowerBlock = stmtMethods.lowerBlock;
-KirLowerer.prototype.lowerScopedBlock = stmtMethods.lowerScopedBlock;
-KirLowerer.prototype.lowerStatement = stmtMethods.lowerStatement;
-KirLowerer.prototype.lowerLetStmt = stmtMethods.lowerLetStmt;
-KirLowerer.prototype.lowerConstStmt = stmtMethods.lowerConstStmt;
-KirLowerer.prototype.lowerReturnStmt = stmtMethods.lowerReturnStmt;
-KirLowerer.prototype.lowerIfStmt = stmtMethods.lowerIfStmt;
-KirLowerer.prototype.lowerWhileStmt = stmtMethods.lowerWhileStmt;
-KirLowerer.prototype.lowerForStmt = stmtMethods.lowerForStmt;
-KirLowerer.prototype.lowerCForStmt = stmtMethods.lowerCForStmt;
-KirLowerer.prototype.lowerSwitchStmt = stmtMethods.lowerSwitchStmt;
-KirLowerer.prototype.lowerExprStmt = stmtMethods.lowerExprStmt;
-KirLowerer.prototype.lowerAssertStmt = stmtMethods.lowerAssertStmt;
-KirLowerer.prototype.lowerRequireStmt = stmtMethods.lowerRequireStmt;
+KirLowerer.prototype.lowerBlock = bind(stmtMethods.lowerBlock);
+KirLowerer.prototype.lowerScopedBlock = bind(stmtMethods.lowerScopedBlock);
+KirLowerer.prototype.lowerStatement = bind(stmtMethods.lowerStatement);
+KirLowerer.prototype.lowerLetStmt = bind(stmtMethods.lowerLetStmt);
+KirLowerer.prototype.lowerConstStmt = bind(stmtMethods.lowerConstStmt);
+KirLowerer.prototype.lowerReturnStmt = bind(stmtMethods.lowerReturnStmt);
+KirLowerer.prototype.lowerIfStmt = bind(stmtMethods.lowerIfStmt);
+KirLowerer.prototype.lowerWhileStmt = bind(stmtMethods.lowerWhileStmt);
+KirLowerer.prototype.lowerForStmt = bind(stmtMethods.lowerForStmt);
+KirLowerer.prototype.lowerCForStmt = bind(stmtMethods.lowerCForStmt);
+KirLowerer.prototype.lowerSwitchStmt = bind(stmtMethods.lowerSwitchStmt);
+KirLowerer.prototype.lowerExprStmt = bind(stmtMethods.lowerExprStmt);
+KirLowerer.prototype.lowerAssertStmt = bind(stmtMethods.lowerAssertStmt);
+KirLowerer.prototype.lowerRequireStmt = bind(stmtMethods.lowerRequireStmt);
 
 // Expression methods
-KirLowerer.prototype.lowerExpr = exprMethods.lowerExpr;
-KirLowerer.prototype.lowerExprAsPtr = exprMethods.lowerExprAsPtr;
-KirLowerer.prototype.lowerIdentifier = exprMethods.lowerIdentifier;
-KirLowerer.prototype.lowerCallExpr = exprMethods.lowerCallExpr;
-KirLowerer.prototype.lowerMemberExpr = exprMethods.lowerMemberExpr;
-KirLowerer.prototype.lowerIndexExpr = exprMethods.lowerIndexExpr;
-KirLowerer.prototype.lowerAssignExpr = exprMethods.lowerAssignExpr;
-KirLowerer.prototype.lowerIfExpr = exprMethods.lowerIfExpr;
-KirLowerer.prototype.lowerMoveExpr = exprMethods.lowerMoveExpr;
-KirLowerer.prototype.lowerCastExpr = exprMethods.lowerCastExpr;
+KirLowerer.prototype.lowerExpr = bind(exprMethods.lowerExpr);
+KirLowerer.prototype.lowerExprAsPtr = bind(exprMethods.lowerExprAsPtr);
+KirLowerer.prototype.lowerIdentifier = bind(exprMethods.lowerIdentifier);
+KirLowerer.prototype.lowerCallExpr = bind(exprMethods.lowerCallExpr);
+KirLowerer.prototype.lowerMemberExpr = bind(exprMethods.lowerMemberExpr);
+KirLowerer.prototype.lowerIndexExpr = bind(exprMethods.lowerIndexExpr);
+KirLowerer.prototype.lowerAssignExpr = bind(exprMethods.lowerAssignExpr);
+KirLowerer.prototype.lowerIfExpr = bind(exprMethods.lowerIfExpr);
+KirLowerer.prototype.lowerMoveExpr = bind(exprMethods.lowerMoveExpr);
+KirLowerer.prototype.lowerCastExpr = bind(exprMethods.lowerCastExpr);
 
 // Switch methods
-KirLowerer.prototype.lowerSwitchExpr = switchMethods.lowerSwitchExpr;
-KirLowerer.prototype.findConstIntInst = switchMethods.findConstIntInst;
+KirLowerer.prototype.lowerSwitchExpr = bind(switchMethods.lowerSwitchExpr);
+KirLowerer.prototype.findConstIntInst = bind(switchMethods.findConstIntInst);
 
 // Enum methods
-KirLowerer.prototype.lowerEnumVariantConstruction = enumMethods.lowerEnumVariantConstruction;
-KirLowerer.prototype.lowerEnumVariantAccess = enumMethods.lowerEnumVariantAccess;
+KirLowerer.prototype.lowerEnumVariantConstruction = bind(enumMethods.lowerEnumVariantConstruction);
+KirLowerer.prototype.lowerEnumVariantAccess = bind(enumMethods.lowerEnumVariantAccess);
 
 // Literal methods
-KirLowerer.prototype.lowerIntLiteral = literalMethods.lowerIntLiteral;
-KirLowerer.prototype.lowerFloatLiteral = literalMethods.lowerFloatLiteral;
-KirLowerer.prototype.lowerStringLiteral = literalMethods.lowerStringLiteral;
-KirLowerer.prototype.lowerBoolLiteral = literalMethods.lowerBoolLiteral;
-KirLowerer.prototype.lowerNullLiteral = literalMethods.lowerNullLiteral;
-KirLowerer.prototype.lowerStructLiteral = literalMethods.lowerStructLiteral;
-KirLowerer.prototype.lowerArrayLiteral = literalMethods.lowerArrayLiteral;
+KirLowerer.prototype.lowerIntLiteral = bind(literalMethods.lowerIntLiteral);
+KirLowerer.prototype.lowerFloatLiteral = bind(literalMethods.lowerFloatLiteral);
+KirLowerer.prototype.lowerStringLiteral = bind(literalMethods.lowerStringLiteral);
+KirLowerer.prototype.lowerBoolLiteral = bind(literalMethods.lowerBoolLiteral);
+KirLowerer.prototype.lowerNullLiteral = bind(literalMethods.lowerNullLiteral);
+KirLowerer.prototype.lowerStructLiteral = bind(literalMethods.lowerStructLiteral);
+KirLowerer.prototype.lowerArrayLiteral = bind(literalMethods.lowerArrayLiteral);
 
 // Operator methods
-KirLowerer.prototype.lowerBinaryExpr = operatorMethods.lowerBinaryExpr;
-KirLowerer.prototype.lowerShortCircuitAnd = operatorMethods.lowerShortCircuitAnd;
-KirLowerer.prototype.lowerShortCircuitOr = operatorMethods.lowerShortCircuitOr;
-KirLowerer.prototype.lowerUnaryExpr = operatorMethods.lowerUnaryExpr;
-KirLowerer.prototype.lowerOperatorMethodCall = operatorMethods.lowerOperatorMethodCall;
+KirLowerer.prototype.lowerBinaryExpr = bind(operatorMethods.lowerBinaryExpr);
+KirLowerer.prototype.lowerShortCircuitAnd = bind(operatorMethods.lowerShortCircuitAnd);
+KirLowerer.prototype.lowerShortCircuitOr = bind(operatorMethods.lowerShortCircuitOr);
+KirLowerer.prototype.lowerUnaryExpr = bind(operatorMethods.lowerUnaryExpr);
+KirLowerer.prototype.lowerOperatorMethodCall = bind(operatorMethods.lowerOperatorMethodCall);
 
 // Error handling methods
-KirLowerer.prototype.lowerThrowExpr = errorMethods.lowerThrowExpr;
-KirLowerer.prototype.lowerCatchExpr = errorMethods.lowerCatchExpr;
-KirLowerer.prototype.resolveCallThrowsInfo = errorMethods.resolveCallThrowsInfo;
-KirLowerer.prototype.lowerCatchThrowPropagation = errorMethods.lowerCatchThrowPropagation;
+KirLowerer.prototype.lowerThrowExpr = bind(errorMethods.lowerThrowExpr);
+KirLowerer.prototype.lowerCatchExpr = bind(errorMethods.lowerCatchExpr);
+KirLowerer.prototype.resolveCallThrowsInfo = bind(errorMethods.resolveCallThrowsInfo);
+KirLowerer.prototype.lowerCatchThrowPropagation = bind(errorMethods.lowerCatchThrowPropagation);
 
 // Type conversion methods
-KirLowerer.prototype.getExprKirType = typeMethods.getExprKirType;
-KirLowerer.prototype.lowerCheckerType = typeMethods.lowerCheckerType;
-KirLowerer.prototype.lowerTypeNode = typeMethods.lowerTypeNode;
-KirLowerer.prototype.resolveParamType = typeMethods.resolveParamType;
-KirLowerer.prototype.resolveParamCheckerType = typeMethods.resolveParamCheckerType;
-KirLowerer.prototype.getFunctionReturnType = typeMethods.getFunctionReturnType;
-KirLowerer.prototype.nameToCheckerType = typeMethods.nameToCheckerType;
-KirLowerer.prototype.resolveSizeofArg = typeMethods.resolveSizeofArg;
-KirLowerer.prototype.sizeofTypeName = typeMethods.sizeofTypeName;
-KirLowerer.prototype.sizeofCheckerType = typeMethods.sizeofCheckerType;
-KirLowerer.prototype.mangleFunctionName = typeMethods.mangleFunctionName;
-KirLowerer.prototype.mangleFunctionNameFromType = typeMethods.mangleFunctionNameFromType;
-KirLowerer.prototype.typeNameSuffix = typeMethods.typeNameSuffix;
-KirLowerer.prototype.checkerTypeSuffix = typeMethods.checkerTypeSuffix;
+KirLowerer.prototype.getExprKirType = bind(typeMethods.getExprKirType);
+KirLowerer.prototype.lowerCheckerType = bind(typeMethods.lowerCheckerType);
+KirLowerer.prototype.lowerTypeNode = bind(typeMethods.lowerTypeNode);
+KirLowerer.prototype.resolveParamType = bind(typeMethods.resolveParamType);
+KirLowerer.prototype.resolveParamCheckerType = bind(typeMethods.resolveParamCheckerType);
+KirLowerer.prototype.getFunctionReturnType = bind(typeMethods.getFunctionReturnType);
+KirLowerer.prototype.nameToCheckerType = bind(typeMethods.nameToCheckerType);
+KirLowerer.prototype.resolveSizeofArg = bind(typeMethods.resolveSizeofArg);
+KirLowerer.prototype.sizeofTypeName = bind(typeMethods.sizeofTypeName);
+KirLowerer.prototype.sizeofCheckerType = bind(typeMethods.sizeofCheckerType);
+KirLowerer.prototype.mangleFunctionName = bind(typeMethods.mangleFunctionName);
+KirLowerer.prototype.mangleFunctionNameFromType = bind(typeMethods.mangleFunctionNameFromType);
+KirLowerer.prototype.typeNameSuffix = bind(typeMethods.typeNameSuffix);
+KirLowerer.prototype.checkerTypeSuffix = bind(typeMethods.checkerTypeSuffix);
 
 // Scope/lifecycle methods
-KirLowerer.prototype.getStructLifecycle = scopeMethods.getStructLifecycle;
-KirLowerer.prototype.pushScope = scopeMethods.pushScope;
-KirLowerer.prototype.popScopeWithDestroy = scopeMethods.popScopeWithDestroy;
-KirLowerer.prototype.emitScopeDestroys = scopeMethods.emitScopeDestroys;
-KirLowerer.prototype.emitAllScopeDestroys = scopeMethods.emitAllScopeDestroys;
-KirLowerer.prototype.emitLoopScopeDestroys = scopeMethods.emitLoopScopeDestroys;
-KirLowerer.prototype.emitAllScopeDestroysExceptNamed = scopeMethods.emitAllScopeDestroysExceptNamed;
-KirLowerer.prototype.trackScopeVar = scopeMethods.trackScopeVar;
-KirLowerer.prototype.trackScopeVarByType = scopeMethods.trackScopeVarByType;
+KirLowerer.prototype.getStructLifecycle = bind(scopeMethods.getStructLifecycle);
+KirLowerer.prototype.pushScope = bind(scopeMethods.pushScope);
+KirLowerer.prototype.popScopeWithDestroy = bind(scopeMethods.popScopeWithDestroy);
+KirLowerer.prototype.emitScopeDestroys = bind(scopeMethods.emitScopeDestroys);
+KirLowerer.prototype.emitAllScopeDestroys = bind(scopeMethods.emitAllScopeDestroys);
+KirLowerer.prototype.emitLoopScopeDestroys = bind(scopeMethods.emitLoopScopeDestroys);
+KirLowerer.prototype.emitAllScopeDestroysExceptNamed = bind(
+  scopeMethods.emitAllScopeDestroysExceptNamed
+);
+KirLowerer.prototype.trackScopeVar = bind(scopeMethods.trackScopeVar);
+KirLowerer.prototype.trackScopeVarByType = bind(scopeMethods.trackScopeVarByType);
 
 // Utility methods
-KirLowerer.prototype.freshVar = utilMethods.freshVar;
-KirLowerer.prototype.freshBlockId = utilMethods.freshBlockId;
-KirLowerer.prototype.emit = utilMethods.emit;
-KirLowerer.prototype.emitConstInt = utilMethods.emitConstInt;
-KirLowerer.prototype.setTerminator = utilMethods.setTerminator;
-KirLowerer.prototype.isBlockTerminated = utilMethods.isBlockTerminated;
-KirLowerer.prototype.sealCurrentBlock = utilMethods.sealCurrentBlock;
-KirLowerer.prototype.startBlock = utilMethods.startBlock;
-KirLowerer.prototype.ensureTerminator = utilMethods.ensureTerminator;
-KirLowerer.prototype.isStackAllocVar = utilMethods.isStackAllocVar;
-KirLowerer.prototype.mapBinOp = utilMethods.mapBinOp;
-KirLowerer.prototype.mapCompoundAssignOp = utilMethods.mapCompoundAssignOp;
-KirLowerer.prototype.emitStackAlloc = utilMethods.emitStackAlloc;
-KirLowerer.prototype.emitFieldLoad = utilMethods.emitFieldLoad;
-KirLowerer.prototype.emitTagIsSuccess = utilMethods.emitTagIsSuccess;
-KirLowerer.prototype.emitCastToPtr = utilMethods.emitCastToPtr;
-KirLowerer.prototype.emitLoadModifyStore = utilMethods.emitLoadModifyStore;
+KirLowerer.prototype.freshVar = bind(utilMethods.freshVar);
+KirLowerer.prototype.freshBlockId = bind(utilMethods.freshBlockId);
+KirLowerer.prototype.emit = bind(utilMethods.emit);
+KirLowerer.prototype.emitConstInt = bind(utilMethods.emitConstInt);
+KirLowerer.prototype.setTerminator = bind(utilMethods.setTerminator);
+KirLowerer.prototype.isBlockTerminated = bind(utilMethods.isBlockTerminated);
+KirLowerer.prototype.sealCurrentBlock = bind(utilMethods.sealCurrentBlock);
+KirLowerer.prototype.startBlock = bind(utilMethods.startBlock);
+KirLowerer.prototype.ensureTerminator = bind(utilMethods.ensureTerminator);
+KirLowerer.prototype.isStackAllocVar = bind(utilMethods.isStackAllocVar);
+KirLowerer.prototype.mapBinOp = bind(utilMethods.mapBinOp);
+KirLowerer.prototype.mapCompoundAssignOp = bind(utilMethods.mapCompoundAssignOp);
+KirLowerer.prototype.emitStackAlloc = bind(utilMethods.emitStackAlloc);
+KirLowerer.prototype.emitFieldLoad = bind(utilMethods.emitFieldLoad);
+KirLowerer.prototype.emitTagIsSuccess = bind(utilMethods.emitTagIsSuccess);
+KirLowerer.prototype.emitCastToPtr = bind(utilMethods.emitCastToPtr);
+KirLowerer.prototype.emitLoadModifyStore = bind(utilMethods.emitLoadModifyStore);
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 

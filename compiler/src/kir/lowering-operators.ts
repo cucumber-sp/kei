@@ -6,38 +6,50 @@
 import type { BinaryExpr, Expression, UnaryExpr } from "../ast/nodes.ts";
 import type { StructType } from "../checker/types";
 import type { KirType, VarId } from "./kir-types.ts";
-import type { KirLowerer } from "./lowering.ts";
+import type { LoweringCtx } from "./lowering-ctx.ts";
+import { lowerExpr, lowerExprAsPtr } from "./lowering-expr.ts";
+import { getExprKirType, lowerCheckerType } from "./lowering-types.ts";
+import {
+  emit,
+  emitStackAlloc,
+  freshBlockId,
+  freshVar,
+  mapBinOp,
+  sealCurrentBlock,
+  setTerminator,
+  startBlock,
+} from "./lowering-utils.ts";
 
-export function lowerBinaryExpr(this: KirLowerer, expr: BinaryExpr): VarId {
+export function lowerBinaryExpr(ctx: LoweringCtx, expr: BinaryExpr): VarId {
   // Check for operator overloading
-  const opMethod = this.checkResult.operatorMethods.get(expr);
+  const opMethod = ctx.checkResult.operatorMethods.get(expr);
   if (opMethod) {
-    return this.lowerOperatorMethodCall(expr.left, opMethod.methodName, opMethod.structType, [
+    return lowerOperatorMethodCall(ctx, expr.left, opMethod.methodName, opMethod.structType, [
       expr.right,
     ]);
   }
 
   // Short-circuit for logical AND/OR
   if (expr.operator === "&&") {
-    return this.lowerShortCircuitAnd(expr);
+    return lowerShortCircuitAnd(ctx, expr);
   }
   if (expr.operator === "||") {
-    return this.lowerShortCircuitOr(expr);
+    return lowerShortCircuitOr(ctx, expr);
   }
 
-  const lhs = this.lowerExpr(expr.left);
-  const rhs = this.lowerExpr(expr.right);
-  const dest = this.freshVar();
+  const lhs = lowerExpr(ctx, expr.left);
+  const rhs = lowerExpr(ctx, expr.right);
+  const dest = freshVar(ctx);
 
-  const op = this.mapBinOp(expr.operator);
+  const op = mapBinOp(ctx, expr.operator);
   if (op) {
-    const type = this.getExprKirType(expr);
+    const type = getExprKirType(ctx, expr);
     // For string equality/inequality, pass operandType so the C emitter knows
-    const leftCheckerType = this.checkResult.typeMap.get(expr.left);
+    const leftCheckerType = ctx.checkResult.typeMap.get(expr.left);
     if (leftCheckerType?.kind === "string" && (op === "eq" || op === "neq")) {
-      this.emit({ kind: "bin_op", op, dest, lhs, rhs, type, operandType: { kind: "string" } });
+      emit(ctx, { kind: "bin_op", op, dest, lhs, rhs, type, operandType: { kind: "string" } });
     } else {
-      this.emit({ kind: "bin_op", op, dest, lhs, rhs, type });
+      emit(ctx, { kind: "bin_op", op, dest, lhs, rhs, type });
     }
     return dest;
   }
@@ -46,96 +58,96 @@ export function lowerBinaryExpr(this: KirLowerer, expr: BinaryExpr): VarId {
   return lhs;
 }
 
-export function lowerShortCircuitAnd(this: KirLowerer, expr: BinaryExpr): VarId {
+export function lowerShortCircuitAnd(ctx: LoweringCtx, expr: BinaryExpr): VarId {
   const resultType: KirType = { kind: "bool" };
-  const resultPtr = this.emitStackAlloc(resultType);
+  const resultPtr = emitStackAlloc(ctx, resultType);
 
-  const lhs = this.lowerExpr(expr.left);
-  const rhsLabel = this.freshBlockId("and.rhs");
-  const falseLabel = this.freshBlockId("and.false");
-  const endLabel = this.freshBlockId("and.end");
+  const lhs = lowerExpr(ctx, expr.left);
+  const rhsLabel = freshBlockId(ctx, "and.rhs");
+  const falseLabel = freshBlockId(ctx, "and.false");
+  const endLabel = freshBlockId(ctx, "and.end");
 
-  this.setTerminator({ kind: "br", cond: lhs, thenBlock: rhsLabel, elseBlock: falseLabel });
+  setTerminator(ctx, { kind: "br", cond: lhs, thenBlock: rhsLabel, elseBlock: falseLabel });
 
   // False path: store false
-  this.sealCurrentBlock();
-  this.startBlock(falseLabel);
-  const falseVal = this.freshVar();
-  this.emit({ kind: "const_bool", dest: falseVal, value: false });
-  this.emit({ kind: "store", ptr: resultPtr, value: falseVal });
-  this.setTerminator({ kind: "jump", target: endLabel });
+  sealCurrentBlock(ctx);
+  startBlock(ctx, falseLabel);
+  const falseVal = freshVar(ctx);
+  emit(ctx, { kind: "const_bool", dest: falseVal, value: false });
+  emit(ctx, { kind: "store", ptr: resultPtr, value: falseVal });
+  setTerminator(ctx, { kind: "jump", target: endLabel });
 
   // RHS path: evaluate rhs and store it
-  this.sealCurrentBlock();
-  this.startBlock(rhsLabel);
-  const rhs = this.lowerExpr(expr.right);
-  this.emit({ kind: "store", ptr: resultPtr, value: rhs });
-  this.setTerminator({ kind: "jump", target: endLabel });
+  sealCurrentBlock(ctx);
+  startBlock(ctx, rhsLabel);
+  const rhs = lowerExpr(ctx, expr.right);
+  emit(ctx, { kind: "store", ptr: resultPtr, value: rhs });
+  setTerminator(ctx, { kind: "jump", target: endLabel });
 
   // End: load result
-  this.sealCurrentBlock();
-  this.startBlock(endLabel);
-  const dest = this.freshVar();
-  this.emit({ kind: "load", dest, ptr: resultPtr, type: resultType });
+  sealCurrentBlock(ctx);
+  startBlock(ctx, endLabel);
+  const dest = freshVar(ctx);
+  emit(ctx, { kind: "load", dest, ptr: resultPtr, type: resultType });
   return dest;
 }
 
-export function lowerShortCircuitOr(this: KirLowerer, expr: BinaryExpr): VarId {
+export function lowerShortCircuitOr(ctx: LoweringCtx, expr: BinaryExpr): VarId {
   const resultType: KirType = { kind: "bool" };
-  const resultPtr = this.emitStackAlloc(resultType);
+  const resultPtr = emitStackAlloc(ctx, resultType);
 
-  const lhs = this.lowerExpr(expr.left);
-  const trueLabel = this.freshBlockId("or.true");
-  const rhsLabel = this.freshBlockId("or.rhs");
-  const endLabel = this.freshBlockId("or.end");
+  const lhs = lowerExpr(ctx, expr.left);
+  const trueLabel = freshBlockId(ctx, "or.true");
+  const rhsLabel = freshBlockId(ctx, "or.rhs");
+  const endLabel = freshBlockId(ctx, "or.end");
 
-  this.setTerminator({ kind: "br", cond: lhs, thenBlock: trueLabel, elseBlock: rhsLabel });
+  setTerminator(ctx, { kind: "br", cond: lhs, thenBlock: trueLabel, elseBlock: rhsLabel });
 
   // True path: store true
-  this.sealCurrentBlock();
-  this.startBlock(trueLabel);
-  const trueVal = this.freshVar();
-  this.emit({ kind: "const_bool", dest: trueVal, value: true });
-  this.emit({ kind: "store", ptr: resultPtr, value: trueVal });
-  this.setTerminator({ kind: "jump", target: endLabel });
+  sealCurrentBlock(ctx);
+  startBlock(ctx, trueLabel);
+  const trueVal = freshVar(ctx);
+  emit(ctx, { kind: "const_bool", dest: trueVal, value: true });
+  emit(ctx, { kind: "store", ptr: resultPtr, value: trueVal });
+  setTerminator(ctx, { kind: "jump", target: endLabel });
 
   // RHS path: evaluate rhs and store it
-  this.sealCurrentBlock();
-  this.startBlock(rhsLabel);
-  const rhs = this.lowerExpr(expr.right);
-  this.emit({ kind: "store", ptr: resultPtr, value: rhs });
-  this.setTerminator({ kind: "jump", target: endLabel });
+  sealCurrentBlock(ctx);
+  startBlock(ctx, rhsLabel);
+  const rhs = lowerExpr(ctx, expr.right);
+  emit(ctx, { kind: "store", ptr: resultPtr, value: rhs });
+  setTerminator(ctx, { kind: "jump", target: endLabel });
 
   // End: load result
-  this.sealCurrentBlock();
-  this.startBlock(endLabel);
-  const dest = this.freshVar();
-  this.emit({ kind: "load", dest, ptr: resultPtr, type: resultType });
+  sealCurrentBlock(ctx);
+  startBlock(ctx, endLabel);
+  const dest = freshVar(ctx);
+  emit(ctx, { kind: "load", dest, ptr: resultPtr, type: resultType });
   return dest;
 }
 
-export function lowerUnaryExpr(this: KirLowerer, expr: UnaryExpr): VarId {
+export function lowerUnaryExpr(ctx: LoweringCtx, expr: UnaryExpr): VarId {
   // Check for operator overloading (e.g., -a → a.op_neg())
-  const opMethod = this.checkResult.operatorMethods.get(expr);
+  const opMethod = ctx.checkResult.operatorMethods.get(expr);
   if (opMethod) {
-    return this.lowerOperatorMethodCall(expr.operand, opMethod.methodName, opMethod.structType, []);
+    return lowerOperatorMethodCall(ctx, expr.operand, opMethod.methodName, opMethod.structType, []);
   }
 
-  const operand = this.lowerExpr(expr.operand);
-  const dest = this.freshVar();
+  const operand = lowerExpr(ctx, expr.operand);
+  const dest = freshVar(ctx);
 
   switch (expr.operator) {
     case "-": {
-      const type = this.getExprKirType(expr);
-      this.emit({ kind: "neg", dest, operand, type });
+      const type = getExprKirType(ctx, expr);
+      emit(ctx, { kind: "neg", dest, operand, type });
       return dest;
     }
     case "!":
-      this.emit({ kind: "not", dest, operand });
+      emit(ctx, { kind: "not", dest, operand });
       return dest;
     case "~": {
-      const type = this.getExprKirType(expr);
-      this.emit({ kind: "bit_not", dest, operand, type });
+      const type = getExprKirType(ctx, expr);
+      emit(ctx, { kind: "bit_not", dest, operand, type });
       return dest;
     }
     default:
@@ -148,20 +160,20 @@ export function lowerUnaryExpr(this: KirLowerer, expr: UnaryExpr): VarId {
  * Lowers `self` and `args`, then emits: call StructName_methodName(self, ...args)
  */
 export function lowerOperatorMethodCall(
-  this: KirLowerer,
+  ctx: LoweringCtx,
   selfExpr: Expression,
   methodName: string,
   structType: StructType,
   argExprs: Expression[]
 ): VarId {
   // Methods take self and args as pointers, so get alloc pointers, not loaded values
-  const selfId = this.lowerExprAsPtr(selfExpr);
+  const selfId = lowerExprAsPtr(ctx, selfExpr);
   const args = argExprs.map((a) => {
-    const argType = this.checkResult.typeMap.get(a);
+    const argType = ctx.checkResult.typeMap.get(a);
     if (argType?.kind === "struct") {
-      return this.lowerExprAsPtr(a);
+      return lowerExprAsPtr(ctx, a);
     }
-    return this.lowerExpr(a);
+    return lowerExpr(ctx, a);
   });
 
   const funcName = `${structType.name}_${methodName}`;
@@ -169,9 +181,9 @@ export function lowerOperatorMethodCall(
   // Look up the method's return type
   const method = structType.methods.get(methodName);
   if (method && method.returnType.kind !== "void") {
-    const resultType = this.lowerCheckerType(method.returnType);
-    const dest = this.freshVar();
-    this.emit({ kind: "call", dest, func: funcName, args: [selfId, ...args], type: resultType });
+    const resultType = lowerCheckerType(ctx, method.returnType);
+    const dest = freshVar(ctx);
+    emit(ctx, { kind: "call", dest, func: funcName, args: [selfId, ...args], type: resultType });
 
     // Struct return values are handled by the caller (variable assignment stores into alloc)
 
@@ -179,7 +191,6 @@ export function lowerOperatorMethodCall(
   }
 
   // Void return
-  this.emit({ kind: "call_void", func: funcName, args: [selfId, ...args] });
+  emit(ctx, { kind: "call_void", func: funcName, args: [selfId, ...args] });
   return selfId;
 }
-

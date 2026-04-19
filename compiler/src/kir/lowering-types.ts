@@ -6,23 +6,24 @@
 import type { Expression, FunctionDecl } from "../ast/nodes.ts";
 import type { FunctionType, Type } from "../checker/types";
 import type { KirType } from "./kir-types.ts";
-import type { KirLowerer } from "./lowering.ts";
+import type { LoweringCtx } from "./lowering-ctx.ts";
+import { lowerEnumDecl } from "./lowering-enum-decl.ts";
 
-export function getExprKirType(this: KirLowerer, expr: Expression): KirType {
+export function getExprKirType(ctx: LoweringCtx, expr: Expression): KirType {
   // Prefer per-instantiation type map (for monomorphized function bodies)
-  const bodyType = this.currentBodyTypeMap?.get(expr);
+  const bodyType = ctx.currentBodyTypeMap?.get(expr);
   if (bodyType) {
-    return this.lowerCheckerType(bodyType);
+    return lowerCheckerType(ctx, bodyType);
   }
-  const checkerType = this.checkResult.typeMap.get(expr);
+  const checkerType = ctx.checkResult.typeMap.get(expr);
   if (checkerType) {
-    return this.lowerCheckerType(checkerType);
+    return lowerCheckerType(ctx, checkerType);
   }
   // Default fallback
   return { kind: "int", bits: 32, signed: true };
 }
 
-export function lowerCheckerType(this: KirLowerer, t: Type): KirType {
+export function lowerCheckerType(ctx: LoweringCtx, t: Type): KirType {
   switch (t.kind) {
     case "int":
       return { kind: "int", bits: t.bits, signed: t.signed };
@@ -35,14 +36,14 @@ export function lowerCheckerType(this: KirLowerer, t: Type): KirType {
     case "string":
       return { kind: "string" };
     case "ptr":
-      return { kind: "ptr", pointee: this.lowerCheckerType(t.pointee) };
+      return { kind: "ptr", pointee: lowerCheckerType(ctx, t.pointee) };
     case "struct":
       return {
         kind: "struct",
         name: t.name,
         fields: Array.from(t.fields.entries()).map(([name, fieldType]) => ({
           name,
-          type: this.lowerCheckerType(fieldType),
+          type: lowerCheckerType(ctx, fieldType),
         })),
       };
     case "enum":
@@ -53,18 +54,18 @@ export function lowerCheckerType(this: KirLowerer, t: Type): KirType {
           name: v.name,
           fields: v.fields.map((f) => ({
             name: f.name,
-            type: this.lowerCheckerType(f.type),
+            type: lowerCheckerType(ctx, f.type),
           })),
           value: v.value,
         })),
       };
     case "array":
-      return { kind: "array", element: this.lowerCheckerType(t.element), length: t.length ?? 0 };
+      return { kind: "array", element: lowerCheckerType(ctx, t.element), length: t.length ?? 0 };
     case "function":
       return {
         kind: "function",
-        params: t.params.map((p) => this.lowerCheckerType(p.type)),
-        returnType: this.lowerCheckerType(t.returnType),
+        params: t.params.map((p) => lowerCheckerType(ctx, p.type)),
+        returnType: lowerCheckerType(ctx, t.returnType),
       };
     case "null":
       return { kind: "ptr", pointee: { kind: "void" } };
@@ -75,7 +76,7 @@ export function lowerCheckerType(this: KirLowerer, t: Type): KirType {
         kind: "struct",
         name: "slice",
         fields: [
-          { name: "ptr", type: { kind: "ptr", pointee: this.lowerCheckerType(t.element) } },
+          { name: "ptr", type: { kind: "ptr", pointee: lowerCheckerType(ctx, t.element) } },
           { name: "len", type: { kind: "int", bits: 64, signed: false } },
         ],
       };
@@ -84,8 +85,8 @@ export function lowerCheckerType(this: KirLowerer, t: Type): KirType {
         kind: "struct",
         name: "Range",
         fields: [
-          { name: "start", type: this.lowerCheckerType(t.element) },
-          { name: "end", type: this.lowerCheckerType(t.element) },
+          { name: "start", type: lowerCheckerType(ctx, t.element) },
+          { name: "end", type: lowerCheckerType(ctx, t.element) },
         ],
       };
     default:
@@ -93,7 +94,10 @@ export function lowerCheckerType(this: KirLowerer, t: Type): KirType {
   }
 }
 
-export function lowerTypeNode(this: KirLowerer, typeNode: { kind: string; name: string }): KirType {
+export function lowerTypeNode(
+  ctx: LoweringCtx,
+  typeNode: { kind: string; name: string }
+): KirType {
   const name = typeNode.name;
   switch (name) {
     case "int":
@@ -129,9 +133,9 @@ export function lowerTypeNode(this: KirLowerer, typeNode: { kind: string; name: 
       return { kind: "string" };
     default: {
       // Check if the name refers to an enum declaration
-      for (const decl of this.program.declarations) {
+      for (const decl of ctx.program.declarations) {
         if (decl.kind === "EnumDecl" && decl.name === name) {
-          return this.lowerEnumDecl(decl).type;
+          return lowerEnumDecl(ctx, decl).type;
         }
       }
       return { kind: "struct", name, fields: [] };
@@ -139,36 +143,40 @@ export function lowerTypeNode(this: KirLowerer, typeNode: { kind: string; name: 
   }
 }
 
-export function resolveParamType(this: KirLowerer, decl: FunctionDecl, paramName: string): KirType {
+export function resolveParamType(
+  ctx: LoweringCtx,
+  decl: FunctionDecl,
+  paramName: string
+): KirType {
   const param = decl.params.find((p) => p.name === paramName);
   if (param) {
-    return this.lowerTypeNode(param.typeAnnotation);
+    return lowerTypeNode(ctx, param.typeAnnotation);
   }
   return { kind: "int", bits: 32, signed: true };
 }
 
 export function resolveParamCheckerType(
-  this: KirLowerer,
+  ctx: LoweringCtx,
   decl: FunctionDecl,
   paramName: string
 ): Type | undefined {
   const param = decl.params.find((p) => p.name === paramName);
   if (param) {
-    return this.nameToCheckerType(param.typeAnnotation.name) as Type;
+    return nameToCheckerType(ctx, param.typeAnnotation.name) as Type;
   }
   return undefined;
 }
 
-export function getFunctionReturnType(this: KirLowerer, decl: FunctionDecl): Type {
+export function getFunctionReturnType(ctx: LoweringCtx, decl: FunctionDecl): Type {
   // Try to get from the checker's type map
   // The function decl itself isn't in typeMap, but we can derive from return type annotation
   if (decl.returnType) {
     const name = decl.returnType.name;
-    const checkerType = this.nameToCheckerType(name);
+    const checkerType = nameToCheckerType(ctx, name);
     // If nameToCheckerType didn't recognize it (returns void for user-defined type names),
     // check if it's an enum or struct declaration
     if (checkerType.kind === "void" && name !== "void") {
-      for (const d of this.program.declarations) {
+      for (const d of ctx.program.declarations) {
         if (d.kind === "EnumDecl" && d.name === name) {
           return {
             kind: "enum" as const,
@@ -196,7 +204,7 @@ export function getFunctionReturnType(this: KirLowerer, decl: FunctionDecl): Typ
   return { kind: "void" as const };
 }
 
-export function nameToCheckerType(this: KirLowerer, name: string): Type {
+export function nameToCheckerType(_ctx: LoweringCtx, name: string): Type {
   switch (name) {
     case "int":
     case "i32":
@@ -232,20 +240,20 @@ export function nameToCheckerType(this: KirLowerer, name: string): Type {
 }
 
 /** Resolve the byte size of a sizeof argument at compile time. */
-export function resolveSizeofArg(this: KirLowerer, arg: Expression): number {
+export function resolveSizeofArg(ctx: LoweringCtx, arg: Expression): number {
   if (arg.kind === "Identifier") {
-    return this.sizeofTypeName(arg.name);
+    return sizeofTypeName(ctx, arg.name);
   }
   // For non-identifier args, use the checker type
-  const checkerType = this.checkResult.typeMap.get(arg);
+  const checkerType = ctx.checkResult.typeMap.get(arg);
   if (checkerType) {
-    return this.sizeofCheckerType(checkerType);
+    return sizeofCheckerType(ctx, checkerType);
   }
   return 0;
 }
 
 /** Get size from a type name string. */
-export function sizeofTypeName(this: KirLowerer, name: string): number {
+export function sizeofTypeName(ctx: LoweringCtx, name: string): number {
   switch (name) {
     case "i8":
     case "u8":
@@ -271,14 +279,14 @@ export function sizeofTypeName(this: KirLowerer, name: string): number {
       return 32; // kei_string struct: data(8) + len(8) + cap(8) + ref(8)
     default: {
       // Look up struct in program declarations
-      for (const decl of this.program.declarations) {
+      for (const decl of ctx.program.declarations) {
         if (
           (decl.kind === "StructDecl" || decl.kind === "UnsafeStructDecl") &&
           decl.name === name
         ) {
           let size = 0;
           for (const field of decl.fields) {
-            size += this.sizeofTypeName(field.typeAnnotation.name);
+            size += sizeofTypeName(ctx, field.typeAnnotation.name);
           }
           return size;
         }
@@ -289,7 +297,7 @@ export function sizeofTypeName(this: KirLowerer, name: string): number {
 }
 
 /** Get size from a checker Type. */
-export function sizeofCheckerType(this: KirLowerer, t: Type): number {
+export function sizeofCheckerType(ctx: LoweringCtx, t: Type): number {
   switch (t.kind) {
     case "bool":
       return 1;
@@ -304,7 +312,7 @@ export function sizeofCheckerType(this: KirLowerer, t: Type): number {
     case "struct": {
       let size = 0;
       for (const [, fieldType] of t.fields) {
-        size += this.sizeofCheckerType(fieldType);
+        size += sizeofCheckerType(ctx, fieldType);
       }
       return size;
     }
@@ -314,23 +322,27 @@ export function sizeofCheckerType(this: KirLowerer, t: Type): number {
 }
 
 /** Build a mangled function name from a FunctionDecl (for overloaded definitions). */
-export function mangleFunctionName(this: KirLowerer, baseName: string, decl: FunctionDecl): string {
-  const paramSuffixes = decl.params.map((p) => this.typeNameSuffix(p.typeAnnotation.name));
+export function mangleFunctionName(
+  ctx: LoweringCtx,
+  baseName: string,
+  decl: FunctionDecl
+): string {
+  const paramSuffixes = decl.params.map((p) => typeNameSuffix(ctx, p.typeAnnotation.name));
   return `${baseName}_${paramSuffixes.join("_")}`;
 }
 
 /** Build a mangled function name from a resolved FunctionType (for overloaded calls). */
 export function mangleFunctionNameFromType(
-  this: KirLowerer,
+  ctx: LoweringCtx,
   baseName: string,
   funcType: FunctionType
 ): string {
-  const paramSuffixes = funcType.params.map((p) => this.checkerTypeSuffix(p.type));
+  const paramSuffixes = funcType.params.map((p) => checkerTypeSuffix(ctx, p.type));
   return `${baseName}_${paramSuffixes.join("_")}`;
 }
 
 /** Convert a type annotation name to a short suffix for mangling. */
-export function typeNameSuffix(this: KirLowerer, name: string): string {
+export function typeNameSuffix(_ctx: LoweringCtx, name: string): string {
   switch (name) {
     case "int":
     case "i32":
@@ -373,7 +385,7 @@ export function typeNameSuffix(this: KirLowerer, name: string): string {
 }
 
 /** Convert a checker Type to a short suffix for mangling. */
-export function checkerTypeSuffix(this: KirLowerer, t: Type): string {
+export function checkerTypeSuffix(ctx: LoweringCtx, t: Type): string {
   switch (t.kind) {
     case "int":
       return `${t.signed ? "i" : "u"}${t.bits}`;
@@ -386,7 +398,7 @@ export function checkerTypeSuffix(this: KirLowerer, t: Type): string {
     case "void":
       return "void";
     case "ptr":
-      return `ptr_${this.checkerTypeSuffix(t.pointee)}`;
+      return `ptr_${checkerTypeSuffix(ctx, t.pointee)}`;
     case "struct":
       return t.name;
     case "enum":

@@ -6,57 +6,75 @@
 import type { CatchExpr, Expression, ThrowExpr } from "../ast/nodes.ts";
 import type { FunctionType } from "../checker/types";
 import type { KirType, VarId } from "./kir-types.ts";
-import type { KirLowerer } from "./lowering.ts";
+import type { LoweringCtx } from "./lowering-ctx.ts";
+import { lowerExpr } from "./lowering-expr.ts";
+import { emitAllScopeDestroys } from "./lowering-scope.ts";
+import { lowerStatement } from "./lowering-stmt.ts";
+import { findConstIntInst } from "./lowering-switch.ts";
+import { getExprKirType, lowerCheckerType, mangleFunctionNameFromType } from "./lowering-types.ts";
+import {
+  emit,
+  emitCastToPtr,
+  emitConstInt,
+  emitStackAlloc,
+  emitTagIsSuccess,
+  freshBlockId,
+  freshVar,
+  isBlockTerminated,
+  sealCurrentBlock,
+  setTerminator,
+  startBlock,
+} from "./lowering-utils.ts";
 
-export function lowerThrowExpr(this: KirLowerer, expr: ThrowExpr): VarId {
+export function lowerThrowExpr(ctx: LoweringCtx, expr: ThrowExpr): VarId {
   // throw ErrorType{} → cast __err to typed pointer, store error value, return error tag
-  const valueId = this.lowerExpr(expr.value);
+  const valueId = lowerExpr(ctx, expr.value);
   // biome-ignore lint/style/noNonNullAssertion: __err is always present in a throws function context
-  const errPtr = this.varMap.get("__err")!;
+  const errPtr = ctx.varMap.get("__err")!;
 
   // Determine the error type for casting
-  const errorKirType = this.getExprKirType(expr.value);
+  const errorKirType = getExprKirType(ctx, expr.value);
 
   // Only copy error data if the struct has fields (skip for empty structs)
   const hasFields = errorKirType.kind === "struct" && errorKirType.fields.length > 0;
   if (hasFields) {
     // Cast __err (void*) to the specific error struct pointer type
-    const typedErrPtr = this.emitCastToPtr(errPtr, errorKirType);
+    const typedErrPtr = emitCastToPtr(ctx, errPtr, errorKirType);
 
     // The struct literal returns a pointer; load the actual struct value from it
-    const structVal = this.freshVar();
-    this.emit({ kind: "load", dest: structVal, ptr: valueId, type: errorKirType });
+    const structVal = freshVar(ctx);
+    emit(ctx, { kind: "load", dest: structVal, ptr: valueId, type: errorKirType });
 
     // Store the struct value through the typed error pointer
-    this.emit({ kind: "store", ptr: typedErrPtr, value: structVal });
+    emit(ctx, { kind: "store", ptr: typedErrPtr, value: structVal });
   }
 
   // Determine the tag for this error type
-  const checkerType = this.checkResult.typeMap.get(expr.value);
+  const checkerType = ctx.checkResult.typeMap.get(expr.value);
   let tag = 1; // default
   if (checkerType && checkerType.kind === "struct") {
-    const idx = this.currentFunctionThrowsTypes.findIndex(
+    const idx = ctx.currentFunctionThrowsTypes.findIndex(
       (t) => t.kind === "struct" && t.name === checkerType.name
     );
     if (idx >= 0) tag = idx + 1;
   }
 
-  this.emitAllScopeDestroys();
-  const tagVal = this.emitConstInt(tag);
-  this.setTerminator({ kind: "ret", value: tagVal });
+  emitAllScopeDestroys(ctx);
+  const tagVal = emitConstInt(ctx, tag);
+  setTerminator(ctx, { kind: "ret", value: tagVal });
   return tagVal;
 }
 
-export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
+export function lowerCatchExpr(ctx: LoweringCtx, expr: CatchExpr): VarId {
   // The operand must be a function call to a throws function
   // We need to resolve the callee's throws info to generate the right code
 
   // Resolve the function name and its throws info
   const callExpr = expr.operand;
-  const throwsInfo = this.resolveCallThrowsInfo(callExpr);
+  const throwsInfo = resolveCallThrowsInfo(ctx, callExpr);
   if (!throwsInfo) {
     // Fallback: just lower the operand normally
-    return this.lowerExpr(expr.operand);
+    return lowerExpr(ctx, expr.operand);
   }
 
   const { funcName, args: callArgs, throwsTypes, returnType: successType } = throwsInfo;
@@ -66,13 +84,13 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
     successType.kind === "void"
       ? { kind: "int" as const, bits: 8 as const, signed: false as const }
       : successType;
-  const outPtr = this.emitStackAlloc(outType);
+  const outPtr = emitStackAlloc(ctx, outType);
   // err buffer: use u8 placeholder (C backend will emit union-sized buffer)
-  const errPtr = this.emitStackAlloc({ kind: "int", bits: 8, signed: false });
+  const errPtr = emitStackAlloc(ctx, { kind: "int", bits: 8, signed: false });
 
   // Call the throws function — dest receives the i32 tag
-  const tagVar = this.freshVar();
-  this.emit({
+  const tagVar = freshVar(ctx);
+  emit(ctx, {
     kind: "call_throws",
     dest: tagVar,
     func: funcName,
@@ -85,28 +103,28 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
 
   if (expr.catchType === "panic") {
     // catch panic: if tag != 0 → kei_panic
-    const isOk = this.emitTagIsSuccess(tagVar);
-    const okLabel = this.freshBlockId("catch.ok");
-    const panicLabel = this.freshBlockId("catch.panic");
-    this.setTerminator({ kind: "br", cond: isOk, thenBlock: okLabel, elseBlock: panicLabel });
+    const isOk = emitTagIsSuccess(ctx, tagVar);
+    const okLabel = freshBlockId(ctx, "catch.ok");
+    const panicLabel = freshBlockId(ctx, "catch.panic");
+    setTerminator(ctx, { kind: "br", cond: isOk, thenBlock: okLabel, elseBlock: panicLabel });
 
-    this.sealCurrentBlock();
-    this.startBlock(panicLabel);
+    sealCurrentBlock(ctx);
+    startBlock(ctx, panicLabel);
     // Call kei_panic
-    const panicMsg = this.freshVar();
-    this.emit({ kind: "const_string", dest: panicMsg, value: "unhandled error" });
-    this.emit({ kind: "call_extern_void", func: "kei_panic", args: [panicMsg] });
-    this.setTerminator({ kind: "unreachable" });
+    const panicMsg = freshVar(ctx);
+    emit(ctx, { kind: "const_string", dest: panicMsg, value: "unhandled error" });
+    emit(ctx, { kind: "call_extern_void", func: "kei_panic", args: [panicMsg] });
+    setTerminator(ctx, { kind: "unreachable" });
 
-    this.sealCurrentBlock();
-    this.startBlock(okLabel);
+    sealCurrentBlock(ctx);
+    startBlock(ctx, okLabel);
 
     // Load and return the success value
     if (successType.kind === "void") {
-      return this.emitConstInt(0);
+      return emitConstInt(ctx, 0);
     }
-    const resultVal = this.freshVar();
-    this.emit({ kind: "load", dest: resultVal, ptr: outPtr, type: successType });
+    const resultVal = freshVar(ctx);
+    emit(ctx, { kind: "load", dest: resultVal, ptr: outPtr, type: successType });
     return resultVal;
   }
 
@@ -114,11 +132,11 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
     // catch throw: pass caller's __err directly so callee writes to it
     // Re-emit the call with the caller's __err pointer
     // Remove the previous call_throws (it was the last emitted instruction)
-    this.currentInsts.pop(); // remove the call_throws we just emitted
+    ctx.currentInsts.pop(); // remove the call_throws we just emitted
 
     // biome-ignore lint/style/noNonNullAssertion: __err is always present when inside a throws function (catch throw requires it)
-    const callerErrPtr = this.varMap.get("__err")!;
-    this.emit({
+    const callerErrPtr = ctx.varMap.get("__err")!;
+    emit(ctx, {
       kind: "call_throws",
       dest: tagVar,
       func: funcName,
@@ -129,43 +147,43 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
       errorTypes: throwsTypes,
     });
 
-    const isOk = this.emitTagIsSuccess(tagVar);
-    const okLabel = this.freshBlockId("catch.ok");
-    const propagateLabel = this.freshBlockId("catch.throw");
-    this.setTerminator({ kind: "br", cond: isOk, thenBlock: okLabel, elseBlock: propagateLabel });
+    const isOk = emitTagIsSuccess(ctx, tagVar);
+    const okLabel = freshBlockId(ctx, "catch.ok");
+    const propagateLabel = freshBlockId(ctx, "catch.throw");
+    setTerminator(ctx, { kind: "br", cond: isOk, thenBlock: okLabel, elseBlock: propagateLabel });
 
-    this.sealCurrentBlock();
-    this.startBlock(propagateLabel);
+    sealCurrentBlock(ctx);
+    startBlock(ctx, propagateLabel);
 
     // Remap tags from callee to caller's tag space and propagate
-    this.lowerCatchThrowPropagation(throwsTypes, tagVar, callerErrPtr);
+    lowerCatchThrowPropagation(ctx, throwsTypes, tagVar, callerErrPtr);
 
-    this.sealCurrentBlock();
-    this.startBlock(okLabel);
+    sealCurrentBlock(ctx);
+    startBlock(ctx, okLabel);
 
     if (successType.kind === "void") {
-      return this.emitConstInt(0);
+      return emitConstInt(ctx, 0);
     }
-    const resultVal = this.freshVar();
-    this.emit({ kind: "load", dest: resultVal, ptr: outPtr, type: successType });
+    const resultVal = freshVar(ctx);
+    emit(ctx, { kind: "load", dest: resultVal, ptr: outPtr, type: successType });
     return resultVal;
   }
 
   // catch { clauses } — block catch with per-error-type handling
-  const isOk = this.emitTagIsSuccess(tagVar);
+  const isOk = emitTagIsSuccess(ctx, tagVar);
 
-  const okLabel = this.freshBlockId("catch.ok");
-  const switchLabel = this.freshBlockId("catch.switch");
-  const endLabel = this.freshBlockId("catch.end");
-  this.setTerminator({ kind: "br", cond: isOk, thenBlock: okLabel, elseBlock: switchLabel });
+  const okLabel = freshBlockId(ctx, "catch.ok");
+  const switchLabel = freshBlockId(ctx, "catch.switch");
+  const endLabel = freshBlockId(ctx, "catch.end");
+  setTerminator(ctx, { kind: "br", cond: isOk, thenBlock: okLabel, elseBlock: switchLabel });
 
   // Allocate result storage (the catch expr produces a value)
-  const resultType = this.getExprKirType(expr);
-  const resultPtr = this.emitStackAlloc(resultType);
+  const resultType = getExprKirType(ctx, expr);
+  const resultPtr = emitStackAlloc(ctx, resultType);
 
   // Switch block: branch on tag value
-  this.sealCurrentBlock();
-  this.startBlock(switchLabel);
+  sealCurrentBlock(ctx);
+  startBlock(ctx, switchLabel);
 
   // Build case blocks for each clause
   const caseInfos: { tagConst: VarId; label: string }[] = [];
@@ -177,18 +195,18 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
     const errorTag =
       throwsTypes.findIndex((t) => t.kind === "struct" && t.name === clause.errorType) + 1;
 
-    const clauseLabel = this.freshBlockId(`catch.clause.${clause.errorType}`);
-    const tagConstVar = this.emitConstInt(errorTag);
+    const clauseLabel = freshBlockId(ctx, `catch.clause.${clause.errorType}`);
+    const tagConstVar = emitConstInt(ctx, errorTag);
     caseInfos.push({ tagConst: tagConstVar, label: clauseLabel });
   }
 
   // Default block (unreachable or user default clause)
   const defaultClause = expr.clauses.find((c) => c.isDefault);
   const defaultLabel = defaultClause
-    ? this.freshBlockId("catch.default")
-    : this.freshBlockId("catch.unreachable");
+    ? freshBlockId(ctx, "catch.default")
+    : freshBlockId(ctx, "catch.unreachable");
 
-  this.setTerminator({
+  setTerminator(ctx, {
     kind: "switch",
     value: tagVar,
     cases: caseInfos.map((ci) => ({ value: ci.tagConst, target: ci.label })),
@@ -203,35 +221,35 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
       throwsTypes.findIndex((t) => t.kind === "struct" && t.name === clause.errorType) + 1;
     const clauseLabel = caseInfos.find((ci) => {
       // Match by tag value
-      const inst = this.findConstIntInst(ci.tagConst);
+      const inst = findConstIntInst(ctx, ci.tagConst);
       return inst?.value === errorTag;
     })?.label;
     if (!clauseLabel) continue;
 
-    this.sealCurrentBlock();
-    this.startBlock(clauseLabel);
+    sealCurrentBlock(ctx);
+    startBlock(ctx, clauseLabel);
 
     // If clause has a variable name, bind it to the error value in the err buffer
     if (clause.varName) {
       const errType = throwsTypes[errorTag - 1];
       // Cast errPtr to typed pointer — this becomes the variable's storage
-      const typedErrPtr = this.emitCastToPtr(errPtr, errType);
-      this.varMap.set(clause.varName, typedErrPtr);
+      const typedErrPtr = emitCastToPtr(ctx, errPtr, errType);
+      ctx.varMap.set(clause.varName, typedErrPtr);
     }
 
     // Lower clause body statements
     for (const stmt of clause.body) {
-      this.lowerStatement(stmt);
+      lowerStatement(ctx, stmt);
     }
 
-    if (!this.isBlockTerminated()) {
-      this.setTerminator({ kind: "jump", target: endLabel });
+    if (!isBlockTerminated(ctx)) {
+      setTerminator(ctx, { kind: "jump", target: endLabel });
     }
   }
 
   // Default clause block
-  this.sealCurrentBlock();
-  this.startBlock(defaultLabel);
+  sealCurrentBlock(ctx);
+  startBlock(ctx, defaultLabel);
   if (defaultClause) {
     if (defaultClause.varName) {
       // Bind the error variable to a typed pointer into the err buffer
@@ -240,42 +258,42 @@ export function lowerCatchExpr(this: KirLowerer, expr: CatchExpr): VarId {
         bits: 8 as const,
         signed: false as const,
       };
-      const typedErrPtr = this.emitCastToPtr(errPtr, firstErrType);
-      this.varMap.set(defaultClause.varName, typedErrPtr);
+      const typedErrPtr = emitCastToPtr(ctx, errPtr, firstErrType);
+      ctx.varMap.set(defaultClause.varName, typedErrPtr);
     }
     for (const stmt of defaultClause.body) {
-      this.lowerStatement(stmt);
+      lowerStatement(ctx, stmt);
     }
   }
-  if (!this.isBlockTerminated()) {
-    this.setTerminator({ kind: "jump", target: endLabel });
+  if (!isBlockTerminated(ctx)) {
+    setTerminator(ctx, { kind: "jump", target: endLabel });
   }
 
   // OK path: load success value
-  this.sealCurrentBlock();
-  this.startBlock(okLabel);
+  sealCurrentBlock(ctx);
+  startBlock(ctx, okLabel);
   if (successType.kind !== "void") {
-    const successVal = this.freshVar();
-    this.emit({ kind: "load", dest: successVal, ptr: outPtr, type: successType });
-    this.emit({ kind: "store", ptr: resultPtr, value: successVal });
+    const successVal = freshVar(ctx);
+    emit(ctx, { kind: "load", dest: successVal, ptr: outPtr, type: successType });
+    emit(ctx, { kind: "store", ptr: resultPtr, value: successVal });
   }
-  this.setTerminator({ kind: "jump", target: endLabel });
+  setTerminator(ctx, { kind: "jump", target: endLabel });
 
   // End block
-  this.sealCurrentBlock();
-  this.startBlock(endLabel);
+  sealCurrentBlock(ctx);
+  startBlock(ctx, endLabel);
 
   if (resultType.kind === "void") {
-    return this.emitConstInt(0);
+    return emitConstInt(ctx, 0);
   }
-  const finalResult = this.freshVar();
-  this.emit({ kind: "load", dest: finalResult, ptr: resultPtr, type: resultType });
+  const finalResult = freshVar(ctx);
+  emit(ctx, { kind: "load", dest: finalResult, ptr: resultPtr, type: resultType });
   return finalResult;
 }
 
 /** Resolve the function name, args, and throws info for a call expression used in catch */
 export function resolveCallThrowsInfo(
-  this: KirLowerer,
+  ctx: LoweringCtx,
   callExpr: Expression
 ): {
   funcName: string;
@@ -285,20 +303,20 @@ export function resolveCallThrowsInfo(
 } | null {
   if (callExpr.kind !== "CallExpr") return null;
 
-  const args = callExpr.args.map((a) => this.lowerExpr(a));
-  const _resultType = this.getExprKirType(callExpr);
+  const args = callExpr.args.map((a) => lowerExpr(ctx, a));
+  const _resultType = getExprKirType(ctx, callExpr);
 
   // Resolve function name (same logic as lowerCallExpr)
   let funcName: string;
   if (callExpr.callee.kind === "Identifier") {
     const baseName = callExpr.callee.name;
-    const importedName = this.importedNames.get(baseName);
+    const importedName = ctx.importedNames.get(baseName);
     const resolvedBase = importedName ?? baseName;
 
-    if (this.overloadedNames.has(baseName)) {
-      const calleeType = this.checkResult.typeMap.get(callExpr.callee);
+    if (ctx.overloadedNames.has(baseName)) {
+      const calleeType = ctx.checkResult.typeMap.get(callExpr.callee);
       if (calleeType && calleeType.kind === "function") {
-        funcName = this.mangleFunctionNameFromType(resolvedBase, calleeType as FunctionType);
+        funcName = mangleFunctionNameFromType(ctx, resolvedBase, calleeType as FunctionType);
       } else {
         funcName = resolvedBase;
       }
@@ -306,7 +324,7 @@ export function resolveCallThrowsInfo(
       funcName = resolvedBase;
     }
   } else if (callExpr.callee.kind === "MemberExpr") {
-    const objType = this.checkResult.typeMap.get(callExpr.callee.object);
+    const objType = ctx.checkResult.typeMap.get(callExpr.callee.object);
     if (objType?.kind === "module") {
       const modulePrefix = objType.name.replace(/\./g, "_");
       funcName = `${modulePrefix}_${callExpr.callee.property}`;
@@ -318,7 +336,7 @@ export function resolveCallThrowsInfo(
   }
 
   // Look up throws info from pre-registered throws functions
-  const throwsInfo = this.throwsFunctions.get(funcName);
+  const throwsInfo = ctx.throwsFunctions.get(funcName);
   if (throwsInfo) {
     return {
       funcName,
@@ -329,7 +347,7 @@ export function resolveCallThrowsInfo(
   }
 
   // Fallback: try to get from checker's type info
-  const calleeType = this.checkResult.typeMap.get(callExpr.callee);
+  const calleeType = ctx.checkResult.typeMap.get(callExpr.callee);
   if (
     calleeType &&
     calleeType.kind === "function" &&
@@ -339,8 +357,8 @@ export function resolveCallThrowsInfo(
     return {
       funcName,
       args,
-      throwsTypes: ft.throwsTypes.map((t) => this.lowerCheckerType(t)),
-      returnType: this.lowerCheckerType(ft.returnType),
+      throwsTypes: ft.throwsTypes.map((t) => lowerCheckerType(ctx, t)),
+      returnType: lowerCheckerType(ctx, ft.returnType),
     };
   }
 
@@ -351,12 +369,12 @@ export function resolveCallThrowsInfo(
  *  The callee already wrote the error value to the caller's __err buffer,
  *  so we only need to remap tags if the error type ordering differs. */
 export function lowerCatchThrowPropagation(
-  this: KirLowerer,
+  ctx: LoweringCtx,
   calleeThrowsTypes: KirType[],
   tagVar: VarId,
   _errPtr: VarId
 ): void {
-  const callerThrowsTypes = this.currentFunctionThrowsTypes;
+  const callerThrowsTypes = ctx.currentFunctionThrowsTypes;
 
   // Check if all callee types exist in caller types at same indices
   let needsRemap = false;
@@ -373,20 +391,20 @@ export function lowerCatchThrowPropagation(
 
   if (!needsRemap) {
     // Direct propagation: same tag numbering, error already in caller's buffer
-    this.emitAllScopeDestroys();
-    this.setTerminator({ kind: "ret", value: tagVar });
+    emitAllScopeDestroys(ctx);
+    setTerminator(ctx, { kind: "ret", value: tagVar });
   } else {
     // Remap: switch on callee tag, return caller's tag
     const cases: { value: VarId; target: string }[] = [];
-    const endPropLabel = this.freshBlockId("catch.prop.end");
+    const endPropLabel = freshBlockId(ctx, "catch.prop.end");
 
     for (let i = 0; i < calleeThrowsTypes.length; i++) {
-      const calleeTag = this.emitConstInt(i + 1);
-      const caseLabel = this.freshBlockId(`catch.prop.${i}`);
+      const calleeTag = emitConstInt(ctx, i + 1);
+      const caseLabel = freshBlockId(ctx, `catch.prop.${i}`);
       cases.push({ value: calleeTag, target: caseLabel });
     }
 
-    this.setTerminator({
+    setTerminator(ctx, {
       kind: "switch",
       value: tagVar,
       cases,
@@ -400,15 +418,15 @@ export function lowerCatchThrowPropagation(
       );
       if (callerIdx < 0) continue;
 
-      this.sealCurrentBlock();
-      this.startBlock(cases[i].target);
-      this.emitAllScopeDestroys();
-      const callerTag = this.emitConstInt(callerIdx + 1);
-      this.setTerminator({ kind: "ret", value: callerTag });
+      sealCurrentBlock(ctx);
+      startBlock(ctx, cases[i].target);
+      emitAllScopeDestroys(ctx);
+      const callerTag = emitConstInt(ctx, callerIdx + 1);
+      setTerminator(ctx, { kind: "ret", value: callerTag });
     }
 
-    this.sealCurrentBlock();
-    this.startBlock(endPropLabel);
-    this.setTerminator({ kind: "unreachable" });
+    sealCurrentBlock(ctx);
+    startBlock(ctx, endPropLabel);
+    setTerminator(ctx, { kind: "unreachable" });
   }
 }

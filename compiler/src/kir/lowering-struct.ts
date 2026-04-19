@@ -16,15 +16,24 @@ import type {
   KirTypeDecl,
   VarId,
 } from "./kir-types.ts";
-import type { KirLowerer } from "./lowering.ts";
+import type { LoweringCtx } from "./lowering-ctx.ts";
+import { resetFunctionState, finalizeFunctionBody } from "./lowering-decl.ts";
+import { lowerBlock } from "./lowering-stmt.ts";
+import {
+  getFunctionReturnType,
+  lowerCheckerType,
+  lowerTypeNode,
+  resolveParamType,
+} from "./lowering-types.ts";
+import { pushScope } from "./lowering-scope.ts";
 
 export function lowerStructDecl(
-  this: KirLowerer,
+  ctx: LoweringCtx,
   decl: StructDecl | UnsafeStructDecl
 ): KirTypeDecl {
   const fields = decl.fields.map((f) => ({
     name: f.name,
-    type: this.lowerTypeNode(f.typeAnnotation),
+    type: lowerTypeNode(ctx, f.typeAnnotation),
   }));
 
   return {
@@ -34,14 +43,14 @@ export function lowerStructDecl(
 }
 
 export function lowerMonomorphizedStruct(
-  this: KirLowerer,
+  ctx: LoweringCtx,
   mangledName: string,
   monoStruct: MonomorphizedStruct
 ): KirTypeDecl {
   const concrete = monoStruct.concrete;
   const fields = Array.from(concrete.fields.entries()).map(([name, fieldType]) => ({
     name,
-    type: this.lowerCheckerType(fieldType),
+    type: lowerCheckerType(ctx, fieldType),
   }));
   return {
     name: mangledName,
@@ -50,42 +59,42 @@ export function lowerMonomorphizedStruct(
 }
 
 export function lowerMethod(
-  this: KirLowerer,
+  ctx: LoweringCtx,
   decl: FunctionDecl,
   mangledName: string,
   _structName: string
 ): KirFunction {
-  this.resetFunctionState();
+  resetFunctionState(ctx);
 
   // Push function-level scope
-  this.pushScope();
+  pushScope(ctx);
 
   const params: KirParam[] = decl.params.map((p) => {
-    const type = this.resolveParamType(decl, p.name);
+    const type = resolveParamType(ctx, decl, p.name);
     // The self parameter is passed as a pointer to the struct
     const paramType: KirType =
       p.name === "self" || type.kind === "struct" ? { kind: "ptr", pointee: type } : type;
     const varId: VarId = `%${p.name}`;
-    this.varMap.set(p.name, varId);
+    ctx.varMap.set(p.name, varId);
     return { name: p.name, type: paramType };
   });
 
-  const returnType = this.lowerCheckerType(this.getFunctionReturnType(decl));
+  const returnType = lowerCheckerType(ctx, getFunctionReturnType(ctx, decl));
 
   // Set current function return type so lowerReturnStmt can add struct loads
-  this.currentFunctionOrigReturnType = returnType;
+  ctx.currentFunctionOrigReturnType = returnType;
 
   // Lower body
-  this.lowerBlock(decl.body);
+  lowerBlock(ctx, decl.body);
 
-  this.finalizeFunctionBody(false, returnType);
+  finalizeFunctionBody(ctx, false, returnType);
 
   return {
     name: mangledName,
     params,
     returnType,
-    blocks: this.blocks,
-    localCount: this.varCounter,
+    blocks: ctx.blocks,
+    localCount: ctx.varCounter,
   };
 }
 
@@ -95,7 +104,7 @@ export function lowerMethod(
  * and field_ptr + destroy for struct fields that have __destroy.
  */
 export function lowerAutoDestroy(
-  lowerer: KirLowerer,
+  _ctx: LoweringCtx,
   structName: string,
   structType: StructType,
   structPrefix: string
@@ -161,7 +170,7 @@ export function lowerAutoDestroy(
  * calls nested __oncopy for struct fields, then loads and returns the modified struct.
  */
 export function lowerAutoOncopy(
-  lowerer: KirLowerer,
+  _ctx: LoweringCtx,
   structName: string,
   structType: StructType,
   structPrefix: string

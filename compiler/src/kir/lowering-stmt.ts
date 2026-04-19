@@ -20,101 +20,126 @@ import type {
   WhileStmt,
 } from "../ast/nodes.ts";
 import type { KirType, VarId } from "./kir-types.ts";
-import type { KirLowerer } from "./lowering.ts";
+import type { LoweringCtx } from "./lowering-ctx.ts";
+import { lowerExpr } from "./lowering-expr.ts";
+import {
+  emitAllScopeDestroys,
+  emitAllScopeDestroysExceptNamed,
+  emitLoopScopeDestroys,
+  getStructLifecycle,
+  popScopeWithDestroy,
+  pushScope,
+  trackScopeVar,
+} from "./lowering-scope.ts";
+import { getExprKirType, lowerCheckerType } from "./lowering-types.ts";
+import {
+  emit,
+  emitConstInt,
+  emitFieldLoad,
+  emitLoadModifyStore,
+  emitStackAlloc,
+  freshBlockId,
+  freshVar,
+  isBlockTerminated,
+  isStackAllocVar,
+  sealCurrentBlock,
+  setTerminator,
+  startBlock,
+} from "./lowering-utils.ts";
 
 // ─── Statements ──────────────────────────────────────────────────────────
 
-export function lowerBlock(this: KirLowerer, block: BlockStmt): void {
+export function lowerBlock(ctx: LoweringCtx, block: BlockStmt): void {
   for (const stmt of block.statements) {
-    this.lowerStatement(stmt);
+    lowerStatement(ctx, stmt);
   }
 }
 
 /** Lower a block statement that introduces its own scope (e.g., nested { } blocks) */
-export function lowerScopedBlock(this: KirLowerer, block: BlockStmt): void {
-  this.pushScope();
+export function lowerScopedBlock(ctx: LoweringCtx, block: BlockStmt): void {
+  pushScope(ctx);
   for (const stmt of block.statements) {
-    this.lowerStatement(stmt);
+    lowerStatement(ctx, stmt);
   }
-  if (!this.isBlockTerminated()) {
-    this.popScopeWithDestroy();
+  if (!isBlockTerminated(ctx)) {
+    popScopeWithDestroy(ctx);
   } else {
-    this.scopeStack.pop();
+    ctx.scopeStack.pop();
   }
 }
 
-export function lowerStatement(this: KirLowerer, stmt: Statement): void {
+export function lowerStatement(ctx: LoweringCtx, stmt: Statement): void {
   // If current block is already terminated, skip
-  if (this.isBlockTerminated()) return;
+  if (isBlockTerminated(ctx)) return;
 
   switch (stmt.kind) {
     case "LetStmt":
-      this.lowerLetStmt(stmt);
+      lowerLetStmt(ctx, stmt);
       break;
     case "ConstStmt":
-      this.lowerConstStmt(stmt);
+      lowerConstStmt(ctx, stmt);
       break;
     case "ReturnStmt":
-      this.lowerReturnStmt(stmt);
+      lowerReturnStmt(ctx, stmt);
       break;
     case "IfStmt":
-      this.lowerIfStmt(stmt);
+      lowerIfStmt(ctx, stmt);
       break;
     case "WhileStmt":
-      this.lowerWhileStmt(stmt);
+      lowerWhileStmt(ctx, stmt);
       break;
     case "ForStmt":
-      this.lowerForStmt(stmt);
+      lowerForStmt(ctx, stmt);
       break;
     case "CForStmt":
-      this.lowerCForStmt(stmt);
+      lowerCForStmt(ctx, stmt);
       break;
     case "SwitchStmt":
-      this.lowerSwitchStmt(stmt);
+      lowerSwitchStmt(ctx, stmt);
       break;
     case "ExprStmt":
-      this.lowerExprStmt(stmt);
+      lowerExprStmt(ctx, stmt);
       break;
     case "BlockStmt":
-      this.lowerScopedBlock(stmt);
+      lowerScopedBlock(ctx, stmt);
       break;
     case "BreakStmt":
-      if (this.loopBreakTarget) {
-        this.emitLoopScopeDestroys();
-        this.setTerminator({ kind: "jump", target: this.loopBreakTarget });
+      if (ctx.loopBreakTarget) {
+        emitLoopScopeDestroys(ctx);
+        setTerminator(ctx, { kind: "jump", target: ctx.loopBreakTarget });
       }
       break;
     case "ContinueStmt":
-      if (this.loopContinueTarget) {
-        this.emitLoopScopeDestroys();
-        this.setTerminator({ kind: "jump", target: this.loopContinueTarget });
+      if (ctx.loopContinueTarget) {
+        emitLoopScopeDestroys(ctx);
+        setTerminator(ctx, { kind: "jump", target: ctx.loopContinueTarget });
       }
       break;
     case "AssertStmt":
-      this.lowerAssertStmt(stmt);
+      lowerAssertStmt(ctx, stmt);
       break;
     case "RequireStmt":
-      this.lowerRequireStmt(stmt);
+      lowerRequireStmt(ctx, stmt);
       break;
     case "DeferStmt":
       // Defer is not yet implemented in KIR
       break;
     case "UnsafeBlock":
-      this.lowerScopedBlock(stmt.body);
+      lowerScopedBlock(ctx, stmt.body);
       break;
   }
 }
 
-export function lowerLetStmt(this: KirLowerer, stmt: LetStmt): void {
-  const type = this.getExprKirType(stmt.initializer);
+export function lowerLetStmt(ctx: LoweringCtx, stmt: LetStmt): void {
+  const type = getExprKirType(ctx, stmt.initializer);
 
   // Evaluate initializer first
-  const valueId = this.lowerExpr(stmt.initializer);
+  const valueId = lowerExpr(ctx, stmt.initializer);
 
   // For struct literals and expressions that return alloc pointers,
   // we can directly alias the variable to the alloc pointer (no extra copy needed).
   // This avoids the pointer-store-into-alloc problem.
-  const isStructAlloc = type.kind === "struct" && this.isStackAllocVar(valueId);
+  const isStructAlloc = type.kind === "struct" && isStackAllocVar(ctx, valueId);
 
   let ptrId: VarId;
   if (isStructAlloc) {
@@ -122,80 +147,80 @@ export function lowerLetStmt(this: KirLowerer, stmt: LetStmt): void {
     ptrId = valueId;
   } else {
     // Regular path: alloc + store
-    ptrId = this.emitStackAlloc(type);
+    ptrId = emitStackAlloc(ctx, type);
 
     // Emit oncopy if this is a copy of a struct with __oncopy (not a move)
     if (stmt.initializer.kind !== "MoveExpr") {
-      const checkerType = this.checkResult.typeMap.get(stmt.initializer);
-      const lifecycle = this.getStructLifecycle(checkerType);
+      const checkerType = ctx.checkResult.typeMap.get(stmt.initializer);
+      const lifecycle = getStructLifecycle(ctx, checkerType);
       if (lifecycle?.hasOncopy) {
-        this.emit({ kind: "oncopy", value: valueId, structName: lifecycle.structName });
+        emit(ctx, { kind: "oncopy", value: valueId, structName: lifecycle.structName });
       }
     }
 
-    this.emit({ kind: "store", ptr: ptrId, value: valueId });
+    emit(ctx, { kind: "store", ptr: ptrId, value: valueId });
   }
 
   // Map variable name to its stack pointer
-  this.varMap.set(stmt.name, ptrId);
+  ctx.varMap.set(stmt.name, ptrId);
 
   // Track for scope-exit destroy
-  this.trackScopeVar(stmt.name, ptrId, stmt.initializer);
+  trackScopeVar(ctx, stmt.name, ptrId, stmt.initializer);
 }
 
-export function lowerConstStmt(this: KirLowerer, stmt: ConstStmt): void {
+export function lowerConstStmt(ctx: LoweringCtx, stmt: ConstStmt): void {
   // Const is just like let but immutable — same lowering
-  const valueId = this.lowerExpr(stmt.initializer);
-  this.varMap.set(stmt.name, valueId);
+  const valueId = lowerExpr(ctx, stmt.initializer);
+  ctx.varMap.set(stmt.name, valueId);
 }
 
-export function lowerReturnStmt(this: KirLowerer, stmt: ReturnStmt): void {
-  if (this.currentFunctionThrowsTypes.length > 0) {
+export function lowerReturnStmt(ctx: LoweringCtx, stmt: ReturnStmt): void {
+  if (ctx.currentFunctionThrowsTypes.length > 0) {
     // In a throws function: store value to __out pointer, return tag 0 (success)
     if (stmt.value) {
-      const valueId = this.lowerExpr(stmt.value);
+      const valueId = lowerExpr(ctx, stmt.value);
       const returnedVarName = stmt.value.kind === "Identifier" ? stmt.value.name : null;
-      this.emitAllScopeDestroysExceptNamed(returnedVarName);
+      emitAllScopeDestroysExceptNamed(ctx, returnedVarName);
       // Store success value through __out pointer
-      if (this.currentFunctionOrigReturnType.kind !== "void") {
+      if (ctx.currentFunctionOrigReturnType.kind !== "void") {
         // biome-ignore lint/style/noNonNullAssertion: __out is always present in a throws function when the return type is non-void
-        const outPtr = this.varMap.get("__out")!;
-        this.emit({ kind: "store", ptr: outPtr, value: valueId });
+        const outPtr = ctx.varMap.get("__out")!;
+        emit(ctx, { kind: "store", ptr: outPtr, value: valueId });
       }
     } else {
-      this.emitAllScopeDestroys();
+      emitAllScopeDestroys(ctx);
     }
-    const zeroTag = this.emitConstInt(0);
-    this.setTerminator({ kind: "ret", value: zeroTag });
+    const zeroTag = emitConstInt(ctx, 0);
+    setTerminator(ctx, { kind: "ret", value: zeroTag });
   } else {
     if (stmt.value) {
-      let valueId = this.lowerExpr(stmt.value);
+      let valueId = lowerExpr(ctx, stmt.value);
       // Emit destroys for all scope variables, but skip the returned variable
       const returnedVarName = stmt.value.kind === "Identifier" ? stmt.value.name : null;
-      this.emitAllScopeDestroysExceptNamed(returnedVarName);
+      emitAllScopeDestroysExceptNamed(ctx, returnedVarName);
       // If returning a struct value and the function returns by value,
       // we need to load from the pointer (structs are always stack_alloc'd as pointers in KIR)
-      const retType = this.currentFunctionOrigReturnType;
+      const retType = ctx.currentFunctionOrigReturnType;
       if (retType.kind === "struct") {
-        const loaded = this.freshVar();
-        this.emit({ kind: "load", dest: loaded, ptr: valueId, type: retType });
+        const loaded = freshVar(ctx);
+        emit(ctx, { kind: "load", dest: loaded, ptr: valueId, type: retType });
         valueId = loaded;
       }
-      this.setTerminator({ kind: "ret", value: valueId });
+      setTerminator(ctx, { kind: "ret", value: valueId });
     } else {
-      this.emitAllScopeDestroys();
-      this.setTerminator({ kind: "ret_void" });
+      emitAllScopeDestroys(ctx);
+      setTerminator(ctx, { kind: "ret_void" });
     }
   }
 }
 
-export function lowerIfStmt(this: KirLowerer, stmt: IfStmt): void {
-  const condId = this.lowerExpr(stmt.condition);
-  const thenLabel = this.freshBlockId("if.then");
-  const elseLabel = stmt.elseBlock ? this.freshBlockId("if.else") : this.freshBlockId("if.end");
-  const endLabel = stmt.elseBlock ? this.freshBlockId("if.end") : elseLabel;
+export function lowerIfStmt(ctx: LoweringCtx, stmt: IfStmt): void {
+  const condId = lowerExpr(ctx, stmt.condition);
+  const thenLabel = freshBlockId(ctx, "if.then");
+  const elseLabel = stmt.elseBlock ? freshBlockId(ctx, "if.else") : freshBlockId(ctx, "if.end");
+  const endLabel = stmt.elseBlock ? freshBlockId(ctx, "if.end") : elseLabel;
 
-  this.setTerminator({
+  setTerminator(ctx, {
     kind: "br",
     cond: condId,
     thenBlock: thenLabel,
@@ -203,44 +228,44 @@ export function lowerIfStmt(this: KirLowerer, stmt: IfStmt): void {
   });
 
   // Then block
-  this.sealCurrentBlock();
-  this.startBlock(thenLabel);
-  this.lowerBlock(stmt.thenBlock);
-  if (!this.isBlockTerminated()) {
-    this.setTerminator({ kind: "jump", target: endLabel });
+  sealCurrentBlock(ctx);
+  startBlock(ctx, thenLabel);
+  lowerBlock(ctx, stmt.thenBlock);
+  if (!isBlockTerminated(ctx)) {
+    setTerminator(ctx, { kind: "jump", target: endLabel });
   }
 
   // Else block
   if (stmt.elseBlock) {
-    this.sealCurrentBlock();
-    this.startBlock(elseLabel);
+    sealCurrentBlock(ctx);
+    startBlock(ctx, elseLabel);
     if (stmt.elseBlock.kind === "IfStmt") {
-      this.lowerIfStmt(stmt.elseBlock);
+      lowerIfStmt(ctx, stmt.elseBlock);
     } else {
-      this.lowerBlock(stmt.elseBlock);
+      lowerBlock(ctx, stmt.elseBlock);
     }
-    if (!this.isBlockTerminated()) {
-      this.setTerminator({ kind: "jump", target: endLabel });
+    if (!isBlockTerminated(ctx)) {
+      setTerminator(ctx, { kind: "jump", target: endLabel });
     }
   }
 
   // End block
-  this.sealCurrentBlock();
-  this.startBlock(endLabel);
+  sealCurrentBlock(ctx);
+  startBlock(ctx, endLabel);
 }
 
-export function lowerWhileStmt(this: KirLowerer, stmt: WhileStmt): void {
-  const headerLabel = this.freshBlockId("while.header");
-  const bodyLabel = this.freshBlockId("while.body");
-  const endLabel = this.freshBlockId("while.end");
+export function lowerWhileStmt(ctx: LoweringCtx, stmt: WhileStmt): void {
+  const headerLabel = freshBlockId(ctx, "while.header");
+  const bodyLabel = freshBlockId(ctx, "while.body");
+  const endLabel = freshBlockId(ctx, "while.end");
 
-  this.setTerminator({ kind: "jump", target: headerLabel });
+  setTerminator(ctx, { kind: "jump", target: headerLabel });
 
   // Header: evaluate condition
-  this.sealCurrentBlock();
-  this.startBlock(headerLabel);
-  const condId = this.lowerExpr(stmt.condition);
-  this.setTerminator({
+  sealCurrentBlock(ctx);
+  startBlock(ctx, headerLabel);
+  const condId = lowerExpr(ctx, stmt.condition);
+  setTerminator(ctx, {
     kind: "br",
     cond: condId,
     thenBlock: bodyLabel,
@@ -248,76 +273,76 @@ export function lowerWhileStmt(this: KirLowerer, stmt: WhileStmt): void {
   });
 
   // Body
-  this.sealCurrentBlock();
-  this.startBlock(bodyLabel);
+  sealCurrentBlock(ctx);
+  startBlock(ctx, bodyLabel);
 
-  const prevBreak = this.loopBreakTarget;
-  const prevContinue = this.loopContinueTarget;
-  const prevScopeDepth = this.loopScopeDepth;
-  this.loopBreakTarget = endLabel;
-  this.loopContinueTarget = headerLabel;
-  this.loopScopeDepth = this.scopeStack.length;
+  const prevBreak = ctx.loopBreakTarget;
+  const prevContinue = ctx.loopContinueTarget;
+  const prevScopeDepth = ctx.loopScopeDepth;
+  ctx.loopBreakTarget = endLabel;
+  ctx.loopContinueTarget = headerLabel;
+  ctx.loopScopeDepth = ctx.scopeStack.length;
 
-  this.lowerBlock(stmt.body);
+  lowerBlock(ctx, stmt.body);
 
-  this.loopBreakTarget = prevBreak;
-  this.loopContinueTarget = prevContinue;
-  this.loopScopeDepth = prevScopeDepth;
+  ctx.loopBreakTarget = prevBreak;
+  ctx.loopContinueTarget = prevContinue;
+  ctx.loopScopeDepth = prevScopeDepth;
 
-  if (!this.isBlockTerminated()) {
-    this.setTerminator({ kind: "jump", target: headerLabel });
+  if (!isBlockTerminated(ctx)) {
+    setTerminator(ctx, { kind: "jump", target: headerLabel });
   }
 
   // End
-  this.sealCurrentBlock();
-  this.startBlock(endLabel);
+  sealCurrentBlock(ctx);
+  startBlock(ctx, endLabel);
 }
 
-export function lowerForStmt(this: KirLowerer, stmt: ForStmt): void {
+export function lowerForStmt(ctx: LoweringCtx, stmt: ForStmt): void {
   // For loops over ranges: for x in start..end { body }
   // Lower as: init → header (condition) → body → latch (increment) → header
-  const initLabel = this.freshBlockId("for.init");
-  const headerLabel = this.freshBlockId("for.header");
-  const bodyLabel = this.freshBlockId("for.body");
-  const latchLabel = this.freshBlockId("for.latch");
-  const endLabel = this.freshBlockId("for.end");
+  const initLabel = freshBlockId(ctx, "for.init");
+  const headerLabel = freshBlockId(ctx, "for.header");
+  const bodyLabel = freshBlockId(ctx, "for.body");
+  const latchLabel = freshBlockId(ctx, "for.latch");
+  const endLabel = freshBlockId(ctx, "for.end");
 
-  this.setTerminator({ kind: "jump", target: initLabel });
+  setTerminator(ctx, { kind: "jump", target: initLabel });
 
   // Init: evaluate iterable (range), set up loop var
-  this.sealCurrentBlock();
-  this.startBlock(initLabel);
+  sealCurrentBlock(ctx);
+  startBlock(ctx, initLabel);
 
-  const _iterableType = this.getExprKirType(stmt.iterable);
+  const _iterableType = getExprKirType(ctx, stmt.iterable);
 
   // For range-based: iterable is a RangeExpr, we extract start/end
   if (stmt.iterable.kind === "RangeExpr") {
-    const startId = this.lowerExpr(stmt.iterable.start);
-    const endId = this.lowerExpr(stmt.iterable.end);
+    const startId = lowerExpr(ctx, stmt.iterable.start);
+    const endId = lowerExpr(ctx, stmt.iterable.end);
 
     // Allocate loop variable
     const loopVarType: KirType = { kind: "int", bits: 32, signed: true };
-    const loopVarPtr = this.emitStackAlloc(loopVarType);
-    this.emit({ kind: "store", ptr: loopVarPtr, value: startId });
-    this.varMap.set(stmt.variable, loopVarPtr);
+    const loopVarPtr = emitStackAlloc(ctx, loopVarType);
+    emit(ctx, { kind: "store", ptr: loopVarPtr, value: startId });
+    ctx.varMap.set(stmt.variable, loopVarPtr);
 
     // Index variable if present
     if (stmt.index) {
-      const indexPtr = this.emitStackAlloc(loopVarType);
-      const zeroId = this.emitConstInt(0);
-      this.emit({ kind: "store", ptr: indexPtr, value: zeroId });
-      this.varMap.set(stmt.index, indexPtr);
+      const indexPtr = emitStackAlloc(ctx, loopVarType);
+      const zeroId = emitConstInt(ctx, 0);
+      emit(ctx, { kind: "store", ptr: indexPtr, value: zeroId });
+      ctx.varMap.set(stmt.index, indexPtr);
     }
 
-    this.setTerminator({ kind: "jump", target: headerLabel });
+    setTerminator(ctx, { kind: "jump", target: headerLabel });
 
     // Header: check condition
-    this.sealCurrentBlock();
-    this.startBlock(headerLabel);
-    const curVal = this.freshVar();
-    this.emit({ kind: "load", dest: curVal, ptr: loopVarPtr, type: loopVarType });
-    const condId = this.freshVar();
-    this.emit({
+    sealCurrentBlock(ctx);
+    startBlock(ctx, headerLabel);
+    const curVal = freshVar(ctx);
+    emit(ctx, { kind: "load", dest: curVal, ptr: loopVarPtr, type: loopVarType });
+    const condId = freshVar(ctx);
+    emit(ctx, {
       kind: "bin_op",
       op: "lt",
       dest: condId,
@@ -325,7 +350,7 @@ export function lowerForStmt(this: KirLowerer, stmt: ForStmt): void {
       rhs: endId,
       type: { kind: "bool" },
     });
-    this.setTerminator({
+    setTerminator(ctx, {
       kind: "br",
       cond: condId,
       thenBlock: bodyLabel,
@@ -333,73 +358,73 @@ export function lowerForStmt(this: KirLowerer, stmt: ForStmt): void {
     });
 
     // Body
-    this.sealCurrentBlock();
-    this.startBlock(bodyLabel);
+    sealCurrentBlock(ctx);
+    startBlock(ctx, bodyLabel);
 
-    const prevBreak = this.loopBreakTarget;
-    const prevContinue = this.loopContinueTarget;
-    const prevScopeDepth = this.loopScopeDepth;
-    this.loopBreakTarget = endLabel;
-    this.loopContinueTarget = latchLabel;
-    this.loopScopeDepth = this.scopeStack.length;
+    const prevBreak = ctx.loopBreakTarget;
+    const prevContinue = ctx.loopContinueTarget;
+    const prevScopeDepth = ctx.loopScopeDepth;
+    ctx.loopBreakTarget = endLabel;
+    ctx.loopContinueTarget = latchLabel;
+    ctx.loopScopeDepth = ctx.scopeStack.length;
 
-    this.lowerBlock(stmt.body);
+    lowerBlock(ctx, stmt.body);
 
-    this.loopBreakTarget = prevBreak;
-    this.loopContinueTarget = prevContinue;
-    this.loopScopeDepth = prevScopeDepth;
+    ctx.loopBreakTarget = prevBreak;
+    ctx.loopContinueTarget = prevContinue;
+    ctx.loopScopeDepth = prevScopeDepth;
 
-    if (!this.isBlockTerminated()) {
-      this.setTerminator({ kind: "jump", target: latchLabel });
+    if (!isBlockTerminated(ctx)) {
+      setTerminator(ctx, { kind: "jump", target: latchLabel });
     }
 
     // Latch: increment loop var
-    this.sealCurrentBlock();
-    this.startBlock(latchLabel);
-    const oneId = this.emitConstInt(1);
-    this.emitLoadModifyStore(loopVarPtr, "add", oneId, loopVarType);
+    sealCurrentBlock(ctx);
+    startBlock(ctx, latchLabel);
+    const oneId = emitConstInt(ctx, 1);
+    emitLoadModifyStore(ctx, loopVarPtr, "add", oneId, loopVarType);
 
     // Increment index if present
     if (stmt.index) {
       // biome-ignore lint/style/noNonNullAssertion: stmt.index is a declared loop variable guaranteed to be in varMap
-      const indexPtr = this.varMap.get(stmt.index)!;
-      const oneId2 = this.emitConstInt(1);
-      this.emitLoadModifyStore(indexPtr, "add", oneId2, loopVarType);
+      const indexPtr = ctx.varMap.get(stmt.index)!;
+      const oneId2 = emitConstInt(ctx, 1);
+      emitLoadModifyStore(ctx, indexPtr, "add", oneId2, loopVarType);
     }
 
-    this.setTerminator({ kind: "jump", target: headerLabel });
+    setTerminator(ctx, { kind: "jump", target: headerLabel });
   } else {
     // Fallback: just treat as a while-like loop with the iterable
     // This handles array/slice iteration in the future
-    this.setTerminator({ kind: "jump", target: headerLabel });
-    this.sealCurrentBlock();
-    this.startBlock(headerLabel);
-    this.setTerminator({ kind: "jump", target: endLabel });
+    setTerminator(ctx, { kind: "jump", target: headerLabel });
+    sealCurrentBlock(ctx);
+    startBlock(ctx, headerLabel);
+    setTerminator(ctx, { kind: "jump", target: endLabel });
   }
 
   // End
-  this.sealCurrentBlock();
-  this.startBlock(endLabel);
+  sealCurrentBlock(ctx);
+  startBlock(ctx, endLabel);
 }
 
-export function lowerCForStmt(this: KirLowerer, stmt: CForStmt): void {
+export function lowerCForStmt(ctx: LoweringCtx, stmt: CForStmt): void {
   // C-style for: for (let i = 0; i < 10; i = i + 1) { body }
   // Lower as: init → header (condition) → body → latch (update) → header → end
-  const headerLabel = this.freshBlockId("cfor.header");
-  const bodyLabel = this.freshBlockId("cfor.body");
-  const latchLabel = this.freshBlockId("cfor.latch");
-  const endLabel = this.freshBlockId("cfor.end");
+  const headerLabel = freshBlockId(ctx, "cfor.header");
+  const bodyLabel = freshBlockId(ctx, "cfor.body");
+  const latchLabel = freshBlockId(ctx, "cfor.latch");
+  const endLabel = freshBlockId(ctx, "cfor.end");
 
   // Init: lower the let statement in the current block
-  this.lowerLetStmt(stmt.init);
+  lowerLetStmt(ctx, stmt.init);
 
-  this.setTerminator({ kind: "jump", target: headerLabel });
+  setTerminator(ctx, { kind: "jump", target: headerLabel });
 
   // Header: evaluate condition
-  this.sealCurrentBlock();
-  this.startBlock(headerLabel);
-  const condId = this.lowerExpr(stmt.condition);
-  this.setTerminator({
+  sealCurrentBlock(ctx);
+  startBlock(ctx, headerLabel);
+  const condId = lowerExpr(ctx, stmt.condition);
+  setTerminator(ctx, {
     kind: "br",
     cond: condId,
     thenBlock: bodyLabel,
@@ -407,43 +432,43 @@ export function lowerCForStmt(this: KirLowerer, stmt: CForStmt): void {
   });
 
   // Body
-  this.sealCurrentBlock();
-  this.startBlock(bodyLabel);
+  sealCurrentBlock(ctx);
+  startBlock(ctx, bodyLabel);
 
-  const prevBreak = this.loopBreakTarget;
-  const prevContinue = this.loopContinueTarget;
-  const prevScopeDepth = this.loopScopeDepth;
-  this.loopBreakTarget = endLabel;
-  this.loopContinueTarget = latchLabel;
-  this.loopScopeDepth = this.scopeStack.length;
+  const prevBreak = ctx.loopBreakTarget;
+  const prevContinue = ctx.loopContinueTarget;
+  const prevScopeDepth = ctx.loopScopeDepth;
+  ctx.loopBreakTarget = endLabel;
+  ctx.loopContinueTarget = latchLabel;
+  ctx.loopScopeDepth = ctx.scopeStack.length;
 
-  this.lowerBlock(stmt.body);
+  lowerBlock(ctx, stmt.body);
 
-  this.loopBreakTarget = prevBreak;
-  this.loopContinueTarget = prevContinue;
-  this.loopScopeDepth = prevScopeDepth;
+  ctx.loopBreakTarget = prevBreak;
+  ctx.loopContinueTarget = prevContinue;
+  ctx.loopScopeDepth = prevScopeDepth;
 
-  if (!this.isBlockTerminated()) {
-    this.setTerminator({ kind: "jump", target: latchLabel });
+  if (!isBlockTerminated(ctx)) {
+    setTerminator(ctx, { kind: "jump", target: latchLabel });
   }
 
   // Latch: evaluate update expression, jump back to header
-  this.sealCurrentBlock();
-  this.startBlock(latchLabel);
-  this.lowerExpr(stmt.update);
-  this.setTerminator({ kind: "jump", target: headerLabel });
+  sealCurrentBlock(ctx);
+  startBlock(ctx, latchLabel);
+  lowerExpr(ctx, stmt.update);
+  setTerminator(ctx, { kind: "jump", target: headerLabel });
 
   // End
-  this.sealCurrentBlock();
-  this.startBlock(endLabel);
+  sealCurrentBlock(ctx);
+  startBlock(ctx, endLabel);
 }
 
-export function lowerSwitchStmt(this: KirLowerer, stmt: SwitchStmt): void {
-  const subjectId = this.lowerExpr(stmt.subject);
-  const endLabel = this.freshBlockId("switch.end");
+export function lowerSwitchStmt(ctx: LoweringCtx, stmt: SwitchStmt): void {
+  const subjectId = lowerExpr(ctx, stmt.subject);
+  const endLabel = freshBlockId(ctx, "switch.end");
 
   // Check if this is a switch on a data-variant (tagged union) enum
-  const subjectType = this.checkResult.typeMap.get(stmt.subject);
+  const subjectType = ctx.checkResult.typeMap.get(stmt.subject);
   const isTaggedUnionEnum =
     subjectType?.kind === "enum" && subjectType.variants.some((v) => v.fields.length > 0);
 
@@ -451,7 +476,7 @@ export function lowerSwitchStmt(this: KirLowerer, stmt: SwitchStmt): void {
   let switchValue: VarId;
   if (isTaggedUnionEnum) {
     const tagType: KirType = { kind: "int", bits: 32, signed: true };
-    switchValue = this.emitFieldLoad(subjectId, "tag", tagType);
+    switchValue = emitFieldLoad(ctx, subjectId, "tag", tagType);
   } else {
     switchValue = subjectId;
   }
@@ -467,8 +492,8 @@ export function lowerSwitchStmt(this: KirLowerer, stmt: SwitchStmt): void {
 
   for (const c of stmt.cases) {
     const label = c.isDefault
-      ? this.freshBlockId("switch.default")
-      : this.freshBlockId("switch.case");
+      ? freshBlockId(ctx, "switch.default")
+      : freshBlockId(ctx, "switch.case");
 
     if (c.isDefault) {
       defaultLabel = label;
@@ -481,8 +506,8 @@ export function lowerSwitchStmt(this: KirLowerer, stmt: SwitchStmt): void {
         if (variantIndex >= 0) {
           const variant = subjectType.variants[variantIndex];
           const tagValue = variant.value ?? variantIndex;
-          const tagId = this.freshVar();
-          this.emit({
+          const tagId = freshVar(ctx);
+          emit(ctx, {
             kind: "const_int",
             dest: tagId,
             type: { kind: "int", bits: 32, signed: true },
@@ -492,14 +517,14 @@ export function lowerSwitchStmt(this: KirLowerer, stmt: SwitchStmt): void {
           continue;
         }
       }
-      const valId = this.lowerExpr(val);
+      const valId = lowerExpr(ctx, val);
       caseLabels.push({ value: valId, target: label });
     }
 
     caseBlocks.push({ label, stmts: c.body, isDefault: c.isDefault, astCase: c });
   }
 
-  this.setTerminator({
+  setTerminator(ctx, {
     kind: "switch",
     value: switchValue,
     cases: caseLabels,
@@ -508,44 +533,44 @@ export function lowerSwitchStmt(this: KirLowerer, stmt: SwitchStmt): void {
 
   // Emit case blocks
   for (const cb of caseBlocks) {
-    this.sealCurrentBlock();
-    this.startBlock(cb.label);
+    sealCurrentBlock(ctx);
+    startBlock(ctx, cb.label);
 
     // Emit destructuring bindings: load variant fields from the enum subject
-    const bindingInfo = this.checkResult.switchCaseBindings?.get(cb.astCase);
+    const bindingInfo = ctx.checkResult.switchCaseBindings?.get(cb.astCase);
     if (bindingInfo && cb.astCase.bindings) {
       for (let i = 0; i < cb.astCase.bindings.length; i++) {
         const fieldPath = `data.${bindingInfo.variantName}.${bindingInfo.fieldNames[i]}`;
-        const fieldType = this.lowerCheckerType(bindingInfo.fieldTypes[i]);
-        const loadedVal = this.emitFieldLoad(subjectId, fieldPath, fieldType);
-        this.varMap.set(cb.astCase.bindings[i], loadedVal);
+        const fieldType = lowerCheckerType(ctx, bindingInfo.fieldTypes[i]);
+        const loadedVal = emitFieldLoad(ctx, subjectId, fieldPath, fieldType);
+        ctx.varMap.set(cb.astCase.bindings[i], loadedVal);
       }
     }
 
     for (const s of cb.stmts) {
-      this.lowerStatement(s);
+      lowerStatement(ctx, s);
     }
-    if (!this.isBlockTerminated()) {
-      this.setTerminator({ kind: "jump", target: endLabel });
+    if (!isBlockTerminated(ctx)) {
+      setTerminator(ctx, { kind: "jump", target: endLabel });
     }
   }
 
-  this.sealCurrentBlock();
-  this.startBlock(endLabel);
+  sealCurrentBlock(ctx);
+  startBlock(ctx, endLabel);
 }
 
-export function lowerExprStmt(this: KirLowerer, stmt: ExprStmt): void {
-  this.lowerExpr(stmt.expression);
+export function lowerExprStmt(ctx: LoweringCtx, stmt: ExprStmt): void {
+  lowerExpr(ctx, stmt.expression);
 }
 
-export function lowerAssertStmt(this: KirLowerer, stmt: AssertStmt): void {
-  const condId = this.lowerExpr(stmt.condition);
+export function lowerAssertStmt(ctx: LoweringCtx, stmt: AssertStmt): void {
+  const condId = lowerExpr(ctx, stmt.condition);
   const msg = stmt.message?.kind === "StringLiteral" ? stmt.message.value : "assertion failed";
-  this.emit({ kind: "assert_check", cond: condId, message: msg });
+  emit(ctx, { kind: "assert_check", cond: condId, message: msg });
 }
 
-export function lowerRequireStmt(this: KirLowerer, stmt: RequireStmt): void {
-  const condId = this.lowerExpr(stmt.condition);
+export function lowerRequireStmt(ctx: LoweringCtx, stmt: RequireStmt): void {
+  const condId = lowerExpr(ctx, stmt.condition);
   const msg = stmt.message?.kind === "StringLiteral" ? stmt.message.value : "requirement failed";
-  this.emit({ kind: "require_check", cond: condId, message: msg });
+  emit(ctx, { kind: "require_check", cond: condId, message: msg });
 }

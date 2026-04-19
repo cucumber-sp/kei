@@ -8,17 +8,20 @@
  */
 
 import type { CallExpr, MemberExpr } from "../ast/nodes.ts";
-import type { KirType, VarId } from "./kir-types.ts";
-import type { KirLowerer } from "./lowering.ts";
+import type { VarId } from "./kir-types.ts";
+import type { LoweringCtx } from "./lowering-ctx.ts";
+import { lowerExpr } from "./lowering-expr.ts";
+import { lowerCheckerType } from "./lowering-types.ts";
+import { emit, emitStackAlloc, freshVar } from "./lowering-utils.ts";
 
 /**
  * Lower an enum data variant construction call: Shape.Circle(3.14)
  * Returns the VarId of the constructed tagged union, or null if expr is not an enum construction.
  */
-export function lowerEnumVariantConstruction(this: KirLowerer, expr: CallExpr): VarId | null {
+export function lowerEnumVariantConstruction(ctx: LoweringCtx, expr: CallExpr): VarId | null {
   if (expr.callee.kind !== "MemberExpr") return null;
 
-  const calleeType = this.checkResult.typeMap.get(expr.callee.object);
+  const calleeType = ctx.checkResult.typeMap.get(expr.callee.object);
   if (calleeType?.kind !== "enum") return null;
 
   const enumType = calleeType;
@@ -28,46 +31,46 @@ export function lowerEnumVariantConstruction(this: KirLowerer, expr: CallExpr): 
 
   const variant = enumType.variants[variantIndex];
   const tagValue = variant.value ?? variantIndex;
-  const kirEnumType = this.lowerCheckerType(enumType);
+  const kirEnumType = lowerCheckerType(ctx, enumType);
 
   // stack_alloc the tagged union struct
-  const ptrId = this.emitStackAlloc(kirEnumType);
+  const ptrId = emitStackAlloc(ctx, kirEnumType);
 
   // Set tag field
-  const tagPtrId = this.freshVar();
-  this.emit({
+  const tagPtrId = freshVar(ctx);
+  emit(ctx, {
     kind: "field_ptr",
     dest: tagPtrId,
     base: ptrId,
     field: "tag",
     type: { kind: "int", bits: 32, signed: true },
   });
-  const tagVal = this.freshVar();
-  this.emit({
+  const tagVal = freshVar(ctx);
+  emit(ctx, {
     kind: "const_int",
     dest: tagVal,
     type: { kind: "int", bits: 32, signed: true },
     value: tagValue,
   });
-  this.emit({ kind: "store", ptr: tagPtrId, value: tagVal });
+  emit(ctx, { kind: "store", ptr: tagPtrId, value: tagVal });
 
   // Set data fields: data.VariantName.fieldName
   for (let i = 0; i < expr.args.length; i++) {
     const arg = expr.args[i];
     if (!arg) continue;
-    const valueId = this.lowerExpr(arg);
+    const valueId = lowerExpr(ctx, arg);
     const field = variant.fields[i];
     if (!field) continue;
-    const fieldType = this.lowerCheckerType(field.type);
-    const fieldPtrId = this.freshVar();
-    this.emit({
+    const fieldType = lowerCheckerType(ctx, field.type);
+    const fieldPtrId = freshVar(ctx);
+    emit(ctx, {
       kind: "field_ptr",
       dest: fieldPtrId,
       base: ptrId,
       field: `data.${variantName}.${field.name}`,
       type: fieldType,
     });
-    this.emit({ kind: "store", ptr: fieldPtrId, value: valueId });
+    emit(ctx, { kind: "store", ptr: fieldPtrId, value: valueId });
   }
 
   return ptrId;
@@ -77,8 +80,8 @@ export function lowerEnumVariantConstruction(this: KirLowerer, expr: CallExpr): 
  * Lower an enum variant member access: Color.Red or Shape.None (fieldless variant of tagged union).
  * Returns the VarId, or null if expr is not an enum variant access.
  */
-export function lowerEnumVariantAccess(this: KirLowerer, expr: MemberExpr): VarId | null {
-  const objectType = this.checkResult.typeMap.get(expr.object);
+export function lowerEnumVariantAccess(ctx: LoweringCtx, expr: MemberExpr): VarId | null {
+  const objectType = ctx.checkResult.typeMap.get(expr.object);
   if (objectType?.kind !== "enum") return null;
 
   const variantIndex = objectType.variants.findIndex((v) => v.name === expr.property);
@@ -90,31 +93,31 @@ export function lowerEnumVariantAccess(this: KirLowerer, expr: MemberExpr): VarI
 
   if (hasDataVariants) {
     // Tagged union enum: construct full struct with tag set (no data fields for fieldless variant)
-    const kirEnumType = this.lowerCheckerType(objectType);
-    const ptrId = this.emitStackAlloc(kirEnumType);
+    const kirEnumType = lowerCheckerType(ctx, objectType);
+    const ptrId = emitStackAlloc(ctx, kirEnumType);
 
-    const tagPtrId = this.freshVar();
-    this.emit({
+    const tagPtrId = freshVar(ctx);
+    emit(ctx, {
       kind: "field_ptr",
       dest: tagPtrId,
       base: ptrId,
       field: "tag",
       type: { kind: "int", bits: 32, signed: true },
     });
-    const tagVal = this.freshVar();
-    this.emit({
+    const tagVal = freshVar(ctx);
+    emit(ctx, {
       kind: "const_int",
       dest: tagVal,
       type: { kind: "int", bits: 32, signed: true },
       value,
     });
-    this.emit({ kind: "store", ptr: tagPtrId, value: tagVal });
+    emit(ctx, { kind: "store", ptr: tagPtrId, value: tagVal });
 
     return ptrId;
   }
 
   // Simple enum: just emit the integer discriminant
-  const dest = this.freshVar();
-  this.emit({ kind: "const_int", dest, type: { kind: "int", bits: 32, signed: true }, value });
+  const dest = freshVar(ctx);
+  emit(ctx, { kind: "const_int", dest, type: { kind: "int", bits: 32, signed: true }, value });
   return dest;
 }

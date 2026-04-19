@@ -8,14 +8,15 @@
 
 import type { EnumDecl } from "../ast/nodes.ts";
 import type { KirTypeDecl } from "./kir-types.ts";
-import type { KirLowerer } from "./lowering.ts";
+import type { LoweringCtx } from "./lowering-ctx.ts";
+import { lowerTypeNode } from "./lowering-types.ts";
 
-export function lowerEnumDecl(this: KirLowerer, decl: EnumDecl): KirTypeDecl {
+export function lowerEnumDecl(ctx: LoweringCtx, decl: EnumDecl): KirTypeDecl {
   const variants = decl.variants.map((v) => ({
     name: v.name,
     fields: v.fields.map((f) => ({
       name: f.name,
-      type: this.lowerTypeNode(f.typeAnnotation),
+      type: lowerTypeNode(ctx, f.typeAnnotation),
     })),
     value: v.value?.kind === "IntLiteral" ? v.value.value : null,
   }));
