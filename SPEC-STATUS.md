@@ -59,11 +59,14 @@ Anything spec'd but not implemented is listed below with a status tag:
 
 | Item                                      | Status   | Notes                                              |
 |-------------------------------------------|----------|----------------------------------------------------|
-| `KirLowerer` prototype-patching refactor  | PLANNED  | Convert to `LoweringCtx` + pure functions.         |
-| `CheckResult` 9-map consolidation         | PLANNED  | Group into `types` / `generics` / `lifecycle`.     |
-| `cli.ts` split                            | PLANNED  | `args.ts` + `driver.ts` + `diagnostics-format.ts`. |
-| Embed `runtime.h` at build time           | PLANNED  | Remove fs lookup in c-emitter.                     |
-| Delete unused `AstVisitor`                | PLANNED  | Nothing uses it.                                   |
+| Delete unused `AstVisitor`                | DONE     | B1: removed 115 LOC dead interface.                |
+| Postfix `++` / `--` removal               | DONE     | B1: lexer/parser/checker/lowering all dropped.     |
+| `main()` return-type validation           | DONE     | B1: must return `int`, no params, no `throws`.     |
+| `KirLowerer` prototype-patching refactor  | DONE     | B2: `LoweringCtx` interface + 13 pure-fn modules.  |
+| `CheckResult` 9-map consolidation         | DONE     | B3: grouped into `types`/`generics`/`lifecycle`.   |
+| `cli.ts` split                            | DONE     | B4: 441→34 LOC; `cli/{args,driver,diagnostics-format,ast-printer}.ts`. |
+| Embed `runtime.h` at build time           | DONE     | B5: Bun text import; no fs read in c-emitter.      |
+| Lifecycle/scope unification               | DEFERRED | B6: checker emits sidecar map; KIR reads it. Not blocking features. |
 
 ## Spec cleanup applied in this revision
 
