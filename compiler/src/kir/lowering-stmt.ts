@@ -151,8 +151,21 @@ export function lowerLetStmt(ctx: LoweringCtx, stmt: LetStmt): void {
     // Regular path: alloc + store
     ptrId = emitStackAlloc(ctx, type);
 
-    // Emit oncopy if this is a copy of a struct with __oncopy (not a move)
-    if (stmt.initializer.kind !== "MoveExpr") {
+    // Emit oncopy when a let binding aliases an existing value (no second owner
+    // is created for rvalues: call results, struct literals, ifs/switch arms,
+    // unsafe-expr bodies, grouped expressions, and casts all produce fresh
+    // values that ownership transfers from).
+    const initKind = stmt.initializer.kind;
+    const isRValue =
+      initKind === "MoveExpr" ||
+      initKind === "CallExpr" ||
+      initKind === "StructLiteral" ||
+      initKind === "IfExpr" ||
+      initKind === "SwitchExpr" ||
+      initKind === "UnsafeExpr" ||
+      initKind === "GroupExpr" ||
+      initKind === "CastExpr";
+    if (!isRValue) {
       const checkerType = ctx.checkResult.types.typeMap.get(stmt.initializer);
       const lifecycle = getStructLifecycle(ctx, checkerType);
       if (lifecycle?.hasOncopy) {

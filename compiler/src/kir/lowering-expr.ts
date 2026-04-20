@@ -475,6 +475,10 @@ export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
     if (lifecycle?.hasOncopy && expr.value.kind !== "MoveExpr") {
       emit(ctx, { kind: "oncopy", value: valueId, structName: lifecycle.structName });
     }
+  } else if (expr.target.kind === "DerefExpr") {
+    // *p = v — store through the raw pointer.
+    const ptrId = lowerExpr(ctx, expr.target.operand);
+    emit(ctx, { kind: "store", ptr: ptrId, value: valueId });
   } else if (expr.target.kind === "IndexExpr") {
     const baseId = lowerExpr(ctx, expr.target.object);
     const indexId = lowerExpr(ctx, expr.target.index);

@@ -2743,4 +2743,60 @@ describe("e2e: unsafe pointer lowering", () => {
     expect(r.exitCode).toBe(4);
     expect(r.stdout).toBe("");
   });
+
+  test("bump-arena pattern: alloc, store through raw ptr, read back, reset", () => {
+    const r = run(
+      "unsafe_arena_inline",
+      `
+      import { alloc, dealloc } from mem;
+
+      unsafe struct Arena {
+        buf: ptr<u8>;
+        pos: usize;
+        cap: usize;
+
+        fn __destroy(self: Arena) {
+          unsafe { dealloc(self.buf as ptr<void>); }
+        }
+
+        fn __oncopy(self: Arena) -> Arena {
+          return Arena { buf: null, pos: 0, cap: 0 };
+        }
+      }
+
+      fn arena_make(cap: usize) -> Arena {
+        unsafe { return Arena { buf: alloc(cap), pos: 0, cap: cap }; }
+      }
+
+      fn arena_alloc(a: ptr<Arena>, size: usize) -> ptr<u8> {
+        unsafe {
+          if a->pos + size > a->cap { return null; }
+          let result: ptr<u8> = ((a->buf as usize) + a->pos) as ptr<u8>;
+          a->pos = a->pos + size;
+          return result;
+        }
+      }
+
+      fn arena_reset(a: ptr<Arena>) {
+        unsafe { a->pos = 0; }
+      }
+
+      fn main() -> int {
+        let a = arena_make(64);
+        unsafe {
+          let p1: ptr<i32> = arena_alloc(&a, 4) as ptr<i32>;
+          let p2: ptr<i32> = arena_alloc(&a, 4) as ptr<i32>;
+          *p1 = 10;
+          *p2 = 32;
+          let sum: i32 = *p1 + *p2;
+          arena_reset(&a);
+          return sum;
+        }
+      }
+    `
+    );
+
+    expect(r.exitCode).toBe(42);
+    expect(r.stdout).toBe("");
+  });
 });
