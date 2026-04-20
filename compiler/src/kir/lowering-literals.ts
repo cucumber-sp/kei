@@ -19,7 +19,7 @@ import { emit, emitStackAlloc, freshVar } from "./lowering-utils.ts";
 
 export function lowerIntLiteral(ctx: LoweringCtx, expr: IntLiteral): VarId {
   const dest = freshVar(ctx);
-  const checkerType = ctx.checkResult.typeMap.get(expr);
+  const checkerType = ctx.checkResult.types.typeMap.get(expr);
   let type: KirIntType = { kind: "int", bits: 32, signed: true };
   if (checkerType?.kind === "int") {
     type = { kind: "int", bits: checkerType.bits, signed: checkerType.signed };
@@ -30,7 +30,7 @@ export function lowerIntLiteral(ctx: LoweringCtx, expr: IntLiteral): VarId {
 
 export function lowerFloatLiteral(ctx: LoweringCtx, expr: FloatLiteral): VarId {
   const dest = freshVar(ctx);
-  const checkerType = ctx.checkResult.typeMap.get(expr);
+  const checkerType = ctx.checkResult.types.typeMap.get(expr);
   let type: KirFloatType = { kind: "float", bits: 64 };
   if (checkerType?.kind === "float") {
     type = { kind: "float", bits: checkerType.bits };
@@ -79,7 +79,7 @@ export function lowerStructLiteral(ctx: LoweringCtx, expr: StructLiteral): VarId
 }
 
 export function lowerArrayLiteral(ctx: LoweringCtx, expr: ArrayLiteral): VarId {
-  const checkerType = ctx.checkResult.typeMap.get(expr);
+  const checkerType = ctx.checkResult.types.typeMap.get(expr);
   let elemType: KirType = { kind: "int", bits: 32, signed: true };
   if (checkerType?.kind === "array") {
     elemType = lowerCheckerType(ctx, checkerType.element);

@@ -21,7 +21,7 @@ import { emit, emitStackAlloc, freshVar } from "./lowering-utils.ts";
 export function lowerEnumVariantConstruction(ctx: LoweringCtx, expr: CallExpr): VarId | null {
   if (expr.callee.kind !== "MemberExpr") return null;
 
-  const calleeType = ctx.checkResult.typeMap.get(expr.callee.object);
+  const calleeType = ctx.checkResult.types.typeMap.get(expr.callee.object);
   if (calleeType?.kind !== "enum") return null;
 
   const enumType = calleeType;
@@ -81,7 +81,7 @@ export function lowerEnumVariantConstruction(ctx: LoweringCtx, expr: CallExpr): 
  * Returns the VarId, or null if expr is not an enum variant access.
  */
 export function lowerEnumVariantAccess(ctx: LoweringCtx, expr: MemberExpr): VarId | null {
-  const objectType = ctx.checkResult.typeMap.get(expr.object);
+  const objectType = ctx.checkResult.types.typeMap.get(expr.object);
   if (objectType?.kind !== "enum") return null;
 
   const variantIndex = objectType.variants.findIndex((v) => v.name === expr.property);

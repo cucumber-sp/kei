@@ -22,7 +22,7 @@ import {
 
 export function lowerBinaryExpr(ctx: LoweringCtx, expr: BinaryExpr): VarId {
   // Check for operator overloading
-  const opMethod = ctx.checkResult.operatorMethods.get(expr);
+  const opMethod = ctx.checkResult.types.operatorMethods.get(expr);
   if (opMethod) {
     return lowerOperatorMethodCall(ctx, expr.left, opMethod.methodName, opMethod.structType, [
       expr.right,
@@ -45,7 +45,7 @@ export function lowerBinaryExpr(ctx: LoweringCtx, expr: BinaryExpr): VarId {
   if (op) {
     const type = getExprKirType(ctx, expr);
     // For string equality/inequality, pass operandType so the C emitter knows
-    const leftCheckerType = ctx.checkResult.typeMap.get(expr.left);
+    const leftCheckerType = ctx.checkResult.types.typeMap.get(expr.left);
     if (leftCheckerType?.kind === "string" && (op === "eq" || op === "neq")) {
       emit(ctx, { kind: "bin_op", op, dest, lhs, rhs, type, operandType: { kind: "string" } });
     } else {
@@ -128,7 +128,7 @@ export function lowerShortCircuitOr(ctx: LoweringCtx, expr: BinaryExpr): VarId {
 
 export function lowerUnaryExpr(ctx: LoweringCtx, expr: UnaryExpr): VarId {
   // Check for operator overloading (e.g., -a → a.op_neg())
-  const opMethod = ctx.checkResult.operatorMethods.get(expr);
+  const opMethod = ctx.checkResult.types.operatorMethods.get(expr);
   if (opMethod) {
     return lowerOperatorMethodCall(ctx, expr.operand, opMethod.methodName, opMethod.structType, []);
   }
@@ -169,7 +169,7 @@ export function lowerOperatorMethodCall(
   // Methods take self and args as pointers, so get alloc pointers, not loaded values
   const selfId = lowerExprAsPtr(ctx, selfExpr);
   const args = argExprs.map((a) => {
-    const argType = ctx.checkResult.typeMap.get(a);
+    const argType = ctx.checkResult.types.typeMap.get(a);
     if (argType?.kind === "struct") {
       return lowerExprAsPtr(ctx, a);
     }

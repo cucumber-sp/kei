@@ -694,7 +694,7 @@ describe("Checker: Operator Overloading (comprehensive)", () => {
       expect(errors.length).toBe(0);
 
       const methods = new Set<string>();
-      for (const [, info] of result.operatorMethods) {
+      for (const [, info] of result.types.operatorMethods) {
         methods.add(info.methodName);
       }
       expect(methods.has("op_add")).toBe(true);
@@ -734,7 +734,7 @@ describe("Checker: Operator Overloading (comprehensive)", () => {
       expect(errors.length).toBe(0);
 
       let foundIndex = false;
-      for (const [, info] of result.operatorMethods) {
+      for (const [, info] of result.types.operatorMethods) {
         if (info.methodName === "op_index") {
           foundIndex = true;
         }

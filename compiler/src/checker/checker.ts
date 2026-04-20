@@ -29,23 +29,38 @@ import { TypeResolver } from "./type-resolver.ts";
 import type { FunctionType, StructType, Type } from "./types";
 import { TypeKind, typeToString } from "./types";
 
-export interface CheckResult {
-  diagnostics: Diagnostic[];
+/** Per-expression resolution metadata produced by the checker. */
+export interface CheckTypes {
+  /** Resolved type for every checked expression. */
   typeMap: Map<Expression, Type>;
+  /** Operator-overload resolution: which method satisfies an operator at a call site. */
   operatorMethods: Map<Expression, { methodName: string; structType: StructType }>;
-  monomorphizedStructs: Map<string, MonomorphizedStruct>;
-  monomorphizedFunctions: Map<string, MonomorphizedFunction>;
-  /** Maps generic call/struct literal expressions to their resolved mangled names */
-  genericResolutions: Map<Expression, string>;
-  /** Struct types that have auto-generated __destroy (name → checker StructType) */
-  autoDestroyStructs: Map<string, StructType>;
-  /** Struct types that have auto-generated __oncopy (name → checker StructType) */
-  autoOncopyStructs: Map<string, StructType>;
-  /** Destructuring bindings for switch cases on data enum variants */
+  /** Destructuring bindings for switch cases on data enum variants. */
   switchCaseBindings: Map<
     SwitchCase,
     { variantName: string; fieldNames: string[]; fieldTypes: Type[] }
   >;
+}
+
+/** Generic monomorphization output. */
+export interface CheckGenerics {
+  monomorphizedStructs: Map<string, MonomorphizedStruct>;
+  monomorphizedFunctions: Map<string, MonomorphizedFunction>;
+  /** Maps generic call / struct literal expressions to their resolved mangled names. */
+  resolutions: Map<Expression, string>;
+}
+
+/** Auto-generated lifecycle hook info (which structs got __destroy / __oncopy). */
+export interface CheckLifecycle {
+  autoDestroyStructs: Map<string, StructType>;
+  autoOncopyStructs: Map<string, StructType>;
+}
+
+export interface CheckResult {
+  diagnostics: Diagnostic[];
+  types: CheckTypes;
+  generics: CheckGenerics;
+  lifecycle: CheckLifecycle;
 }
 
 /** Info about a module to check in multi-module mode */
@@ -56,33 +71,21 @@ export interface ModuleCheckInfo {
   importDecls: ImportDecl[];
 }
 
-/** Result of multi-module checking */
+/**
+ * Result of multi-module checking.
+ *
+ * Per-module results are kept in `results`. The `types`/`generics`/`lifecycle`
+ * fields hold the merged view across all modules, in the same shape as
+ * `CheckResult`'s sub-objects.
+ */
 export interface MultiModuleCheckResult {
-  /** Per-module check results, keyed by module name */
   results: Map<string, CheckResult>;
-  /** Combined type map across all modules */
-  typeMap: Map<Expression, Type>;
-  /** Combined diagnostics across all modules */
   diagnostics: Diagnostic[];
-  /** Public symbols exported by each module */
+  /** Public symbols exported by each module. */
   moduleExports: Map<string, Map<string, ScopeSymbol>>;
-  /** Combined operator method resolution info */
-  operatorMethods: Map<Expression, { methodName: string; structType: StructType }>;
-  /** Combined monomorphized structs */
-  monomorphizedStructs: Map<string, MonomorphizedStruct>;
-  /** Combined monomorphized functions */
-  monomorphizedFunctions: Map<string, MonomorphizedFunction>;
-  /** Combined generic resolution info */
-  genericResolutions: Map<Expression, string>;
-  /** Combined auto-destroy struct types */
-  autoDestroyStructs: Map<string, StructType>;
-  /** Combined auto-oncopy struct types */
-  autoOncopyStructs: Map<string, StructType>;
-  /** Combined switch case destructuring bindings */
-  switchCaseBindings: Map<
-    SwitchCase,
-    { variantName: string; fieldNames: string[]; fieldTypes: Type[] }
-  >;
+  types: CheckTypes;
+  generics: CheckGenerics;
+  lifecycle: CheckLifecycle;
 }
 
 export class Checker {
@@ -253,14 +256,20 @@ export class Checker {
 
     return {
       diagnostics: this.diagnostics,
-      typeMap: this.typeMap,
-      operatorMethods: this.operatorMethods,
-      monomorphizedStructs: this.monomorphizedStructs,
-      monomorphizedFunctions: this.monomorphizedFunctions,
-      genericResolutions: this.genericResolutions,
-      autoDestroyStructs,
-      autoOncopyStructs,
-      switchCaseBindings: this.switchCaseBindings,
+      types: {
+        typeMap: this.typeMap,
+        operatorMethods: this.operatorMethods,
+        switchCaseBindings: this.switchCaseBindings,
+      },
+      generics: {
+        monomorphizedStructs: this.monomorphizedStructs,
+        monomorphizedFunctions: this.monomorphizedFunctions,
+        resolutions: this.genericResolutions,
+      },
+      lifecycle: {
+        autoDestroyStructs,
+        autoOncopyStructs,
+      },
     };
   }
 
@@ -355,18 +364,22 @@ export class Checker {
   static checkModules(modules: ModuleCheckInfo[]): MultiModuleCheckResult {
     const moduleExports = new Map<string, Map<string, ScopeSymbol>>();
     const allResults = new Map<string, CheckResult>();
-    const combinedTypeMap = new Map<Expression, Type>();
     const combinedDiags: Diagnostic[] = [];
-    const combinedOpMethods = new Map<Expression, { methodName: string; structType: StructType }>();
-    const combinedMonoStructs = new Map<string, MonomorphizedStruct>();
-    const combinedMonoFuncs = new Map<string, MonomorphizedFunction>();
-    const combinedGenericResolutions = new Map<Expression, string>();
-    const combinedAutoDestroy = new Map<string, StructType>();
-    const combinedAutoOncopy = new Map<string, StructType>();
-    const combinedSwitchCaseBindings = new Map<
-      SwitchCase,
-      { variantName: string; fieldNames: string[]; fieldTypes: Type[] }
-    >();
+
+    const types: CheckTypes = {
+      typeMap: new Map(),
+      operatorMethods: new Map(),
+      switchCaseBindings: new Map(),
+    };
+    const generics: CheckGenerics = {
+      monomorphizedStructs: new Map(),
+      monomorphizedFunctions: new Map(),
+      resolutions: new Map(),
+    };
+    const lifecycle: CheckLifecycle = {
+      autoDestroyStructs: new Map(),
+      autoOncopyStructs: new Map(),
+    };
 
     for (const mod of modules) {
       const checker = new Checker(mod.program, mod.source);
@@ -375,30 +388,27 @@ export class Checker {
       const result = checker.check();
       allResults.set(mod.name, result);
 
-      // Merge type maps, diagnostics, operator methods, and monomorphized maps
-      for (const [expr, type] of result.typeMap) {
-        combinedTypeMap.set(expr, type);
+      for (const [expr, type] of result.types.typeMap) types.typeMap.set(expr, type);
+      for (const [expr, info] of result.types.operatorMethods) {
+        types.operatorMethods.set(expr, info);
       }
-      for (const [expr, info] of result.operatorMethods) {
-        combinedOpMethods.set(expr, info);
+      for (const [sc, info] of result.types.switchCaseBindings) {
+        types.switchCaseBindings.set(sc, info);
       }
-      for (const [name, mono] of result.monomorphizedStructs) {
-        combinedMonoStructs.set(name, mono);
+      for (const [name, mono] of result.generics.monomorphizedStructs) {
+        generics.monomorphizedStructs.set(name, mono);
       }
-      for (const [name, mono] of result.monomorphizedFunctions) {
-        combinedMonoFuncs.set(name, mono);
+      for (const [name, mono] of result.generics.monomorphizedFunctions) {
+        generics.monomorphizedFunctions.set(name, mono);
       }
-      for (const [expr, name] of result.genericResolutions) {
-        combinedGenericResolutions.set(expr, name);
+      for (const [expr, name] of result.generics.resolutions) {
+        generics.resolutions.set(expr, name);
       }
-      for (const [name, st] of result.autoDestroyStructs) {
-        combinedAutoDestroy.set(name, st);
+      for (const [name, st] of result.lifecycle.autoDestroyStructs) {
+        lifecycle.autoDestroyStructs.set(name, st);
       }
-      for (const [name, st] of result.autoOncopyStructs) {
-        combinedAutoOncopy.set(name, st);
-      }
-      for (const [sc, info] of result.switchCaseBindings) {
-        combinedSwitchCaseBindings.set(sc, info);
+      for (const [name, st] of result.lifecycle.autoOncopyStructs) {
+        lifecycle.autoOncopyStructs.set(name, st);
       }
       combinedDiags.push(...result.diagnostics);
 
@@ -409,16 +419,11 @@ export class Checker {
 
     return {
       results: allResults,
-      typeMap: combinedTypeMap,
       diagnostics: combinedDiags,
       moduleExports,
-      operatorMethods: combinedOpMethods,
-      monomorphizedStructs: combinedMonoStructs,
-      monomorphizedFunctions: combinedMonoFuncs,
-      genericResolutions: combinedGenericResolutions,
-      autoDestroyStructs: combinedAutoDestroy,
-      autoOncopyStructs: combinedAutoOncopy,
-      switchCaseBindings: combinedSwitchCaseBindings,
+      types,
+      generics,
+      lifecycle,
     };
   }
 

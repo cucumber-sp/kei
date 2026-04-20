@@ -525,11 +525,11 @@ describe("Checker: Operator Overloading", () => {
       // biome-ignore lint/suspicious/noExplicitAny: dynamic require loses type info
       const errors = result.diagnostics.filter((d: any) => d.severity === "error");
       expect(errors.length).toBe(0);
-      expect(result.operatorMethods.size).toBeGreaterThan(0);
+      expect(result.types.operatorMethods.size).toBeGreaterThan(0);
 
       // Find the entry with methodName "op_add"
       let foundOpAdd = false;
-      for (const [, info] of result.operatorMethods) {
+      for (const [, info] of result.types.operatorMethods) {
         if (info.methodName === "op_add") {
           foundOpAdd = true;
           expect(info.structType.name).toBe("Vec2");

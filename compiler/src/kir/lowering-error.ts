@@ -50,7 +50,7 @@ export function lowerThrowExpr(ctx: LoweringCtx, expr: ThrowExpr): VarId {
   }
 
   // Determine the tag for this error type
-  const checkerType = ctx.checkResult.typeMap.get(expr.value);
+  const checkerType = ctx.checkResult.types.typeMap.get(expr.value);
   let tag = 1; // default
   if (checkerType && checkerType.kind === "struct") {
     const idx = ctx.currentFunctionThrowsTypes.findIndex(
@@ -314,7 +314,7 @@ export function resolveCallThrowsInfo(
     const resolvedBase = importedName ?? baseName;
 
     if (ctx.overloadedNames.has(baseName)) {
-      const calleeType = ctx.checkResult.typeMap.get(callExpr.callee);
+      const calleeType = ctx.checkResult.types.typeMap.get(callExpr.callee);
       if (calleeType && calleeType.kind === "function") {
         funcName = mangleFunctionNameFromType(ctx, resolvedBase, calleeType as FunctionType);
       } else {
@@ -324,7 +324,7 @@ export function resolveCallThrowsInfo(
       funcName = resolvedBase;
     }
   } else if (callExpr.callee.kind === "MemberExpr") {
-    const objType = ctx.checkResult.typeMap.get(callExpr.callee.object);
+    const objType = ctx.checkResult.types.typeMap.get(callExpr.callee.object);
     if (objType?.kind === "module") {
       const modulePrefix = objType.name.replace(/\./g, "_");
       funcName = `${modulePrefix}_${callExpr.callee.property}`;
@@ -347,7 +347,7 @@ export function resolveCallThrowsInfo(
   }
 
   // Fallback: try to get from checker's type info
-  const calleeType = ctx.checkResult.typeMap.get(callExpr.callee);
+  const calleeType = ctx.checkResult.types.typeMap.get(callExpr.callee);
   if (
     calleeType &&
     calleeType.kind === "function" &&

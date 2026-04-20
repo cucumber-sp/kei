@@ -420,8 +420,8 @@ describe("Checker: Generics (comprehensive)", () => {
       // biome-ignore lint/suspicious/noExplicitAny: dynamic require loses type info
       const errors = result.diagnostics.filter((d: any) => d.severity === "error");
       expect(errors.length).toBe(0);
-      expect(result.monomorphizedStructs.has("Box_i32")).toBe(true);
-      expect(result.monomorphizedStructs.has("Box_bool")).toBe(true);
+      expect(result.generics.monomorphizedStructs.has("Box_i32")).toBe(true);
+      expect(result.generics.monomorphizedStructs.has("Box_bool")).toBe(true);
     });
 
     test("monomorphizedFunctions populated for generic function", () => {
@@ -451,8 +451,8 @@ describe("Checker: Generics (comprehensive)", () => {
       // biome-ignore lint/suspicious/noExplicitAny: dynamic require loses type info
       const errors = result.diagnostics.filter((d: any) => d.severity === "error");
       expect(errors.length).toBe(0);
-      expect(result.monomorphizedFunctions.has("identity_i32")).toBe(true);
-      expect(result.monomorphizedFunctions.has("identity_bool")).toBe(true);
+      expect(result.generics.monomorphizedFunctions.has("identity_i32")).toBe(true);
+      expect(result.generics.monomorphizedFunctions.has("identity_bool")).toBe(true);
     });
 
     test("genericResolutions populated for generic calls", () => {
@@ -480,10 +480,10 @@ describe("Checker: Generics (comprehensive)", () => {
       // biome-ignore lint/suspicious/noExplicitAny: dynamic require loses type info
       const errors = result.diagnostics.filter((d: any) => d.severity === "error");
       expect(errors.length).toBe(0);
-      expect(result.genericResolutions.size).toBeGreaterThan(0);
+      expect(result.generics.resolutions.size).toBeGreaterThan(0);
 
       let foundIdentity = false;
-      for (const [, mangledName] of result.genericResolutions) {
+      for (const [, mangledName] of result.generics.resolutions) {
         if (mangledName === "identity_i32") foundIdentity = true;
       }
       expect(foundIdentity).toBe(true);

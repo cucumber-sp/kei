@@ -21,7 +21,7 @@ function typeOfLet(source: string, varName: string): Type {
   if (mainDecl?.kind !== "FunctionDecl") throw new Error("Expected FunctionDecl");
   for (const stmt of mainDecl.body.statements) {
     if (stmt.kind === "LetStmt" && stmt.name === varName) {
-      const type = result.typeMap.get(stmt.initializer);
+      const type = result.types.typeMap.get(stmt.initializer);
       if (type) return type;
     }
   }

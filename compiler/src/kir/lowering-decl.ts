@@ -65,14 +65,14 @@ export function lowerDeclaration(ctx: LoweringCtx, decl: Declaration): void {
         ctx.functions.push(lowerMethod(ctx, method, mangledName, decl.name));
       }
       // Generate auto __destroy if the checker flagged this struct
-      if (ctx.checkResult.autoDestroyStructs.has(decl.name)) {
-        const structType = ctx.checkResult.autoDestroyStructs.get(decl.name)!;
+      if (ctx.checkResult.lifecycle.autoDestroyStructs.has(decl.name)) {
+        const structType = ctx.checkResult.lifecycle.autoDestroyStructs.get(decl.name)!;
         const structPrefix = ctx.modulePrefix ? `${ctx.modulePrefix}_${decl.name}` : decl.name;
         ctx.functions.push(lowerAutoDestroy(ctx, decl.name, structType, structPrefix));
       }
       // Generate auto __oncopy if the checker flagged this struct
-      if (ctx.checkResult.autoOncopyStructs.has(decl.name)) {
-        const structType = ctx.checkResult.autoOncopyStructs.get(decl.name)!;
+      if (ctx.checkResult.lifecycle.autoOncopyStructs.has(decl.name)) {
+        const structType = ctx.checkResult.lifecycle.autoOncopyStructs.get(decl.name)!;
         const structPrefix = ctx.modulePrefix ? `${ctx.modulePrefix}_${decl.name}` : decl.name;
         ctx.functions.push(lowerAutoOncopy(ctx, decl.name, structType, structPrefix));
       }

@@ -151,7 +151,7 @@ export function lowerLetStmt(ctx: LoweringCtx, stmt: LetStmt): void {
 
     // Emit oncopy if this is a copy of a struct with __oncopy (not a move)
     if (stmt.initializer.kind !== "MoveExpr") {
-      const checkerType = ctx.checkResult.typeMap.get(stmt.initializer);
+      const checkerType = ctx.checkResult.types.typeMap.get(stmt.initializer);
       const lifecycle = getStructLifecycle(ctx, checkerType);
       if (lifecycle?.hasOncopy) {
         emit(ctx, { kind: "oncopy", value: valueId, structName: lifecycle.structName });
@@ -468,7 +468,7 @@ export function lowerSwitchStmt(ctx: LoweringCtx, stmt: SwitchStmt): void {
   const endLabel = freshBlockId(ctx, "switch.end");
 
   // Check if this is a switch on a data-variant (tagged union) enum
-  const subjectType = ctx.checkResult.typeMap.get(stmt.subject);
+  const subjectType = ctx.checkResult.types.typeMap.get(stmt.subject);
   const isTaggedUnionEnum =
     subjectType?.kind === "enum" && subjectType.variants.some((v) => v.fields.length > 0);
 
@@ -537,7 +537,7 @@ export function lowerSwitchStmt(ctx: LoweringCtx, stmt: SwitchStmt): void {
     startBlock(ctx, cb.label);
 
     // Emit destructuring bindings: load variant fields from the enum subject
-    const bindingInfo = ctx.checkResult.switchCaseBindings?.get(cb.astCase);
+    const bindingInfo = ctx.checkResult.types.switchCaseBindings.get(cb.astCase);
     if (bindingInfo && cb.astCase.bindings) {
       for (let i = 0; i < cb.astCase.bindings.length; i++) {
         const fieldPath = `data.${bindingInfo.variantName}.${bindingInfo.fieldNames[i]}`;

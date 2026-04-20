@@ -133,7 +133,7 @@ export function lowerExprAsPtr(ctx: LoweringCtx, expr: Expression): VarId {
   }
   // For complex expressions like (a + b).x, lower the expression and wrap in alloc if needed
   const valueId = lowerExpr(ctx, expr);
-  const exprType = ctx.checkResult.typeMap.get(expr);
+  const exprType = ctx.checkResult.types.typeMap.get(expr);
   if (exprType?.kind === "struct") {
     const kirType = lowerCheckerType(ctx, exprType);
     const alloc = emitStackAlloc(ctx, kirType);
@@ -194,7 +194,7 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
 
   // Check for generic call resolution (e.g. max<i32>(a, b) → max_i32)
   const genericName =
-    ctx.currentBodyGenericResolutions?.get(expr) ?? ctx.checkResult.genericResolutions.get(expr);
+    ctx.currentBodyGenericResolutions?.get(expr) ?? ctx.checkResult.generics.resolutions.get(expr);
   if (genericName) {
     funcName = ctx.modulePrefix ? `${ctx.modulePrefix}_${genericName}` : genericName;
   } else if (expr.callee.kind === "Identifier") {
@@ -205,7 +205,7 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
 
     // Mangle overloaded function calls using the resolved callee type
     if (ctx.overloadedNames.has(baseName)) {
-      const calleeType = ctx.checkResult.typeMap.get(expr.callee);
+      const calleeType = ctx.checkResult.types.typeMap.get(expr.callee);
       if (calleeType && calleeType.kind === "function") {
         funcName = mangleFunctionNameFromType(ctx, resolvedBase, calleeType as FunctionType);
       } else {
@@ -216,7 +216,7 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
     }
   } else if (expr.callee.kind === "MemberExpr") {
     // Check if this is a module-qualified call: module.function(args)
-    const objType = ctx.checkResult.typeMap.get(expr.callee.object);
+    const objType = ctx.checkResult.types.typeMap.get(expr.callee.object);
     if (objType?.kind === "module") {
       // Module-qualified call: math.add(args) → math_add(args)
       const modulePath = objType.name; // e.g., "math" or "net.http"
@@ -225,7 +225,7 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
       const baseMangledName = `${modulePrefix}_${callName}`;
 
       // Check if the function is overloaded
-      const calleeResolvedType = ctx.checkResult.typeMap.get(expr.callee);
+      const calleeResolvedType = ctx.checkResult.types.typeMap.get(expr.callee);
       if (calleeResolvedType && calleeResolvedType.kind === "function") {
         if (ctx.overloadedNames.has(callName)) {
           funcName = mangleFunctionNameFromType(
@@ -259,7 +259,7 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
       // to wrap the already-lowered value into a stack_alloc + store to get a pointer.
       const methodArgs = args.map((argId, i) => {
         const argExpr = expr.args[i];
-        const argType = argExpr ? ctx.checkResult.typeMap.get(argExpr) : undefined;
+        const argType = argExpr ? ctx.checkResult.types.typeMap.get(argExpr) : undefined;
         if (argType?.kind === "struct") {
           const kirType = lowerCheckerType(ctx, argType);
           const alloc = emitStackAlloc(ctx, kirType);
@@ -301,7 +301,7 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
 export function lowerMemberExpr(ctx: LoweringCtx, expr: MemberExpr): VarId {
   // Handle .len on arrays — emit compile-time constant
   if (expr.property === "len") {
-    const objectType = ctx.checkResult.typeMap.get(expr.object);
+    const objectType = ctx.checkResult.types.typeMap.get(expr.object);
     if (objectType?.kind === "array" && objectType.length != null) {
       const dest = freshVar(ctx);
       emit(ctx, {
@@ -321,7 +321,7 @@ export function lowerMemberExpr(ctx: LoweringCtx, expr: MemberExpr): VarId {
   }
 
   // Handle enum variant access — emit the variant's integer discriminant
-  const objectType = ctx.checkResult.typeMap.get(expr.object);
+  const objectType = ctx.checkResult.types.typeMap.get(expr.object);
   const enumVariant = lowerEnumVariantAccess(ctx, expr);
   if (enumVariant !== null) return enumVariant;
 
@@ -350,7 +350,7 @@ export function lowerMemberExpr(ctx: LoweringCtx, expr: MemberExpr): VarId {
 
 export function lowerIndexExpr(ctx: LoweringCtx, expr: IndexExpr): VarId {
   // Check for operator overloading (e.g., obj[i] → obj.op_index(i))
-  const opMethod = ctx.checkResult.operatorMethods.get(expr);
+  const opMethod = ctx.checkResult.types.operatorMethods.get(expr);
   if (opMethod) {
     return lowerOperatorMethodCall(ctx, expr.object, opMethod.methodName, opMethod.structType, [
       expr.index,
@@ -362,7 +362,7 @@ export function lowerIndexExpr(ctx: LoweringCtx, expr: IndexExpr): VarId {
   const resultType = getExprKirType(ctx, expr);
 
   // Emit bounds check for arrays with known length
-  const objectType = ctx.checkResult.typeMap.get(expr.object);
+  const objectType = ctx.checkResult.types.typeMap.get(expr.object);
   if (objectType?.kind === "array" && objectType.length != null) {
     const lenId = freshVar(ctx);
     emit(ctx, {
@@ -384,7 +384,7 @@ export function lowerIndexExpr(ctx: LoweringCtx, expr: IndexExpr): VarId {
 
 export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
   // Check for operator overloading: obj[i] = v → obj.op_index_set(i, v)
-  const opMethod = ctx.checkResult.operatorMethods.get(expr);
+  const opMethod = ctx.checkResult.types.operatorMethods.get(expr);
   if (opMethod && expr.target.kind === "IndexExpr") {
     return lowerOperatorMethodCall(
       ctx,
@@ -415,7 +415,7 @@ export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
       }
 
       // For simple assignment to managed type: destroy old, store new, oncopy new
-      const checkerType = ctx.checkResult.typeMap.get(expr.target);
+      const checkerType = ctx.checkResult.types.typeMap.get(expr.target);
       const lifecycle = getStructLifecycle(ctx, checkerType);
       if (lifecycle?.hasDestroy) {
         // Load old value and destroy it
@@ -448,7 +448,7 @@ export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
     });
 
     // Destroy old field value if it has lifecycle hooks
-    const checkerType = ctx.checkResult.typeMap.get(expr.target);
+    const checkerType = ctx.checkResult.types.typeMap.get(expr.target);
     const lifecycle = getStructLifecycle(ctx, checkerType);
     if (lifecycle?.hasDestroy) {
       const oldVal = freshVar(ctx);
@@ -472,7 +472,7 @@ export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
     emit(ctx, { kind: "index_ptr", dest: ptrDest, base: baseId, index: indexId, type: elemType });
 
     // Destroy old element value if it's a managed type
-    const checkerType = ctx.checkResult.typeMap.get(expr.target);
+    const checkerType = ctx.checkResult.types.typeMap.get(expr.target);
     const lifecycle = getStructLifecycle(ctx, checkerType);
     if (lifecycle?.hasDestroy) {
       const oldVal = freshVar(ctx);

@@ -96,7 +96,7 @@ export function trackScopeVar(
   expr: Expression
 ): void {
   if (ctx.scopeStack.length === 0) return;
-  const checkerType = ctx.checkResult.typeMap.get(expr);
+  const checkerType = ctx.checkResult.types.typeMap.get(expr);
   if (checkerType?.kind === "string") {
     ctx.scopeStack[ctx.scopeStack.length - 1].push({
       name,

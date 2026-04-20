@@ -15,7 +15,7 @@ export function getExprKirType(ctx: LoweringCtx, expr: Expression): KirType {
   if (bodyType) {
     return lowerCheckerType(ctx, bodyType);
   }
-  const checkerType = ctx.checkResult.typeMap.get(expr);
+  const checkerType = ctx.checkResult.types.typeMap.get(expr);
   if (checkerType) {
     return lowerCheckerType(ctx, checkerType);
   }
@@ -245,7 +245,7 @@ export function resolveSizeofArg(ctx: LoweringCtx, arg: Expression): number {
     return sizeofTypeName(ctx, arg.name);
   }
   // For non-identifier args, use the checker type
-  const checkerType = ctx.checkResult.typeMap.get(arg);
+  const checkerType = ctx.checkResult.types.typeMap.get(arg);
   if (checkerType) {
     return sizeofCheckerType(ctx, checkerType);
   }

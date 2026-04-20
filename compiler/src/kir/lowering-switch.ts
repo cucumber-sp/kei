@@ -27,7 +27,7 @@ export function lowerSwitchExpr(ctx: LoweringCtx, expr: SwitchExpr): VarId {
   const endLabel = freshBlockId(ctx, "switchexpr.end");
 
   // Check if this is a switch on a data-variant (tagged union) enum
-  const subjectType = ctx.checkResult.typeMap.get(expr.subject);
+  const subjectType = ctx.checkResult.types.typeMap.get(expr.subject);
   const isTaggedUnionEnum =
     subjectType?.kind === "enum" && subjectType.variants.some((v) => v.fields.length > 0);
 
@@ -94,7 +94,7 @@ export function lowerSwitchExpr(ctx: LoweringCtx, expr: SwitchExpr): VarId {
     startBlock(ctx, cb.label);
 
     // Emit destructuring bindings
-    const bindingInfo = ctx.checkResult.switchCaseBindings?.get(cb.astCase);
+    const bindingInfo = ctx.checkResult.types.switchCaseBindings.get(cb.astCase);
     if (bindingInfo && cb.astCase.bindings) {
       for (let i = 0; i < cb.astCase.bindings.length; i++) {
         const fieldPath = `data.${bindingInfo.variantName}.${bindingInfo.fieldNames[i]}`;

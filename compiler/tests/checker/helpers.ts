@@ -101,7 +101,7 @@ export function typeOf(exprSource: string): Type {
   // Find the first ExprStmt
   for (const stmt of mainDecl.body.statements) {
     if (stmt.kind === "ExprStmt") {
-      const type = result.typeMap.get(stmt.expression);
+      const type = result.types.typeMap.get(stmt.expression);
       if (type) return type;
     }
   }

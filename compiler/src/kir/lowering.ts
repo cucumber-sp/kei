@@ -80,7 +80,7 @@ export function runLowering(ctx: LoweringCtx): KirModule {
   }
 
   // Emit monomorphized struct definitions from generics
-  for (const [mangledName, monoStruct] of ctx.checkResult.monomorphizedStructs) {
+  for (const [mangledName, monoStruct] of ctx.checkResult.generics.monomorphizedStructs) {
     ctx.typeDecls.push(lowerMonomorphizedStruct(ctx, mangledName, monoStruct));
     // Lower methods for monomorphized structs
     if (monoStruct.originalDecl) {
@@ -93,7 +93,7 @@ export function runLowering(ctx: LoweringCtx): KirModule {
   }
 
   // Emit monomorphized function definitions from generics
-  for (const [_mangledName, monoFunc] of ctx.checkResult.monomorphizedFunctions) {
+  for (const [_mangledName, monoFunc] of ctx.checkResult.generics.monomorphizedFunctions) {
     if (monoFunc.declaration) {
       ctx.functions.push(lowerMonomorphizedFunction(ctx, monoFunc));
     }
