@@ -9,6 +9,19 @@ import type { KirInst, VarId } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
 import { emit } from "./lowering-utils";
 
+/**
+ * Build the mangled name used for a struct's __destroy/__oncopy C functions.
+ * Definitions live in the module that declared the struct (prefix stamped onto
+ * `StructType.modulePrefix` by the checker); call sites in any module must
+ * reproduce the same name, so the prefix travels with the type through imports.
+ *
+ * Main-module structs carry an empty prefix and use the bare struct name
+ * (matching how their own function definitions are emitted).
+ */
+export function mangledLifecycleStructName(t: { name: string; modulePrefix?: string }): string {
+  return t.modulePrefix ? `${t.modulePrefix}_${t.name}` : t.name;
+}
+
 /** Check if a checker Type is a struct that has __destroy or __oncopy methods */
 export function getStructLifecycle(
   ctx: LoweringCtx,
@@ -17,16 +30,19 @@ export function getStructLifecycle(
   if (!checkerType) return null;
   if (checkerType.kind !== "struct") return null;
 
-  const cached = ctx.structLifecycleCache.get(checkerType.name);
-  if (cached) return { ...cached, structName: checkerType.name };
+  // Key the cache by the mangled name so two structs with the same bare name
+  // from different modules don't collide.
+  const mangled = mangledLifecycleStructName(checkerType);
+  const cached = ctx.structLifecycleCache.get(mangled);
+  if (cached) return { ...cached, structName: mangled };
 
   const hasDestroy = checkerType.methods.has("__destroy");
   const hasOncopy = checkerType.methods.has("__oncopy");
 
-  ctx.structLifecycleCache.set(checkerType.name, { hasDestroy, hasOncopy });
+  ctx.structLifecycleCache.set(mangled, { hasDestroy, hasOncopy });
 
   if (!hasDestroy && !hasOncopy) return null;
-  return { hasDestroy, hasOncopy, structName: checkerType.name };
+  return { hasDestroy, hasOncopy, structName: mangled };
 }
 
 /** Push a new scope for lifecycle tracking */

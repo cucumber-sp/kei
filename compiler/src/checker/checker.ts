@@ -128,9 +128,19 @@ export class Checker {
   /** Per-instantiation generic resolutions, set during checkMonomorphizedBodies */
   private currentBodyGenericResolutions: Map<Expression, string> | null = null;
 
-  constructor(program: Program, source: SourceFile) {
+  /**
+   * Mangled prefix for top-level symbols defined in this module — derived from
+   * the dotted module name (`net.http` → `net_http`). Empty string for the main
+   * module and for single-file mode. Used by struct-checker to stamp origin
+   * onto `StructType.modulePrefix`, so destroy/oncopy call sites in other
+   * modules can reconstruct the correct mangled function name.
+   */
+  modulePrefix: string;
+
+  constructor(program: Program, source: SourceFile, moduleName = "") {
     this.program = program;
     this.source = source;
+    this.modulePrefix = moduleName.replace(/\./g, "_");
     this.typeResolver = new TypeResolver();
     this.exprChecker = new ExpressionChecker(this);
     this.stmtChecker = new StatementChecker(this);
@@ -381,8 +391,13 @@ export class Checker {
       autoOncopyStructs: new Map(),
     };
 
+    // The lowering pipeline treats the last module in topological order as
+    // "main" and emits its top-level symbols without a module prefix. We
+    // mirror that rule here so structs declared in main keep modulePrefix "".
+    const mainModule = modules[modules.length - 1];
     for (const mod of modules) {
-      const checker = new Checker(mod.program, mod.source);
+      const moduleName = mod === mainModule ? "" : mod.name;
+      const checker = new Checker(mod.program, mod.source, moduleName);
       checker.setModuleExports(moduleExports);
 
       const result = checker.check();

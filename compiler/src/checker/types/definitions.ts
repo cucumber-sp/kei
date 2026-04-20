@@ -73,6 +73,13 @@ export interface StructType {
   methods: Map<string, FunctionType>;
   isUnsafe: boolean;
   genericParams: string[];
+  /**
+   * Mangled module prefix of the module that *defined* this struct (e.g. "arena"
+   * for `std/arena.kei`; "net_http" for `src/net/http.kei`; "" for the main
+   * module). Travels with the type through imports so call sites — which live
+   * in other modules — can reconstruct the mangled __destroy/__oncopy names.
+   */
+  modulePrefix?: string;
   /** Original base name for generic instantiations (e.g. "Pair" for "Pair_A_B"). */
   genericBaseName?: string;
   /** Original type args for generic instantiations (needed for re-mangling after substitution). */

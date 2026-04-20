@@ -1,0 +1,54 @@
+// std/arena.kei — Bump-pointer arena allocator.
+//
+// Owns a single heap buffer; hands out sub-slices via `arena_alloc`.
+// POD-only: does NOT run per-allocation destructors on reset/destroy.
+// The whole buffer is freed in __destroy.
+
+import { alloc, dealloc } from mem;
+
+pub unsafe struct Arena {
+    buf: ptr<u8>;
+    pos: usize;
+    cap: usize;
+
+    fn __destroy(self: Arena) {
+        unsafe {
+            dealloc(self.buf as ptr<void>);
+        }
+    }
+
+    fn __oncopy(self: Arena) -> Arena {
+        // An Arena owns a unique heap buffer. Copying would double-free on
+        // scope exit, so __oncopy yields an empty shell — any accidental copy
+        // turns into an obvious null-arena instead of undefined behaviour.
+        // Callers should `move` an Arena to transfer ownership.
+        return Arena { buf: null, pos: 0, cap: 0 };
+    }
+}
+
+/// Create a new arena backed by `cap` bytes from the system allocator.
+pub fn arena_make(cap: usize) -> Arena {
+    unsafe {
+        return Arena { buf: alloc(cap), pos: 0, cap: cap };
+    }
+}
+
+/// Bump-allocate `size` bytes from the arena. Returns null if the arena is full.
+pub fn arena_alloc(a: ptr<Arena>, size: usize) -> ptr<u8> {
+    unsafe {
+        if a->pos + size > a->cap {
+            return null;
+        }
+        let result: ptr<u8> = ((a->buf as usize) + a->pos) as ptr<u8>;
+        a->pos = a->pos + size;
+        return result;
+    }
+}
+
+/// Drop every allocation without freeing the backing buffer. All previously
+/// returned pointers are invalidated.
+pub fn arena_reset(a: ptr<Arena>) {
+    unsafe {
+        a->pos = 0;
+    }
+}

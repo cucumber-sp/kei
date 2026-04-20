@@ -175,6 +175,7 @@ export class TypeResolver {
       methods: newMethods,
       isUnsafe: base.isUnsafe,
       genericParams: [],
+      modulePrefix: base.modulePrefix,
       genericBaseName: base.name,
       genericTypeArgs: resolvedTypeArgs,
     };

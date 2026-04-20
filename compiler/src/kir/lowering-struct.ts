@@ -18,7 +18,7 @@ import type {
 } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
 import { finalizeFunctionBody, resetFunctionState } from "./lowering-decl";
-import { pushScope } from "./lowering-scope";
+import { mangledLifecycleStructName, pushScope } from "./lowering-scope";
 import { lowerBlock } from "./lowering-stmt";
 import {
   getFunctionReturnType,
@@ -144,7 +144,11 @@ export function lowerAutoDestroy(
         field: fieldName,
         type: kirFieldType,
       });
-      insts.push({ kind: "destroy", value: fieldPtr, structName: fieldType.name });
+      insts.push({
+        kind: "destroy",
+        value: fieldPtr,
+        structName: mangledLifecycleStructName(fieldType),
+      });
     }
   }
 
@@ -221,7 +225,11 @@ export function lowerAutoOncopy(
       });
       const loaded = freshVar();
       insts.push({ kind: "load", dest: loaded, ptr: fieldPtr, type: kirFieldType });
-      insts.push({ kind: "oncopy", value: loaded, structName: fieldType.name });
+      insts.push({
+        kind: "oncopy",
+        value: loaded,
+        structName: mangledLifecycleStructName(fieldType),
+      });
       insts.push({ kind: "store", ptr: fieldPtr, value: loaded });
     }
   }

@@ -39,6 +39,7 @@ export class StructChecker {
       methods: new Map(),
       isUnsafe,
       genericParams: decl.genericParams,
+      modulePrefix: this.checker.modulePrefix,
     };
 
     // Register early so self-referencing types in methods/fields resolve

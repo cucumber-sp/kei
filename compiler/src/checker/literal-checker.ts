@@ -263,6 +263,7 @@ function instantiateGenericStruct(
     methods: new Map(),
     isUnsafe: baseStruct.isUnsafe,
     genericParams: [],
+    modulePrefix: baseStruct.modulePrefix,
   };
 
   substituteStructMethods(baseStruct, concreteStruct, typeMap);
@@ -350,6 +351,7 @@ function checkGenericStructLiteralInferred(
       methods: new Map(),
       isUnsafe: structType.isUnsafe,
       genericParams: [],
+      modulePrefix: structType.modulePrefix,
     };
 
     substituteStructMethods(structType, concreteStruct, subs);

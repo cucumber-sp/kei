@@ -2744,6 +2744,36 @@ describe("e2e: unsafe pointer lowering", () => {
     expect(r.stdout).toBe("");
   });
 
+  test("stdlib Arena: import from std, __destroy runs via correct mangled name", () => {
+    // Regression: the destroy/oncopy KIR insts carried only the bare struct
+    // name, so consumer modules emitted `Arena___destroy(...)` even though the
+    // definition was `arena_Arena___destroy(...)` — link error. Fix threads
+    // the origin module prefix through `StructType.modulePrefix` so call
+    // sites in any module reconstruct the correct mangled name.
+    const r = run(
+      "stdlib_arena_consumer",
+      `
+      import { arena_make, arena_alloc, arena_reset } from arena;
+
+      fn main() -> int {
+        let a = arena_make(64);
+        unsafe {
+          let p1: ptr<i32> = arena_alloc(&a, 4) as ptr<i32>;
+          let p2: ptr<i32> = arena_alloc(&a, 4) as ptr<i32>;
+          *p1 = 10;
+          *p2 = 32;
+          let sum: i32 = *p1 + *p2;
+          arena_reset(&a);
+          return sum;
+        }
+      }
+    `
+    );
+
+    expect(r.exitCode).toBe(42);
+    expect(r.stdout).toBe("");
+  });
+
   test("bump-arena pattern: alloc, store through raw ptr, read back, reset", () => {
     const r = run(
       "unsafe_arena_inline",
