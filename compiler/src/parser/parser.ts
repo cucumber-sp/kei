@@ -262,6 +262,19 @@ export class Parser implements ParserContext {
   // ─── Types ──────────────────────────────────────────────────────────
 
   parseType(): TypeNode {
+    let node = this.parseBaseType();
+    while (this.match(TokenKind.Question)) {
+      const qSpan = this.previous().span;
+      node = {
+        kind: "NullableType",
+        inner: node,
+        span: { start: node.span.start, end: qSpan.end },
+      };
+    }
+    return node;
+  }
+
+  private parseBaseType(): TypeNode {
     const token = this.current();
 
     // Handle generic type keywords: ptr<T>, array<T, N>, slice<T>, dynarray<T>

@@ -3,11 +3,17 @@
  * Extracted from lowering.ts for modularity.
  */
 
-import type { Expression, FunctionDecl } from "../ast/nodes";
+import type { Expression, FunctionDecl, TypeNode } from "../ast/nodes";
 import type { FunctionType, Type } from "../checker/types";
 import type { KirType } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
 import { lowerEnumDecl } from "./lowering-enum-decl";
+
+/** Extract the base name from a TypeNode — for NullableType returns "ptr". */
+function typeNodeName(node: TypeNode): string {
+  if (node.kind === "NullableType") return "ptr";
+  return node.name;
+}
 
 export function getExprKirType(ctx: LoweringCtx, expr: Expression): KirType {
   // Prefer per-instantiation type map (for monomorphized function bodies)
@@ -94,8 +100,46 @@ export function lowerCheckerType(ctx: LoweringCtx, t: Type): KirType {
   }
 }
 
-export function lowerTypeNode(ctx: LoweringCtx, typeNode: { kind: string; name: string }): KirType {
-  const name = typeNode.name;
+export function lowerTypeNode(ctx: LoweringCtx, typeNode: TypeNode): KirType {
+  // NullableType (T?) → ptr<T>
+  if (typeNode.kind === "NullableType") {
+    return { kind: "ptr", pointee: lowerTypeNode(ctx, typeNode.inner) };
+  }
+  // GenericType with known built-ins
+  if (typeNode.kind === "GenericType") {
+    const arg0 = typeNode.typeArgs[0];
+    if (typeNode.name === "ptr") {
+      return { kind: "ptr", pointee: arg0 ? lowerTypeNode(ctx, arg0) : { kind: "void" } };
+    }
+    if (typeNode.name === "slice") {
+      return {
+        kind: "struct",
+        name: "slice",
+        fields: [
+          {
+            name: "ptr",
+            type: { kind: "ptr", pointee: arg0 ? lowerTypeNode(ctx, arg0) : { kind: "void" } },
+          },
+          { name: "len", type: { kind: "int", bits: 64, signed: false } },
+        ],
+      };
+    }
+    if (typeNode.name === "array" || typeNode.name === "dynarray") {
+      const arg1 = typeNode.typeArgs[1];
+      const length = arg1?.kind === "NamedType" ? Number.parseInt(arg1.name, 10) || 0 : 0;
+      return {
+        kind: "array",
+        element: arg0 ? lowerTypeNode(ctx, arg0) : { kind: "int", bits: 32, signed: true },
+        length,
+      };
+    }
+  }
+  const name =
+    typeNode.kind === "NamedType"
+      ? typeNode.name
+      : typeNode.kind === "GenericType"
+        ? typeNode.name
+        : "ptr";
   switch (name) {
     case "int":
     case "i32":
@@ -155,7 +199,7 @@ export function resolveParamCheckerType(
 ): Type | undefined {
   const param = decl.params.find((p) => p.name === paramName);
   if (param) {
-    return nameToCheckerType(ctx, param.typeAnnotation.name) as Type;
+    return nameToCheckerType(ctx, typeNodeName(param.typeAnnotation)) as Type;
   }
   return undefined;
 }
@@ -164,7 +208,20 @@ export function getFunctionReturnType(ctx: LoweringCtx, decl: FunctionDecl): Typ
   // Try to get from the checker's type map
   // The function decl itself isn't in typeMap, but we can derive from return type annotation
   if (decl.returnType) {
-    const name = decl.returnType.name;
+    if (decl.returnType.kind === "NullableType") {
+      return {
+        kind: "ptr",
+        pointee: getFunctionReturnType(ctx, { ...decl, returnType: decl.returnType.inner }),
+      };
+    }
+    if (decl.returnType.kind === "GenericType" && decl.returnType.name === "ptr") {
+      const inner = decl.returnType.typeArgs[0];
+      const pointee = inner
+        ? getFunctionReturnType(ctx, { ...decl, returnType: inner })
+        : ({ kind: "void" } as const);
+      return { kind: "ptr", pointee };
+    }
+    const name = typeNodeName(decl.returnType);
     const checkerType = nameToCheckerType(ctx, name);
     // If nameToCheckerType didn't recognize it (returns void for user-defined type names),
     // check if it's an enum or struct declaration
@@ -279,7 +336,7 @@ export function sizeofTypeName(ctx: LoweringCtx, name: string): number {
         ) {
           let size = 0;
           for (const field of decl.fields) {
-            size += sizeofTypeName(ctx, field.typeAnnotation.name);
+            size += sizeofTypeName(ctx, typeNodeName(field.typeAnnotation));
           }
           return size;
         }
@@ -316,7 +373,7 @@ export function sizeofCheckerType(ctx: LoweringCtx, t: Type): number {
 
 /** Build a mangled function name from a FunctionDecl (for overloaded definitions). */
 export function mangleFunctionName(ctx: LoweringCtx, baseName: string, decl: FunctionDecl): string {
-  const paramSuffixes = decl.params.map((p) => typeNameSuffix(ctx, p.typeAnnotation.name));
+  const paramSuffixes = decl.params.map((p) => typeNameSuffix(ctx, typeNodeName(p.typeAnnotation)));
   return `${baseName}_${paramSuffixes.join("_")}`;
 }
 

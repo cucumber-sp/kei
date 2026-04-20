@@ -49,6 +49,8 @@ export class TypeResolver {
         return this.resolveNamedType(node.name, node.span, scope);
       case "GenericType":
         return this.resolveGenericType(node.name, node.typeArgs, node.span, scope);
+      case "NullableType":
+        return ptrType(this.resolve(node.inner, scope));
     }
   }
 

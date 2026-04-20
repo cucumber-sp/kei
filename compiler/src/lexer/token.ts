@@ -173,6 +173,7 @@ export enum TokenKind {
   Semicolon = ";",
   Colon = ":",
   Comma = ",",
+  Question = "?",
 }
 
 /**

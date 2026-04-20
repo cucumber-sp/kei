@@ -3,6 +3,7 @@ import type { BaseNode } from "./base";
 export enum TypeNodeKind {
   Named = "NamedType",
   Generic = "GenericType",
+  Nullable = "NullableType",
 }
 
 /** A simple named type reference, e.g. `i32`, `MyStruct`. */
@@ -18,5 +19,11 @@ export interface GenericType extends BaseNode {
   typeArgs: TypeNode[];
 }
 
+/** A nullable type suffix, e.g. `MyStruct?`. Lowers to `ptr<inner>`. */
+export interface NullableType extends BaseNode {
+  kind: "NullableType";
+  inner: TypeNode;
+}
+
 /** Any type annotation in surface syntax. */
-export type TypeNode = NamedType | GenericType;
+export type TypeNode = NamedType | GenericType | NullableType;

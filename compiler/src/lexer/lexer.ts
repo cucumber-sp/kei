@@ -372,6 +372,8 @@ export class Lexer {
         return this.makeToken(TokenKind.Colon, start, this.pos);
       case ",":
         return this.makeToken(TokenKind.Comma, start, this.pos);
+      case "?":
+        return this.makeToken(TokenKind.Question, start, this.pos);
       default:
         this.addDiagnostic(Severity.Error, `Unexpected character '${ch}'`, start);
         return this.makeToken(TokenKind.Error, start, this.pos);
