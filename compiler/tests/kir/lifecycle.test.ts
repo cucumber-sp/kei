@@ -21,11 +21,11 @@ describe("KIR: lifecycle — destroy", () => {
     const destroys = getInstructions(fn, "destroy") as KirDestroy[];
     expect(destroys.length).toBe(2);
     // Reverse order: b destroyed before a
-    expect(destroys[0].structName).toBe("Res");
-    expect(destroys[1].structName).toBe("Res");
+    expect(destroys[0]!.structName).toBe("Res");
+    expect(destroys[1]!.structName).toBe("Res");
     // The second destroy's value should be the earlier-declared variable's ptr
     // Both are Res, but b should come first (reverse order)
-    expect(destroys[0].value).not.toBe(destroys[1].value);
+    expect(destroys[0]!.value).not.toBe(destroys[1]!.value);
   });
 
   test("assignment emits destroy on old value", () => {
@@ -151,8 +151,8 @@ describe("KIR: lifecycle — move", () => {
     );
     const moves = getInstructions(fn, "move") as KirMove[];
     expect(moves.length).toBe(1);
-    expect(moves[0].source).toBeDefined();
-    expect(moves[0].dest).toBeDefined();
+    expect(moves[0]!.source).toBeDefined();
+    expect(moves[0]!.dest).toBeDefined();
   });
 
   test("move does not emit oncopy", () => {

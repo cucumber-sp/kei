@@ -1,5 +1,6 @@
 // ─── Type Utilities ─────────────────────────────────────────────────────────
 
+import type { Expression } from "../../ast/nodes";
 import type {
   ArrayType,
   EnumType,
@@ -49,7 +50,10 @@ export function typesEqual(a: Type, b: Type): boolean {
       if (a.params.length !== bf.params.length) return false;
       if (!typesEqual(a.returnType, bf.returnType)) return false;
       for (let i = 0; i < a.params.length; i++) {
-        if (!typesEqual(a.params[i]?.type, bf.params[i]?.type)) return false;
+        const leftParam = a.params[i];
+        const rightParam = bf.params[i];
+        if (!leftParam || !rightParam) return false;
+        if (!typesEqual(leftParam.type, rightParam.type)) return false;
       }
       return true;
     }
@@ -97,13 +101,9 @@ export function isAssignableTo(source: Type, target: Type): boolean {
  * Extract literal info from an expression, handling unary negation.
  * Returns { kind, value } if the expression is a literal (or -literal), else null.
  */
-export function extractLiteralInfo(expr: {
-  kind: string;
-  value?: number;
-  suffix?: string;
-  operator?: string;
-  operand?: { kind: string; value?: number; suffix?: string };
-}): { kind: "IntLiteral" | "FloatLiteral"; value: number } | null {
+export function extractLiteralInfo(
+  expr: Expression
+): { kind: "IntLiteral" | "FloatLiteral"; value: number } | null {
   if (expr.kind === "IntLiteral" || expr.kind === "FloatLiteral") {
     // Suffixed literals have an explicit type — don't allow implicit conversion
     if (expr.suffix) return null;
@@ -111,11 +111,12 @@ export function extractLiteralInfo(expr: {
   }
   // Handle unary minus: -(IntLiteral) or -(FloatLiteral)
   if (expr.kind === "UnaryExpr" && expr.operator === "-" && expr.operand) {
-    if (expr.operand.suffix) return null;
     if (expr.operand.kind === "IntLiteral") {
+      if (expr.operand.suffix) return null;
       return { kind: "IntLiteral", value: -(expr.operand.value as number) };
     }
     if (expr.operand.kind === "FloatLiteral") {
+      if (expr.operand.suffix) return null;
       return { kind: "FloatLiteral", value: -(expr.operand.value as number) };
     }
   }

@@ -438,7 +438,8 @@ function renameVariables(
   }
 
   if (cfg.blockOrder.length > 0) {
-    renameBlock(cfg.blockOrder[0]);
+    const entryBlock = cfg.blockOrder[0];
+    if (entryBlock) renameBlock(entryBlock);
   }
 
   // Update localCount so subsequent passes don't reuse SSA names
@@ -483,6 +484,7 @@ function eliminateDeadPhis(blocks: KirBlock[]): void {
           // Trivial phi: all incoming paths carry the same value.
           // Replace all uses of phi.dest with that value.
           const replacement = uniqueValues[0];
+          if (!replacement) continue;
           const from = phi.dest;
           const mapVar = (v: VarId) => (v === from ? replacement : v);
 

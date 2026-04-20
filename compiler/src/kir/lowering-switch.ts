@@ -62,6 +62,7 @@ export function lowerSwitchExpr(ctx: LoweringCtx, expr: SwitchExpr): VarId {
         const variantIndex = subjectType.variants.findIndex((v) => v.name === val.name);
         if (variantIndex >= 0) {
           const variant = subjectType.variants[variantIndex];
+          if (!variant) continue;
           const tagValue = variant.value ?? variantIndex;
           const tagId = freshVar(ctx);
           emit(ctx, {
@@ -97,10 +98,14 @@ export function lowerSwitchExpr(ctx: LoweringCtx, expr: SwitchExpr): VarId {
     const bindingInfo = ctx.checkResult.types.switchCaseBindings.get(cb.astCase);
     if (bindingInfo && cb.astCase.bindings) {
       for (let i = 0; i < cb.astCase.bindings.length; i++) {
-        const fieldPath = `data.${bindingInfo.variantName}.${bindingInfo.fieldNames[i]}`;
-        const fieldType = lowerCheckerType(ctx, bindingInfo.fieldTypes[i]);
+        const bindingName = cb.astCase.bindings[i];
+        const fieldName = bindingInfo.fieldNames[i];
+        const fieldTypeInfo = bindingInfo.fieldTypes[i];
+        if (!bindingName || !fieldName || !fieldTypeInfo) continue;
+        const fieldPath = `data.${bindingInfo.variantName}.${fieldName}`;
+        const fieldType = lowerCheckerType(ctx, fieldTypeInfo);
         const loadedVal = emitFieldLoad(ctx, subjectId, fieldPath, fieldType);
-        ctx.varMap.set(cb.astCase.bindings[i], loadedVal);
+        ctx.varMap.set(bindingName, loadedVal);
       }
     }
 

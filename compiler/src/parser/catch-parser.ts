@@ -55,7 +55,7 @@ export function parseCatchExpression(ctx: ParserContext, operand: Expression): C
         isDefault: true,
         span: {
           start: operand.span.start,
-          end: body.length > 0 ? body[body.length - 1]?.span.end : ctx.previous().span.end,
+          end: body.at(-1)?.span.end ?? ctx.previous().span.end,
         },
       });
     } else {
@@ -74,7 +74,7 @@ export function parseCatchExpression(ctx: ParserContext, operand: Expression): C
         isDefault: false,
         span: {
           start: operand.span.start,
-          end: body.length > 0 ? body[body.length - 1]?.span.end : ctx.previous().span.end,
+          end: body.at(-1)?.span.end ?? ctx.previous().span.end,
         },
       });
     }

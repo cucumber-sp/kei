@@ -523,6 +523,10 @@ export class Checker {
     }
   }
 
+  getExprType(expr: Expression): Type | undefined {
+    return this.typeMap.get(expr);
+  }
+
   setGenericResolution(expr: Expression, mangledName: string): void {
     this.genericResolutions.set(expr, mangledName);
     if (this.currentBodyGenericResolutions) {

@@ -20,6 +20,7 @@ import type {
   IndexExpr,
   MemberExpr,
   MoveExpr,
+  TypeNode,
 } from "../ast/nodes";
 import type { FunctionType } from "../checker/types";
 import type { KirType, VarId } from "./kir-types";
@@ -176,7 +177,8 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
     const arg = expr.args[0];
     let kirType: KirType;
     if (arg && arg.kind === "Identifier") {
-      kirType = lowerTypeNode(ctx, { kind: "NamedType", name: arg.name, span: arg.span });
+      const namedType: TypeNode = { kind: "NamedType", name: arg.name, span: arg.span };
+      kirType = lowerTypeNode(ctx, namedType);
     } else {
       kirType = { kind: "int", bits: 32, signed: true };
     }

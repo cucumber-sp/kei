@@ -15,11 +15,11 @@ describe("KIR: nested expressions", () => {
     const binOps = getInstructions(fn, "bin_op") as KirBinOp[];
     // a+b, c-d, multiply, a+1, divide = 5 ops
     expect(binOps).toHaveLength(5);
-    expect(binOps[0].op).toBe("add"); // a + b
-    expect(binOps[1].op).toBe("sub"); // c - d
-    expect(binOps[2].op).toBe("mul"); // *
-    expect(binOps[3].op).toBe("add"); // a + 1
-    expect(binOps[4].op).toBe("div"); // /
+    expect(binOps[0]!.op).toBe("add"); // a + b
+    expect(binOps[1]!.op).toBe("sub"); // c - d
+    expect(binOps[2]!.op).toBe("mul"); // *
+    expect(binOps[3]!.op).toBe("add"); // a + 1
+    expect(binOps[4]!.op).toBe("div"); // /
   });
 
   test("expression with function call and arithmetic", () => {

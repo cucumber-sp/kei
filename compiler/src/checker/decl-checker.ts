@@ -215,7 +215,11 @@ export class DeclarationChecker {
 
       // Use the last part of the dotted path as the local name
       const parts = decl.path.split(".");
-      const localName = parts[parts.length - 1];
+      const localName = parts.at(-1);
+      if (!localName) {
+        this.checker.error(`invalid import path '${decl.path}'`, decl.span);
+        return;
+      }
 
       const modType: ModuleType = {
         kind: TypeKind.Module,

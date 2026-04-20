@@ -162,8 +162,7 @@ export function emitTerminator(term: KirTerminator): string {
       return `if (${varName(term.cond)}) goto ${sanitizeName(term.thenBlock)}; else goto ${sanitizeName(term.elseBlock)};`;
     case "switch": {
       const lines: string[] = [];
-      for (let i = 0; i < term.cases.length; i++) {
-        const c = term.cases[i];
+      for (const [i, c] of term.cases.entries()) {
         const prefix = i === 0 ? "if" : "else if";
         lines.push(
           `${prefix} (${varName(term.value)} == ${varName(c.value)}) goto ${sanitizeName(c.target)};`

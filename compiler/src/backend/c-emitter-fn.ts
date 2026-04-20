@@ -19,8 +19,7 @@ export function emitFunction(fn: KirFunction): string {
   }
   if (varDecls.size > 0) out.push("");
 
-  for (let i = 0; i < fn.blocks.length; i++) {
-    const block = fn.blocks[i];
+  for (const [i, block] of fn.blocks.entries()) {
     if (i > 0) {
       out.push(`${sanitizeName(block.id)}:`);
     } else {

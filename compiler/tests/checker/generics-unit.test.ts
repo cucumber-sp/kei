@@ -122,7 +122,7 @@ describe("substituteType", () => {
       const m = result.methods.get("get");
       expect(m).toBeDefined();
       expect(m!.returnType).toEqual(F64_TYPE);
-      expect(m!.params[0].type).toEqual(F64_TYPE);
+      expect(m!.params[0]!.type).toEqual(F64_TYPE);
     }
   });
 
@@ -134,7 +134,7 @@ describe("substituteType", () => {
     const result = substituteType(fn, new Map([["T", BOOL_TYPE]]));
     expect(result.kind).toBe(TypeKind.Function);
     if (result.kind === TypeKind.Function) {
-      expect(result.params[0].type).toEqual(BOOL_TYPE);
+      expect(result.params[0]!.type).toEqual(BOOL_TYPE);
       expect(result.returnType).toEqual(BOOL_TYPE);
     }
   });
@@ -181,7 +181,7 @@ describe("substituteFunctionType", () => {
       VOID_TYPE
     );
     const result = substituteFunctionType(fn, new Map([["T", I32_TYPE]]));
-    expect(result.params[0].type).toEqual(I32_TYPE);
+    expect(result.params[0]!.type).toEqual(I32_TYPE);
   });
 
   test("substitutes return type", () => {
@@ -195,7 +195,7 @@ describe("substituteFunctionType", () => {
     const fn = functionType([], VOID_TYPE, [errStruct]);
     const result = substituteFunctionType(fn, new Map([["T", STRING_TYPE]]));
     expect(result.throwsTypes).toHaveLength(1);
-    if (result.throwsTypes[0].kind === TypeKind.Struct) {
+    if (result.throwsTypes[0]!.kind === TypeKind.Struct) {
       expect(result.throwsTypes[0].fields.get("msg")).toEqual(STRING_TYPE);
     }
   });

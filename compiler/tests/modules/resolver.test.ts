@@ -16,7 +16,7 @@ describe("ModuleResolver", () => {
 
       expect(result.errors).toHaveLength(0);
       expect(result.modules).toHaveLength(1);
-      expect(result.modules[0].name).toBe("math");
+      expect(result.modules[0]!.name).toBe("math");
     });
   });
 

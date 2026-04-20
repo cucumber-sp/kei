@@ -63,7 +63,8 @@ export function buildCFG(blocks: KirBlock[]): CFG {
   }
 
   if (blocks.length > 0) {
-    dfs(blocks[0].id);
+    const entryBlock = blocks[0];
+    if (entryBlock) dfs(entryBlock.id);
   }
   rpo.reverse();
 

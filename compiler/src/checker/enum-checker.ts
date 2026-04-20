@@ -5,7 +5,7 @@
 import type { EnumDecl } from "../ast/nodes";
 import type { Checker } from "./checker";
 import { typeSymbol } from "./symbols";
-import type { EnumVariantInfo } from "./types";
+import type { EnumType, EnumVariantInfo } from "./types";
 import { isAssignableTo, isErrorType, isIntegerType, TypeKind, typeToString } from "./types";
 
 export class EnumChecker {
@@ -38,8 +38,8 @@ export class EnumChecker {
       value: v.value && v.value.kind === "IntLiteral" ? v.value.value : null,
     }));
 
-    const enumType = {
-      kind: TypeKind.Enum as const,
+    const enumType: EnumType = {
+      kind: TypeKind.Enum,
       name: decl.name,
       baseType,
       variants,

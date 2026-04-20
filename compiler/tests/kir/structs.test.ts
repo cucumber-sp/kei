@@ -12,12 +12,13 @@ describe("KIR: struct type declarations", () => {
       fn foo() {}
     `);
     expect(mod.types).toHaveLength(1);
-    expect(mod.types[0].name).toBe("Point");
-    expect(mod.types[0].type.kind).toBe("struct");
-    if (mod.types[0].type.kind === "struct") {
-      expect(mod.types[0].type.fields).toHaveLength(2);
-      expect(mod.types[0].type.fields[0].name).toBe("x");
-      expect(mod.types[0].type.fields[1].name).toBe("y");
+    expect(mod.types[0]!.name).toBe("Point");
+    expect(mod.types[0]!.type.kind).toBe("struct");
+    if (mod.types[0]!.type.kind === "struct") {
+      const pointType = mod.types[0]!.type;
+      expect(mod.types[0]!.type.fields).toHaveLength(2);
+      expect(pointType.fields[0]!.name).toBe("x");
+      expect(pointType.fields[1]!.name).toBe("y");
     }
   });
 });

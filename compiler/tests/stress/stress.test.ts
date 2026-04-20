@@ -252,7 +252,7 @@ describe("stress: large struct declarations", () => {
     };
     const inits = Array.from(
       { length: 60 },
-      (_, i) => `field${i}: ${defaults[types[i % types.length]]}`
+      (_, i) => `field${i}: ${defaults[types[i % types.length]!]}`
     ).join(", ");
     const source = `struct Mixed {\n${fields}\n}\nfn main() -> i32 {\n  let m = Mixed{ ${inits} };\n  return 0;\n}`;
     const c = compileFull(source);
@@ -356,7 +356,7 @@ describe("stress: many generic instantiations", () => {
 
     const instantiations: string[] = [];
     for (let i = 0; i < 20; i++) {
-      const t = allTypes[i % allTypes.length];
+      const t = allTypes[i % allTypes.length]!;
       const defaultVal = floatTypes.includes(t) ? "0.0" : "0";
       instantiations.push(`  let b${i} = Box<${t}>{ value: ${defaultVal} };`);
     }
@@ -393,7 +393,7 @@ describe("stress: many generic instantiations", () => {
     const types = ["i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"];
     const calls: string[] = [];
     for (let i = 0; i < 15; i++) {
-      const t = types[i % types.length];
+      const t = types[i % types.length]!;
       const val = t.startsWith("f") ? "0.0" : "0";
       calls.push(`  let r${i} = identity<${t}>(${val});`);
     }

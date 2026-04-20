@@ -263,9 +263,12 @@ export function lowerMonomorphizedFunction(
 
   const params: KirParam[] = [];
   for (let i = 0; i < decl.params.length; i++) {
-    // biome-ignore lint/style/noNonNullAssertion: index i is bounded by decl.params.length
-    const p = decl.params[i]!;
-    const type = lowerCheckerType(ctx, concreteType.params[i]?.type);
+    const p = decl.params[i];
+    const concreteParam = concreteType.params[i];
+    if (!p || !concreteParam) {
+      throw new Error("invariant: monomorphized function params must match declaration params");
+    }
+    const type = lowerCheckerType(ctx, concreteParam.type);
     const varId: VarId = `%${p.name}`;
     ctx.varMap.set(p.name, varId);
     params.push({ name: p.name, type });

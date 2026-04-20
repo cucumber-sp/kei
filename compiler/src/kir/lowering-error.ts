@@ -232,6 +232,9 @@ export function lowerCatchExpr(ctx: LoweringCtx, expr: CatchExpr): VarId {
     // If clause has a variable name, bind it to the error value in the err buffer
     if (clause.varName) {
       const errType = throwsTypes[errorTag - 1];
+      if (!errType) {
+        throw new Error("invariant: catch clause tag must map to a thrown error type");
+      }
       // Cast errPtr to typed pointer — this becomes the variable's storage
       const typedErrPtr = emitCastToPtr(ctx, errPtr, errType);
       ctx.varMap.set(clause.varName, typedErrPtr);
@@ -380,6 +383,7 @@ export function lowerCatchThrowPropagation(
   let needsRemap = false;
   for (let i = 0; i < calleeThrowsTypes.length; i++) {
     const calleeType = calleeThrowsTypes[i];
+    if (!calleeType) continue;
     const callerIdx = callerThrowsTypes.findIndex(
       (ct) => ct.kind === "struct" && calleeType.kind === "struct" && ct.name === calleeType.name
     );
@@ -413,13 +417,18 @@ export function lowerCatchThrowPropagation(
 
     for (let i = 0; i < calleeThrowsTypes.length; i++) {
       const calleeType = calleeThrowsTypes[i];
+      if (!calleeType) continue;
       const callerIdx = callerThrowsTypes.findIndex(
         (ct) => ct.kind === "struct" && calleeType.kind === "struct" && ct.name === calleeType.name
       );
       if (callerIdx < 0) continue;
 
       sealCurrentBlock(ctx);
-      startBlock(ctx, cases[i].target);
+      const caseInfo = cases[i];
+      if (!caseInfo) {
+        throw new Error("invariant: catch propagation cases must align with throws types");
+      }
+      startBlock(ctx, caseInfo.target);
       emitAllScopeDestroys(ctx);
       const callerTag = emitConstInt(ctx, callerIdx + 1);
       setTerminator(ctx, { kind: "ret", value: callerTag });

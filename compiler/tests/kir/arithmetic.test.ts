@@ -79,8 +79,8 @@ describe("KIR: arithmetic expressions", () => {
     );
     const binOps = getInstructions(fn, "bin_op") as KirBinOp[];
     expect(binOps).toHaveLength(2);
-    expect(binOps[0].op).toBe("add");
-    expect(binOps[1].op).toBe("mul");
+    expect(binOps[0]!.op).toBe("add");
+    expect(binOps[1]!.op).toBe("mul");
   });
 });
 

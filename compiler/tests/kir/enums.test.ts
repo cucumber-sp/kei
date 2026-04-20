@@ -135,7 +135,7 @@ describe("KIR — Switch on data variant enum tags", () => {
     expect(switches.length).toBe(1);
 
     // The switch should have 2 cases (Circle=0, Point=1)
-    const sw = switches[0];
+    const sw = switches[0]!;
     if (sw.kind === "switch") {
       expect(sw.cases.length).toBe(2);
     }
@@ -160,7 +160,7 @@ describe("KIR — Switch on data variant enum tags", () => {
 
     const switches = getTerminators(fn, "switch");
     expect(switches.length).toBe(1);
-    const sw = switches[0];
+    const sw = switches[0]!;
     if (sw.kind === "switch") {
       expect(sw.cases.length).toBe(3);
     }
@@ -184,7 +184,7 @@ describe("KIR — Switch on data variant enum tags", () => {
 
     const switches = getTerminators(fn, "switch");
     expect(switches.length).toBe(1);
-    const sw = switches[0];
+    const sw = switches[0]!;
     if (sw.kind === "switch") {
       expect(sw.cases.length).toBe(1); // Only Circle, default is separate
     }

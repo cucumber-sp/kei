@@ -252,7 +252,7 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
     // Operator overloading: a[i] = v → op_index_set(self, index, value)
     if (expr.target.kind === "IndexExpr") {
       const indexExpr = expr.target;
-      const objectType = checker.typeMap.get(indexExpr.object);
+      const objectType = checker.getExprType(indexExpr.object);
       if (objectType && objectType.kind === TypeKind.Struct) {
         const method = objectType.methods.get("op_index_set");
         if (method) {
@@ -264,7 +264,7 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
             );
             return ERROR_TYPE;
           }
-          const indexType = checker.typeMap.get(indexExpr.index);
+          const indexType = checker.getExprType(indexExpr.index);
           // biome-ignore lint/style/noNonNullAssertion: params.length === 3 is checked above, so index 1 is guaranteed
           const indexParam = method.params[1]!;
           if (indexType && !isAssignableTo(indexType, indexParam.type)) {

@@ -27,7 +27,7 @@ import {
 } from "./types";
 
 /** Map from primitive type name to its internal Type representation */
-const PRIMITIVE_TYPE_MAP: ReadonlyMap<string, Type> = new Map([
+const PRIMITIVE_TYPE_MAP: ReadonlyMap<string, Type> = new Map<string, Type>([
   // Sized integer types
   ["i8", I8_TYPE],
   ["i16", I16_TYPE],

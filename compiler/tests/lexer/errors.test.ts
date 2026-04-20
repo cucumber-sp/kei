@@ -18,20 +18,20 @@ describe("Error handling", () => {
 
       const diagnostics = lexer.getDiagnostics();
       expect(diagnostics).toHaveLength(1);
-      expect(diagnostics[0].severity).toBe(Severity.Error);
-      expect(diagnostics[0].message).toContain(`Unexpected character '${char}'`);
-      expect(diagnostics[0].location.line).toBe(1);
-      expect(diagnostics[0].location.column).toBe(9); // Position of invalid char
+      expect(diagnostics[0]!.severity).toBe(Severity.Error);
+      expect(diagnostics[0]!.message).toContain(`Unexpected character '${char}'`);
+      expect(diagnostics[0]!.location.line).toBe(1);
+      expect(diagnostics[0]!.location.column).toBe(9); // Position of invalid char
 
       // Lexer should continue and produce other valid tokens
-      expect(tokens[0].kind).toBe(TokenKind.Let);
-      expect(tokens[1].kind).toBe(TokenKind.Identifier);
-      expect(tokens[2].kind).toBe(TokenKind.Equal);
-      expect(tokens[3].kind).toBe(TokenKind.Error); // The invalid character
-      expect(tokens[4].kind).toBe(TokenKind.Plus);
-      expect(tokens[5].kind).toBe(TokenKind.IntLiteral);
-      expect(tokens[6].kind).toBe(TokenKind.Semicolon);
-      expect(tokens[7].kind).toBe(TokenKind.Eof);
+      expect(tokens[0]!.kind).toBe(TokenKind.Let);
+      expect(tokens[1]!.kind).toBe(TokenKind.Identifier);
+      expect(tokens[2]!.kind).toBe(TokenKind.Equal);
+      expect(tokens[3]!.kind).toBe(TokenKind.Error); // The invalid character
+      expect(tokens[4]!.kind).toBe(TokenKind.Plus);
+      expect(tokens[5]!.kind).toBe(TokenKind.IntLiteral);
+      expect(tokens[6]!.kind).toBe(TokenKind.Semicolon);
+      expect(tokens[7]!.kind).toBe(TokenKind.Eof);
     }
   });
 
@@ -44,21 +44,21 @@ describe("Error handling", () => {
     expect(diagnostics).toHaveLength(4); // Four invalid characters
 
     for (let i = 0; i < 4; i++) {
-      expect(diagnostics[i].severity).toBe(Severity.Error);
-      expect(diagnostics[i].message).toContain("Unexpected character");
+      expect(diagnostics[i]!.severity).toBe(Severity.Error);
+      expect(diagnostics[i]!.message).toContain("Unexpected character");
     }
 
     // Should still tokenize valid parts
-    expect(tokens[0].kind).toBe(TokenKind.Let);
-    expect(tokens[1].kind).toBe(TokenKind.Error); // @
-    expect(tokens[2].kind).toBe(TokenKind.Identifier); // x
-    expect(tokens[3].kind).toBe(TokenKind.Error); // #
-    expect(tokens[4].kind).toBe(TokenKind.Equal); // =
-    expect(tokens[5].kind).toBe(TokenKind.Error); // $
-    expect(tokens[6].kind).toBe(TokenKind.IntLiteral); // 42
-    expect(tokens[7].kind).toBe(TokenKind.Error); // `
-    expect(tokens[8].kind).toBe(TokenKind.Semicolon); // ;
-    expect(tokens[9].kind).toBe(TokenKind.Eof);
+    expect(tokens[0]!.kind).toBe(TokenKind.Let);
+    expect(tokens[1]!.kind).toBe(TokenKind.Error); // @
+    expect(tokens[2]!.kind).toBe(TokenKind.Identifier); // x
+    expect(tokens[3]!.kind).toBe(TokenKind.Error); // #
+    expect(tokens[4]!.kind).toBe(TokenKind.Equal); // =
+    expect(tokens[5]!.kind).toBe(TokenKind.Error); // $
+    expect(tokens[6]!.kind).toBe(TokenKind.IntLiteral); // 42
+    expect(tokens[7]!.kind).toBe(TokenKind.Error); // `
+    expect(tokens[8]!.kind).toBe(TokenKind.Semicolon); // ;
+    expect(tokens[9]!.kind).toBe(TokenKind.Eof);
   });
 
   test("should provide correct location information for errors", () => {
@@ -73,11 +73,11 @@ line 3`
 
     const diagnostics = lexer.getDiagnostics();
     expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0].severity).toBe(Severity.Error);
-    expect(diagnostics[0].message).toContain("Unexpected character '@'");
-    expect(diagnostics[0].location.line).toBe(2);
-    expect(diagnostics[0].location.column).toBe(9);
-    expect(diagnostics[0].location.file).toBe("test.kei");
+    expect(diagnostics[0]!.severity).toBe(Severity.Error);
+    expect(diagnostics[0]!.message).toContain("Unexpected character '@'");
+    expect(diagnostics[0]!.location.line).toBe(2);
+    expect(diagnostics[0]!.location.column).toBe(9);
+    expect(diagnostics[0]!.location.file).toBe("test.kei");
   });
 
   test("should handle invalid identifiers starting with digits", () => {
@@ -88,19 +88,19 @@ line 3`
 
     expect(tokens).toHaveLength(5); // 42, abc, 123, def, EOF
 
-    expect(tokens[0].kind).toBe(TokenKind.IntLiteral);
-    expect(tokens[0].value).toBe(42);
+    expect(tokens[0]!.kind).toBe(TokenKind.IntLiteral);
+    expect(tokens[0]!.value).toBe(42);
 
-    expect(tokens[1].kind).toBe(TokenKind.Identifier);
-    expect(tokens[1].lexeme).toBe("abc");
+    expect(tokens[1]!.kind).toBe(TokenKind.Identifier);
+    expect(tokens[1]!.lexeme).toBe("abc");
 
-    expect(tokens[2].kind).toBe(TokenKind.IntLiteral);
-    expect(tokens[2].value).toBe(123);
+    expect(tokens[2]!.kind).toBe(TokenKind.IntLiteral);
+    expect(tokens[2]!.value).toBe(123);
 
-    expect(tokens[3].kind).toBe(TokenKind.Identifier);
-    expect(tokens[3].lexeme).toBe("def");
+    expect(tokens[3]!.kind).toBe(TokenKind.Identifier);
+    expect(tokens[3]!.lexeme).toBe("def");
 
-    expect(tokens[4].kind).toBe(TokenKind.Eof);
+    expect(tokens[4]!.kind).toBe(TokenKind.Eof);
 
     // This should not produce errors - it's valid lexing
     expect(lexer.getDiagnostics()).toHaveLength(0);
@@ -121,19 +121,19 @@ line 3`
     ];
 
     for (let i = 0; i < 3; i++) {
-      expect(diagnostics[i].severity).toBe(Severity.Error);
-      expect(diagnostics[i].message).toBe(expectedMessages[i]);
+      expect(diagnostics[i]!.severity).toBe(Severity.Error);
+      expect(diagnostics[i]!.message).toBe(expectedMessages[i]!);
     }
 
     // Tokens should still be created with correct kinds
-    expect(tokens[0].kind).toBe(TokenKind.Let);
-    expect(tokens[1].kind).toBe(TokenKind.Async);
-    expect(tokens[2].kind).toBe(TokenKind.Equal);
-    expect(tokens[3].kind).toBe(TokenKind.Await);
-    expect(tokens[4].kind).toBe(TokenKind.Plus);
-    expect(tokens[5].kind).toBe(TokenKind.Match);
-    expect(tokens[6].kind).toBe(TokenKind.Semicolon);
-    expect(tokens[7].kind).toBe(TokenKind.Eof);
+    expect(tokens[0]!.kind).toBe(TokenKind.Let);
+    expect(tokens[1]!.kind).toBe(TokenKind.Async);
+    expect(tokens[2]!.kind).toBe(TokenKind.Equal);
+    expect(tokens[3]!.kind).toBe(TokenKind.Await);
+    expect(tokens[4]!.kind).toBe(TokenKind.Plus);
+    expect(tokens[5]!.kind).toBe(TokenKind.Match);
+    expect(tokens[6]!.kind).toBe(TokenKind.Semicolon);
+    expect(tokens[7]!.kind).toBe(TokenKind.Eof);
   });
 
   test("should handle malformed number literals", () => {
@@ -165,16 +165,16 @@ line 3`
 
     const diagnostics = lexer.getDiagnostics();
     expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0].severity).toBe(Severity.Error);
-    expect(diagnostics[0].message).toContain("Unterminated multi-line comment");
+    expect(diagnostics[0]!.severity).toBe(Severity.Error);
+    expect(diagnostics[0]!.message).toContain("Unterminated multi-line comment");
 
     // Should still tokenize the part before the comment
-    expect(tokens[0].kind).toBe(TokenKind.Let);
-    expect(tokens[1].kind).toBe(TokenKind.Identifier);
-    expect(tokens[2].kind).toBe(TokenKind.Equal);
-    expect(tokens[3].kind).toBe(TokenKind.IntLiteral);
-    expect(tokens[4].kind).toBe(TokenKind.Semicolon);
-    expect(tokens[5].kind).toBe(TokenKind.Eof);
+    expect(tokens[0]!.kind).toBe(TokenKind.Let);
+    expect(tokens[1]!.kind).toBe(TokenKind.Identifier);
+    expect(tokens[2]!.kind).toBe(TokenKind.Equal);
+    expect(tokens[3]!.kind).toBe(TokenKind.IntLiteral);
+    expect(tokens[4]!.kind).toBe(TokenKind.Semicolon);
+    expect(tokens[5]!.kind).toBe(TokenKind.Eof);
   });
 
   test("should handle unterminated string literals", () => {
@@ -184,15 +184,15 @@ line 3`
 
     const diagnostics = lexer.getDiagnostics();
     expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0].severity).toBe(Severity.Error);
-    expect(diagnostics[0].message).toContain("Unterminated string literal");
+    expect(diagnostics[0]!.severity).toBe(Severity.Error);
+    expect(diagnostics[0]!.message).toContain("Unterminated string literal");
 
     // Should recover and continue lexing
-    expect(tokens[0].kind).toBe(TokenKind.Let);
-    expect(tokens[1].kind).toBe(TokenKind.Identifier);
-    expect(tokens[2].kind).toBe(TokenKind.Equal);
-    expect(tokens[3].kind).toBe(TokenKind.Error); // The unterminated string
-    expect(tokens[4].kind).toBe(TokenKind.Let); // Recovery continues here
+    expect(tokens[0]!.kind).toBe(TokenKind.Let);
+    expect(tokens[1]!.kind).toBe(TokenKind.Identifier);
+    expect(tokens[2]!.kind).toBe(TokenKind.Equal);
+    expect(tokens[3]!.kind).toBe(TokenKind.Error); // The unterminated string
+    expect(tokens[4]!.kind).toBe(TokenKind.Let); // Recovery continues here
   });
 
   test("should handle multiple error types in one source", () => {
@@ -232,8 +232,8 @@ line 3`
 
     // Each @ should have its own error with correct span
     for (let i = 0; i < 3; i++) {
-      expect(diagnostics[i].location.column).toBe(9 + i); // @ positions
-      expect(diagnostics[i].location.offset).toBe(8 + i); // 0-based offset
+      expect(diagnostics[i]!.location.column).toBe(9 + i); // @ positions
+      expect(diagnostics[i]!.location.offset).toBe(8 + i); // 0-based offset
     }
   });
 
@@ -244,12 +244,12 @@ line 3`
 
     const diagnostics = lexer.getDiagnostics();
     expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0].location.line).toBe(1);
-    expect(diagnostics[0].location.column).toBe(1);
-    expect(diagnostics[0].location.offset).toBe(0);
+    expect(diagnostics[0]!.location.line).toBe(1);
+    expect(diagnostics[0]!.location.column).toBe(1);
+    expect(diagnostics[0]!.location.offset).toBe(0);
 
-    expect(tokens[0].kind).toBe(TokenKind.Error);
-    expect(tokens[1].kind).toBe(TokenKind.Let);
+    expect(tokens[0]!.kind).toBe(TokenKind.Error);
+    expect(tokens[1]!.kind).toBe(TokenKind.Let);
   });
 
   test("should handle errors at end of file", () => {
@@ -259,11 +259,11 @@ line 3`
 
     const diagnostics = lexer.getDiagnostics();
     expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0].location.column).toBe(11); // Position of @
+    expect(diagnostics[0]!.location.column).toBe(11); // Position of @
 
     // let, x, =, 1, @, EOF
-    expect(tokens[4].kind).toBe(TokenKind.Error);
-    expect(tokens[5].kind).toBe(TokenKind.Eof);
+    expect(tokens[4]!.kind).toBe(TokenKind.Error);
+    expect(tokens[5]!.kind).toBe(TokenKind.Eof);
   });
 
   test("should handle empty file", () => {
@@ -272,7 +272,7 @@ line 3`
     const tokens = lexer.tokenize();
 
     expect(tokens).toHaveLength(1);
-    expect(tokens[0].kind).toBe(TokenKind.Eof);
+    expect(tokens[0]!.kind).toBe(TokenKind.Eof);
     expect(lexer.getDiagnostics()).toHaveLength(0);
   });
 
@@ -282,7 +282,7 @@ line 3`
     const tokens = lexer.tokenize();
 
     expect(tokens).toHaveLength(1);
-    expect(tokens[0].kind).toBe(TokenKind.Eof);
+    expect(tokens[0]!.kind).toBe(TokenKind.Eof);
     expect(lexer.getDiagnostics()).toHaveLength(0);
   });
 
@@ -300,7 +300,7 @@ line 3`
     const tokens = lexer.tokenize();
 
     expect(tokens).toHaveLength(1);
-    expect(tokens[0].kind).toBe(TokenKind.Eof);
+    expect(tokens[0]!.kind).toBe(TokenKind.Eof);
     expect(lexer.getDiagnostics()).toHaveLength(0);
   });
 
@@ -330,12 +330,12 @@ line 3`
 
     const diagnostics = lexer.getDiagnostics();
     expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0].location.column).toBe(501); // Position of @
+    expect(diagnostics[0]!.location.column).toBe(501); // Position of @
 
-    expect(tokens[0].kind).toBe(TokenKind.Identifier);
-    expect(tokens[0].lexeme).toBe(longValidPart);
-    expect(tokens[1].kind).toBe(TokenKind.Error);
-    expect(tokens[2].kind).toBe(TokenKind.Identifier);
-    expect(tokens[2].lexeme).toBe(longValidPart);
+    expect(tokens[0]!.kind).toBe(TokenKind.Identifier);
+    expect(tokens[0]!.lexeme).toBe(longValidPart);
+    expect(tokens[1]!.kind).toBe(TokenKind.Error);
+    expect(tokens[2]!.kind).toBe(TokenKind.Identifier);
+    expect(tokens[2]!.lexeme).toBe(longValidPart);
   });
 });

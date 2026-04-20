@@ -368,9 +368,12 @@ export class StatementChecker {
         const bindingInfo = this.checker.switchCaseBindings.get(switchCase);
         if (bindingInfo) {
           for (let i = 0; i < switchCase.bindings.length; i++) {
+            const bindingName = switchCase.bindings[i];
+            const bindingType = bindingInfo.fieldTypes[i];
+            if (!bindingName || !bindingType) continue;
             this.checker.defineVariable(
-              switchCase.bindings[i],
-              bindingInfo.fieldTypes[i],
+              bindingName,
+              bindingType,
               false, // not mutable
               true, // const
               switchCase.span
@@ -462,7 +465,7 @@ export class StatementChecker {
   private checkConditionStatement(
     keyword: string,
     condition: Expression,
-    message: Expression | undefined
+    message: Expression | null | undefined
   ): boolean {
     const condType = this.checker.checkExpression(condition);
     if (!isErrorType(condType) && condType.kind !== TypeKind.Bool) {

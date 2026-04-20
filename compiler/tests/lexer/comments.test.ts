@@ -16,14 +16,14 @@ describe("Comments", () => {
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
-      expect(tokens[0].kind).toBe(TokenKind.Let);
-      expect(tokens[1].kind).toBe(TokenKind.Identifier);
-      expect(tokens[1].lexeme).toBe("x");
-      expect(tokens[2].kind).toBe(TokenKind.Equal);
-      expect(tokens[3].kind).toBe(TokenKind.IntLiteral);
-      expect(tokens[3].value).toBe(42);
-      expect(tokens[4].kind).toBe(TokenKind.Semicolon);
-      expect(tokens[5].kind).toBe(TokenKind.Eof);
+      expect(tokens[0]!.kind).toBe(TokenKind.Let);
+      expect(tokens[1]!.kind).toBe(TokenKind.Identifier);
+      expect(tokens[1]!.lexeme).toBe("x");
+      expect(tokens[2]!.kind).toBe(TokenKind.Equal);
+      expect(tokens[3]!.kind).toBe(TokenKind.IntLiteral);
+      expect(tokens[3]!.value).toBe(42);
+      expect(tokens[4]!.kind).toBe(TokenKind.Semicolon);
+      expect(tokens[5]!.kind).toBe(TokenKind.Eof);
 
       expect(lexer.getDiagnostics()).toHaveLength(0);
     });
@@ -35,9 +35,9 @@ describe("Comments", () => {
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
-      expect(tokens[0].kind).toBe(TokenKind.Let);
-      expect(tokens[4].kind).toBe(TokenKind.Semicolon);
-      expect(tokens[5].kind).toBe(TokenKind.Eof);
+      expect(tokens[0]!.kind).toBe(TokenKind.Let);
+      expect(tokens[4]!.kind).toBe(TokenKind.Semicolon);
+      expect(tokens[5]!.kind).toBe(TokenKind.Eof);
 
       expect(lexer.getDiagnostics()).toHaveLength(0);
     });
@@ -59,13 +59,13 @@ describe("Comments", () => {
       // let, x, =, 1, ;, let, y, =, 2, ;, EOF
       expect(tokens).toHaveLength(11);
 
-      expect(tokens[0].kind).toBe(TokenKind.Let);
-      expect(tokens[1].lexeme).toBe("x");
-      expect(tokens[3].value).toBe(1);
-      expect(tokens[5].kind).toBe(TokenKind.Let);
-      expect(tokens[6].lexeme).toBe("y");
-      expect(tokens[8].value).toBe(2);
-      expect(tokens[10].kind).toBe(TokenKind.Eof);
+      expect(tokens[0]!.kind).toBe(TokenKind.Let);
+      expect(tokens[1]!.lexeme).toBe("x");
+      expect(tokens[3]!.value).toBe(1);
+      expect(tokens[5]!.kind).toBe(TokenKind.Let);
+      expect(tokens[6]!.lexeme).toBe("y");
+      expect(tokens[8]!.value).toBe(2);
+      expect(tokens[10]!.kind).toBe(TokenKind.Eof);
 
       expect(lexer.getDiagnostics()).toHaveLength(0);
     });
@@ -77,7 +77,7 @@ describe("Comments", () => {
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
-      expect(tokens[5].kind).toBe(TokenKind.Eof);
+      expect(tokens[5]!.kind).toBe(TokenKind.Eof);
 
       expect(lexer.getDiagnostics()).toHaveLength(0);
     });
@@ -89,7 +89,7 @@ describe("Comments", () => {
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
-      expect(tokens[5].kind).toBe(TokenKind.Eof);
+      expect(tokens[5]!.kind).toBe(TokenKind.Eof);
 
       expect(lexer.getDiagnostics()).toHaveLength(0);
     });
@@ -100,7 +100,7 @@ describe("Comments", () => {
       const tokens = lexer.tokenize();
 
       expect(tokens).toHaveLength(6);
-      expect(tokens[5].kind).toBe(TokenKind.Eof);
+      expect(tokens[5]!.kind).toBe(TokenKind.Eof);
 
       expect(lexer.getDiagnostics()).toHaveLength(0);
     });
@@ -114,12 +114,12 @@ describe("Comments", () => {
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
-      expect(tokens[0].kind).toBe(TokenKind.Let);
-      expect(tokens[1].lexeme).toBe("x");
-      expect(tokens[2].kind).toBe(TokenKind.Equal);
-      expect(tokens[3].value).toBe(42);
-      expect(tokens[4].kind).toBe(TokenKind.Semicolon);
-      expect(tokens[5].kind).toBe(TokenKind.Eof);
+      expect(tokens[0]!.kind).toBe(TokenKind.Let);
+      expect(tokens[1]!.lexeme).toBe("x");
+      expect(tokens[2]!.kind).toBe(TokenKind.Equal);
+      expect(tokens[3]!.value).toBe(42);
+      expect(tokens[4]!.kind).toBe(TokenKind.Semicolon);
+      expect(tokens[5]!.kind).toBe(TokenKind.Eof);
 
       expect(lexer.getDiagnostics()).toHaveLength(0);
     });
@@ -131,12 +131,12 @@ describe("Comments", () => {
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
-      expect(tokens[0].kind).toBe(TokenKind.Let);
-      expect(tokens[1].lexeme).toBe("x");
-      expect(tokens[2].kind).toBe(TokenKind.Equal);
-      expect(tokens[3].value).toBe(42);
-      expect(tokens[4].kind).toBe(TokenKind.Semicolon);
-      expect(tokens[5].kind).toBe(TokenKind.Eof);
+      expect(tokens[0]!.kind).toBe(TokenKind.Let);
+      expect(tokens[1]!.lexeme).toBe("x");
+      expect(tokens[2]!.kind).toBe(TokenKind.Equal);
+      expect(tokens[3]!.value).toBe(42);
+      expect(tokens[4]!.kind).toBe(TokenKind.Semicolon);
+      expect(tokens[5]!.kind).toBe(TokenKind.Eof);
 
       expect(lexer.getDiagnostics()).toHaveLength(0);
     });
@@ -159,12 +159,12 @@ describe("Comments", () => {
       // let, x, =, 1, ;, let, y, =, 2, ;, EOF
       expect(tokens).toHaveLength(11);
 
-      expect(tokens[0].kind).toBe(TokenKind.Let);
-      expect(tokens[1].lexeme).toBe("x");
-      expect(tokens[3].value).toBe(1);
-      expect(tokens[5].kind).toBe(TokenKind.Let);
-      expect(tokens[6].lexeme).toBe("y");
-      expect(tokens[8].value).toBe(2);
+      expect(tokens[0]!.kind).toBe(TokenKind.Let);
+      expect(tokens[1]!.lexeme).toBe("x");
+      expect(tokens[3]!.value).toBe(1);
+      expect(tokens[5]!.kind).toBe(TokenKind.Let);
+      expect(tokens[6]!.lexeme).toBe("y");
+      expect(tokens[8]!.value).toBe(2);
 
       expect(lexer.getDiagnostics()).toHaveLength(0);
     });
@@ -176,7 +176,7 @@ describe("Comments", () => {
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
-      expect(tokens[3].value).toBe(42);
+      expect(tokens[3]!.value).toBe(42);
 
       expect(lexer.getDiagnostics()).toHaveLength(0);
     });
@@ -194,8 +194,8 @@ describe("Comments", () => {
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
-      expect(tokens[0].kind).toBe(TokenKind.Let);
-      expect(tokens[3].value).toBe(42);
+      expect(tokens[0]!.kind).toBe(TokenKind.Let);
+      expect(tokens[3]!.value).toBe(42);
 
       expect(lexer.getDiagnostics()).toHaveLength(0);
     });
@@ -207,8 +207,8 @@ describe("Comments", () => {
 
       const diagnostics = lexer.getDiagnostics();
       expect(diagnostics).toHaveLength(1);
-      expect(diagnostics[0].severity).toBe(Severity.Error);
-      expect(diagnostics[0].message).toContain("Unterminated multi-line comment");
+      expect(diagnostics[0]!.severity).toBe(Severity.Error);
+      expect(diagnostics[0]!.message).toContain("Unterminated multi-line comment");
     });
 
     test("should handle comment that looks like nested comment start", () => {
@@ -221,8 +221,8 @@ describe("Comments", () => {
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
-      expect(tokens[0].kind).toBe(TokenKind.Let);
-      expect(tokens[3].value).toBe(42);
+      expect(tokens[0]!.kind).toBe(TokenKind.Let);
+      expect(tokens[3]!.value).toBe(42);
 
       expect(lexer.getDiagnostics()).toHaveLength(0);
     });
@@ -248,13 +248,13 @@ describe("Comments", () => {
       // fn, main, (, ), ->, int, {, let, x, =, 42, ;, let, result, =, x, *, 2, ;, return, result, ;, }, EOF
       expect(tokens).toHaveLength(24);
 
-      expect(tokens[0].kind).toBe(TokenKind.Fn);
-      expect(tokens[1].lexeme).toBe("main");
-      expect(tokens[5].kind).toBe(TokenKind.Int);
-      expect(tokens[10].value).toBe(42);
-      expect(tokens[17].value).toBe(2);
-      expect(tokens[19].kind).toBe(TokenKind.Return);
-      expect(tokens[23].kind).toBe(TokenKind.Eof);
+      expect(tokens[0]!.kind).toBe(TokenKind.Fn);
+      expect(tokens[1]!.lexeme).toBe("main");
+      expect(tokens[5]!.kind).toBe(TokenKind.Int);
+      expect(tokens[10]!.value).toBe(42);
+      expect(tokens[17]!.value).toBe(2);
+      expect(tokens[19]!.kind).toBe(TokenKind.Return);
+      expect(tokens[23]!.kind).toBe(TokenKind.Eof);
 
       expect(lexer.getDiagnostics()).toHaveLength(0);
     });
@@ -266,10 +266,10 @@ describe("Comments", () => {
 
       // string, let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(7);
-      expect(tokens[0].kind).toBe(TokenKind.StringLiteral);
-      expect(tokens[0].value).toBe("This string has // in it");
-      expect(tokens[1].kind).toBe(TokenKind.Let);
-      expect(tokens[4].value).toBe(42);
+      expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
+      expect(tokens[0]!.value).toBe("This string has // in it");
+      expect(tokens[1]!.kind).toBe(TokenKind.Let);
+      expect(tokens[4]!.value).toBe(42);
 
       expect(lexer.getDiagnostics()).toHaveLength(0);
     });
@@ -284,9 +284,9 @@ describe("Comments", () => {
 
       // string, let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(7);
-      expect(tokens[0].kind).toBe(TokenKind.StringLiteral);
-      expect(tokens[0].value).toBe("This string has /* comment */ in it");
-      expect(tokens[1].kind).toBe(TokenKind.Let);
+      expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
+      expect(tokens[0]!.value).toBe("This string has /* comment */ in it");
+      expect(tokens[1]!.kind).toBe(TokenKind.Let);
 
       expect(lexer.getDiagnostics()).toHaveLength(0);
     });
@@ -298,12 +298,12 @@ describe("Comments", () => {
 
       // a, +, b, -, c, EOF
       expect(tokens).toHaveLength(6);
-      expect(tokens[0].kind).toBe(TokenKind.Identifier);
-      expect(tokens[0].lexeme).toBe("a");
-      expect(tokens[1].kind).toBe(TokenKind.Plus);
-      expect(tokens[2].lexeme).toBe("b");
-      expect(tokens[3].kind).toBe(TokenKind.Minus);
-      expect(tokens[4].lexeme).toBe("c");
+      expect(tokens[0]!.kind).toBe(TokenKind.Identifier);
+      expect(tokens[0]!.lexeme).toBe("a");
+      expect(tokens[1]!.kind).toBe(TokenKind.Plus);
+      expect(tokens[2]!.lexeme).toBe("b");
+      expect(tokens[3]!.kind).toBe(TokenKind.Minus);
+      expect(tokens[4]!.lexeme).toBe("c");
 
       expect(lexer.getDiagnostics()).toHaveLength(0);
     });
@@ -321,14 +321,14 @@ let y = 24;`
       const tokens = lexer.tokenize();
 
       // First token after comment should be on line 2
-      expect(tokens[0].kind).toBe(TokenKind.Let);
-      expect(tokens[0].line).toBe(2);
-      expect(tokens[0].column).toBe(1);
+      expect(tokens[0]!.kind).toBe(TokenKind.Let);
+      expect(tokens[0]!.line).toBe(2);
+      expect(tokens[0]!.column).toBe(1);
 
       // Token after multi-line comment should be on line 5
-      expect(tokens[5].kind).toBe(TokenKind.Let);
-      expect(tokens[5].line).toBe(5);
-      expect(tokens[5].column).toBe(1);
+      expect(tokens[5]!.kind).toBe(TokenKind.Let);
+      expect(tokens[5]!.line).toBe(5);
+      expect(tokens[5]!.column).toBe(1);
 
       expect(lexer.getDiagnostics()).toHaveLength(0);
     });
@@ -340,13 +340,13 @@ let y = 24;`
     const lexer = new Lexer(source);
     const tokens = lexer.tokenize();
 
-    expect(tokens[0].lexeme).toBe("a");
-    expect(tokens[1].kind).toBe(TokenKind.Slash);
-    expect(tokens[2].lexeme).toBe("b");
-    expect(tokens[3].lexeme).toBe("c");
-    expect(tokens[4].lexeme).toBe("a"); // on new line
-    expect(tokens[5].kind).toBe(TokenKind.SlashEqual);
-    expect(tokens[6].lexeme).toBe("b");
+    expect(tokens[0]!.lexeme).toBe("a");
+    expect(tokens[1]!.kind).toBe(TokenKind.Slash);
+    expect(tokens[2]!.lexeme).toBe("b");
+    expect(tokens[3]!.lexeme).toBe("c");
+    expect(tokens[4]!.lexeme).toBe("a"); // on new line
+    expect(tokens[5]!.kind).toBe(TokenKind.SlashEqual);
+    expect(tokens[6]!.lexeme).toBe("b");
 
     expect(lexer.getDiagnostics()).toHaveLength(0);
   });

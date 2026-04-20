@@ -398,7 +398,11 @@ function checkFunctionCallArgs(
     const currentArg = args[i];
     if (!currentArg) continue;
     const argType = checker.checkExpression(currentArg);
-    const paramType = expectedParams[i]?.type;
+    const param = expectedParams[i];
+    if (!param) {
+      throw new Error("invariant: function arity matched but parameter is missing");
+    }
+    const paramType = param.type;
 
     if (!isErrorType(argType) && !isAssignableTo(argType, paramType)) {
       // Check if this is a literal that can be implicitly converted
@@ -414,7 +418,7 @@ function checkFunctionCallArgs(
     }
 
     // Handle move params
-    if (expectedParams[i]?.isMove && currentArg.kind === "MoveExpr") {
+    if (param.isMove && currentArg.kind === "MoveExpr") {
       const moveExpr = currentArg;
       if (moveExpr.operand.kind === "Identifier") {
         checker.markVariableMoved(moveExpr.operand.name);

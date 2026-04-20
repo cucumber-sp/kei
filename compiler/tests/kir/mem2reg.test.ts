@@ -85,7 +85,7 @@ describe("mem2reg: simple variable (no phi needed)", () => {
     expect(constInts.length).toBeGreaterThanOrEqual(1);
 
     // Return should reference the const directly (or through SSA)
-    expect(fn.blocks[0].terminator.kind).toBe("ret");
+    expect(fn.blocks[0]!.terminator.kind).toBe("ret");
   });
 
   test("sequential assignments without branches", () => {
@@ -257,7 +257,7 @@ describe("mem2reg: while loop with phi nodes", () => {
 
     // The phi should have 2 incoming edges:
     // one from the pre-loop block, one from the loop body (back-edge)
-    const phi = headerPhis[0];
+    const phi = headerPhis[0]!;
     expect(phi.incoming).toHaveLength(2);
   });
 });

@@ -48,6 +48,7 @@ export function emitScopeDestroys(
 ): void {
   for (let i = scope.length - 1; i >= 0; i--) {
     const sv = scope[i];
+    if (!sv) continue;
     if (ctx.movedVars.has(sv.name)) continue;
     if (sv.isString) {
       emit(ctx, { kind: "call_extern_void", func: "kei_string_destroy", args: [sv.varId] });
@@ -60,14 +61,18 @@ export function emitScopeDestroys(
 /** Emit destroys for all scopes (for early return) without popping */
 export function emitAllScopeDestroys(ctx: LoweringCtx): void {
   for (let i = ctx.scopeStack.length - 1; i >= 0; i--) {
-    emitScopeDestroys(ctx, ctx.scopeStack[i]);
+    const scope = ctx.scopeStack[i];
+    if (!scope) continue;
+    emitScopeDestroys(ctx, scope);
   }
 }
 
 /** Emit destroys only for scopes inside the current loop (from loopScopeDepth onward) */
 export function emitLoopScopeDestroys(ctx: LoweringCtx): void {
   for (let i = ctx.scopeStack.length - 1; i >= ctx.loopScopeDepth; i--) {
-    emitScopeDestroys(ctx, ctx.scopeStack[i]);
+    const scope = ctx.scopeStack[i];
+    if (!scope) continue;
+    emitScopeDestroys(ctx, scope);
   }
 }
 
@@ -75,8 +80,10 @@ export function emitLoopScopeDestroys(ctx: LoweringCtx): void {
 export function emitAllScopeDestroysExceptNamed(ctx: LoweringCtx, skipName: string | null): void {
   for (let i = ctx.scopeStack.length - 1; i >= 0; i--) {
     const scope = ctx.scopeStack[i];
+    if (!scope) continue;
     for (let j = scope.length - 1; j >= 0; j--) {
       const sv = scope[j];
+      if (!sv) continue;
       if (ctx.movedVars.has(sv.name)) continue;
       if (skipName !== null && sv.name === skipName) continue;
       if (sv.isString) {
@@ -96,9 +103,11 @@ export function trackScopeVar(
   expr: Expression
 ): void {
   if (ctx.scopeStack.length === 0) return;
+  const currentScope = ctx.scopeStack.at(-1);
+  if (!currentScope) return;
   const checkerType = ctx.checkResult.types.typeMap.get(expr);
   if (checkerType?.kind === "string") {
-    ctx.scopeStack[ctx.scopeStack.length - 1].push({
+    currentScope.push({
       name,
       varId,
       structName: "",
@@ -108,7 +117,7 @@ export function trackScopeVar(
   }
   const lifecycle = getStructLifecycle(ctx, checkerType);
   if (lifecycle?.hasDestroy) {
-    ctx.scopeStack[ctx.scopeStack.length - 1].push({
+    currentScope.push({
       name,
       varId,
       structName: lifecycle.structName,
@@ -124,12 +133,14 @@ export function trackScopeVarByType(
   checkerType: Type | undefined
 ): void {
   if (ctx.scopeStack.length === 0) return;
+  const currentScope = ctx.scopeStack.at(-1);
+  if (!currentScope) return;
   // Note: strings are NOT tracked here because function params are values,
   // not stack pointers. kei_string_destroy requires a pointer.
   // Local string variables are tracked via trackScopeVar instead.
   const lifecycle = getStructLifecycle(ctx, checkerType);
   if (lifecycle?.hasDestroy) {
-    ctx.scopeStack[ctx.scopeStack.length - 1].push({
+    currentScope.push({
       name,
       varId,
       structName: lifecycle.structName,

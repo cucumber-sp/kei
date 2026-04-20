@@ -224,7 +224,7 @@ export function parseSwitchCase(ctx: ParserContext): SwitchCase {
       isDefault: true,
       span: {
         start: ctx.previous().span.start,
-        end: body.length > 0 ? body[body.length - 1]?.span.end : ctx.previous().span.end,
+        end: body.at(-1)?.span.end ?? ctx.previous().span.end,
       },
     };
   }
@@ -271,7 +271,7 @@ export function parseSwitchCase(ctx: ParserContext): SwitchCase {
     isDefault: false,
     span: {
       start: startToken.span.start,
-      end: body.length > 0 ? body[body.length - 1]?.span.end : ctx.previous().span.end,
+      end: body.at(-1)?.span.end ?? ctx.previous().span.end,
     },
   };
 }

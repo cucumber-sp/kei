@@ -8,27 +8,27 @@ describe("KIR: basic function lowering", () => {
     expect(fn.params).toHaveLength(0);
     expect(fn.returnType).toEqual({ kind: "void" });
     expect(fn.blocks).toHaveLength(1);
-    expect(fn.blocks[0].id).toBe("entry");
-    expect(fn.blocks[0].terminator.kind).toBe("ret_void");
+    expect(fn.blocks[0]!.id).toBe("entry");
+    expect(fn.blocks[0]!.terminator.kind).toBe("ret_void");
   });
 
   test("function with int return", () => {
     const fn = lowerFunction(`fn foo() -> int { return 42; }`, "foo");
     expect(fn.returnType).toEqual({ kind: "int", bits: 32, signed: true });
-    expect(fn.blocks[0].terminator.kind).toBe("ret");
+    expect(fn.blocks[0]!.terminator.kind).toBe("ret");
   });
 
   test("function with parameters", () => {
     const fn = lowerFunction(`fn add(a: int, b: int) -> int { return a + b; }`, "add");
     expect(fn.params).toHaveLength(2);
-    expect(fn.params[0].name).toBe("a");
-    expect(fn.params[0].type).toEqual({ kind: "int", bits: 32, signed: true });
-    expect(fn.params[1].name).toBe("b");
+    expect(fn.params[0]!.name).toBe("a");
+    expect(fn.params[0]!.type).toEqual({ kind: "int", bits: 32, signed: true });
+    expect(fn.params[1]!.name).toBe("b");
   });
 
   test("entry block is first", () => {
     const fn = lowerFunction(`fn main() -> int { return 0; }`, "main");
-    expect(fn.blocks[0].id).toBe("entry");
+    expect(fn.blocks[0]!.id).toBe("entry");
   });
 
   test("module contains all functions", () => {

@@ -108,7 +108,7 @@ describe("TypeResolver", () => {
       const result = resolver.resolve(namedType("Unknown"), scope);
       expect(result).toEqual(ERROR_TYPE);
       expect(resolver.getDiagnostics()).toHaveLength(1);
-      expect(resolver.getDiagnostics()[0].message).toContain("undeclared type 'Unknown'");
+      expect(resolver.getDiagnostics()[0]!.message).toContain("undeclared type 'Unknown'");
     });
   });
 
@@ -154,8 +154,8 @@ describe("TypeResolver", () => {
 
       const diags = resolver.getDiagnostics();
       expect(diags).toHaveLength(2);
-      expect(diags[0].message).toContain("Foo");
-      expect(diags[1].message).toContain("Bar");
+      expect(diags[0]!.message).toContain("Foo");
+      expect(diags[1]!.message).toContain("Bar");
     });
 
     test("clearDiagnostics resets errors", () => {
@@ -173,7 +173,7 @@ describe("TypeResolver", () => {
       const customSpan: Span = { start: 10, end: 20 };
       resolver.resolve({ kind: "NamedType", name: "Missing", span: customSpan } as TypeNode, scope);
 
-      expect(resolver.getDiagnostics()[0].span).toEqual(customSpan);
+      expect(resolver.getDiagnostics()[0]!.span).toEqual(customSpan);
     });
   });
 
@@ -195,7 +195,7 @@ describe("TypeResolver", () => {
         scope
       );
       expect(result).toEqual(ERROR_TYPE);
-      expect(resolver.getDiagnostics()[0].message).toContain("expects exactly 1 type argument");
+      expect(resolver.getDiagnostics()[0]!.message).toContain("expects exactly 1 type argument");
     });
 
     test("resolves array<T>", () => {
@@ -223,7 +223,7 @@ describe("TypeResolver", () => {
         scope
       );
       expect(result).toEqual(ERROR_TYPE);
-      expect(resolver.getDiagnostics()[0].message).toContain("expects exactly 1 type argument");
+      expect(resolver.getDiagnostics()[0]!.message).toContain("expects exactly 1 type argument");
     });
 
     test("nested generic: ptr<ptr<i32>>", () => {
@@ -261,7 +261,7 @@ describe("TypeResolver", () => {
 
       const result = resolver.resolve(genericType("Point", [namedType("i32")]), scope);
       expect(result).toEqual(ERROR_TYPE);
-      expect(resolver.getDiagnostics()[0].message).toContain("not generic");
+      expect(resolver.getDiagnostics()[0]!.message).toContain("not generic");
     });
 
     test("errors on wrong number of type args", () => {
@@ -283,7 +283,7 @@ describe("TypeResolver", () => {
 
       const result = resolver.resolve(genericType("Pair", [namedType("i32")]), scope);
       expect(result).toEqual(ERROR_TYPE);
-      expect(resolver.getDiagnostics()[0].message).toContain("expects 2 type argument(s)");
+      expect(resolver.getDiagnostics()[0]!.message).toContain("expects 2 type argument(s)");
     });
 
     test("undeclared generic type produces error", () => {
@@ -292,7 +292,7 @@ describe("TypeResolver", () => {
 
       const result = resolver.resolve(genericType("Nonexistent", [namedType("i32")]), scope);
       expect(result).toEqual(ERROR_TYPE);
-      expect(resolver.getDiagnostics()[0].message).toContain("undeclared type 'Nonexistent'");
+      expect(resolver.getDiagnostics()[0]!.message).toContain("undeclared type 'Nonexistent'");
     });
 
     test("generic struct methods get substituted", () => {
@@ -315,7 +315,7 @@ describe("TypeResolver", () => {
         const getMethodResult = result.methods.get("get");
         expect(getMethodResult).toBeDefined();
         expect(getMethodResult!.returnType).toEqual(BOOL_TYPE);
-        expect(getMethodResult!.params[0].type).toEqual(BOOL_TYPE);
+        expect(getMethodResult!.params[0]!.type).toEqual(BOOL_TYPE);
       }
     });
   });

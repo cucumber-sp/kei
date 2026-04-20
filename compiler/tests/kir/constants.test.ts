@@ -17,8 +17,8 @@ describe("KIR: constants", () => {
     );
     const consts = getInstructions(fn, "const_int") as KirConstInt[];
     expect(consts).toHaveLength(1);
-    expect(consts[0].value).toBe(42);
-    expect(consts[0].type.kind).toBe("int");
+    expect(consts[0]!.value).toBe(42);
+    expect(consts[0]!.type.kind).toBe("int");
   });
 
   test("float constant", () => {
@@ -30,8 +30,8 @@ describe("KIR: constants", () => {
     );
     const consts = getInstructions(fn, "const_float") as KirConstFloat[];
     expect(consts).toHaveLength(1);
-    expect(consts[0].value).toBe(3.14);
-    expect(consts[0].type.kind).toBe("float");
+    expect(consts[0]!.value).toBe(3.14);
+    expect(consts[0]!.type.kind).toBe("float");
   });
 
   test("boolean true constant", () => {
@@ -43,7 +43,7 @@ describe("KIR: constants", () => {
     );
     const consts = getInstructions(fn, "const_bool") as KirConstBool[];
     expect(consts).toHaveLength(1);
-    expect(consts[0].value).toBe(true);
+    expect(consts[0]!.value).toBe(true);
   });
 
   test("boolean false constant", () => {
@@ -55,7 +55,7 @@ describe("KIR: constants", () => {
     );
     const consts = getInstructions(fn, "const_bool") as KirConstBool[];
     expect(consts).toHaveLength(1);
-    expect(consts[0].value).toBe(false);
+    expect(consts[0]!.value).toBe(false);
   });
 
   test("string constant", () => {
@@ -67,7 +67,7 @@ describe("KIR: constants", () => {
     );
     const consts = getInstructions(fn, "const_string") as KirConstString[];
     expect(consts).toHaveLength(1);
-    expect(consts[0].value).toBe("hello");
+    expect(consts[0]!.value).toBe("hello");
   });
 
   test("zero constant", () => {
@@ -79,7 +79,7 @@ describe("KIR: constants", () => {
     );
     const consts = getInstructions(fn, "const_int") as KirConstInt[];
     expect(consts).toHaveLength(1);
-    expect(consts[0].value).toBe(0);
+    expect(consts[0]!.value).toBe(0);
   });
 
   test("negative literal creates negation", () => {

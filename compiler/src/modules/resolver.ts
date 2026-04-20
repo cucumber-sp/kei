@@ -248,7 +248,9 @@ export class ModuleResolver {
 
       // Also try deps/<first>/mod.kei for package-level imports
       if (parts.length === 1) {
-        const modPath = join(this.depsRoot, parts[0], "mod.kei");
+        const packageName = parts[0];
+        if (!packageName) return null;
+        const modPath = join(this.depsRoot, packageName, "mod.kei");
         if (existsSync(modPath)) return modPath;
       }
     }
@@ -332,7 +334,10 @@ export class ModuleResolver {
     if (this.depsRoot) {
       paths.push(`    ${join(this.depsRoot, relPath)}`);
       if (parts.length === 1) {
-        paths.push(`    ${join(this.depsRoot, parts[0], "mod.kei")}`);
+        const packageName = parts[0];
+        if (packageName) {
+          paths.push(`    ${join(this.depsRoot, packageName, "mod.kei")}`);
+        }
       }
     }
 
@@ -356,7 +361,7 @@ export class ModuleResolver {
         candidates.push(name);
       }
     }
-    return candidates.length > 0 ? candidates[0] : null;
+    return candidates[0] ?? null;
   }
 
   private commonPrefixLength(a: string, b: string): number {

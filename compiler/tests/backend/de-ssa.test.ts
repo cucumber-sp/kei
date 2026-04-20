@@ -256,8 +256,7 @@ describe("de-ssa: lost-copy regression", () => {
     };
 
     const result = runDeSsa(mod);
-    const fn = result.functions[0];
-    // biome-ignore lint/style/noNonNullAssertion: test setup guarantees entry block exists
+    const fn = result.functions[0]!;
     const entryBlock = fn.blocks.find((b) => b.id === "entry")!;
 
     // Should have no phis remaining
@@ -338,8 +337,7 @@ describe("de-ssa: lost-copy regression", () => {
     };
 
     const result = runDeSsa(mod);
-    const fn = result.functions[0];
-    // biome-ignore lint/style/noNonNullAssertion: test setup guarantees entry block exists
+    const fn = result.functions[0]!;
     const entryBlock = fn.blocks.find((b) => b.id === "entry")!;
 
     // No temps needed — localCount should stay the same

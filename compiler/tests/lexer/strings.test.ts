@@ -22,10 +22,10 @@ describe("String literals - edge cases", () => {
       const tokens = lexer.tokenize();
 
       expect(tokens).toHaveLength(2);
-      expect(tokens[0].kind).toBe(TokenKind.StringLiteral);
-      expect(tokens[0].lexeme).toBe(input);
-      expect(tokens[0].value).toBe(expected);
-      expect(tokens[1].kind).toBe(TokenKind.Eof);
+      expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
+      expect(tokens[0]!.lexeme).toBe(input);
+      expect(tokens[0]!.value).toBe(expected);
+      expect(tokens[1]!.kind).toBe(TokenKind.Eof);
       expect(lexer.getDiagnostics()).toHaveLength(0);
     }
   });
@@ -51,10 +51,10 @@ describe("String literals - edge cases", () => {
       const tokens = lexer.tokenize();
 
       expect(tokens).toHaveLength(2);
-      expect(tokens[0].kind).toBe(TokenKind.StringLiteral);
-      expect(tokens[0].lexeme).toBe(input);
-      expect(tokens[0].value).toBe(expected);
-      expect(tokens[1].kind).toBe(TokenKind.Eof);
+      expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
+      expect(tokens[0]!.lexeme).toBe(input);
+      expect(tokens[0]!.value).toBe(expected);
+      expect(tokens[1]!.kind).toBe(TokenKind.Eof);
       expect(lexer.getDiagnostics()).toHaveLength(0);
     }
   });
@@ -68,8 +68,8 @@ describe("String literals - edge cases", () => {
     const tokens = lexer.tokenize();
 
     expect(tokens).toHaveLength(2);
-    expect(tokens[0].kind).toBe(TokenKind.StringLiteral);
-    expect(tokens[0].value).toBe('Line 1\nTab:\tValue\r\nQuote: "Hello" End');
+    expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
+    expect(tokens[0]!.value).toBe('Line 1\nTab:\tValue\r\nQuote: "Hello" End');
     expect(lexer.getDiagnostics()).toHaveLength(0);
   });
 
@@ -87,8 +87,8 @@ describe("String literals - edge cases", () => {
       const tokens = lexer.tokenize();
 
       expect(tokens).toHaveLength(2);
-      expect(tokens[0].kind).toBe(TokenKind.StringLiteral);
-      expect(tokens[0].value).toBe(expected);
+      expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
+      expect(tokens[0]!.value).toBe(expected);
       expect(lexer.getDiagnostics()).toHaveLength(0);
     }
   });
@@ -108,8 +108,8 @@ describe("String literals - edge cases", () => {
       const tokens = lexer.tokenize();
 
       expect(tokens).toHaveLength(2);
-      expect(tokens[0].kind).toBe(TokenKind.StringLiteral);
-      expect(tokens[0].value).toBe(expected);
+      expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
+      expect(tokens[0]!.value).toBe(expected);
       expect(lexer.getDiagnostics()).toHaveLength(0);
     }
   });
@@ -121,8 +121,8 @@ describe("String literals - edge cases", () => {
     const tokens = lexer.tokenize();
 
     expect(tokens).toHaveLength(2);
-    expect(tokens[0].kind).toBe(TokenKind.StringLiteral);
-    expect(tokens[0].value).toBe(longString);
+    expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
+    expect(tokens[0]!.value).toBe(longString);
     expect(lexer.getDiagnostics()).toHaveLength(0);
   });
 
@@ -132,10 +132,10 @@ describe("String literals - edge cases", () => {
     const tokens = lexer.tokenize();
 
     expect(tokens).toHaveLength(2);
-    expect(tokens[0].kind).toBe(TokenKind.StringLiteral);
-    expect(tokens[0].lexeme).toBe('""');
-    expect(tokens[0].value).toBe("");
-    expect(tokens[1].kind).toBe(TokenKind.Eof);
+    expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
+    expect(tokens[0]!.lexeme).toBe('""');
+    expect(tokens[0]!.value).toBe("");
+    expect(tokens[1]!.kind).toBe(TokenKind.Eof);
     expect(lexer.getDiagnostics()).toHaveLength(0);
   });
 
@@ -147,9 +147,9 @@ describe("String literals - edge cases", () => {
 
       const diagnostics = lexer.getDiagnostics();
       expect(diagnostics.length).toBeGreaterThan(0);
-      expect(diagnostics[0].severity).toBe(Severity.Error);
-      expect(diagnostics[0].message).toContain("Unterminated string literal");
-      expect(tokens[0].kind).toBe(TokenKind.Error);
+      expect(diagnostics[0]!.severity).toBe(Severity.Error);
+      expect(diagnostics[0]!.message).toContain("Unterminated string literal");
+      expect(tokens[0]!.kind).toBe(TokenKind.Error);
     });
 
     test("should error on unterminated string with newline", () => {
@@ -159,9 +159,9 @@ describe("String literals - edge cases", () => {
 
       const diagnostics = lexer.getDiagnostics();
       expect(diagnostics.length).toBeGreaterThan(0);
-      expect(diagnostics[0].severity).toBe(Severity.Error);
-      expect(diagnostics[0].message).toContain("Unterminated string literal");
-      expect(tokens[0].kind).toBe(TokenKind.Error);
+      expect(diagnostics[0]!.severity).toBe(Severity.Error);
+      expect(diagnostics[0]!.message).toContain("Unterminated string literal");
+      expect(tokens[0]!.kind).toBe(TokenKind.Error);
     });
 
     test("should error on invalid escape sequences", () => {
@@ -179,10 +179,10 @@ describe("String literals - edge cases", () => {
 
         const diagnostics = lexer.getDiagnostics();
         expect(diagnostics).toHaveLength(1);
-        expect(diagnostics[0].severity).toBe(Severity.Error);
-        expect(diagnostics[0].message).toContain(`Invalid escape sequence '\\${char}'`);
+        expect(diagnostics[0]!.severity).toBe(Severity.Error);
+        expect(diagnostics[0]!.message).toContain(`Invalid escape sequence '\\${char}'`);
         // String still parses to completion (with missing escaped char)
-        expect(tokens[0].kind).toBe(TokenKind.StringLiteral);
+        expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
       }
     });
 
@@ -199,8 +199,8 @@ describe("String literals - edge cases", () => {
 
         const diagnostics = lexer.getDiagnostics();
         expect(diagnostics.length).toBeGreaterThan(0);
-        expect(diagnostics[0].severity).toBe(Severity.Error);
-        expect(diagnostics[0].message).toContain("hex escape");
+        expect(diagnostics[0]!.severity).toBe(Severity.Error);
+        expect(diagnostics[0]!.message).toContain("hex escape");
       }
     });
 
@@ -212,8 +212,8 @@ describe("String literals - edge cases", () => {
 
       const diagnostics = lexer.getDiagnostics();
       expect(diagnostics.length).toBeGreaterThan(0);
-      expect(diagnostics[0].severity).toBe(Severity.Error);
-      expect(diagnostics[0].message).toContain("hex escape");
+      expect(diagnostics[0]!.severity).toBe(Severity.Error);
+      expect(diagnostics[0]!.message).toContain("hex escape");
     });
   });
 
@@ -225,16 +225,16 @@ describe("String literals - edge cases", () => {
     // 3 strings + EOF
     expect(tokens).toHaveLength(4);
 
-    expect(tokens[0].kind).toBe(TokenKind.StringLiteral);
-    expect(tokens[0].value).toBe("first");
+    expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
+    expect(tokens[0]!.value).toBe("first");
 
-    expect(tokens[1].kind).toBe(TokenKind.StringLiteral);
-    expect(tokens[1].value).toBe("second");
+    expect(tokens[1]!.kind).toBe(TokenKind.StringLiteral);
+    expect(tokens[1]!.value).toBe("second");
 
-    expect(tokens[2].kind).toBe(TokenKind.StringLiteral);
-    expect(tokens[2].value).toBe("third");
+    expect(tokens[2]!.kind).toBe(TokenKind.StringLiteral);
+    expect(tokens[2]!.value).toBe("third");
 
-    expect(tokens[3].kind).toBe(TokenKind.Eof);
+    expect(tokens[3]!.kind).toBe(TokenKind.Eof);
     expect(lexer.getDiagnostics()).toHaveLength(0);
   });
 
@@ -246,7 +246,7 @@ describe("String literals - edge cases", () => {
     // let, msg, =, string, ;, EOF
     expect(tokens).toHaveLength(6);
 
-    const stringToken = tokens[3];
+    const stringToken = tokens[3]!;
     expect(stringToken.kind).toBe(TokenKind.StringLiteral);
     expect(stringToken.line).toBe(1);
     expect(stringToken.column).toBe(11);
@@ -270,14 +270,14 @@ let c = "third";`
 
     expect(strings).toHaveLength(3);
 
-    expect(strings[0].line).toBe(1);
-    expect(strings[0].value).toBe("first");
+    expect(strings[0]!.line).toBe(1);
+    expect(strings[0]!.value).toBe("first");
 
-    expect(strings[1].line).toBe(2);
-    expect(strings[1].value).toBe("second");
+    expect(strings[1]!.line).toBe(2);
+    expect(strings[1]!.value).toBe("second");
 
-    expect(strings[2].line).toBe(3);
-    expect(strings[2].value).toBe("third");
+    expect(strings[2]!.line).toBe(3);
+    expect(strings[2]!.value).toBe("third");
 
     expect(lexer.getDiagnostics()).toHaveLength(0);
   });
@@ -292,8 +292,8 @@ let c = "third";`
     const tokens = lexer.tokenize();
 
     expect(tokens).toHaveLength(2);
-    expect(tokens[0].kind).toBe(TokenKind.StringLiteral);
-    expect(tokens[0].value).toBe(printableChars);
+    expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
+    expect(tokens[0]!.value).toBe(printableChars);
     expect(lexer.getDiagnostics()).toHaveLength(0);
   });
 });

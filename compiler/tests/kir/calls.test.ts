@@ -15,7 +15,7 @@ describe("KIR: function calls", () => {
     );
     const callVoids = getInstructions(fn, "call_void") as KirCallVoid[];
     expect(callVoids.length).toBeGreaterThanOrEqual(1);
-    expect(callVoids[0].func).toBe("bar");
+    expect(callVoids[0]!.func).toBe("bar");
   });
 
   test("function call with return generates call", () => {
@@ -30,7 +30,7 @@ describe("KIR: function calls", () => {
     );
     const calls = getInstructions(fn, "call") as KirCall[];
     expect(calls.length).toBeGreaterThanOrEqual(1);
-    expect(calls[0].func).toBe("bar");
+    expect(calls[0]!.func).toBe("bar");
   });
 
   test("function call with arguments", () => {
@@ -45,7 +45,7 @@ describe("KIR: function calls", () => {
     );
     const calls = getInstructions(fn, "call") as KirCall[];
     expect(calls.length).toBeGreaterThanOrEqual(1);
-    expect(calls[0].args).toHaveLength(2);
+    expect(calls[0]!.args).toHaveLength(2);
   });
 
   test("nested function calls", () => {

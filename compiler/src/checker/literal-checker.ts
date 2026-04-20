@@ -43,7 +43,7 @@ import {
   USIZE_TYPE,
 } from "./types";
 
-const SUFFIX_TYPE_MAP: ReadonlyMap<string, Type> = new Map([
+const SUFFIX_TYPE_MAP: ReadonlyMap<string, Type> = new Map<string, Type>([
   ["i8", I8_TYPE],
   ["i16", I16_TYPE],
   ["i32", I32_TYPE],
@@ -105,23 +105,27 @@ export function checkArrayLiteral(checker: Checker, expr: ArrayLiteral): Type {
     return ERROR_TYPE;
   }
 
-  // biome-ignore lint/style/noNonNullAssertion: length > 0 is checked above
-  const firstType = checker.checkExpression(expr.elements[0]!);
+  const firstElement = expr.elements[0];
+  if (!firstElement) {
+    checker.error("array literal missing first element", expr.span);
+    return ERROR_TYPE;
+  }
+  const firstType = checker.checkExpression(firstElement);
   if (isErrorType(firstType)) return ERROR_TYPE;
 
   for (let i = 1; i < expr.elements.length; i++) {
-    // biome-ignore lint/style/noNonNullAssertion: i is within bounds of expr.elements (loop guard)
-    const elemType = checker.checkExpression(expr.elements[i]!);
+    const element = expr.elements[i];
+    if (!element) continue;
+    const elemType = checker.checkExpression(element);
     if (isErrorType(elemType)) continue;
     if (!isAssignableTo(elemType, firstType)) {
       // Check literal assignability
-      // biome-ignore lint/style/noNonNullAssertion: i is within bounds of expr.elements (loop guard)
-      const litInfo = extractLiteralInfo(expr.elements[i]!);
+      const litInfo = extractLiteralInfo(element);
       const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, firstType);
       if (!isLiteralOk) {
         checker.error(
           `array element ${i}: expected '${typeToString(firstType)}', got '${typeToString(elemType)}'`,
-          expr.elements[i]?.span
+          element.span
         );
       }
     }

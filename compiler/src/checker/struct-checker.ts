@@ -239,7 +239,8 @@ export class StructChecker {
           }
         }
       } else if (method.name === "__oncopy") {
-        if (method.params.length >= 1 && method.params[0].name !== "self") {
+        const selfParam = method.params[0];
+        if (method.params.length >= 1 && selfParam && selfParam.name !== "self") {
           this.checker.error(
             `lifecycle hook '__oncopy' first parameter must be named 'self'`,
             method.span

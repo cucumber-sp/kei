@@ -482,8 +482,8 @@ describe("Parser — Edge Cases", () => {
         expect(expr.kind).toBe("CallExpr");
         if (expr.kind !== "CallExpr") continue;
         expect(expr.args).toHaveLength(1);
-        expect(expr.args[0].kind).toBe("Identifier");
-        if (expr.args[0].kind === "Identifier") {
+        expect(expr.args[0]!.kind).toBe("Identifier");
+        if (expr.args[0]!.kind === "Identifier") {
           expect(expr.args[0].name).toBe(prim);
         }
       }

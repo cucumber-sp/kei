@@ -27,12 +27,13 @@ export function computeDominators(cfg: CFG): Map<BlockId, BlockId> {
   if (blockOrder.length === 0) return new Map();
 
   const entryBlock = blockOrder[0];
+  if (!entryBlock) return new Map();
 
   // Map block → index in RPO for efficient comparisons.
   // Lower index = earlier in RPO = dominates more blocks.
   const rpoIndex = new Map<BlockId, number>();
-  for (let i = 0; i < blockOrder.length; i++) {
-    rpoIndex.set(blockOrder[i], i);
+  for (const [i, blockId] of blockOrder.entries()) {
+    rpoIndex.set(blockId, i);
   }
 
   const idom = new Map<BlockId, BlockId>();
@@ -44,21 +45,43 @@ export function computeDominators(cfg: CFG): Map<BlockId, BlockId> {
    * higher index is farther from the entry, so we step it upward.
    */
   function intersect(b1: BlockId, b2: BlockId): BlockId {
-    // biome-ignore lint/style/noNonNullAssertion: b1 is always a block from blockOrder, so rpoIndex always has it
-    let idx1 = rpoIndex.get(b1)!;
-    // biome-ignore lint/style/noNonNullAssertion: b2 is always a block from blockOrder, so rpoIndex always has it
-    let idx2 = rpoIndex.get(b2)!;
+    const getRpoIndex = (blockId: BlockId): number => {
+      const index = rpoIndex.get(blockId);
+      if (index === undefined) {
+        throw new Error(`invariant: missing RPO index for block '${blockId}'`);
+      }
+      return index;
+    };
+    const getBlockAt = (index: number): BlockId => {
+      const blockId = blockOrder[index];
+      if (blockId === undefined) {
+        throw new Error(`invariant: RPO index ${index} must resolve to a block`);
+      }
+      return blockId;
+    };
+    let idx1 = getRpoIndex(b1);
+    let idx2 = getRpoIndex(b2);
     while (idx1 !== idx2) {
       while (idx1 > idx2) {
-        // biome-ignore lint/style/noNonNullAssertion: blockOrder[idx1] is always in idom (algorithm invariant) and rpoIndex covers all blocks
-        idx1 = rpoIndex.get(idom.get(blockOrder[idx1])!)!;
+        const idomBlock = idom.get(getBlockAt(idx1));
+        if (idomBlock === undefined) {
+          throw new Error("invariant: idom must exist for processed block");
+        }
+        idx1 = getRpoIndex(idomBlock);
       }
       while (idx2 > idx1) {
-        // biome-ignore lint/style/noNonNullAssertion: blockOrder[idx2] is always in idom (algorithm invariant) and rpoIndex covers all blocks
-        idx2 = rpoIndex.get(idom.get(blockOrder[idx2])!)!;
+        const idomBlock = idom.get(getBlockAt(idx2));
+        if (idomBlock === undefined) {
+          throw new Error("invariant: idom must exist for processed block");
+        }
+        idx2 = getRpoIndex(idomBlock);
       }
     }
-    return blockOrder[idx1];
+    const result = blockOrder[idx1];
+    if (result === undefined) {
+      throw new Error(`invariant: RPO index ${idx1} must resolve to a block`);
+    }
+    return result;
   }
 
   // Iterate until fixed point. Skip the entry (index 0) since its
@@ -68,6 +91,7 @@ export function computeDominators(cfg: CFG): Map<BlockId, BlockId> {
     changed = false;
     for (let i = 1; i < blockOrder.length; i++) {
       const blockId = blockOrder[i];
+      if (blockId === undefined) continue;
       const predList = preds.get(blockId) ?? [];
 
       // Pick the first already-processed predecessor as the initial idom

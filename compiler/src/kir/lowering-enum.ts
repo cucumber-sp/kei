@@ -30,6 +30,7 @@ export function lowerEnumVariantConstruction(ctx: LoweringCtx, expr: CallExpr): 
   if (variantIndex < 0) return null;
 
   const variant = enumType.variants[variantIndex];
+  if (!variant) return null;
   const tagValue = variant.value ?? variantIndex;
   const kirEnumType = lowerCheckerType(ctx, enumType);
 
@@ -88,6 +89,7 @@ export function lowerEnumVariantAccess(ctx: LoweringCtx, expr: MemberExpr): VarI
   if (variantIndex < 0) return null;
 
   const variant = objectType.variants[variantIndex];
+  if (!variant) return null;
   const value = variant.value ?? variantIndex;
   const hasDataVariants = objectType.variants.some((v) => v.fields.length > 0);
 
