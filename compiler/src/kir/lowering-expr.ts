@@ -14,6 +14,7 @@ import type {
   AssignExpr,
   CallExpr,
   CastExpr,
+  DerefExpr,
   Expression,
   Identifier,
   IfExpr,
@@ -21,6 +22,7 @@ import type {
   MemberExpr,
   MoveExpr,
   TypeNode,
+  UnsafeExpr,
 } from "../ast/nodes";
 import type { FunctionType } from "../checker/types";
 import type { KirType, VarId } from "./kir-types";
@@ -37,7 +39,7 @@ import {
   lowerStructLiteral,
 } from "./lowering-literals";
 import { lowerBinaryExpr, lowerOperatorMethodCall, lowerUnaryExpr } from "./lowering-operators";
-import { getStructLifecycle } from "./lowering-scope";
+import { getStructLifecycle, popScopeWithDestroy, pushScope } from "./lowering-scope";
 import { lowerStatement } from "./lowering-stmt";
 import { lowerSwitchExpr } from "./lowering-switch";
 import {
@@ -87,6 +89,8 @@ export function lowerExpr(ctx: LoweringCtx, expr: Expression): VarId {
       return lowerMemberExpr(ctx, expr);
     case "IndexExpr":
       return lowerIndexExpr(ctx, expr);
+    case "DerefExpr":
+      return lowerDerefExpr(ctx, expr);
     case "AssignExpr":
       return lowerAssignExpr(ctx, expr);
     case "StructLiteral":
@@ -95,6 +99,8 @@ export function lowerExpr(ctx: LoweringCtx, expr: Expression): VarId {
       return lowerIfExpr(ctx, expr);
     case "GroupExpr":
       return lowerExpr(ctx, expr.expression);
+    case "UnsafeExpr":
+      return lowerUnsafeExpr(ctx, expr);
     case "MoveExpr":
       return lowerMoveExpr(ctx, expr);
     case "ThrowExpr":
@@ -538,6 +544,43 @@ export function lowerIfExpr(ctx: LoweringCtx, expr: IfExpr): VarId {
   const dest = freshVar(ctx);
   emit(ctx, { kind: "load", dest, ptr: resultPtr, type: resultType });
   return dest;
+}
+
+export function lowerDerefExpr(ctx: LoweringCtx, expr: DerefExpr): VarId {
+  const ptr = lowerExpr(ctx, expr.operand);
+  const type = getExprKirType(ctx, expr);
+  const dest = freshVar(ctx);
+  emit(ctx, { kind: "load", dest, ptr, type });
+  return dest;
+}
+
+export function lowerUnsafeExpr(ctx: LoweringCtx, expr: UnsafeExpr): VarId {
+  pushScope(ctx);
+  const outerVarMap = ctx.varMap;
+  ctx.varMap = new Map(outerVarMap);
+
+  let result: VarId | null = null;
+
+  for (const stmt of expr.body.statements) {
+    if (isBlockTerminated(ctx)) break;
+
+    if (stmt.kind === "ExprStmt") {
+      result = lowerExpr(ctx, stmt.expression);
+    } else {
+      lowerStatement(ctx, stmt);
+      result = null;
+    }
+  }
+
+  if (isBlockTerminated(ctx)) {
+    ctx.scopeStack.pop();
+    ctx.deferStack.pop();
+  } else {
+    popScopeWithDestroy(ctx);
+  }
+
+  ctx.varMap = outerVarMap;
+  return result ?? emitConstInt(ctx, 0);
 }
 
 export function lowerMoveExpr(ctx: LoweringCtx, expr: MoveExpr): VarId {

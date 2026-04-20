@@ -2660,3 +2660,44 @@ describe("e2e: generic struct + function combo", () => {
     expect(r.stdout).toBe("10\nten\ntrue\n99\n");
   });
 });
+
+describe("e2e: unsafe pointer lowering", () => {
+  test("unsafe address-of plus unsafe deref returns the pointed value", () => {
+    const r = run(
+      "unsafe_ptr_roundtrip",
+      `
+      fn main() -> int {
+        let x: i32 = 42;
+        let p: ptr<i32> = unsafe { &x };
+        let v: i32 = unsafe { *p };
+        return v;
+      }
+    `
+    );
+
+    expect(r.exitCode).toBe(42);
+    expect(r.stdout).toBe("");
+  });
+
+  test("pointer reads through a helper function remain correct", () => {
+    const r = run(
+      "unsafe_ptr_helper_read",
+      `
+      fn read_twice(p: ptr<i32>) -> i32 {
+        let a: i32 = unsafe { *p };
+        let b: i32 = unsafe { *p };
+        return a + b;
+      }
+
+      fn main() -> int {
+        let x: i32 = 21;
+        let p: ptr<i32> = unsafe { &x };
+        return read_twice(p);
+      }
+    `
+    );
+
+    expect(r.exitCode).toBe(42);
+    expect(r.stdout).toBe("");
+  });
+});

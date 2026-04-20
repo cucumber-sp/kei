@@ -67,7 +67,8 @@ function findPromotableAllocas(fn: KirFunction): Map<VarId, AllocaInfo> {
 
   // Second pass: classify each use of an alloca.
   // - load → record use block
-  // - store → record def block
+  // - store through the alloca → record def block
+  // - store the alloca pointer as a value → mark address-taken
   // - anything else using the alloca pointer → mark address-taken
   const addressTaken = new Set<VarId>();
 
@@ -76,6 +77,9 @@ function findPromotableAllocas(fn: KirFunction): Map<VarId, AllocaInfo> {
       if (inst.kind === "store") {
         if (allocas.has(inst.ptr)) {
           allocas.get(inst.ptr)?.defBlocks.add(block.id);
+        }
+        if (allocas.has(inst.value)) {
+          addressTaken.add(inst.value);
         }
       } else if (inst.kind === "load") {
         if (allocas.has(inst.ptr)) {

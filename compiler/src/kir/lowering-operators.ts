@@ -14,6 +14,7 @@ import {
   emitStackAlloc,
   freshBlockId,
   freshVar,
+  isStackAllocVar,
   mapBinOp,
   sealCurrentBlock,
   setTerminator,
@@ -150,8 +151,50 @@ export function lowerUnaryExpr(ctx: LoweringCtx, expr: UnaryExpr): VarId {
       emit(ctx, { kind: "bit_not", dest, operand, type });
       return dest;
     }
+    case "&":
+      return lowerAddressOfExpr(ctx, expr.operand);
     default:
       return operand;
+  }
+}
+
+function lowerAddressOfExpr(ctx: LoweringCtx, expr: Expression): VarId {
+  switch (expr.kind) {
+    case "Identifier": {
+      const varId = ctx.varMap.get(expr.name);
+      if (!varId) {
+        return lowerExpr(ctx, expr);
+      }
+      if (isStackAllocVar(ctx, varId)) {
+        return varId;
+      }
+
+      const type = getExprKirType(ctx, expr);
+      const ptr = emitStackAlloc(ctx, type);
+      emit(ctx, { kind: "store", ptr, value: varId });
+      return ptr;
+    }
+    case "MemberExpr": {
+      const base = lowerExprAsPtr(ctx, expr.object);
+      const type = getExprKirType(ctx, expr);
+      const dest = freshVar(ctx);
+      emit(ctx, { kind: "field_ptr", dest, base, field: expr.property, type });
+      return dest;
+    }
+    case "IndexExpr": {
+      const base = lowerExpr(ctx, expr.object);
+      const index = lowerExpr(ctx, expr.index);
+      const type = getExprKirType(ctx, expr);
+      const dest = freshVar(ctx);
+      emit(ctx, { kind: "index_ptr", dest, base, index, type });
+      return dest;
+    }
+    case "DerefExpr":
+      return lowerExpr(ctx, expr.operand);
+    case "GroupExpr":
+      return lowerAddressOfExpr(ctx, expr.expression);
+    default:
+      return lowerExpr(ctx, expr);
   }
 }
 
