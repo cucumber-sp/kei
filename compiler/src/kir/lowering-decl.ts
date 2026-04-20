@@ -93,6 +93,7 @@ export function resetFunctionState(ctx: LoweringCtx): void {
   ctx.loopBreakTarget = null;
   ctx.loopContinueTarget = null;
   ctx.scopeStack = [];
+  ctx.deferStack = [];
   ctx.movedVars = new Set();
 }
 
@@ -105,6 +106,7 @@ export function finalizeFunctionBody(
   // Emit destroy for function-scope variables before implicit return
   if (isBlockTerminated(ctx)) {
     ctx.scopeStack.pop(); // discard without emitting (already returned)
+    ctx.deferStack.pop();
   } else {
     popScopeWithDestroy(ctx);
   }

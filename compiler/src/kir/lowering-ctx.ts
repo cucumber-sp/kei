@@ -62,6 +62,8 @@ export interface LoweringCtx {
 
   /** Lifecycle tracking — one frame per scope, each holding the vars that need `__destroy`. */
   scopeStack: ScopeVar[][];
+  /** Deferred instruction sequences — one frame per scope, each holding captured insts in push order (emitted LIFO at scope exit). */
+  deferStack: KirInst[][][];
   /** Variables explicitly `move`'d — skipped at scope-exit destroy. */
   movedVars: Set<string>;
 
@@ -128,6 +130,7 @@ export function createLoweringCtx(
     loopScopeDepth: 0,
 
     scopeStack: [],
+    deferStack: [],
     movedVars: new Set(),
 
     structLifecycleCache: new Map(),

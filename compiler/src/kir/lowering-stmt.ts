@@ -8,6 +8,7 @@ import type {
   BlockStmt,
   CForStmt,
   ConstStmt,
+  DeferStmt,
   ExprStmt,
   ForStmt,
   IfStmt,
@@ -63,6 +64,7 @@ export function lowerScopedBlock(ctx: LoweringCtx, block: BlockStmt): void {
   }
   if (isBlockTerminated(ctx)) {
     ctx.scopeStack.pop();
+    ctx.deferStack.pop();
   } else {
     popScopeWithDestroy(ctx);
   }
@@ -122,7 +124,7 @@ export function lowerStatement(ctx: LoweringCtx, stmt: Statement): void {
       lowerRequireStmt(ctx, stmt);
       break;
     case "DeferStmt":
-      // Defer is not yet implemented in KIR
+      lowerDeferStmt(ctx, stmt);
       break;
     case "UnsafeBlock":
       lowerScopedBlock(ctx, stmt.body);
@@ -578,4 +580,18 @@ export function lowerRequireStmt(ctx: LoweringCtx, stmt: RequireStmt): void {
   const condId = lowerExpr(ctx, stmt.condition);
   const msg = stmt.message?.kind === "StringLiteral" ? stmt.message.value : "requirement failed";
   emit(ctx, { kind: "require_check", cond: condId, message: msg });
+}
+
+export function lowerDeferStmt(ctx: LoweringCtx, stmt: DeferStmt): void {
+  const frame = ctx.deferStack.at(-1);
+  if (!frame) return;
+
+  // Capture instructions emitted by the deferred body without disturbing current block
+  const saved = ctx.currentInsts;
+  const captured: typeof ctx.currentInsts = [];
+  ctx.currentInsts = captured;
+  lowerStatement(ctx, stmt.statement);
+  ctx.currentInsts = saved;
+
+  frame.push(captured);
 }

@@ -5,7 +5,7 @@
 
 import type { Expression } from "../ast/nodes";
 import type { Type } from "../checker/types";
-import type { VarId } from "./kir-types";
+import type { KirInst, VarId } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
 import { emit } from "./lowering-utils";
 
@@ -32,13 +32,23 @@ export function getStructLifecycle(
 /** Push a new scope for lifecycle tracking */
 export function pushScope(ctx: LoweringCtx): void {
   ctx.scopeStack.push([]);
+  ctx.deferStack.push([]);
 }
 
 /** Pop scope and emit destroy for all live variables in reverse declaration order */
 export function popScopeWithDestroy(ctx: LoweringCtx): void {
   const scope = ctx.scopeStack.pop();
-  if (!scope) return;
-  emitScopeDestroys(ctx, scope);
+  const defers = ctx.deferStack.pop();
+  if (defers) emitScopeDeferInsts(ctx, defers);
+  if (scope) emitScopeDestroys(ctx, scope);
+}
+
+/** Emit captured defer instruction sequences for one scope frame, in LIFO order. */
+function emitScopeDeferInsts(ctx: LoweringCtx, frame: KirInst[][]): void {
+  for (let i = frame.length - 1; i >= 0; i--) {
+    const insts = frame[i];
+    if (insts) ctx.currentInsts.push(...insts);
+  }
 }
 
 /** Emit destroys for scope variables in reverse order, skipping moved vars */
@@ -61,24 +71,28 @@ export function emitScopeDestroys(
 /** Emit destroys for all scopes (for early return) without popping */
 export function emitAllScopeDestroys(ctx: LoweringCtx): void {
   for (let i = ctx.scopeStack.length - 1; i >= 0; i--) {
+    const defers = ctx.deferStack[i];
+    if (defers) emitScopeDeferInsts(ctx, defers);
     const scope = ctx.scopeStack[i];
-    if (!scope) continue;
-    emitScopeDestroys(ctx, scope);
+    if (scope) emitScopeDestroys(ctx, scope);
   }
 }
 
 /** Emit destroys only for scopes inside the current loop (from loopScopeDepth onward) */
 export function emitLoopScopeDestroys(ctx: LoweringCtx): void {
   for (let i = ctx.scopeStack.length - 1; i >= ctx.loopScopeDepth; i--) {
+    const defers = ctx.deferStack[i];
+    if (defers) emitScopeDeferInsts(ctx, defers);
     const scope = ctx.scopeStack[i];
-    if (!scope) continue;
-    emitScopeDestroys(ctx, scope);
+    if (scope) emitScopeDestroys(ctx, scope);
   }
 }
 
 /** Emit destroys for all scopes, but skip a named variable (the returned value) */
 export function emitAllScopeDestroysExceptNamed(ctx: LoweringCtx, skipName: string | null): void {
   for (let i = ctx.scopeStack.length - 1; i >= 0; i--) {
+    const defers = ctx.deferStack[i];
+    if (defers) emitScopeDeferInsts(ctx, defers);
     const scope = ctx.scopeStack[i];
     if (!scope) continue;
     for (let j = scope.length - 1; j >= 0; j--) {
