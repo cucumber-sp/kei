@@ -130,4 +130,56 @@ describe("Checker — as cast", () => {
       "pointer cast requires unsafe"
     );
   });
+
+  test("ptr → usize in unsafe block", () => {
+    checkOk(`
+      fn main() -> int {
+        let x: i32 = 42;
+        unsafe {
+          let p = &x;
+          let a = p as usize;
+        }
+        return 0;
+      }
+    `);
+  });
+
+  test("usize → ptr in unsafe block", () => {
+    checkOk(`
+      fn main() -> int {
+        unsafe {
+          let a: usize = 0;
+          let p = a as ptr<u8>;
+        }
+        return 0;
+      }
+    `);
+  });
+
+  test("ptr → usize outside unsafe (error)", () => {
+    checkError(
+      `
+      extern fn get_ptr() -> ptr<i32>;
+      fn main() -> int {
+        let p = unsafe { get_ptr() };
+        let a = p as usize;
+        return 0;
+      }
+      `,
+      "pointer cast requires unsafe"
+    );
+  });
+
+  test("usize → ptr outside unsafe (error)", () => {
+    checkError(
+      `
+      fn main() -> int {
+        let a: usize = 0;
+        let p = a as ptr<u8>;
+        return 0;
+      }
+      `,
+      "pointer cast requires unsafe"
+    );
+  });
 });

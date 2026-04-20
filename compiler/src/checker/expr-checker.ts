@@ -508,8 +508,12 @@ export class ExpressionChecker {
     // bool → int
     if (isBoolType(operandType) && isIntegerType(targetType)) return targetType;
 
-    // ptr → ptr (unsafe only)
-    if (isPtrType(operandType) && isPtrType(targetType)) {
+    // ptr → ptr, ptr → int, int → ptr (unsafe only)
+    const ptrInvolved =
+      (isPtrType(operandType) && isPtrType(targetType)) ||
+      (isPtrType(operandType) && isIntegerType(targetType)) ||
+      (isIntegerType(operandType) && isPtrType(targetType));
+    if (ptrInvolved) {
       if (!this.checker.currentScope.isInsideUnsafe()) {
         this.checker.error("pointer cast requires unsafe block", expr.span);
         return ERROR_TYPE;
