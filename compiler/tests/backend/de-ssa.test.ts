@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { runDeSsa } from "../../src/backend/de-ssa.ts";
-import type { KirFunction, KirModule, KirType, VarId } from "../../src/kir/kir-types.ts";
-import { runMem2Reg } from "../../src/kir/mem2reg.ts";
-import { lower } from "../kir/helpers.ts";
+import { runDeSsa } from "../../src/backend/de-ssa";
+import type { KirFunction, KirModule, KirType, VarId } from "../../src/kir/kir-types";
+import { runMem2Reg } from "../../src/kir/mem2reg";
+import { lower } from "../kir/helpers";
 
 /** Lower source, run mem2reg (to get phis), then run de-ssa */
 function lowerAndDeSsa(source: string): KirModule {

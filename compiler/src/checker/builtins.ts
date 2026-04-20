@@ -3,8 +3,8 @@
  * Registers primitive types, aliases, and built-in functions in the global scope.
  */
 
-import type { Scope } from "./scope.ts";
-import { functionSymbol, typeSymbol, variableSymbol } from "./symbols.ts";
+import type { Scope } from "./scope";
+import { functionSymbol, typeSymbol, variableSymbol } from "./symbols";
 import type { Type } from "./types";
 import {
   BOOL_TYPE,

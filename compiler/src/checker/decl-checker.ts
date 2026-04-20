@@ -9,11 +9,11 @@ import type {
   ImportDecl,
   StaticDecl,
   TypeAlias,
-} from "../ast/nodes.ts";
-import type { Checker } from "./checker.ts";
-import { EnumChecker } from "./enum-checker.ts";
-import { StructChecker } from "./struct-checker.ts";
-import { functionSymbol, moduleSymbol, typeSymbol, variableSymbol } from "./symbols.ts";
+} from "../ast/nodes";
+import type { Checker } from "./checker";
+import { EnumChecker } from "./enum-checker";
+import { StructChecker } from "./struct-checker";
+import { functionSymbol, moduleSymbol, typeSymbol, variableSymbol } from "./symbols";
 import type { FunctionType, ModuleType, ParamInfo, Type } from "./types";
 import {
   ERROR_TYPE,

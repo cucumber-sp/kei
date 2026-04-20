@@ -16,8 +16,8 @@
  * pointers). Address-taken allocas remain in memory.
  */
 
-import { buildCFG, type CFG } from "./cfg.ts";
-import { buildDomTree, computeDomFrontiers, computeDominators } from "./dominance.ts";
+import { buildCFG, type CFG } from "./cfg";
+import { buildDomTree, computeDomFrontiers, computeDominators } from "./dominance";
 import type {
   BlockId,
   KirBlock,
@@ -28,7 +28,7 @@ import type {
   KirTerminator,
   KirType,
   VarId,
-} from "./kir-types.ts";
+} from "./kir-types";
 
 // ─── Promotable alloca identification ───────────────────────────────────────
 

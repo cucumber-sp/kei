@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { KirCall, KirCallVoid } from "../../src/kir/kir-types.ts";
-import { getInstructions, lowerFunction } from "./helpers.ts";
+import type { KirCall, KirCallVoid } from "../../src/kir/kir-types";
+import { getInstructions, lowerFunction } from "./helpers";
 
 describe("KIR: function calls", () => {
   test("void function call generates call_void", () => {

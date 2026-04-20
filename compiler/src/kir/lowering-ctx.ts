@@ -11,10 +11,10 @@
  * `importedNames`, …).
  */
 
-import type { Expression } from "../ast/nodes.ts";
-import type { CheckResult } from "../checker/checker.ts";
+import type { Expression } from "../ast/nodes";
+import type { CheckResult } from "../checker/checker";
 import type { Type } from "../checker/types";
-import type { Program } from "../ast/nodes.ts";
+import type { Program } from "../ast/nodes";
 import type {
   BlockId,
   KirBlock,
@@ -26,7 +26,7 @@ import type {
   KirType,
   KirTypeDecl,
   VarId,
-} from "./kir-types.ts";
+} from "./kir-types";
 
 /** A live variable inside a lowering scope — for lifecycle (`__destroy`) tracking. */
 export interface ScopeVar {

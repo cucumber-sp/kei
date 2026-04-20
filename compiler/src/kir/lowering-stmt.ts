@@ -18,10 +18,10 @@ import type {
   SwitchCase,
   SwitchStmt,
   WhileStmt,
-} from "../ast/nodes.ts";
-import type { KirType, VarId } from "./kir-types.ts";
-import type { LoweringCtx } from "./lowering-ctx.ts";
-import { lowerExpr } from "./lowering-expr.ts";
+} from "../ast/nodes";
+import type { KirType, VarId } from "./kir-types";
+import type { LoweringCtx } from "./lowering-ctx";
+import { lowerExpr } from "./lowering-expr";
 import {
   emitAllScopeDestroys,
   emitAllScopeDestroysExceptNamed,
@@ -30,8 +30,8 @@ import {
   popScopeWithDestroy,
   pushScope,
   trackScopeVar,
-} from "./lowering-scope.ts";
-import { getExprKirType, lowerCheckerType } from "./lowering-types.ts";
+} from "./lowering-scope";
+import { getExprKirType, lowerCheckerType } from "./lowering-types";
 import {
   emit,
   emitConstInt,
@@ -45,7 +45,7 @@ import {
   sealCurrentBlock,
   setTerminator,
   startBlock,
-} from "./lowering-utils.ts";
+} from "./lowering-utils";
 
 // ─── Statements ──────────────────────────────────────────────────────────
 

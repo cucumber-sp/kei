@@ -1,4 +1,4 @@
-import type { Span } from "../../lexer/token.ts";
+import type { Span } from "../../lexer/token";
 
 /** Common fields shared by all AST nodes. */
 export interface BaseNode {

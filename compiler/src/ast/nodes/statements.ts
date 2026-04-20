@@ -1,6 +1,6 @@
-import type { BaseNode } from "./base.ts";
-import type { Expression } from "./expressions.ts";
-import type { TypeNode } from "./types.ts";
+import type { BaseNode } from "./base";
+import type { Expression } from "./expressions";
+import type { TypeNode } from "./types";
 
 export enum StmtKind {
   Block = "BlockStmt",

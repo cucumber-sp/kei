@@ -58,6 +58,6 @@ export type {
   UnsafeBlock,
   UnsafeStructDecl,
   WhileStmt,
-} from "./nodes/index.ts";
+} from "./nodes";
 
-export { DeclKind, ExprKind, StmtKind, TypeNodeKind } from "./nodes/index.ts";
+export { DeclKind, ExprKind, StmtKind, TypeNodeKind } from "./nodes";

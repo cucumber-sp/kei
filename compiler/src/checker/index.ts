@@ -1,8 +1,8 @@
-export type { CheckResult } from "./checker.ts";
-export { Checker } from "./checker.ts";
-export type { MonomorphizedFunction, MonomorphizedStruct } from "./generics.ts";
-export { mangleGenericName, substituteFunctionType, substituteType } from "./generics.ts";
-export { BINARY_OP_METHODS } from "./operator-checker.ts";
+export type { CheckResult } from "./checker";
+export { Checker } from "./checker";
+export type { MonomorphizedFunction, MonomorphizedStruct } from "./generics";
+export { mangleGenericName, substituteFunctionType, substituteType } from "./generics";
+export { BINARY_OP_METHODS } from "./operator-checker";
 export type {
   ArrayType,
   BoolType,

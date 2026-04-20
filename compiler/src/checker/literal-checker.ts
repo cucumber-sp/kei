@@ -11,11 +11,11 @@ import type {
   NullLiteral,
   StringLiteral,
   StructLiteral,
-} from "../ast/nodes.ts";
-import { I32_MAX, I32_MIN } from "../utils/constants.ts";
-import type { Checker } from "./checker.ts";
-import { mangleGenericName, substituteFunctionType, substituteType } from "./generics.ts";
-import { SymbolKind } from "./symbols.ts";
+} from "../ast/nodes";
+import { I32_MAX, I32_MIN } from "../utils/constants";
+import type { Checker } from "./checker";
+import { mangleGenericName, substituteFunctionType, substituteType } from "./generics";
+import { SymbolKind } from "./symbols";
 import type { ArrayType, PtrType, RangeType, SliceType, StructType, Type } from "./types";
 import {
   arrayType,

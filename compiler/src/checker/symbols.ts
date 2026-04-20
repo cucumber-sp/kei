@@ -7,7 +7,7 @@
  * to the originating AST node.
  */
 
-import type { EnumDecl, FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes.ts";
+import type { EnumDecl, FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes";
 import type { EnumType, FunctionType, ModuleType, StructType, Type } from "./types";
 
 // ─── Symbol Kind Constants ──────────────────────────────────────────────────

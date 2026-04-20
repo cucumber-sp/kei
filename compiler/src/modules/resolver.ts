@@ -13,10 +13,10 @@
 
 import { existsSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import type { ImportDecl, Program } from "../ast/nodes.ts";
-import { Lexer } from "../lexer/index.ts";
-import { Parser } from "../parser/index.ts";
-import { SourceFile } from "../utils/source.ts";
+import type { ImportDecl, Program } from "../ast/nodes";
+import { Lexer } from "../lexer";
+import { Parser } from "../parser";
+import { SourceFile } from "../utils/source";
 
 // ─── Module Info ──────────────────────────────────────────────────────────────
 

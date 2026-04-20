@@ -4,12 +4,12 @@
  * calls, static method calls, and instance method calls.
  */
 
-import type { CallExpr, Expression, FunctionDecl } from "../ast/nodes.ts";
-import type { Checker } from "./checker.ts";
-import { mangleGenericName, substituteFunctionType } from "./generics.ts";
-import { extractTypeParamSubs } from "./literal-checker.ts";
-import type { FunctionOverload } from "./symbols.ts";
-import { SymbolKind } from "./symbols.ts";
+import type { CallExpr, Expression, FunctionDecl } from "../ast/nodes";
+import type { Checker } from "./checker";
+import { mangleGenericName, substituteFunctionType } from "./generics";
+import { extractTypeParamSubs } from "./literal-checker";
+import type { FunctionOverload } from "./symbols";
+import { SymbolKind } from "./symbols";
 import type { FunctionType, Type } from "./types";
 import {
   ERROR_TYPE,

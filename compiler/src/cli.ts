@@ -11,8 +11,8 @@
  *   - cli/ast-printer.ts          (--ast tree dump)
  */
 
-import { parseArgs, printHelp, VERSION } from "./cli/args.ts";
-import { runDriver } from "./cli/driver.ts";
+import { parseArgs, printHelp, VERSION } from "./cli/args";
+import { runDriver } from "./cli/driver";
 
 const result = parseArgs(process.argv.slice(2));
 

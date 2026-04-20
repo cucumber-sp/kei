@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getInstructions, lowerFunction } from "./helpers.ts";
+import { getInstructions, lowerFunction } from "./helpers";
 
 describe("KIR — Array Literals", () => {
   test("array literal emits stack_alloc with array type", () => {

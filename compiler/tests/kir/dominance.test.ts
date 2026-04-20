@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { buildCFG } from "../../src/kir/cfg.ts";
-import { buildDomTree, computeDomFrontiers, computeDominators } from "../../src/kir/dominance.ts";
+import { buildCFG } from "../../src/kir/cfg";
+import { buildDomTree, computeDomFrontiers, computeDominators } from "../../src/kir/dominance";
 import type { BlockId, KirBlock, KirTerminator } from "../../src/kir/kir-types";
 
 function block(id: BlockId, terminator: KirTerminator): KirBlock {

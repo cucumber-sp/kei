@@ -13,13 +13,13 @@ import type {
   Program,
   Statement,
   TypeNode,
-} from "../ast/nodes.ts";
-import type { Diagnostic } from "../errors/diagnostic.ts";
-import { Severity } from "../errors/diagnostic.ts";
-import type { Token } from "../lexer/token.ts";
-import { TokenKind } from "../lexer/token.ts";
-import { parseDeclaration } from "./decl-parser.ts";
-import { parseExpression } from "./expr-parser.ts";
+} from "../ast/nodes";
+import type { Diagnostic } from "../errors/diagnostic";
+import { Severity } from "../errors/diagnostic";
+import type { Token } from "../lexer/token";
+import { TokenKind } from "../lexer/token";
+import { parseDeclaration } from "./decl-parser";
+import { parseExpression } from "./expr-parser";
 import {
   parseAssertStatement,
   parseBreakStatement,
@@ -35,7 +35,7 @@ import {
   parseSwitchStatement,
   parseUnsafeBlockStatement,
   parseWhileStatement,
-} from "./stmt-parser.ts";
+} from "./stmt-parser";
 
 /** Token kinds that start a type annotation (used for type parsing context) */
 const TYPE_KEYWORDS: ReadonlySet<TokenKind> = new Set([

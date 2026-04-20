@@ -12,18 +12,18 @@ import type {
   IntLiteral,
   Statement,
   SwitchCase,
-} from "../ast/nodes.ts";
-import { TokenKind } from "../lexer/token.ts";
-import type { ParserContext } from "./parser.ts";
-import { parsePostfixExpression } from "./postfix-parser.ts";
+} from "../ast/nodes";
+import { TokenKind } from "../lexer/token";
+import type { ParserContext } from "./parser";
+import { parsePostfixExpression } from "./postfix-parser";
 import {
   Associativity,
   getBinaryAssociativity,
   getBinaryPrecedence,
   isAssignmentOperator,
   Precedence,
-} from "./precedence.ts";
-import { parseSwitchCase } from "./stmt-parser.ts";
+} from "./precedence";
+import { parseSwitchCase } from "./stmt-parser";
 
 export function parseExpression(ctx: ParserContext): Expression {
   return parsePrattExpression(ctx, Precedence.None);

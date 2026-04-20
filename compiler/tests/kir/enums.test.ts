@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getInstructions, getTerminators, lower, lowerFunction } from "./helpers.ts";
+import { getInstructions, getTerminators, lower, lowerFunction } from "./helpers";
 
 describe("KIR — Enum variant construction", () => {
   test("data variant construction emits stack_alloc + tag + field stores", () => {

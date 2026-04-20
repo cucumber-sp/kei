@@ -2,9 +2,9 @@
  * Type-checks enum declarations.
  */
 
-import type { EnumDecl } from "../ast/nodes.ts";
-import type { Checker } from "./checker.ts";
-import { typeSymbol } from "./symbols.ts";
+import type { EnumDecl } from "../ast/nodes";
+import type { Checker } from "./checker";
+import { typeSymbol } from "./symbols";
 import type { EnumVariantInfo } from "./types";
 import { isAssignableTo, isErrorType, isIntegerType, TypeKind, typeToString } from "./types";
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { KirBinOp, KirNeg, KirNot } from "../../src/kir/kir-types.ts";
-import { getInstructions, lowerFunction } from "./helpers.ts";
+import type { KirBinOp, KirNeg, KirNot } from "../../src/kir/kir-types";
+import { getInstructions, lowerFunction } from "./helpers";
 
 describe("KIR: arithmetic expressions", () => {
   test("addition", () => {

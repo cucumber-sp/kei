@@ -18,10 +18,10 @@ import type {
   TypeAlias,
   TypeNode,
   UnsafeStructDecl,
-} from "../ast/nodes.ts";
-import type { Token } from "../lexer/token.ts";
-import { TokenKind } from "../lexer/token.ts";
-import type { ParserContext } from "./parser.ts";
+} from "../ast/nodes";
+import type { Token } from "../lexer/token";
+import { TokenKind } from "../lexer/token";
+import type { ParserContext } from "./parser";
 
 export function parseDeclaration(ctx: ParserContext): Declaration {
   const isPublic = ctx.match(TokenKind.Pub);

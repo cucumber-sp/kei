@@ -1,8 +1,8 @@
-export { Parser } from "./parser.ts";
+export { Parser } from "./parser";
 export {
   Associativity,
   getBinaryAssociativity,
   getBinaryPrecedence,
   isAssignmentOperator,
   Precedence,
-} from "./precedence.ts";
+} from "./precedence";

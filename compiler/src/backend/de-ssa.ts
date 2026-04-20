@@ -29,7 +29,7 @@ import type {
   KirModule,
   KirType,
   VarId,
-} from "../kir/kir-types.ts";
+} from "../kir/kir-types";
 
 /**
  * Eliminate phi nodes from a KIR module by inserting copy assignments

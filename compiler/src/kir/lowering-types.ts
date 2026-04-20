@@ -3,11 +3,11 @@
  * Extracted from lowering.ts for modularity.
  */
 
-import type { Expression, FunctionDecl } from "../ast/nodes.ts";
+import type { Expression, FunctionDecl } from "../ast/nodes";
 import type { FunctionType, Type } from "../checker/types";
-import type { KirType } from "./kir-types.ts";
-import type { LoweringCtx } from "./lowering-ctx.ts";
-import { lowerEnumDecl } from "./lowering-enum-decl.ts";
+import type { KirType } from "./kir-types";
+import type { LoweringCtx } from "./lowering-ctx";
+import { lowerEnumDecl } from "./lowering-enum-decl";
 
 export function getExprKirType(ctx: LoweringCtx, expr: Expression): KirType {
   // Prefer per-instantiation type map (for monomorphized function bodies)

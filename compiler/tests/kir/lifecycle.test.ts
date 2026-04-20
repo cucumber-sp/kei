@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { KirCallExternVoid, KirDestroy, KirMove, KirOncopy } from "../../src/kir/kir-types.ts";
-import { getInstructions, lowerAndPrint, lowerFunction } from "./helpers.ts";
+import type { KirCallExternVoid, KirDestroy, KirMove, KirOncopy } from "../../src/kir/kir-types";
+import { getInstructions, lowerAndPrint, lowerFunction } from "./helpers";
 
 describe("KIR: lifecycle — destroy", () => {
   test("scope exit emits destroy in reverse declaration order", () => {

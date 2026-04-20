@@ -21,8 +21,8 @@ import type {
   SwitchStmt,
   UnsafeBlock,
   WhileStmt,
-} from "../ast/nodes.ts";
-import type { Checker } from "./checker.ts";
+} from "../ast/nodes";
+import type { Checker } from "./checker";
 import type { Type } from "./types";
 import {
   ERROR_TYPE,

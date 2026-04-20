@@ -3,16 +3,16 @@
  * Handles primitives, aliases, generics, and user-defined types.
  */
 
-import type { TypeNode } from "../ast/nodes.ts";
-import type { Span } from "../lexer/token.ts";
-import { lookupPrimitiveType } from "./builtins.ts";
+import type { TypeNode } from "../ast/nodes";
+import type { Span } from "../lexer/token";
+import { lookupPrimitiveType } from "./builtins";
 import {
   mangleGenericName,
   substituteFunctionType,
   substituteType as substituteTypeGeneric,
-} from "./generics.ts";
-import type { Scope } from "./scope.ts";
-import { SymbolKind } from "./symbols.ts";
+} from "./generics";
+import type { Scope } from "./scope";
+import { SymbolKind } from "./symbols";
 import type { FunctionType, Type } from "./types";
 import { arrayType, ERROR_TYPE, isStructType, ptrType, sliceType, TypeKind } from "./types";
 
@@ -136,7 +136,7 @@ export class TypeResolver {
 
   /** Instantiate a generic struct with concrete type arguments. */
   private instantiateStructType(
-    base: import("./types.ts").StructType,
+    base: import("./types/index.ts").StructType,
     typeArgs: TypeNode[],
     scope: Scope
   ): Type {

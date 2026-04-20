@@ -3,11 +3,11 @@
  * Extracted from lowering.ts for modularity.
  */
 
-import type { Expression } from "../ast/nodes.ts";
+import type { Expression } from "../ast/nodes";
 import type { Type } from "../checker/types";
-import type { VarId } from "./kir-types.ts";
-import type { LoweringCtx } from "./lowering-ctx.ts";
-import { emit } from "./lowering-utils.ts";
+import type { VarId } from "./kir-types";
+import type { LoweringCtx } from "./lowering-ctx";
+import { emit } from "./lowering-utils";
 
 /** Check if a checker Type is a struct that has __destroy or __oncopy methods */
 export function getStructLifecycle(

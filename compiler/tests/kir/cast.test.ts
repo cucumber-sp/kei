@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getInstructions, lowerAndPrint, lowerFunction } from "./helpers.ts";
+import { getInstructions, lowerAndPrint, lowerFunction } from "./helpers";
 
 describe("KIR: as cast", () => {
   test("i32 → f64 emits cast instruction", () => {

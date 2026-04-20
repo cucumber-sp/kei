@@ -58,9 +58,9 @@ export type {
   KirVariant,
   KirVoidType,
   VarId,
-} from "./kir-types.ts";
+} from "./kir-types";
 
-export { lowerModulesToKir, lowerToKir, runLowering } from "./lowering.ts";
-export { createLoweringCtx, type LoweringCtx } from "./lowering-ctx.ts";
-export { runMem2Reg } from "./mem2reg.ts";
-export { printKir, printType } from "./printer.ts";
+export { lowerModulesToKir, lowerToKir, runLowering } from "./lowering";
+export { createLoweringCtx, type LoweringCtx } from "./lowering-ctx";
+export { runMem2Reg } from "./mem2reg";
+export { printKir, printType } from "./printer";

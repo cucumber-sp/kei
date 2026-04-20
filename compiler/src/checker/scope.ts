@@ -12,8 +12,8 @@
  * a function boundary should *not* inherit a loop context).
  */
 
-import type { FunctionSymbol, ScopeSymbol } from "./symbols.ts";
-import { SymbolKind } from "./symbols.ts";
+import type { FunctionSymbol, ScopeSymbol } from "./symbols";
+import { SymbolKind } from "./symbols";
 import { type FunctionType, typesEqual } from "./types";
 
 export class Scope {

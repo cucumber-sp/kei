@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { join, resolve } from "node:path";
-import { ModuleResolver } from "../../src/modules/resolver.ts";
+import { ModuleResolver } from "../../src/modules/resolver";
 
 const FIXTURES_DIR = resolve(import.meta.dir, "../fixtures/modules");
 

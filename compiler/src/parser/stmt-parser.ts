@@ -23,9 +23,9 @@ import type {
   TypeNode,
   UnsafeBlock,
   WhileStmt,
-} from "../ast/nodes.ts";
-import { TokenKind } from "../lexer/token.ts";
-import type { ParserContext } from "./parser.ts";
+} from "../ast/nodes";
+import { TokenKind } from "../lexer/token";
+import type { ParserContext } from "./parser";
 
 export function parseLetStatement(ctx: ParserContext): LetStmt {
   const start = ctx.expect(TokenKind.Let);

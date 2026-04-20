@@ -4,9 +4,9 @@
 
 import { describe, expect, test } from "bun:test";
 import { join, resolve } from "node:path";
-import type { ModuleCheckInfo } from "../../src/checker/checker.ts";
-import { Checker } from "../../src/checker/checker.ts";
-import { ModuleResolver } from "../../src/modules/resolver.ts";
+import type { ModuleCheckInfo } from "../../src/checker/checker";
+import { Checker } from "../../src/checker/checker";
+import { ModuleResolver } from "../../src/modules/resolver";
 
 const FIXTURES_DIR = resolve(import.meta.dir, "../fixtures/modules");
 

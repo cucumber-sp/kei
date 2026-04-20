@@ -2,7 +2,7 @@
  * Operator precedence and associativity for Pratt parsing.
  */
 
-import { TokenKind } from "../lexer/token.ts";
+import { TokenKind } from "../lexer/token";
 
 /** Precedence levels — higher number = tighter binding */
 export enum Precedence {

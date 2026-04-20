@@ -2,8 +2,8 @@
  * Diagnostic formatting for the CLI: source-line context with caret markers.
  */
 
-import type { Diagnostic } from "../errors/index.ts";
-import type { SourceFile } from "../utils/source.ts";
+import type { Diagnostic } from "../errors";
+import type { SourceFile } from "../utils/source";
 
 /** Format a diagnostic with source context: file:line:col, message, source line, caret. */
 export function formatDiagnostic(diag: Diagnostic, source?: SourceFile): string {

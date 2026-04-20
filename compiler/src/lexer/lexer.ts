@@ -12,17 +12,17 @@
  *   - lexer-strings.ts  (string literal scanning)
  */
 
-import { type Diagnostic, Severity } from "../errors/index.ts";
-import type { SourceFile } from "../utils/source.ts";
-import * as numberMethods from "./lexer-numbers.ts";
-import * as stringMethods from "./lexer-strings.ts";
+import { type Diagnostic, Severity } from "../errors";
+import type { SourceFile } from "../utils/source";
+import * as numberMethods from "./lexer-numbers";
+import * as stringMethods from "./lexer-strings";
 import {
   getReservedTokenKind,
   isReservedKeyword,
   lookupKeyword,
   type Token,
   TokenKind,
-} from "./token.ts";
+} from "./token";
 
 // ─── Character helpers ────────────────────────────────────────────────────
 

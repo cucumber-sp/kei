@@ -20,12 +20,12 @@ import type {
   IndexExpr,
   MemberExpr,
   MoveExpr,
-} from "../ast/nodes.ts";
+} from "../ast/nodes";
 import type { FunctionType } from "../checker/types";
-import type { KirType, VarId } from "./kir-types.ts";
-import type { LoweringCtx } from "./lowering-ctx.ts";
-import { lowerEnumVariantAccess, lowerEnumVariantConstruction } from "./lowering-enum.ts";
-import { lowerCatchExpr, lowerThrowExpr } from "./lowering-error.ts";
+import type { KirType, VarId } from "./kir-types";
+import type { LoweringCtx } from "./lowering-ctx";
+import { lowerEnumVariantAccess, lowerEnumVariantConstruction } from "./lowering-enum";
+import { lowerCatchExpr, lowerThrowExpr } from "./lowering-error";
 import {
   lowerArrayLiteral,
   lowerBoolLiteral,
@@ -34,21 +34,21 @@ import {
   lowerNullLiteral,
   lowerStringLiteral,
   lowerStructLiteral,
-} from "./lowering-literals.ts";
+} from "./lowering-literals";
 import {
   lowerBinaryExpr,
   lowerOperatorMethodCall,
   lowerUnaryExpr,
-} from "./lowering-operators.ts";
-import { getStructLifecycle } from "./lowering-scope.ts";
-import { lowerStatement } from "./lowering-stmt.ts";
-import { lowerSwitchExpr } from "./lowering-switch.ts";
+} from "./lowering-operators";
+import { getStructLifecycle } from "./lowering-scope";
+import { lowerStatement } from "./lowering-stmt";
+import { lowerSwitchExpr } from "./lowering-switch";
 import {
   getExprKirType,
   lowerCheckerType,
   lowerTypeNode,
   mangleFunctionNameFromType,
-} from "./lowering-types.ts";
+} from "./lowering-types";
 import {
   emit,
   emitConstInt,
@@ -62,7 +62,7 @@ import {
   sealCurrentBlock,
   setTerminator,
   startBlock,
-} from "./lowering-utils.ts";
+} from "./lowering-utils";
 
 // ─── Expressions ─────────────────────────────────────────────────────────
 

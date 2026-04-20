@@ -3,8 +3,8 @@
  * catch throw (propagation), and catch block with error type clauses.
  */
 
-import type { CatchExpr, ThrowExpr } from "../ast/nodes.ts";
-import type { Checker } from "./checker.ts";
+import type { CatchExpr, ThrowExpr } from "../ast/nodes";
+import type { Checker } from "./checker";
 import type { Type } from "./types";
 import { ERROR_TYPE, isErrorType, TypeKind, typesEqual, typeToString, VOID_TYPE } from "./types";
 

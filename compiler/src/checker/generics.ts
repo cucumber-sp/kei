@@ -11,7 +11,7 @@
  * named `Box_i32` and `Box_bool`.
  */
 
-import type { FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes.ts";
+import type { FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes";
 import type { FunctionType, StructType, Type } from "./types";
 import {
   arrayType,

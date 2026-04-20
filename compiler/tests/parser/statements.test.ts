@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { Statement } from "../../src/ast/nodes.ts";
-import { parse } from "./helpers.ts";
+import type { Statement } from "../../src/ast/nodes";
+import { parse } from "./helpers";
 
 function parseStatements(body: string): Statement[] {
   const program = parse(`fn test() { ${body} }`);

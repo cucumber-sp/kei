@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import type { TypeNode } from "../../src/ast/nodes.ts";
-import { Scope } from "../../src/checker/scope.ts";
-import { typeSymbol } from "../../src/checker/symbols.ts";
-import { TypeResolver } from "../../src/checker/type-resolver.ts";
+import type { TypeNode } from "../../src/ast/nodes";
+import { Scope } from "../../src/checker/scope";
+import { typeSymbol } from "../../src/checker/symbols";
+import { TypeResolver } from "../../src/checker/type-resolver";
 import type { StructType } from "../../src/checker/types";
 import {
   arrayType,
@@ -22,7 +22,7 @@ import {
   U32_TYPE,
   VOID_TYPE,
 } from "../../src/checker/types";
-import type { Span } from "../../src/lexer/token.ts";
+import type { Span } from "../../src/lexer/token";
 
 const span: Span = { start: 0, end: 0 };
 

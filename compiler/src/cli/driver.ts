@@ -11,23 +11,23 @@
  *   (none)                        → lex-only token dump
  */
 
-import type { Program } from "../ast/nodes.ts";
-import { emitC } from "../backend/c-emitter.ts";
-import { runDeSsa } from "../backend/de-ssa.ts";
-import type { ModuleCheckInfo } from "../checker/checker.ts";
-import { Checker } from "../checker/checker.ts";
-import type { Diagnostic } from "../errors/index.ts";
-import type { KirModule } from "../kir/kir-types.ts";
-import { lowerModulesToKir, lowerToKir } from "../kir/lowering.ts";
-import { runMem2Reg } from "../kir/mem2reg.ts";
-import { printKir } from "../kir/printer.ts";
-import { Lexer } from "../lexer/index.ts";
-import { ModuleResolver } from "../modules/index.ts";
-import { Parser } from "../parser/index.ts";
-import { SourceFile } from "../utils/source.ts";
-import type { CliFlags } from "./args.ts";
-import { printAst } from "./ast-printer.ts";
-import { printErrorSummary, reportDiagnostics } from "./diagnostics-format.ts";
+import type { Program } from "../ast/nodes";
+import { emitC } from "../backend/c-emitter";
+import { runDeSsa } from "../backend/de-ssa";
+import type { ModuleCheckInfo } from "../checker/checker";
+import { Checker } from "../checker/checker";
+import type { Diagnostic } from "../errors";
+import type { KirModule } from "../kir/kir-types";
+import { lowerModulesToKir, lowerToKir } from "../kir/lowering";
+import { runMem2Reg } from "../kir/mem2reg";
+import { printKir } from "../kir/printer";
+import { Lexer } from "../lexer";
+import { ModuleResolver } from "../modules";
+import { Parser } from "../parser";
+import { SourceFile } from "../utils/source";
+import type { CliFlags } from "./args";
+import { printAst } from "./ast-printer";
+import { printErrorSummary, reportDiagnostics } from "./diagnostics-format";
 
 export async function runDriver(flags: CliFlags): Promise<number> {
   // Read input file

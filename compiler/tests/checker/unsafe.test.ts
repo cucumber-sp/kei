@@ -1,5 +1,5 @@
 import { describe, test } from "bun:test";
-import { checkError, checkOk } from "./helpers.ts";
+import { checkError, checkOk } from "./helpers";
 
 // Stub declarations for alloc/free (normally imported from mem module)
 const MEM_STUBS = `

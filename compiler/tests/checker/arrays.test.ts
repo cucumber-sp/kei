@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { Checker } from "../../src/checker/checker.ts";
+import { Checker } from "../../src/checker/checker";
 import type { Type } from "../../src/checker/types";
-import { Lexer } from "../../src/lexer/index.ts";
-import { Parser } from "../../src/parser/index.ts";
-import { SourceFile } from "../../src/utils/source.ts";
-import { checkError, checkOk } from "./helpers.ts";
+import { Lexer } from "../../src/lexer";
+import { Parser } from "../../src/parser";
+import { SourceFile } from "../../src/utils/source";
+import { checkError, checkOk } from "./helpers";
 
 /** Get type of a let-binding by name from checked source */
 function typeOfLet(source: string, varName: string): Type {

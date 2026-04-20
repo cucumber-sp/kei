@@ -2,19 +2,19 @@
  * Test utilities for KIR lowering.
  */
 
-import { Checker } from "../../src/checker/checker.ts";
+import { Checker } from "../../src/checker/checker";
 import type {
   KirBlock,
   KirFunction,
   KirInst,
   KirModule,
   KirTerminator,
-} from "../../src/kir/kir-types.ts";
-import { lowerToKir } from "../../src/kir/lowering.ts";
-import { printKir } from "../../src/kir/printer.ts";
-import { Lexer } from "../../src/lexer/index.ts";
-import { Parser } from "../../src/parser/index.ts";
-import { SourceFile } from "../../src/utils/source.ts";
+} from "../../src/kir/kir-types";
+import { lowerToKir } from "../../src/kir/lowering";
+import { printKir } from "../../src/kir/printer";
+import { Lexer } from "../../src/lexer";
+import { Parser } from "../../src/parser";
+import { SourceFile } from "../../src/utils/source";
 
 /** Parse, check, and lower source code to KIR. */
 export function lower(source: string): KirModule {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { lower } from "./helpers.ts";
+import { lower } from "./helpers";
 
 describe("KIR — Function Overloading", () => {
   test("overloaded functions get mangled names", () => {

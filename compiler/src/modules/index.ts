@@ -1,2 +1,2 @@
-export type { ModuleInfo, ResolverResult } from "./resolver.ts";
-export { ModuleResolver } from "./resolver.ts";
+export type { ModuleInfo, ResolverResult } from "./resolver";
+export { ModuleResolver } from "./resolver";

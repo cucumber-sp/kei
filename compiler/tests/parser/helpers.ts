@@ -1,7 +1,7 @@
-import type { Program } from "../../src/ast/nodes.ts";
-import { Lexer } from "../../src/lexer/index.ts";
-import { Parser } from "../../src/parser/index.ts";
-import { SourceFile } from "../../src/utils/source.ts";
+import type { Program } from "../../src/ast/nodes";
+import { Lexer } from "../../src/lexer";
+import { Parser } from "../../src/parser";
+import { SourceFile } from "../../src/utils/source";
 
 export function parse(source: string): Program {
   const file = new SourceFile("test.kei", source);

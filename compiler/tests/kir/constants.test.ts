@@ -4,8 +4,8 @@ import type {
   KirConstFloat,
   KirConstInt,
   KirConstString,
-} from "../../src/kir/kir-types.ts";
-import { getInstructions, lowerFunction } from "./helpers.ts";
+} from "../../src/kir/kir-types";
+import { getInstructions, lowerFunction } from "./helpers";
 
 describe("KIR: constants", () => {
   test("integer constant", () => {

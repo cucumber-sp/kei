@@ -2,13 +2,13 @@
  * Test utilities for the Kei type checker.
  */
 
-import { Checker } from "../../src/checker/checker.ts";
+import { Checker } from "../../src/checker/checker";
 import type { Type } from "../../src/checker/types";
-import type { Diagnostic } from "../../src/errors/diagnostic.ts";
-import { Severity } from "../../src/errors/diagnostic.ts";
-import { Lexer } from "../../src/lexer/index.ts";
-import { Parser } from "../../src/parser/index.ts";
-import { SourceFile } from "../../src/utils/source.ts";
+import type { Diagnostic } from "../../src/errors/diagnostic";
+import { Severity } from "../../src/errors/diagnostic";
+import { Lexer } from "../../src/lexer";
+import { Parser } from "../../src/parser";
+import { SourceFile } from "../../src/utils/source";
 
 /** Parse + check source code, return all diagnostics. */
 export function check(source: string): Diagnostic[] {

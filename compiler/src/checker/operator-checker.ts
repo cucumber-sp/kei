@@ -8,9 +8,9 @@ import type {
   BinaryExpr,
   Expression,
   UnaryExpr,
-} from "../ast/nodes.ts";
-import type { Checker } from "./checker.ts";
-import { SymbolKind } from "./symbols.ts";
+} from "../ast/nodes";
+import type { Checker } from "./checker";
+import { SymbolKind } from "./symbols";
 import type { FunctionType, StructType, Type } from "./types";
 import {
   BOOL_TYPE,

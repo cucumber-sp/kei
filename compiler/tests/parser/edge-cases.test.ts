@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { Expression } from "../../src/ast/nodes.ts";
-import { parse, parseWithDiagnostics } from "./helpers.ts";
+import type { Expression } from "../../src/ast/nodes";
+import { parse, parseWithDiagnostics } from "./helpers";
 
 function parseExpr(exprStr: string): Expression {
   const program = parse(`fn test() { let _r = ${exprStr}; }`);

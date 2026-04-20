@@ -24,13 +24,13 @@
  *   - lowering-utils.ts      (basic emit helpers)
  */
 
-import type { Program } from "../ast/nodes.ts";
-import type { CheckResult, ModuleCheckInfo, MultiModuleCheckResult } from "../checker/checker.ts";
-import type { KirModule } from "./kir-types.ts";
-import { createLoweringCtx, type LoweringCtx } from "./lowering-ctx.ts";
-import { lowerDeclaration, lowerMonomorphizedFunction } from "./lowering-decl.ts";
-import { lowerMethod, lowerMonomorphizedStruct } from "./lowering-struct.ts";
-import { lowerTypeNode, mangleFunctionName } from "./lowering-types.ts";
+import type { Program } from "../ast/nodes";
+import type { CheckResult, ModuleCheckInfo, MultiModuleCheckResult } from "../checker/checker";
+import type { KirModule } from "./kir-types";
+import { createLoweringCtx, type LoweringCtx } from "./lowering-ctx";
+import { lowerDeclaration, lowerMonomorphizedFunction } from "./lowering-decl";
+import { lowerMethod, lowerMonomorphizedStruct } from "./lowering-struct";
+import { lowerTypeNode, mangleFunctionName } from "./lowering-types";
 
 /**
  * Run the full AST → KIR lowering against a prepared context. Mutates `ctx`

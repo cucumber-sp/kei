@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { KirFieldPtr, KirStackAlloc, KirStore } from "../../src/kir/kir-types.ts";
-import { getInstructions, lower, lowerFunction } from "./helpers.ts";
+import type { KirFieldPtr, KirStackAlloc, KirStore } from "../../src/kir/kir-types";
+import { getInstructions, lower, lowerFunction } from "./helpers";
 
 describe("KIR: struct type declarations", () => {
   test("struct declaration generates type decl", () => {

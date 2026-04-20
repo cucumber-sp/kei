@@ -15,10 +15,10 @@ import type {
   RangeExpr,
   SwitchExpr,
   UnsafeExpr,
-} from "../ast/nodes.ts";
-import { checkCallExpression } from "./call-checker.ts";
-import { checkCatchExpression, checkThrowExpression } from "./catch-checker.ts";
-import type { Checker } from "./checker.ts";
+} from "../ast/nodes";
+import { checkCallExpression } from "./call-checker";
+import { checkCatchExpression, checkThrowExpression } from "./catch-checker";
+import type { Checker } from "./checker";
 import {
   checkArrayLiteral,
   checkBoolLiteral,
@@ -27,13 +27,13 @@ import {
   checkNullLiteral,
   checkStringLiteral,
   checkStructLiteral,
-} from "./literal-checker.ts";
+} from "./literal-checker";
 import {
   checkAssignExpression,
   checkBinaryExpression,
   checkUnaryExpression,
-} from "./operator-checker.ts";
-import { SymbolKind } from "./symbols.ts";
+} from "./operator-checker";
+import { SymbolKind } from "./symbols";
 import type { Type } from "./types";
 import {
   ERROR_TYPE,

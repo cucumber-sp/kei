@@ -7,23 +7,23 @@
  * Enum declaration lowering: lowering-enum-decl.ts
  */
 
-import type { Declaration, ExternFunctionDecl, FunctionDecl, StaticDecl } from "../ast/nodes.ts";
-import type { MonomorphizedFunction } from "../checker/generics.ts";
-import type { KirExtern, KirFunction, KirGlobal, KirParam, KirType, VarId } from "./kir-types.ts";
-import type { LoweringCtx } from "./lowering-ctx.ts";
-import { lowerEnumDecl } from "./lowering-enum-decl.ts";
+import type { Declaration, ExternFunctionDecl, FunctionDecl, StaticDecl } from "../ast/nodes";
+import type { MonomorphizedFunction } from "../checker/generics";
+import type { KirExtern, KirFunction, KirGlobal, KirParam, KirType, VarId } from "./kir-types";
+import type { LoweringCtx } from "./lowering-ctx";
+import { lowerEnumDecl } from "./lowering-enum-decl";
 import {
   pushScope,
   popScopeWithDestroy,
   trackScopeVarByType,
-} from "./lowering-scope.ts";
-import { lowerBlock } from "./lowering-stmt.ts";
+} from "./lowering-scope";
+import { lowerBlock } from "./lowering-stmt";
 import {
   lowerAutoDestroy,
   lowerAutoOncopy,
   lowerMethod,
   lowerStructDecl,
-} from "./lowering-struct.ts";
+} from "./lowering-struct";
 import {
   getExprKirType,
   getFunctionReturnType,
@@ -32,14 +32,14 @@ import {
   mangleFunctionName,
   resolveParamCheckerType,
   resolveParamType,
-} from "./lowering-types.ts";
+} from "./lowering-types";
 import {
   emitConstInt,
   ensureTerminator,
   isBlockTerminated,
   sealCurrentBlock,
   setTerminator,
-} from "./lowering-utils.ts";
+} from "./lowering-utils";
 
 // ─── Declarations ────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
-import type { BaseNode } from "./base.ts";
-import type { BlockStmt, Statement, SwitchCase } from "./statements.ts";
-import type { TypeNode } from "./types.ts";
+import type { BaseNode } from "./base";
+import type { BlockStmt, Statement, SwitchCase } from "./statements";
+import type { TypeNode } from "./types";
 
 export enum ExprKind {
   Binary = "BinaryExpr",

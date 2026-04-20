@@ -14,7 +14,7 @@ import type {
   KirTerminator,
   KirType,
   KirTypeDecl,
-} from "./kir-types.ts";
+} from "./kir-types";
 
 export function printKir(module: KirModule): string {
   const lines: string[] = [];

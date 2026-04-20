@@ -5,11 +5,11 @@
  * Expects phi nodes to have already been eliminated by the de-SSA pass.
  */
 
-import type { KirModule } from "../kir/kir-types.ts";
+import type { KirModule } from "../kir/kir-types";
 import runtimeHeaderSource from "../runtime/runtime.h" with { type: "text" };
-import { emitExtern, emitFunctionPrototype, emitGlobal, emitTypeDecl } from "./c-emitter-decls.ts";
-import { emitFunction } from "./c-emitter-fn.ts";
-import { sanitizeName } from "./c-emitter-types.ts";
+import { emitExtern, emitFunctionPrototype, emitGlobal, emitTypeDecl } from "./c-emitter-decls";
+import { emitFunction } from "./c-emitter-fn";
+import { sanitizeName } from "./c-emitter-types";
 
 // ─── Runtime header (embedded at build time via Bun text import) ────────────
 // Embedding avoids the runtime fs read that broke when the compiler was

@@ -4,11 +4,11 @@
  * Extracted from expr-parser.ts.
  */
 
-import type { CastExpr, Expression, FieldInit, TypeNode } from "../ast/nodes.ts";
-import { TokenKind } from "../lexer/token.ts";
-import { parseCatchExpression } from "./catch-parser.ts";
-import { parseExpression } from "./expr-parser.ts";
-import type { ParserContext } from "./parser.ts";
+import type { CastExpr, Expression, FieldInit, TypeNode } from "../ast/nodes";
+import { TokenKind } from "../lexer/token";
+import { parseCatchExpression } from "./catch-parser";
+import { parseExpression } from "./expr-parser";
+import type { ParserContext } from "./parser";
 
 export function parsePostfixExpression(ctx: ParserContext, left: Expression): Expression {
   while (true) {

@@ -2,10 +2,10 @@
  * Function body emission and variable declaration collection.
  */
 
-import type { KirFunction, KirInst, KirType, VarId } from "../kir/kir-types.ts";
-import { emitFunctionPrototype } from "./c-emitter-decls.ts";
-import { emitInst, emitTerminator } from "./c-emitter-insts.ts";
-import { emitCTypeForDecl, sanitizeName, varName } from "./c-emitter-types.ts";
+import type { KirFunction, KirInst, KirType, VarId } from "../kir/kir-types";
+import { emitFunctionPrototype } from "./c-emitter-decls";
+import { emitInst, emitTerminator } from "./c-emitter-insts";
+import { emitCTypeForDecl, sanitizeName, varName } from "./c-emitter-types";
 
 // ─── Function emission ──────────────────────────────────────────────────────
 

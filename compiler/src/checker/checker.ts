@@ -12,20 +12,20 @@ import type {
   Statement,
   SwitchCase,
   TypeNode,
-} from "../ast/nodes.ts";
-import type { Diagnostic, SourceLocation } from "../errors/diagnostic.ts";
-import { Severity } from "../errors/diagnostic.ts";
-import type { Span } from "../lexer/token.ts";
-import type { SourceFile } from "../utils/source.ts";
-import { registerBuiltins } from "./builtins.ts";
-import { DeclarationChecker } from "./decl-checker.ts";
-import { ExpressionChecker } from "./expr-checker.ts";
-import type { MonomorphizedFunction, MonomorphizedStruct } from "./generics.ts";
-import { Scope } from "./scope.ts";
-import { StatementChecker } from "./stmt-checker.ts";
-import type { ScopeSymbol } from "./symbols.ts";
-import { SymbolKind, typeSymbol, variableSymbol } from "./symbols.ts";
-import { TypeResolver } from "./type-resolver.ts";
+} from "../ast/nodes";
+import type { Diagnostic, SourceLocation } from "../errors/diagnostic";
+import { Severity } from "../errors/diagnostic";
+import type { Span } from "../lexer/token";
+import type { SourceFile } from "../utils/source";
+import { registerBuiltins } from "./builtins";
+import { DeclarationChecker } from "./decl-checker";
+import { ExpressionChecker } from "./expr-checker";
+import type { MonomorphizedFunction, MonomorphizedStruct } from "./generics";
+import { Scope } from "./scope";
+import { StatementChecker } from "./stmt-checker";
+import type { ScopeSymbol } from "./symbols";
+import { SymbolKind, typeSymbol, variableSymbol } from "./symbols";
+import { TypeResolver } from "./type-resolver";
 import type { FunctionType, StructType, Type } from "./types";
 import { TypeKind, typeToString } from "./types";
 

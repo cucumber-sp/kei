@@ -3,15 +3,15 @@
  * Extracted from lowering-expr.ts for modularity.
  */
 
-import type { CatchExpr, Expression, ThrowExpr } from "../ast/nodes.ts";
+import type { CatchExpr, Expression, ThrowExpr } from "../ast/nodes";
 import type { FunctionType } from "../checker/types";
-import type { KirType, VarId } from "./kir-types.ts";
-import type { LoweringCtx } from "./lowering-ctx.ts";
-import { lowerExpr } from "./lowering-expr.ts";
-import { emitAllScopeDestroys } from "./lowering-scope.ts";
-import { lowerStatement } from "./lowering-stmt.ts";
-import { findConstIntInst } from "./lowering-switch.ts";
-import { getExprKirType, lowerCheckerType, mangleFunctionNameFromType } from "./lowering-types.ts";
+import type { KirType, VarId } from "./kir-types";
+import type { LoweringCtx } from "./lowering-ctx";
+import { lowerExpr } from "./lowering-expr";
+import { emitAllScopeDestroys } from "./lowering-scope";
+import { lowerStatement } from "./lowering-stmt";
+import { findConstIntInst } from "./lowering-switch";
+import { getExprKirType, lowerCheckerType, mangleFunctionNameFromType } from "./lowering-types";
 import {
   emit,
   emitCastToPtr,
@@ -24,7 +24,7 @@ import {
   sealCurrentBlock,
   setTerminator,
   startBlock,
-} from "./lowering-utils.ts";
+} from "./lowering-utils";
 
 export function lowerThrowExpr(ctx: LoweringCtx, expr: ThrowExpr): VarId {
   // throw ErrorType{} → cast __err to typed pointer, store error value, return error tag

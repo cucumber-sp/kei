@@ -6,10 +6,10 @@
  * Note: enum variant construction and access are in lowering-enum.ts.
  */
 
-import type { EnumDecl } from "../ast/nodes.ts";
-import type { KirTypeDecl } from "./kir-types.ts";
-import type { LoweringCtx } from "./lowering-ctx.ts";
-import { lowerTypeNode } from "./lowering-types.ts";
+import type { EnumDecl } from "../ast/nodes";
+import type { KirTypeDecl } from "./kir-types";
+import type { LoweringCtx } from "./lowering-ctx";
+import { lowerTypeNode } from "./lowering-types";
 
 export function lowerEnumDecl(ctx: LoweringCtx, decl: EnumDecl): KirTypeDecl {
   const variants = decl.variants.map((v) => ({

@@ -4,8 +4,8 @@
  * Extracted from lowering-decl.ts for modularity.
  */
 
-import type { FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes.ts";
-import type { MonomorphizedStruct } from "../checker/generics.ts";
+import type { FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes";
+import type { MonomorphizedStruct } from "../checker/generics";
 import type { StructType } from "../checker/types";
 import type {
   KirBlock,
@@ -15,17 +15,17 @@ import type {
   KirType,
   KirTypeDecl,
   VarId,
-} from "./kir-types.ts";
-import type { LoweringCtx } from "./lowering-ctx.ts";
-import { resetFunctionState, finalizeFunctionBody } from "./lowering-decl.ts";
-import { lowerBlock } from "./lowering-stmt.ts";
+} from "./kir-types";
+import type { LoweringCtx } from "./lowering-ctx";
+import { resetFunctionState, finalizeFunctionBody } from "./lowering-decl";
+import { lowerBlock } from "./lowering-stmt";
 import {
   getFunctionReturnType,
   lowerCheckerType,
   lowerTypeNode,
   resolveParamType,
-} from "./lowering-types.ts";
-import { pushScope } from "./lowering-scope.ts";
+} from "./lowering-types";
+import { pushScope } from "./lowering-scope";
 
 export function lowerStructDecl(
   ctx: LoweringCtx,

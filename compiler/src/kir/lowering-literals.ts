@@ -10,12 +10,12 @@ import type {
   IntLiteral,
   StringLiteral,
   StructLiteral,
-} from "../ast/nodes.ts";
-import type { KirFloatType, KirIntType, KirType, VarId } from "./kir-types.ts";
-import type { LoweringCtx } from "./lowering-ctx.ts";
-import { lowerExpr } from "./lowering-expr.ts";
-import { lowerCheckerType, getExprKirType } from "./lowering-types.ts";
-import { emit, emitStackAlloc, freshVar } from "./lowering-utils.ts";
+} from "../ast/nodes";
+import type { KirFloatType, KirIntType, KirType, VarId } from "./kir-types";
+import type { LoweringCtx } from "./lowering-ctx";
+import { lowerExpr } from "./lowering-expr";
+import { lowerCheckerType, getExprKirType } from "./lowering-types";
+import { emit, emitStackAlloc, freshVar } from "./lowering-utils";
 
 export function lowerIntLiteral(ctx: LoweringCtx, expr: IntLiteral): VarId {
   const dest = freshVar(ctx);

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseWithDiagnostics } from "./helpers.ts";
+import { parseWithDiagnostics } from "./helpers";
 
 describe("Parser — Error Recovery", () => {
   test("missing semicolon after let", () => {

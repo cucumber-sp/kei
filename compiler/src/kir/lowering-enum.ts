@@ -7,12 +7,12 @@
  *   - Enum variant member access: Color.Red → integer discriminant or tagged union struct
  */
 
-import type { CallExpr, MemberExpr } from "../ast/nodes.ts";
-import type { VarId } from "./kir-types.ts";
-import type { LoweringCtx } from "./lowering-ctx.ts";
-import { lowerExpr } from "./lowering-expr.ts";
-import { lowerCheckerType } from "./lowering-types.ts";
-import { emit, emitStackAlloc, freshVar } from "./lowering-utils.ts";
+import type { CallExpr, MemberExpr } from "../ast/nodes";
+import type { VarId } from "./kir-types";
+import type { LoweringCtx } from "./lowering-ctx";
+import { lowerExpr } from "./lowering-expr";
+import { lowerCheckerType } from "./lowering-types";
+import { emit, emitStackAlloc, freshVar } from "./lowering-utils";
 
 /**
  * Lower an enum data variant construction call: Shape.Circle(3.14)

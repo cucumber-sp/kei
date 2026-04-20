@@ -6,15 +6,15 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { emitC } from "../../src/backend/c-emitter.ts";
-import { runDeSsa } from "../../src/backend/de-ssa.ts";
-import { Checker } from "../../src/checker/checker.ts";
-import type { Diagnostic } from "../../src/errors/diagnostic.ts";
-import { lowerToKir } from "../../src/kir/lowering.ts";
-import { runMem2Reg } from "../../src/kir/mem2reg.ts";
-import { Lexer } from "../../src/lexer/index.ts";
-import { Parser } from "../../src/parser/index.ts";
-import { SourceFile } from "../../src/utils/source.ts";
+import { emitC } from "../../src/backend/c-emitter";
+import { runDeSsa } from "../../src/backend/de-ssa";
+import { Checker } from "../../src/checker/checker";
+import type { Diagnostic } from "../../src/errors/diagnostic";
+import { lowerToKir } from "../../src/kir/lowering";
+import { runMem2Reg } from "../../src/kir/mem2reg";
+import { Lexer } from "../../src/lexer";
+import { Parser } from "../../src/parser";
+import { SourceFile } from "../../src/utils/source";
 
 /** Run the full pipeline: source → tokens → AST → check → KIR → mem2reg → de-ssa → C */
 function compileFull(source: string): string {

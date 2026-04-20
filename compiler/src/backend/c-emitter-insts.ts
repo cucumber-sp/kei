@@ -2,7 +2,7 @@
  * Instruction and terminator emission for the C backend.
  */
 
-import type { BinOp, KirInst, KirTerminator, KirType, VarId } from "../kir/kir-types.ts";
+import type { BinOp, KirInst, KirTerminator, KirType, VarId } from "../kir/kir-types";
 import {
   cStringLiteral,
   emitCType,
@@ -10,7 +10,7 @@ import {
   I32_MIN,
   sanitizeName,
   varName,
-} from "./c-emitter-types.ts";
+} from "./c-emitter-types";
 
 // ─── Instruction emission ───────────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 import { describe, test } from "bun:test";
-import { checkError, checkOk } from "./helpers.ts";
+import { checkError, checkOk } from "./helpers";
 
 describe("Checker — Error Handling", () => {
   test("call throws function without catch → error", () => {

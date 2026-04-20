@@ -1,5 +1,5 @@
 import { describe, test } from "bun:test";
-import { checkError, checkOk } from "./helpers.ts";
+import { checkError, checkOk } from "./helpers";
 
 describe("Checker — Lifecycle", () => {
   test("move x marks x as moved", () => {

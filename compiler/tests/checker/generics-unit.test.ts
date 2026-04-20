@@ -3,7 +3,7 @@ import {
   mangleGenericName,
   substituteFunctionType,
   substituteType,
-} from "../../src/checker/generics.ts";
+} from "../../src/checker/generics";
 import type { FunctionType, StructType, Type } from "../../src/checker/types";
 import {
   arrayType,

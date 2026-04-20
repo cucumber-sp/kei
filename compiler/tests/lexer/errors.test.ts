@@ -3,9 +3,9 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { Severity } from "../../src/errors/index.ts";
-import { Lexer, TokenKind } from "../../src/lexer/index.ts";
-import { SourceFile } from "../../src/utils/source.ts";
+import { Severity } from "../../src/errors";
+import { Lexer, TokenKind } from "../../src/lexer";
+import { SourceFile } from "../../src/utils/source";
 
 describe("Error handling", () => {
   test("should handle invalid characters", () => {

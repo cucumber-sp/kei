@@ -3,9 +3,9 @@
  * Extracted from expr-parser.ts.
  */
 
-import type { CatchClause, CatchExpr, Expression, Statement } from "../ast/nodes.ts";
-import { TokenKind } from "../lexer/token.ts";
-import type { ParserContext } from "./parser.ts";
+import type { CatchClause, CatchExpr, Expression, Statement } from "../ast/nodes";
+import { TokenKind } from "../lexer/token";
+import type { ParserContext } from "./parser";
 
 export function parseCatchExpression(ctx: ParserContext, operand: Expression): CatchExpr {
   ctx.expect(TokenKind.Catch);

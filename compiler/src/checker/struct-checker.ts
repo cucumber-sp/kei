@@ -3,9 +3,9 @@
  * lifecycle hook auto-generation (__destroy / __oncopy).
  */
 
-import type { Declaration, FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes.ts";
-import type { Checker } from "./checker.ts";
-import { typeSymbol } from "./symbols.ts";
+import type { Declaration, FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes";
+import type { Checker } from "./checker";
+import { typeSymbol } from "./symbols";
 import type { FunctionType, ParamInfo, StructType } from "./types";
 import { functionType, isPtrType, TypeKind, VOID_TYPE } from "./types";
 

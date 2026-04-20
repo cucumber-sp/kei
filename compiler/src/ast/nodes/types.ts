@@ -1,4 +1,4 @@
-import type { BaseNode } from "./base.ts";
+import type { BaseNode } from "./base";
 
 export enum TypeNodeKind {
   Named = "NamedType",

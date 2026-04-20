@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getTerminators, lowerFunction } from "./helpers.ts";
+import { getTerminators, lowerFunction } from "./helpers";
 
 describe("KIR: switch statements", () => {
   test("switch generates switch terminator", () => {

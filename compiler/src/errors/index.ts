@@ -1,1 +1,1 @@
-export { type Diagnostic, Severity, type SourceLocation } from "./diagnostic.ts";
+export { type Diagnostic, Severity, type SourceLocation } from "./diagnostic";

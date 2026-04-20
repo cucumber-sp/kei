@@ -7,8 +7,8 @@
  * children from the idom map.
  */
 
-import type { CFG } from "./cfg.ts";
-import type { BlockId } from "./kir-types.ts";
+import type { CFG } from "./cfg";
+import type { BlockId } from "./kir-types";
 
 // ─── Dominance (Cooper, Harvey, Kennedy) ────────────────────────────────────
 

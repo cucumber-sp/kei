@@ -3,12 +3,12 @@
  * Extracted from lowering-expr.ts for modularity.
  */
 
-import type { Statement, SwitchCase, SwitchExpr } from "../ast/nodes.ts";
-import type { KirType, VarId } from "./kir-types.ts";
-import type { LoweringCtx } from "./lowering-ctx.ts";
-import { lowerExpr } from "./lowering-expr.ts";
-import { lowerStatement } from "./lowering-stmt.ts";
-import { getExprKirType, lowerCheckerType } from "./lowering-types.ts";
+import type { Statement, SwitchCase, SwitchExpr } from "../ast/nodes";
+import type { KirType, VarId } from "./kir-types";
+import type { LoweringCtx } from "./lowering-ctx";
+import { lowerExpr } from "./lowering-expr";
+import { lowerStatement } from "./lowering-stmt";
+import { getExprKirType, lowerCheckerType } from "./lowering-types";
 import {
   emit,
   emitFieldLoad,
@@ -19,7 +19,7 @@ import {
   sealCurrentBlock,
   setTerminator,
   startBlock,
-} from "./lowering-utils.ts";
+} from "./lowering-utils";
 
 export function lowerSwitchExpr(ctx: LoweringCtx, expr: SwitchExpr): VarId {
   const subjectId = lowerExpr(ctx, expr.subject);

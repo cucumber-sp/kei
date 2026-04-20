@@ -3,8 +3,8 @@
  * Extracted from lexer.ts for modularity.
  */
 
-import { Severity } from "../errors/index.ts";
-import type { Lexer } from "./lexer.ts";
+import { Severity } from "../errors";
+import type { Lexer } from "./lexer";
 import {
   isAlpha,
   isAlphaNumeric,
@@ -12,9 +12,9 @@ import {
   isDigit,
   isHexDigit,
   isOctalDigit,
-} from "./lexer.ts";
-import type { Token } from "./token.ts";
-import { TokenKind } from "./token.ts";
+} from "./lexer";
+import type { Token } from "./token";
+import { TokenKind } from "./token";
 
 // ─── Number scanning ──────────────────────────────────────────────────────
 

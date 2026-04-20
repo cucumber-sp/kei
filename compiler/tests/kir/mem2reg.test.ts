@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import type { KirFunction, KirPhi } from "../../src/kir/kir-types.ts";
-import { runMem2Reg } from "../../src/kir/mem2reg.ts";
-import { printKir } from "../../src/kir/printer.ts";
-import { getInstructions, lower } from "./helpers.ts";
+import type { KirFunction, KirPhi } from "../../src/kir/kir-types";
+import { runMem2Reg } from "../../src/kir/mem2reg";
+import { printKir } from "../../src/kir/printer";
+import { getInstructions, lower } from "./helpers";
 
 /** Lower source, run mem2reg, return module. */
 function lowerOpt(source: string) {

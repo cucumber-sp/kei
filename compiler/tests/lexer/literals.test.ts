@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { Lexer, TokenKind } from "../../src/lexer/index.ts";
-import { SourceFile } from "../../src/utils/source.ts";
+import { Lexer, TokenKind } from "../../src/lexer";
+import { SourceFile } from "../../src/utils/source";
 
 function tokenize(input: string) {
   const source = new SourceFile("test.kei", input);

@@ -3,11 +3,11 @@
  * Extracted from lexer.ts for modularity.
  */
 
-import { Severity } from "../errors/index.ts";
-import type { Lexer } from "./lexer.ts";
-import { isHexDigit } from "./lexer.ts";
-import type { Token } from "./token.ts";
-import { TokenKind } from "./token.ts";
+import { Severity } from "../errors";
+import type { Lexer } from "./lexer";
+import { isHexDigit } from "./lexer";
+import type { Token } from "./token";
+import { TokenKind } from "./token";
 
 // ─── String scanning ──────────────────────────────────────────────────────
 

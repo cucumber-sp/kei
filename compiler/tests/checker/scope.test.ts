@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { Scope } from "../../src/checker/scope.ts";
+import { Scope } from "../../src/checker/scope";
 import {
   functionSymbol,
   SymbolKind,
   typeSymbol,
   variableSymbol,
-} from "../../src/checker/symbols.ts";
+} from "../../src/checker/symbols";
 import type { FunctionType } from "../../src/checker/types";
 import {
   BOOL_TYPE,

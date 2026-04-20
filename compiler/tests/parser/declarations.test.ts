@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parse } from "./helpers.ts";
+import { parse } from "./helpers";
 
 describe("Parser — Declarations", () => {
   test("simple function", () => {

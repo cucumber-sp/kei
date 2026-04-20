@@ -6,8 +6,8 @@
  * `./lowering-*.ts` siblings; this file happens to be self-contained.
  */
 
-import type { BinOp, BlockId, KirInst, KirTerminator, KirType, VarId } from "./kir-types.ts";
-import type { LoweringCtx } from "./lowering-ctx.ts";
+import type { BinOp, BlockId, KirInst, KirTerminator, KirType, VarId } from "./kir-types";
+import type { LoweringCtx } from "./lowering-ctx";
 
 export function freshVar(ctx: LoweringCtx): VarId {
   return `%${ctx.varCounter++}`;

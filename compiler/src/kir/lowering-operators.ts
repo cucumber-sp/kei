@@ -3,12 +3,12 @@
  * Extracted from lowering-expr.ts for modularity.
  */
 
-import type { BinaryExpr, Expression, UnaryExpr } from "../ast/nodes.ts";
+import type { BinaryExpr, Expression, UnaryExpr } from "../ast/nodes";
 import type { StructType } from "../checker/types";
-import type { KirType, VarId } from "./kir-types.ts";
-import type { LoweringCtx } from "./lowering-ctx.ts";
-import { lowerExpr, lowerExprAsPtr } from "./lowering-expr.ts";
-import { getExprKirType, lowerCheckerType } from "./lowering-types.ts";
+import type { KirType, VarId } from "./kir-types";
+import type { LoweringCtx } from "./lowering-ctx";
+import { lowerExpr, lowerExprAsPtr } from "./lowering-expr";
+import { getExprKirType, lowerCheckerType } from "./lowering-types";
 import {
   emit,
   emitStackAlloc,
@@ -18,7 +18,7 @@ import {
   sealCurrentBlock,
   setTerminator,
   startBlock,
-} from "./lowering-utils.ts";
+} from "./lowering-utils";
 
 export function lowerBinaryExpr(ctx: LoweringCtx, expr: BinaryExpr): VarId {
   // Check for operator overloading

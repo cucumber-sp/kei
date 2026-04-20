@@ -1,4 +1,4 @@
-export type { BaseNode } from "./base.ts";
+export type { BaseNode } from "./base";
 export type {
   Declaration,
   EnumDecl,
@@ -12,8 +12,8 @@ export type {
   StructDecl,
   TypeAlias,
   UnsafeStructDecl,
-} from "./declarations.ts";
-export { DeclKind } from "./declarations.ts";
+} from "./declarations";
+export { DeclKind } from "./declarations";
 export type {
   ArrayLiteral,
   AssignExpr,
@@ -42,9 +42,9 @@ export type {
   ThrowExpr,
   UnaryExpr,
   UnsafeExpr,
-} from "./expressions.ts";
-export { ExprKind } from "./expressions.ts";
-export type { Program } from "./program.ts";
+} from "./expressions";
+export { ExprKind } from "./expressions";
+export type { Program } from "./program";
 export type {
   AssertStmt,
   BlockStmt,
@@ -64,7 +64,7 @@ export type {
   SwitchStmt,
   UnsafeBlock,
   WhileStmt,
-} from "./statements.ts";
-export { StmtKind } from "./statements.ts";
-export type { GenericType, NamedType, TypeNode } from "./types.ts";
-export { TypeNodeKind } from "./types.ts";
+} from "./statements";
+export { StmtKind } from "./statements";
+export type { GenericType, NamedType, TypeNode } from "./types";
+export { TypeNodeKind } from "./types";

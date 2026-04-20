@@ -1,5 +1,5 @@
 import { describe, test } from "bun:test";
-import { checkOk } from "./helpers.ts";
+import { checkOk } from "./helpers";
 
 describe("Checker — Integration", () => {
   test("complete program: main function returns int", () => {

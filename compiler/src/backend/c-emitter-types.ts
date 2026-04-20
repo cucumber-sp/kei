@@ -2,8 +2,8 @@
  * C type mapping, name sanitization, and string literal helpers.
  */
 
-import type { KirType, VarId } from "../kir/kir-types.ts";
-import { I32_MAX, I32_MIN } from "../utils/constants.ts";
+import type { KirType, VarId } from "../kir/kir-types";
+import { I32_MAX, I32_MIN } from "../utils/constants";
 
 export { I32_MIN, I32_MAX };
 

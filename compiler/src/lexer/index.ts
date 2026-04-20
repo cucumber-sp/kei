@@ -1,4 +1,4 @@
-export { Lexer } from "./lexer.ts";
+export { Lexer } from "./lexer";
 export {
   getReservedTokenKind,
   isReservedKeyword,
@@ -6,4 +6,4 @@ export {
   type Span,
   type Token,
   TokenKind,
-} from "./token.ts";
+} from "./token";

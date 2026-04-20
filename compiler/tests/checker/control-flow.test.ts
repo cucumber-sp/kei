@@ -1,5 +1,5 @@
 import { describe, test } from "bun:test";
-import { checkError, checkOk, checkWarning } from "./helpers.ts";
+import { checkError, checkOk, checkWarning } from "./helpers";
 
 describe("Checker — Control Flow", () => {
   test("break inside while → ok", () => {
