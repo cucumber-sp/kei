@@ -66,7 +66,42 @@ export function emitTypeDecl(td: KirTypeDecl): string {
 
 // ─── Extern declarations ────────────────────────────────────────────────────
 
+// Names already declared by the libc headers the runtime #includes;
+// re-declaring with Kei-typed signatures produces conflicting-type errors.
+const LIBC_NAMES: ReadonlySet<string> = new Set([
+  "malloc",
+  "calloc",
+  "realloc",
+  "free",
+  "memcpy",
+  "memmove",
+  "memset",
+  "memcmp",
+  "strlen",
+  "strcmp",
+  "strcpy",
+  "strncpy",
+  "strcat",
+  "strncat",
+  "strchr",
+  "strstr",
+  "putchar",
+  "getchar",
+  "puts",
+  "printf",
+  "fprintf",
+  "sprintf",
+  "snprintf",
+  "scanf",
+  "exit",
+  "abort",
+  "atoi",
+  "atol",
+  "atof",
+]);
+
 export function emitExtern(ext: KirExtern): string {
+  if (LIBC_NAMES.has(ext.name)) return `/* extern ${ext.name}: provided by libc */`;
   const params = ext.params.map((p) => emitCType(p.type)).join(", ");
   return `extern ${emitCType(ext.returnType)} ${sanitizeName(ext.name)}(${params || "void"});`;
 }

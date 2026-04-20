@@ -2721,4 +2721,26 @@ describe("e2e: unsafe pointer lowering", () => {
     expect(r.exitCode).toBe(42);
     expect(r.stdout).toBe("");
   });
+
+  test("pointer arithmetic via ptr↔usize cast yields the expected byte offset", () => {
+    const r = run(
+      "unsafe_ptr_arith",
+      `
+      import { alloc, dealloc } from mem;
+      fn main() -> int {
+        unsafe {
+          let buf: ptr<u8> = alloc(16);
+          let offset: usize = 4;
+          let shifted: ptr<u8> = ((buf as usize) + offset) as ptr<u8>;
+          let diff: usize = (shifted as usize) - (buf as usize);
+          dealloc(buf as ptr<void>);
+          return diff as i32;
+        }
+      }
+    `
+    );
+
+    expect(r.exitCode).toBe(4);
+    expect(r.stdout).toBe("");
+  });
 });
