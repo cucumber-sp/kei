@@ -2700,4 +2700,25 @@ describe("e2e: unsafe pointer lowering", () => {
     expect(r.exitCode).toBe(42);
     expect(r.stdout).toBe("");
   });
+
+  test("ptr->field read and write mutate the pointee", () => {
+    const r = run(
+      "unsafe_ptr_field_write",
+      `
+      struct Counter { value: i32; }
+      fn bump(c: ptr<Counter>) {
+        unsafe { c->value = c->value + 1; }
+      }
+      fn main() -> int {
+        let c = Counter { value: 40 };
+        let p = unsafe { &c };
+        unsafe { bump(p); bump(p); }
+        return c.value;
+      }
+    `
+    );
+
+    expect(r.exitCode).toBe(42);
+    expect(r.stdout).toBe("");
+  });
 });
