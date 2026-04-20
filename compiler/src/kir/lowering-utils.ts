@@ -128,12 +128,7 @@ export function emitStackAlloc(ctx: LoweringCtx, type: KirType): VarId {
 }
 
 /** Emit field_ptr + load and return the loaded value VarId. */
-export function emitFieldLoad(
-  ctx: LoweringCtx,
-  base: VarId,
-  field: string,
-  type: KirType
-): VarId {
+export function emitFieldLoad(ctx: LoweringCtx, base: VarId, field: string, type: KirType): VarId {
   const ptr = freshVar(ctx);
   emit(ctx, { kind: "field_ptr", dest: ptr, base, field, type });
   const dest = freshVar(ctx);

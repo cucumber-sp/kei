@@ -5,7 +5,6 @@ describe("Parser — Declarations", () => {
   test("simple function", () => {
     const program = parse("fn add(a: int, b: int) -> int { return a + b; }");
     expect(program.declarations).toHaveLength(1);
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const fn = program.declarations[0]!;
     expect(fn.kind).toBe("FunctionDecl");
     if (fn.kind !== "FunctionDecl") return;
@@ -19,7 +18,6 @@ describe("Parser — Declarations", () => {
 
   test("void function", () => {
     const program = parse("fn greet() { }");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const fn = program.declarations[0]!;
     expect(fn.kind).toBe("FunctionDecl");
     if (fn.kind !== "FunctionDecl") return;
@@ -30,7 +28,6 @@ describe("Parser — Declarations", () => {
 
   test("function with throws", () => {
     const program = parse("fn get() -> int throws NotFound, DbError { return 0; }");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const fn = program.declarations[0]!;
     if (fn.kind !== "FunctionDecl") return;
     expect(fn.throwsTypes).toHaveLength(2);
@@ -39,7 +36,6 @@ describe("Parser — Declarations", () => {
 
   test("pub function", () => {
     const program = parse("pub fn helper() -> int { return 1; }");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const fn = program.declarations[0]!;
     if (fn.kind !== "FunctionDecl") return;
     expect(fn.isPublic).toBe(true);
@@ -47,7 +43,6 @@ describe("Parser — Declarations", () => {
 
   test("generic function", () => {
     const program = parse("fn identity<T>(x: T) -> T { return x; }");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const fn = program.declarations[0]!;
     if (fn.kind !== "FunctionDecl") return;
     expect(fn.genericParams).toEqual(["T"]);
@@ -56,7 +51,6 @@ describe("Parser — Declarations", () => {
 
   test("extern function", () => {
     const program = parse("extern fn malloc(size: usize) -> ptr<u8>;");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const fn = program.declarations[0]!;
     expect(fn.kind).toBe("ExternFunctionDecl");
     if (fn.kind !== "ExternFunctionDecl") return;
@@ -78,7 +72,6 @@ describe("Parser — Declarations", () => {
         }
       }
     `);
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const s = program.declarations[0]!;
     expect(s.kind).toBe("StructDecl");
     if (s.kind !== "StructDecl") return;
@@ -97,7 +90,6 @@ describe("Parser — Declarations", () => {
         fn __oncopy(self: Buffer) -> Buffer { return self; }
       }
     `);
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const s = program.declarations[0]!;
     expect(s.kind).toBe("UnsafeStructDecl");
     if (s.kind !== "UnsafeStructDecl") return;
@@ -109,7 +101,6 @@ describe("Parser — Declarations", () => {
 
   test("generic struct", () => {
     const program = parse("struct Pair<A, B> { first: A; second: B; }");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const s = program.declarations[0]!;
     if (s.kind !== "StructDecl") return;
     expect(s.genericParams).toEqual(["A", "B"]);
@@ -118,7 +109,6 @@ describe("Parser — Declarations", () => {
 
   test("simple enum with base type", () => {
     const program = parse("enum Color : u8 { Red = 0, Green = 1, Blue = 2 }");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const e = program.declarations[0]!;
     expect(e.kind).toBe("EnumDecl");
     if (e.kind !== "EnumDecl") return;
@@ -131,7 +121,6 @@ describe("Parser — Declarations", () => {
 
   test("data enum", () => {
     const program = parse("enum Shape { Circle(radius: f64), Rectangle(w: f64, h: f64), Point }");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const e = program.declarations[0]!;
     if (e.kind !== "EnumDecl") return;
     expect(e.variants).toHaveLength(3);
@@ -142,7 +131,6 @@ describe("Parser — Declarations", () => {
 
   test("type alias", () => {
     const program = parse("type Integer = i32;");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const t = program.declarations[0]!;
     expect(t.kind).toBe("TypeAlias");
     if (t.kind !== "TypeAlias") return;
@@ -151,7 +139,6 @@ describe("Parser — Declarations", () => {
 
   test("simple import", () => {
     const program = parse("import math;");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const i = program.declarations[0]!;
     expect(i.kind).toBe("ImportDecl");
     if (i.kind !== "ImportDecl") return;
@@ -161,7 +148,6 @@ describe("Parser — Declarations", () => {
 
   test("selective import", () => {
     const program = parse("import { add, mul } from math;");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const i = program.declarations[0]!;
     if (i.kind !== "ImportDecl") return;
     expect(i.path).toBe("math");
@@ -170,7 +156,6 @@ describe("Parser — Declarations", () => {
 
   test("static declaration", () => {
     const program = parse("static PAGE_SIZE = 4096;");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const s = program.declarations[0]!;
     expect(s.kind).toBe("StaticDecl");
     if (s.kind !== "StaticDecl") return;
@@ -179,7 +164,6 @@ describe("Parser — Declarations", () => {
 
   test("pub struct", () => {
     const program = parse("pub struct User { name: string; }");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const s = program.declarations[0]!;
     if (s.kind !== "StructDecl") return;
     expect(s.isPublic).toBe(true);
@@ -187,7 +171,6 @@ describe("Parser — Declarations", () => {
 
   test("pub enum", () => {
     const program = parse("pub enum Status { Active = 0, Inactive = 1 }");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const e = program.declarations[0]!;
     if (e.kind !== "EnumDecl") return;
     expect(e.isPublic).toBe(true);
@@ -195,7 +178,6 @@ describe("Parser — Declarations", () => {
 
   test("pub type alias", () => {
     const program = parse("pub type Id = u64;");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const t = program.declarations[0]!;
     if (t.kind !== "TypeAlias") return;
     expect(t.isPublic).toBe(true);
@@ -203,7 +185,6 @@ describe("Parser — Declarations", () => {
 
   test("pub static", () => {
     const program = parse("pub static VERSION = 1;");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const s = program.declarations[0]!;
     if (s.kind !== "StaticDecl") return;
     expect(s.isPublic).toBe(true);
@@ -211,7 +192,6 @@ describe("Parser — Declarations", () => {
 
   test("function with mut and move params", () => {
     const program = parse("fn consume(mut x: int, move y: string) { }");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const fn = program.declarations[0]!;
     if (fn.kind !== "FunctionDecl") return;
     expect(fn.params[0]?.isMut).toBe(true);
@@ -222,7 +202,6 @@ describe("Parser — Declarations", () => {
 
   test("dotted import path", () => {
     const program = parse("import net.http;");
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
     const i = program.declarations[0]!;
     if (i.kind !== "ImportDecl") return;
     expect(i.path).toBe("net.http");

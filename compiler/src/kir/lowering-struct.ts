@@ -17,7 +17,8 @@ import type {
   VarId,
 } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
-import { resetFunctionState, finalizeFunctionBody } from "./lowering-decl";
+import { finalizeFunctionBody, resetFunctionState } from "./lowering-decl";
+import { pushScope } from "./lowering-scope";
 import { lowerBlock } from "./lowering-stmt";
 import {
   getFunctionReturnType,
@@ -25,7 +26,6 @@ import {
   lowerTypeNode,
   resolveParamType,
 } from "./lowering-types";
-import { pushScope } from "./lowering-scope";
 
 export function lowerStructDecl(
   ctx: LoweringCtx,

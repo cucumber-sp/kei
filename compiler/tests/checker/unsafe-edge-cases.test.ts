@@ -20,14 +20,14 @@ describe("Checker — Unsafe Edge Cases", () => {
 
     test("deref outside unsafe → error", () => {
       checkError(
-        `fn main() -> int { let p: ptr<int> = null; let x = *p; return 0; }`,
+        "fn main() -> int { let p: ptr<int> = null; let x = *p; return 0; }",
         "requires unsafe block"
       );
     });
 
     test("deref of non-pointer → error", () => {
       checkError(
-        `fn main() -> int { unsafe { let x = 42; let y = *x; } return 0; }`,
+        "fn main() -> int { unsafe { let x = 42; let y = *x; } return 0; }",
         "cannot dereference non-pointer"
       );
     });
@@ -73,7 +73,7 @@ describe("Checker — Unsafe Edge Cases", () => {
     });
 
     test("address-of outside unsafe → error", () => {
-      checkError(`fn main() -> int { let x = 42; let p = &x; return 0; }`, "requires unsafe block");
+      checkError("fn main() -> int { let x = 42; let p = &x; return 0; }", "requires unsafe block");
     });
 
     test("address-of struct field → ok", () => {

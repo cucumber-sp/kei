@@ -30,7 +30,7 @@ describe("Checker — Functions", () => {
   });
 
   test("return type matches → ok", () => {
-    checkOk(`fn getInt() -> int { return 42; }`);
+    checkOk("fn getInt() -> int { return 42; }");
   });
 
   test("return type mismatch → error", () => {
@@ -38,15 +38,15 @@ describe("Checker — Functions", () => {
   });
 
   test("missing return in non-void function → error", () => {
-    checkError(`fn getInt() -> int { let x = 42; }`, "does not return a value on all paths");
+    checkError("fn getInt() -> int { let x = 42; }", "does not return a value on all paths");
   });
 
   test("return with value in void function → error", () => {
-    checkError(`fn doStuff() { return 42; }`, "expects return type 'void', got");
+    checkError("fn doStuff() { return 42; }", "expects return type 'void', got");
   });
 
   test("return without value in non-void → error", () => {
-    checkError(`fn getInt() -> int { return; }`, "expects return type 'i32', got void");
+    checkError("fn getInt() -> int { return; }", "expects return type 'i32', got void");
   });
 
   test("all paths return (if/else both return) → ok", () => {
@@ -85,7 +85,7 @@ describe("Checker — Functions", () => {
 
   test("non-mut param is immutable", () => {
     checkError(
-      `fn increment(x: int) -> int { x += 1; return x; }`,
+      "fn increment(x: int) -> int { x += 1; return x; }",
       "cannot assign to immutable variable 'x'"
     );
   });
@@ -172,11 +172,11 @@ describe("Checker — Functions", () => {
   });
 
   test("void function with no return statement → ok", () => {
-    checkOk(`fn doStuff() { let x = 42; }`);
+    checkOk("fn doStuff() { let x = 42; }");
   });
 
   test("void function with return; → ok", () => {
-    checkOk(`fn doStuff() { return; }`);
+    checkOk("fn doStuff() { return; }");
   });
 
   test("function call with too many arguments → error", () => {
@@ -219,24 +219,24 @@ describe("Checker — Functions", () => {
   });
 
   test("main() -> int → ok", () => {
-    checkOk(`fn main() -> int { return 0; }`);
+    checkOk("fn main() -> int { return 0; }");
   });
 
   test("main() returning non-int → error", () => {
-    checkError(`fn main() -> bool { return true; }`, "'main' must return 'int'");
+    checkError("fn main() -> bool { return true; }", "'main' must return 'int'");
   });
 
   test("main() returning void → error", () => {
-    checkError(`fn main() { }`, "'main' must return 'int'");
+    checkError("fn main() { }", "'main' must return 'int'");
   });
 
   test("main() with parameters → error", () => {
-    checkError(`fn main(x: int) -> int { return x; }`, "'main' cannot take parameters");
+    checkError("fn main(x: int) -> int { return x; }", "'main' cannot take parameters");
   });
 
   test("main() declaring throws → error", () => {
     checkError(
-      `struct Bad {} fn main() -> int throws Bad { return 0; }`,
+      "struct Bad {} fn main() -> int throws Bad { return 0; }",
       "'main' cannot declare 'throws'"
     );
   });

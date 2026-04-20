@@ -12,18 +12,9 @@ import type { MonomorphizedFunction } from "../checker/generics";
 import type { KirExtern, KirFunction, KirGlobal, KirParam, KirType, VarId } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
 import { lowerEnumDecl } from "./lowering-enum-decl";
-import {
-  pushScope,
-  popScopeWithDestroy,
-  trackScopeVarByType,
-} from "./lowering-scope";
+import { popScopeWithDestroy, pushScope, trackScopeVarByType } from "./lowering-scope";
 import { lowerBlock } from "./lowering-stmt";
-import {
-  lowerAutoDestroy,
-  lowerAutoOncopy,
-  lowerMethod,
-  lowerStructDecl,
-} from "./lowering-struct";
+import { lowerAutoDestroy, lowerAutoOncopy, lowerMethod, lowerStructDecl } from "./lowering-struct";
 import {
   getExprKirType,
   getFunctionReturnType,
@@ -54,7 +45,7 @@ export function lowerDeclaration(ctx: LoweringCtx, decl: Declaration): void {
       ctx.externs.push(lowerExternFunction(ctx, decl));
       break;
     case "StructDecl":
-    case "UnsafeStructDecl":
+    case "UnsafeStructDecl": {
       // Skip generic struct templates — they are instantiated via monomorphization
       if (decl.genericParams.length > 0) break;
       ctx.typeDecls.push(lowerStructDecl(ctx, decl));
@@ -65,18 +56,19 @@ export function lowerDeclaration(ctx: LoweringCtx, decl: Declaration): void {
         ctx.functions.push(lowerMethod(ctx, method, mangledName, decl.name));
       }
       // Generate auto __destroy if the checker flagged this struct
-      if (ctx.checkResult.lifecycle.autoDestroyStructs.has(decl.name)) {
-        const structType = ctx.checkResult.lifecycle.autoDestroyStructs.get(decl.name)!;
+      const autoDestroyType = ctx.checkResult.lifecycle.autoDestroyStructs.get(decl.name);
+      if (autoDestroyType) {
         const structPrefix = ctx.modulePrefix ? `${ctx.modulePrefix}_${decl.name}` : decl.name;
-        ctx.functions.push(lowerAutoDestroy(ctx, decl.name, structType, structPrefix));
+        ctx.functions.push(lowerAutoDestroy(ctx, decl.name, autoDestroyType, structPrefix));
       }
       // Generate auto __oncopy if the checker flagged this struct
-      if (ctx.checkResult.lifecycle.autoOncopyStructs.has(decl.name)) {
-        const structType = ctx.checkResult.lifecycle.autoOncopyStructs.get(decl.name)!;
+      const autoOncopyType = ctx.checkResult.lifecycle.autoOncopyStructs.get(decl.name);
+      if (autoOncopyType) {
         const structPrefix = ctx.modulePrefix ? `${ctx.modulePrefix}_${decl.name}` : decl.name;
-        ctx.functions.push(lowerAutoOncopy(ctx, decl.name, structType, structPrefix));
+        ctx.functions.push(lowerAutoOncopy(ctx, decl.name, autoOncopyType, structPrefix));
       }
       break;
+    }
     case "EnumDecl":
       ctx.typeDecls.push(lowerEnumDecl(ctx, decl));
       break;
@@ -111,10 +103,10 @@ export function finalizeFunctionBody(
   returnType: KirType
 ): void {
   // Emit destroy for function-scope variables before implicit return
-  if (!isBlockTerminated(ctx)) {
-    popScopeWithDestroy(ctx);
-  } else {
+  if (isBlockTerminated(ctx)) {
     ctx.scopeStack.pop(); // discard without emitting (already returned)
+  } else {
+    popScopeWithDestroy(ctx);
   }
 
   // Ensure the last block has a terminator
@@ -137,8 +129,8 @@ export function addThrowsParams(
   params: KirParam[],
   originalReturnType: KirType
 ): void {
-  const outParamId: VarId = `%__out`;
-  const errParamId: VarId = `%__err`;
+  const outParamId: VarId = "%__out";
+  const errParamId: VarId = "%__err";
   ctx.varMap.set("__out", outParamId);
   ctx.varMap.set("__err", errParamId);
   params.push({

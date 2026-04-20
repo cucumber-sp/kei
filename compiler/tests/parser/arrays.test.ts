@@ -4,10 +4,8 @@ import { parse } from "./helpers";
 
 function parseExpr(exprStr: string): Expression {
   const program = parse(`fn test() { let _r = ${exprStr}; }`);
-  // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
   const fn = program.declarations[0]!;
   if (fn.kind !== "FunctionDecl") throw new Error("Expected FunctionDecl");
-  // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one statement
   const stmt = fn.body.statements[0]!;
   if (stmt.kind !== "LetStmt") throw new Error("Expected LetStmt");
   return stmt.initializer;
@@ -49,11 +47,9 @@ describe("Parser — Array Literals", () => {
 
   test("array indexing arr[0] is still parsed", () => {
     // Ensure postfix indexing still works with identifiers
-    const program = parse(`fn test() { let a = [1]; let b = a[0]; }`);
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees at least one declaration
+    const program = parse("fn test() { let a = [1]; let b = a[0]; }");
     const fn = program.declarations[0]!;
     if (fn.kind !== "FunctionDecl") return;
-    // biome-ignore lint/style/noNonNullAssertion: test input guarantees a second statement exists
     const stmt = fn.body.statements[1]!;
     if (stmt.kind !== "LetStmt") return;
     expect(stmt.initializer.kind).toBe("IndexExpr");

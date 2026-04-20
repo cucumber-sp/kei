@@ -11,10 +11,9 @@
  * `importedNames`, …).
  */
 
-import type { Expression } from "../ast/nodes";
+import type { Expression, Program } from "../ast/nodes";
 import type { CheckResult } from "../checker/checker";
 import type { Type } from "../checker/types";
-import type { Program } from "../ast/nodes";
 import type {
   BlockId,
   KirBlock,
@@ -107,7 +106,7 @@ export interface LoweringCtx {
 export function createLoweringCtx(
   program: Program,
   checkResult: CheckResult,
-  modulePrefix: string = "",
+  modulePrefix = "",
   importedNames?: Map<string, string>,
   importedOverloads?: Set<string>
 ): LoweringCtx {

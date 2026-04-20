@@ -87,7 +87,7 @@ async function compileAndRun(
 
 describe("integration: .kei → C → binary", () => {
   test("simple return 0", async () => {
-    const c = compileToC(`fn main() -> int { return 0; }`);
+    const c = compileToC("fn main() -> int { return 0; }");
     const result = await compileAndRun(c, "return0");
 
     if (!compiler) {
@@ -100,7 +100,7 @@ describe("integration: .kei → C → binary", () => {
   });
 
   test("return non-zero exit code", async () => {
-    const c = compileToC(`fn main() -> int { return 42; }`);
+    const c = compileToC("fn main() -> int { return 42; }");
     const result = await compileAndRun(c, "return42");
 
     if (!compiler) {
@@ -278,7 +278,7 @@ describe("integration: .kei → C → binary", () => {
       return;
     }
 
-    const c = compileToC(`fn main() -> int { return 0; }`);
+    const c = compileToC("fn main() -> int { return 0; }");
     const dir = tmpdir();
     const cPath = join(dir, "kei_test_warnings.c");
 

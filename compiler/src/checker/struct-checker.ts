@@ -6,7 +6,7 @@
 import type { Declaration, FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes";
 import type { Checker } from "./checker";
 import { typeSymbol } from "./symbols";
-import type { FunctionType, ParamInfo, StructType } from "./types";
+import type { FunctionType, StructType } from "./types";
 import { functionType, isPtrType, TypeKind, VOID_TYPE } from "./types";
 
 export class StructChecker {

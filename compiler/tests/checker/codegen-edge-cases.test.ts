@@ -273,11 +273,11 @@ describe("Checker — Codegen Edge Cases", () => {
     });
 
     test("break outside any loop → error", () => {
-      checkError(`fn main() -> int { break; return 0; }`, "'break' used outside of a loop");
+      checkError("fn main() -> int { break; return 0; }", "'break' used outside of a loop");
     });
 
     test("continue outside any loop → error", () => {
-      checkError(`fn main() -> int { continue; return 0; }`, "'continue' used outside of a loop");
+      checkError("fn main() -> int { continue; return 0; }", "'continue' used outside of a loop");
     });
   });
 
@@ -402,7 +402,7 @@ describe("Checker — Codegen Edge Cases", () => {
 
     test("sizeof with no args → error", () => {
       checkError(
-        `fn main() -> int { let s = sizeof(); return 0; }`,
+        "fn main() -> int { let s = sizeof(); return 0; }",
         "'sizeof' expects exactly 1 argument"
       );
     });
@@ -432,31 +432,31 @@ describe("Checker — Codegen Edge Cases", () => {
 
   describe("cast (as) between numeric types", () => {
     test("i32 → f64 → ok", () => {
-      checkOk(`fn main() -> int { let x: i32 = 42; let y = x as f64; return 0; }`);
+      checkOk("fn main() -> int { let x: i32 = 42; let y = x as f64; return 0; }");
     });
 
     test("f64 → i32 → ok", () => {
-      checkOk(`fn main() -> int { let x: f64 = 3.14; let y = x as i32; return 0; }`);
+      checkOk("fn main() -> int { let x: f64 = 3.14; let y = x as i32; return 0; }");
     });
 
     test("i32 → i64 (widening) → ok", () => {
-      checkOk(`fn main() -> int { let x: i32 = 42; let y = x as i64; return 0; }`);
+      checkOk("fn main() -> int { let x: i32 = 42; let y = x as i64; return 0; }");
     });
 
     test("i64 → i32 (narrowing) → ok", () => {
-      checkOk(`fn main() -> int { let x: i64 = 100; let y = x as i32; return 0; }`);
+      checkOk("fn main() -> int { let x: i64 = 100; let y = x as i32; return 0; }");
     });
 
     test("u8 → i32 → ok", () => {
-      checkOk(`fn main() -> int { let x: u8 = 42; let y = x as i32; return 0; }`);
+      checkOk("fn main() -> int { let x: u8 = 42; let y = x as i32; return 0; }");
     });
 
     test("i32 → u32 → ok", () => {
-      checkOk(`fn main() -> int { let x: i32 = 42; let y = x as u32; return 0; }`);
+      checkOk("fn main() -> int { let x: i32 = 42; let y = x as u32; return 0; }");
     });
 
     test("bool → i32 → ok", () => {
-      checkOk(`fn main() -> int { let b = true; let x = b as i32; return 0; }`);
+      checkOk("fn main() -> int { let b = true; let x = b as i32; return 0; }");
     });
 
     test("string → i32 → error", () => {
@@ -626,7 +626,7 @@ describe("Checker — Codegen Edge Cases", () => {
   describe("const and static", () => {
     test("const variable is immutable → assignment error", () => {
       checkError(
-        `fn main() -> int { const x = 10; x = 20; return x; }`,
+        "fn main() -> int { const x = 10; x = 20; return x; }",
         "cannot assign to immutable variable 'x'"
       );
     });
@@ -643,15 +643,15 @@ describe("Checker — Codegen Edge Cases", () => {
 
   describe("void functions", () => {
     test("void function with no return → ok", () => {
-      checkOk(`fn doNothing() { }`);
+      checkOk("fn doNothing() { }");
     });
 
     test("void function with empty return → ok", () => {
-      checkOk(`fn doNothing() { return; }`);
+      checkOk("fn doNothing() { return; }");
     });
 
     test("void function returning value → error", () => {
-      checkError(`fn doNothing() { return 42; }`, "expects return type 'void', got");
+      checkError("fn doNothing() { return 42; }", "expects return type 'void', got");
     });
   });
 
@@ -701,7 +701,10 @@ describe("Checker — Codegen Edge Cases", () => {
     });
 
     test("for loop variable not accessible outside → error", () => {
-      checkError(`fn main() -> int { for (let i = 0; i < 10; i = i + 1) {} return i; }`, "undeclared variable 'i'");
+      checkError(
+        "fn main() -> int { for (let i = 0; i < 10; i = i + 1) {} return i; }",
+        "undeclared variable 'i'"
+      );
     });
   });
 });

@@ -14,7 +14,7 @@ import type {
 import type { KirFloatType, KirIntType, KirType, VarId } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
 import { lowerExpr } from "./lowering-expr";
-import { lowerCheckerType, getExprKirType } from "./lowering-types";
+import { getExprKirType, lowerCheckerType } from "./lowering-types";
 import { emit, emitStackAlloc, freshVar } from "./lowering-utils";
 
 export function lowerIntLiteral(ctx: LoweringCtx, expr: IntLiteral): VarId {

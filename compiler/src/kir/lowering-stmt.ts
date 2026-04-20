@@ -61,10 +61,10 @@ export function lowerScopedBlock(ctx: LoweringCtx, block: BlockStmt): void {
   for (const stmt of block.statements) {
     lowerStatement(ctx, stmt);
   }
-  if (!isBlockTerminated(ctx)) {
-    popScopeWithDestroy(ctx);
-  } else {
+  if (isBlockTerminated(ctx)) {
     ctx.scopeStack.pop();
+  } else {
+    popScopeWithDestroy(ctx);
   }
 }
 

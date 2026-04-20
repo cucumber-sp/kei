@@ -9,7 +9,7 @@ const MEM_STUBS = `
 
 describe("Checker — Unsafe", () => {
   test("unsafe block enters unsafe scope", () => {
-    checkOk(`fn main() -> int { unsafe { let x = 1; } return 0; }`);
+    checkOk("fn main() -> int { unsafe { let x = 1; } return 0; }");
   });
 
   test("alloc inside unsafe → ok", () => {
@@ -74,7 +74,7 @@ describe("Checker — Unsafe", () => {
 
   test("ptr dereference outside unsafe → error", () => {
     checkError(
-      `fn main() -> int { let p: ptr<int> = null; let x = *p; return 0; }`,
+      "fn main() -> int { let p: ptr<int> = null; let x = *p; return 0; }",
       "pointer dereference requires unsafe block"
     );
   });
@@ -90,7 +90,7 @@ describe("Checker — Unsafe", () => {
   });
 
   test("address-of outside unsafe → error", () => {
-    checkError(`fn main() -> int { let x = 42; let p = &x; return 0; }`, "requires unsafe block");
+    checkError("fn main() -> int { let x = 42; let p = &x; return 0; }", "requires unsafe block");
   });
 
   test("nested unsafe blocks", () => {

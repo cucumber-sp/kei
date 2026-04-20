@@ -510,7 +510,7 @@ describe("mem2reg: function with no promotable allocas", () => {
   });
 
   test("empty function", () => {
-    const fn = lowerOptFunction(`fn noop() {}`, "noop");
+    const fn = lowerOptFunction("fn noop() {}", "noop");
     expect(fn.blocks).toHaveLength(1);
     expect(countPhis(fn)).toBe(0);
   });

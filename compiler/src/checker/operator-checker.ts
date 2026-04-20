@@ -3,12 +3,7 @@
  * overloading resolution.
  */
 
-import type {
-  AssignExpr,
-  BinaryExpr,
-  Expression,
-  UnaryExpr,
-} from "../ast/nodes";
+import type { AssignExpr, BinaryExpr, Expression, UnaryExpr } from "../ast/nodes";
 import type { Checker } from "./checker";
 import { SymbolKind } from "./symbols";
 import type { FunctionType, StructType, Type } from "./types";

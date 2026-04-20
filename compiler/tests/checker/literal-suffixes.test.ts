@@ -109,7 +109,7 @@ describe("Checker — numeric literal suffixes", () => {
 
   test("float literal with integer suffix is an error", () => {
     checkError(
-      `fn main() -> int { let x = 2.5u32; return 0; }`,
+      "fn main() -> int { let x = 2.5u32; return 0; }",
       "integer suffix 'u32' cannot be applied to a float literal"
     );
   });

@@ -94,10 +94,7 @@ export function lowerCheckerType(ctx: LoweringCtx, t: Type): KirType {
   }
 }
 
-export function lowerTypeNode(
-  ctx: LoweringCtx,
-  typeNode: { kind: string; name: string }
-): KirType {
+export function lowerTypeNode(ctx: LoweringCtx, typeNode: { kind: string; name: string }): KirType {
   const name = typeNode.name;
   switch (name) {
     case "int":
@@ -143,11 +140,7 @@ export function lowerTypeNode(
   }
 }
 
-export function resolveParamType(
-  ctx: LoweringCtx,
-  decl: FunctionDecl,
-  paramName: string
-): KirType {
+export function resolveParamType(ctx: LoweringCtx, decl: FunctionDecl, paramName: string): KirType {
   const param = decl.params.find((p) => p.name === paramName);
   if (param) {
     return lowerTypeNode(ctx, param.typeAnnotation);
@@ -322,11 +315,7 @@ export function sizeofCheckerType(ctx: LoweringCtx, t: Type): number {
 }
 
 /** Build a mangled function name from a FunctionDecl (for overloaded definitions). */
-export function mangleFunctionName(
-  ctx: LoweringCtx,
-  baseName: string,
-  decl: FunctionDecl
-): string {
+export function mangleFunctionName(ctx: LoweringCtx, baseName: string, decl: FunctionDecl): string {
   const paramSuffixes = decl.params.map((p) => typeNameSuffix(ctx, p.typeAnnotation.name));
   return `${baseName}_${paramSuffixes.join("_")}`;
 }

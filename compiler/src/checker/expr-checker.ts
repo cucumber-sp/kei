@@ -367,13 +367,7 @@ export class ExpressionChecker {
             const bindingName = switchCase.bindings[i];
             const bindingType = bindingInfo.fieldTypes[i];
             if (!bindingName || !bindingType) continue;
-            this.checker.defineVariable(
-              bindingName,
-              bindingType,
-              false,
-              true,
-              switchCase.span
-            );
+            this.checker.defineVariable(bindingName, bindingType, false, true, switchCase.span);
           }
         }
       }

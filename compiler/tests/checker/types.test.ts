@@ -41,7 +41,7 @@ describe("Checker — Types", () => {
   });
 
   test("mixed numeric types: int + float → error", () => {
-    checkError(`fn main() -> int { let x = 1 + 1.0; return 0; }`, "requires same types");
+    checkError("fn main() -> int { let x = 1 + 1.0; return 0; }", "requires same types");
   });
 
   test("boolean logic: true && false → bool", () => {
@@ -60,23 +60,23 @@ describe("Checker — Types", () => {
   });
 
   test("type inference: let x = 42 → x is int", () => {
-    checkOk(`fn main() -> int { let x = 42; return x; }`);
+    checkOk("fn main() -> int { let x = 42; return x; }");
   });
 
   test("type annotation match: let x: int = 42 → ok", () => {
-    checkOk(`fn main() -> int { let x: int = 42; return x; }`);
+    checkOk("fn main() -> int { let x: int = 42; return x; }");
   });
 
   test("type annotation mismatch: let x: string = 42 → error", () => {
-    checkError(`fn main() -> int { let x: string = 42; return 0; }`, "type mismatch");
+    checkError("fn main() -> int { let x: string = 42; return 0; }", "type mismatch");
   });
 
   test("null type: let p: ptr<int> = null → ok", () => {
-    checkOk(`fn main() -> int { let p: ptr<int> = null; return 0; }`);
+    checkOk("fn main() -> int { let p: ptr<int> = null; return 0; }");
   });
 
   test("null to non-ptr: let x: int = null → error", () => {
-    checkError(`fn main() -> int { let x: int = null; return 0; }`, "type mismatch");
+    checkError("fn main() -> int { let x: int = null; return 0; }", "type mismatch");
   });
 
   test("integer widening: i32 → i64", () => {
@@ -90,7 +90,7 @@ describe("Checker — Types", () => {
   });
 
   test("no implicit signed↔unsigned: i32 to u32 → error", () => {
-    checkError(`fn main() -> int { let x: i32 = 42; let y: u32 = x; return 0; }`, "type mismatch");
+    checkError("fn main() -> int { let x: i32 = 42; let y: u32 = x; return 0; }", "type mismatch");
   });
 
   test("void function used in expression → check works", () => {
@@ -111,51 +111,51 @@ describe("Checker — Types", () => {
 
   test("if expression: different branch types → error", () => {
     checkError(
-      `fn main() -> int { let x = if true { 1 } else { 2.0 }; return 0; }`,
+      "fn main() -> int { let x = if true { 1 } else { 2.0 }; return 0; }",
       "different types"
     );
   });
 
   test("assign to immutable → error", () => {
-    checkError(`fn main() -> int { const x = 5; x = 10; return x; }`, "cannot assign to immutable");
+    checkError("fn main() -> int { const x = 5; x = 10; return x; }", "cannot assign to immutable");
   });
 
   test("compound assign type check: x += 1.0 where x: int → error", () => {
-    checkError(`fn main() -> int { let x = 42; x += 1.0; return x; }`, "requires same types");
+    checkError("fn main() -> int { let x = 42; x += 1.0; return x; }", "requires same types");
   });
 
   test("bitwise on non-integer → error", () => {
-    checkError(`fn main() -> int { let x = 1.0 & 2.0; return 0; }`, "requires integer operands");
+    checkError("fn main() -> int { let x = 1.0 & 2.0; return 0; }", "requires integer operands");
   });
 
   test("logical on non-bool → error", () => {
-    checkError(`fn main() -> int { let x = 1 && 2; return 0; }`, "requires bool operands");
+    checkError("fn main() -> int { let x = 1 && 2; return 0; }", "requires bool operands");
   });
 
   test("unary minus on bool → error", () => {
-    checkError(`fn main() -> int { let x = -true; return 0; }`, "requires numeric operand");
+    checkError("fn main() -> int { let x = -true; return 0; }", "requires numeric operand");
   });
 
   test("address-of outside unsafe → error", () => {
-    checkError(`fn main() -> int { let x = 42; let p = &x; return 0; }`, "requires unsafe block");
+    checkError("fn main() -> int { let x = 42; let p = &x; return 0; }", "requires unsafe block");
   });
 
   test("deref outside unsafe → error", () => {
     checkError(
-      `fn main() -> int { let p: ptr<int> = null; let x = *p; return 0; }`,
+      "fn main() -> int { let p: ptr<int> = null; let x = *p; return 0; }",
       "requires unsafe block"
     );
   });
 
   test("deref of non-pointer → error", () => {
     checkError(
-      `fn main() -> int { unsafe { let x = 42; let y = *x; } return 0; }`,
+      "fn main() -> int { unsafe { let x = 42; let y = *x; } return 0; }",
       "cannot dereference non-pointer"
     );
   });
 
   test("index of non-array → error", () => {
-    checkError(`fn main() -> int { let x = 42; let y = x[0]; return 0; }`, "cannot index type");
+    checkError("fn main() -> int { let x = 42; let y = x[0]; return 0; }", "cannot index type");
   });
 
   test("index with non-integer → error", () => {
@@ -223,7 +223,7 @@ describe("Checker — Types", () => {
   });
 
   test("range with non-integer → error", () => {
-    checkError(`fn main() -> int { let r = 1.0..10.0; return 0; }`, "range start must be integer");
+    checkError("fn main() -> int { let r = 1.0..10.0; return 0; }", "range start must be integer");
   });
 
   test("method call resolves correctly", () => {
@@ -270,11 +270,11 @@ describe("Checker — Types", () => {
   });
 
   test("bitwise NOT on non-integer → error", () => {
-    checkError(`fn main() -> int { let x = ~true; return 0; }`, "requires integer operand");
+    checkError("fn main() -> int { let x = ~true; return 0; }", "requires integer operand");
   });
 
   test("equality comparison between same types → ok", () => {
-    checkOk(`fn main() -> int { let x = 1 == 2; return 0; }`);
+    checkOk("fn main() -> int { let x = 1 == 2; return 0; }");
   });
 
   test("equality comparison between different types → error", () => {
@@ -282,15 +282,15 @@ describe("Checker — Types", () => {
   });
 
   test("let variables are mutable", () => {
-    checkOk(`fn main() -> int { let x = 1; x = 2; return x; }`);
+    checkOk("fn main() -> int { let x = 1; x = 2; return x; }");
   });
 
   test("compound assign on integers works", () => {
-    checkOk(`fn main() -> int { let x = 10; x += 5; return x; }`);
+    checkOk("fn main() -> int { let x = 10; x += 5; return x; }");
   });
 
   test("compound bitwise assign works", () => {
-    checkOk(`fn main() -> int { let x = 10; x <<= 2; return x; }`);
+    checkOk("fn main() -> int { let x = 10; x <<= 2; return x; }");
   });
 
   test("ptr equality with null → ok", () => {

@@ -249,10 +249,7 @@ export class DeclarationChecker {
       const ret = funcType.returnType;
       const isI32 = ret.kind === TypeKind.Int && ret.bits === 32 && ret.signed;
       if (!isI32) {
-        this.checker.error(
-          `'main' must return 'int' (i32), got '${typeToString(ret)}'`,
-          decl.span
-        );
+        this.checker.error(`'main' must return 'int' (i32), got '${typeToString(ret)}'`, decl.span);
       }
       if (decl.params.length > 0) {
         this.checker.error("'main' cannot take parameters", decl.span);

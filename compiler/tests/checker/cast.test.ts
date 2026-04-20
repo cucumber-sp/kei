@@ -6,51 +6,51 @@ describe("Checker — as cast", () => {
   // ── Valid numeric casts ────────────────────────────────────────────────
 
   test("i32 → f64", () => {
-    checkOk(`fn main() -> int { let x: i32 = 42; let y = x as f64; return 0; }`);
+    checkOk("fn main() -> int { let x: i32 = 42; let y = x as f64; return 0; }");
   });
 
   test("f64 → i32", () => {
-    checkOk(`fn main() -> int { let x: f64 = 2.5; let y = x as i32; return 0; }`);
+    checkOk("fn main() -> int { let x: f64 = 2.5; let y = x as i32; return 0; }");
   });
 
   test("i32 → i64 (widening)", () => {
-    checkOk(`fn main() -> int { let x: i32 = 42; let y = x as i64; return 0; }`);
+    checkOk("fn main() -> int { let x: i32 = 42; let y = x as i64; return 0; }");
   });
 
   test("i64 → i32 (narrowing)", () => {
-    checkOk(`fn main() -> int { let x: i64 = 1000; let y = x as i32; return 0; }`);
+    checkOk("fn main() -> int { let x: i64 = 1000; let y = x as i32; return 0; }");
   });
 
   test("i32 → u32 (signed → unsigned)", () => {
-    checkOk(`fn main() -> int { let x: i32 = 42; let y = x as u32; return 0; }`);
+    checkOk("fn main() -> int { let x: i32 = 42; let y = x as u32; return 0; }");
   });
 
   test("u32 → i32 (unsigned → signed)", () => {
-    checkOk(`fn main() -> int { let x: u32 = 42; let y = x as i32; return 0; }`);
+    checkOk("fn main() -> int { let x: u32 = 42; let y = x as i32; return 0; }");
   });
 
   test("u8 → i32 (widening unsigned → signed)", () => {
-    checkOk(`fn main() -> int { let x: u8 = 255; let y = x as i32; return 0; }`);
+    checkOk("fn main() -> int { let x: u8 = 255; let y = x as i32; return 0; }");
   });
 
   test("f32 → f64 (float widening)", () => {
-    checkOk(`fn main() -> int { let x: f32 = 1.0 as f32; let y = x as f64; return 0; }`);
+    checkOk("fn main() -> int { let x: f32 = 1.0 as f32; let y = x as f64; return 0; }");
   });
 
   test("f64 → f32 (float narrowing)", () => {
-    checkOk(`fn main() -> int { let x: f64 = 1.0; let y = x as f32; return 0; }`);
+    checkOk("fn main() -> int { let x: f64 = 1.0; let y = x as f32; return 0; }");
   });
 
   // ── Same type cast (no-op) ────────────────────────────────────────────
 
   test("i32 → i32 (same type, no-op)", () => {
-    checkOk(`fn main() -> int { let x: i32 = 42; let y = x as i32; return 0; }`);
+    checkOk("fn main() -> int { let x: i32 = 42; let y = x as i32; return 0; }");
   });
 
   // ── bool → int ────────────────────────────────────────────────────────
 
   test("bool → i32", () => {
-    checkOk(`fn main() -> int { let x = true; let y = x as i32; return 0; }`);
+    checkOk("fn main() -> int { let x = true; let y = x as i32; return 0; }");
   });
 
   // ── Result type is correct ────────────────────────────────────────────
@@ -88,18 +88,18 @@ describe("Checker — as cast", () => {
   });
 
   test("i32 → bool (error)", () => {
-    checkError(`fn main() -> int { let x: i32 = 1; let y = x as bool; return 0; }`, "cannot cast");
+    checkError("fn main() -> int { let x: i32 = 1; let y = x as bool; return 0; }", "cannot cast");
   });
 
   test("struct → i32 (error)", () => {
     checkError(
-      `struct Foo { x: i32; } fn main() -> int { let f = Foo { x: 1 }; let y = f as i32; return 0; }`,
+      "struct Foo { x: i32; } fn main() -> int { let f = Foo { x: 1 }; let y = f as i32; return 0; }",
       "cannot cast"
     );
   });
 
   test("bool → f64 (error)", () => {
-    checkError(`fn main() -> int { let x = true; let y = x as f64; return 0; }`, "cannot cast");
+    checkError("fn main() -> int { let x = true; let y = x as f64; return 0; }", "cannot cast");
   });
 
   // ── Pointer casts ─────────────────────────────────────────────────────

@@ -148,10 +148,7 @@ export function parseForStatement(ctx: ParserContext): ForStmt | CForStmt {
   };
 }
 
-function parseCForStatement(
-  ctx: ParserContext,
-  start: { span: { start: number } }
-): CForStmt {
+function parseCForStatement(ctx: ParserContext, start: { span: { start: number } }): CForStmt {
   ctx.expect(TokenKind.LeftParen);
 
   // Init: let i = 0 (or let i: int = 0)

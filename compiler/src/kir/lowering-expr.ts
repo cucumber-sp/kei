@@ -36,11 +36,7 @@ import {
   lowerStringLiteral,
   lowerStructLiteral,
 } from "./lowering-literals";
-import {
-  lowerBinaryExpr,
-  lowerOperatorMethodCall,
-  lowerUnaryExpr,
-} from "./lowering-operators";
+import { lowerBinaryExpr, lowerOperatorMethodCall, lowerUnaryExpr } from "./lowering-operators";
 import { getStructLifecycle } from "./lowering-scope";
 import { lowerStatement } from "./lowering-stmt";
 import { lowerSwitchExpr } from "./lowering-switch";

@@ -5,14 +5,7 @@
 
 import { Severity } from "../errors";
 import type { Lexer } from "./lexer";
-import {
-  isAlpha,
-  isAlphaNumeric,
-  isBinaryDigit,
-  isDigit,
-  isHexDigit,
-  isOctalDigit,
-} from "./lexer";
+import { isAlpha, isAlphaNumeric, isBinaryDigit, isDigit, isHexDigit, isOctalDigit } from "./lexer";
 import type { Token } from "./token";
 import { TokenKind } from "./token";
 

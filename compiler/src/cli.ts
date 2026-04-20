@@ -16,19 +16,17 @@ import { runDriver } from "./cli/driver";
 
 const result = parseArgs(process.argv.slice(2));
 
-switch (result.kind) {
-  case "help":
-    printHelp();
-    process.exit(0);
-  case "version":
-    console.log(`kei ${VERSION}`);
-    process.exit(0);
-  case "error":
-    console.error(`error: ${result.message}\n`);
-    printHelp();
-    process.exit(1);
-  case "compile": {
-    const code = await runDriver(result.flags);
-    process.exit(code);
-  }
+if (result.kind === "help") {
+  printHelp();
+  process.exit(0);
+} else if (result.kind === "version") {
+  console.log(`kei ${VERSION}`);
+  process.exit(0);
+} else if (result.kind === "error") {
+  console.error(`error: ${result.message}\n`);
+  printHelp();
+  process.exit(1);
+} else {
+  const code = await runDriver(result.flags);
+  process.exit(code);
 }

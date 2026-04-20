@@ -38,7 +38,6 @@ describe("KIR — Function Overloading", () => {
 
     // Collect all call/call_void instructions
     const calls: string[] = [];
-    // biome-ignore lint/style/noNonNullAssertion: mainFn existence asserted above
     for (const block of mainFn!.blocks) {
       for (const inst of block.instructions) {
         if (inst.kind === "call" || inst.kind === "call_void") {
@@ -70,7 +69,6 @@ describe("KIR — Function Overloading", () => {
     expect(mainFn).toBeDefined();
 
     const calls: string[] = [];
-    // biome-ignore lint/style/noNonNullAssertion: mainFn existence asserted above
     for (const block of mainFn!.blocks) {
       for (const inst of block.instructions) {
         if (inst.kind === "call" || inst.kind === "call_void") {

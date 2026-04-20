@@ -4,7 +4,6 @@ import { parse } from "./helpers";
 
 function parseStatements(body: string): Statement[] {
   const program = parse(`fn test() { ${body} }`);
-  // biome-ignore lint/style/noNonNullAssertion: test input guarantees declaration exists
   const fn = program.declarations[0]!;
   if (fn.kind !== "FunctionDecl") throw new Error("Expected FunctionDecl");
   return fn.body.statements;
@@ -12,7 +11,6 @@ function parseStatements(body: string): Statement[] {
 
 function parseFirst(body: string): Statement {
   const stmts = parseStatements(body);
-  // biome-ignore lint/style/noNonNullAssertion: test input guarantees statement exists
   return stmts[0]!;
 }
 

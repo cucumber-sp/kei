@@ -39,7 +39,7 @@ describe("Checker — Array Literals", () => {
   });
 
   test("array literal infers element type", () => {
-    const src = `fn main() -> int { let arr = [10, 20, 30]; return 0; }`;
+    const src = "fn main() -> int { let arr = [10, 20, 30]; return 0; }";
     const t = typeOfLet(src, "arr");
     expect(t.kind).toBe("array");
     if (t.kind !== "array") return;
@@ -48,7 +48,7 @@ describe("Checker — Array Literals", () => {
   });
 
   test("empty array literal is an error", () => {
-    checkError(`fn main() -> int { let arr = []; return 0; }`, "empty array literal");
+    checkError("fn main() -> int { let arr = []; return 0; }", "empty array literal");
   });
 
   test("mixed types in array literal", () => {
@@ -56,20 +56,20 @@ describe("Checker — Array Literals", () => {
   });
 
   test("array indexing returns element type", () => {
-    const src = `fn main() -> int { let arr = [1, 2, 3]; let x = arr[0]; return 0; }`;
+    const src = "fn main() -> int { let arr = [1, 2, 3]; let x = arr[0]; return 0; }";
     const t = typeOfLet(src, "x");
     expect(t.kind).toBe("int");
   });
 
   test("array index must be integer", () => {
     checkError(
-      `fn main() -> int { let arr = [1, 2]; let x = arr[true]; return 0; }`,
+      "fn main() -> int { let arr = [1, 2]; let x = arr[true]; return 0; }",
       "index must be an integer"
     );
   });
 
   test("array .len returns usize", () => {
-    const src = `fn main() -> int { let arr = [1, 2, 3]; let n = arr.len; return 0; }`;
+    const src = "fn main() -> int { let arr = [1, 2, 3]; let n = arr.len; return 0; }";
     const t = typeOfLet(src, "n");
     expect(t.kind).toBe("int");
     if (t.kind !== "int") return;
@@ -78,7 +78,7 @@ describe("Checker — Array Literals", () => {
   });
 
   test("cannot index non-array type", () => {
-    checkError(`fn main() -> int { let x = 42; let y = x[0]; return 0; }`, "cannot index type");
+    checkError("fn main() -> int { let x = 42; let y = x[0]; return 0; }", "cannot index type");
   });
 
   test("array of booleans", () => {

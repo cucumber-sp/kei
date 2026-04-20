@@ -1,21 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { Scope } from "../../src/checker/scope";
-import {
-  functionSymbol,
-  SymbolKind,
-  typeSymbol,
-  variableSymbol,
-} from "../../src/checker/symbols";
+import { functionSymbol, SymbolKind, typeSymbol, variableSymbol } from "../../src/checker/symbols";
 import type { FunctionType } from "../../src/checker/types";
-import {
-  BOOL_TYPE,
-  F64_TYPE,
-  functionType,
-  I32_TYPE,
-  I64_TYPE,
-  STRING_TYPE,
-  VOID_TYPE,
-} from "../../src/checker/types";
+import { BOOL_TYPE, F64_TYPE, functionType, I32_TYPE, VOID_TYPE } from "../../src/checker/types";
 
 function makeFnType(
   paramTypes: import("../../src/checker/types").Type[],

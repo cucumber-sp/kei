@@ -38,16 +38,16 @@ export function emitTypeDecl(td: KirTypeDecl): string {
         .join(",\n");
 
       return [
-        `typedef struct {`,
-        `    int32_t tag;`,
-        `    union {`,
+        "typedef struct {",
+        "    int32_t tag;",
+        "    union {",
         unionMembers,
-        `    } data;`,
+        "    } data;",
         `} ${sName};`,
-        ``,
+        "",
         `enum ${sName}_Tag {`,
         tagConstants,
-        `};`,
+        "};",
       ].join("\n");
     }
 

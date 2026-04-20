@@ -62,16 +62,16 @@ describe("Checker — Control Flow Edge Cases", () => {
     });
 
     test("break outside any loop → error", () => {
-      checkError(`fn main() -> int { break; return 0; }`, "'break' used outside of a loop");
+      checkError("fn main() -> int { break; return 0; }", "'break' used outside of a loop");
     });
 
     test("continue outside any loop → error", () => {
-      checkError(`fn main() -> int { continue; return 0; }`, "'continue' used outside of a loop");
+      checkError("fn main() -> int { continue; return 0; }", "'continue' used outside of a loop");
     });
 
     test("break inside if but outside loop → error", () => {
       checkError(
-        `fn main() -> int { if true { break; } return 0; }`,
+        "fn main() -> int { if true { break; } return 0; }",
         "'break' used outside of a loop"
       );
     });
@@ -107,7 +107,7 @@ describe("Checker — Control Flow Edge Cases", () => {
 
     test("while with non-bool condition → error", () => {
       checkError(
-        `fn main() -> int { while 42 { break; } return 0; }`,
+        "fn main() -> int { while 42 { break; } return 0; }",
         "while condition must be bool"
       );
     });
@@ -156,13 +156,16 @@ describe("Checker — Control Flow Edge Cases", () => {
 
     test("for over non-iterable → error", () => {
       checkError(
-        `fn main() -> int { for i in 42 { let x = i; } return 0; }`,
+        "fn main() -> int { for i in 42 { let x = i; } return 0; }",
         "cannot iterate over type"
       );
     });
 
     test("for loop variable not accessible after loop", () => {
-      checkError(`fn main() -> int { for (let i = 0; i < 10; i = i + 1) { } return i; }`, "undeclared variable 'i'");
+      checkError(
+        "fn main() -> int { for (let i = 0; i < 10; i = i + 1) { } return i; }",
+        "undeclared variable 'i'"
+      );
     });
 
     test("nested for loops → ok", () => {
@@ -452,7 +455,7 @@ describe("Checker — Control Flow Edge Cases", () => {
 
   describe("condition type checking", () => {
     test("if condition must be bool: int → error", () => {
-      checkError(`fn main() -> int { if 42 { } return 0; }`, "if condition must be bool");
+      checkError("fn main() -> int { if 42 { } return 0; }", "if condition must be bool");
     });
 
     test("if condition must be bool: string → error", () => {
@@ -460,11 +463,11 @@ describe("Checker — Control Flow Edge Cases", () => {
     });
 
     test("assert condition must be bool → error", () => {
-      checkError(`fn main() -> int { assert(42); return 0; }`, "assert condition must be bool");
+      checkError("fn main() -> int { assert(42); return 0; }", "assert condition must be bool");
     });
 
     test("require condition must be bool → error", () => {
-      checkError(`fn main() -> int { require(42); return 0; }`, "require condition must be bool");
+      checkError("fn main() -> int { require(42); return 0; }", "require condition must be bool");
     });
 
     test("assert with string message → ok", () => {
@@ -526,7 +529,7 @@ describe("Checker — Control Flow Edge Cases", () => {
     });
 
     test("variable in nested block not accessible outside → error", () => {
-      checkError(`fn main() -> int { { let x = 1; } return x; }`, "undeclared variable 'x'");
+      checkError("fn main() -> int { { let x = 1; } return x; }", "undeclared variable 'x'");
     });
 
     test("outer variable accessible in while body → ok", () => {

@@ -176,7 +176,7 @@ describe("Checker — Lifecycle Hooks (comprehensive)", () => {
 
     test("move non-variable expression → error", () => {
       checkError(
-        `fn main() -> int { let x = move 42; return 0; }`,
+        "fn main() -> int { let x = move 42; return 0; }",
         "'move' can only be applied to a variable"
       );
     });

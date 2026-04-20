@@ -610,13 +610,13 @@ describe("stress: combined scenarios", () => {
 
 describe("stress: edge cases (no crash)", () => {
   test("empty function body", () => {
-    const source = `fn nothing() {}\nfn main() -> i32 { nothing(); return 0; }`;
+    const source = "fn nothing() {}\nfn main() -> i32 { nothing(); return 0; }";
     const c = compileFull(source);
     expect(c).toContain("nothing");
   });
 
   test("empty struct", () => {
-    const result = parseOnly(`struct Empty {}\nfn main() -> i32 { return 0; }`);
+    const result = parseOnly("struct Empty {}\nfn main() -> i32 { return 0; }");
     expect(result.parsed).toBe(true);
   });
 

@@ -14,19 +14,73 @@
     "enabled": true,
     "rules": {
       "recommended": true,
-      "suspicious": {
-        "noExplicitAny": "error",
-        "noImplicitAnyLet": "error"
+      "complexity": {
+        "noUselessConstructor": "error",
+        "noUselessSwitchCase": "error",
+        "noUselessTernary": "error",
+        "noUselessFragments": "error",
+        "noUselessLoneBlockStatements": "error",
+        "noUselessRename": "error",
+        "noUselessStringConcat": "error",
+        "noUselessTypeConstraint": "error",
+        "noUselessUndefinedInitialization": "error",
+        "noBannedTypes": "error",
+        "useFlatMap": "error",
+        "useArrowFunction": "error",
+        "noForEach": "warn"
       },
       "correctness": {
-        "noUnusedVariables": "error"
+        "noUnusedVariables": "error",
+        "noUnusedImports": "error",
+        "noUnusedFunctionParameters": "warn",
+        "noUnusedPrivateClassMembers": "warn",
+        "noPrecisionLoss": "error",
+        "noConstantCondition": "error",
+        "noSwitchDeclarations": "error",
+        "useExhaustiveDependencies": "off"
+      },
+      "performance": {
+        "noAccumulatingSpread": "error",
+        "noBarrelFile": "off",
+        "noDelete": "error"
       },
       "style": {
         "useConst": "error",
-        "useTemplate": "error"
+        "useTemplate": "error",
+        "useImportType": "error",
+        "useExportType": "error",
+        "useShorthandFunctionType": "error",
+        "useNodejsImportProtocol": "error",
+        "useNumberNamespace": "error",
+        "useEnumInitializers": "error",
+        "useArrayLiterals": "error",
+        "useDefaultParameterLast": "error",
+        "useSelfClosingElements": "error",
+        "useSingleVarDeclarator": "error",
+        "useShorthandAssign": "error",
+        "useExponentiationOperator": "error",
+        "noUnusedTemplateLiteral": "error",
+        "noNonNullAssertion": "error",
+        "noNamespace": "error",
+        "noParameterAssign": "warn",
+        "noNegationElse": "error",
+        "noInferrableTypes": "error"
       },
-      "complexity": {
-        "noUselessConstructor": "error"
+      "suspicious": {
+        "noExplicitAny": "error",
+        "noImplicitAnyLet": "error",
+        "noEmptyBlockStatements": "error",
+        "noConfusingVoidType": "error",
+        "noConfusingLabels": "error",
+        "noDoubleEquals": "error",
+        "noFallthroughSwitchClause": "error",
+        "noShadowRestrictedNames": "error",
+        "noSparseArray": "error",
+        "noAssignInExpressions": "error",
+        "useAwait": "warn",
+        "useDefaultSwitchClauseLast": "error",
+        "useGetterReturn": "error",
+        "useIsArray": "error"
       }
     }
   },
@@ -48,5 +102,40 @@
     "formatter": {
       "enabled": true
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["tests/**/*.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
+          },
+          "suspicious": {
+            "noEmptyBlockStatements": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/cli.ts", "src/cli/**/*.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/parser/postfix-parser.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noParameterAssign": "off"
+          }
+        }
+      }
+    }
+  ]
 }

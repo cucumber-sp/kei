@@ -3,15 +3,15 @@ import { checkError, checkOk } from "./helpers";
 
 describe("Checker — Scopes", () => {
   test("variable declared and used", () => {
-    checkOk(`fn main() -> int { let x = 42; return x; }`);
+    checkOk("fn main() -> int { let x = 42; return x; }");
   });
 
   test("variable used before declaration", () => {
-    checkError(`fn main() -> int { let y = x; let x = 10; return y; }`, "undeclared variable 'x'");
+    checkError("fn main() -> int { let y = x; let x = 10; return y; }", "undeclared variable 'x'");
   });
 
   test("variable from outer scope accessible in inner scope", () => {
-    checkOk(`fn main() -> int { let x = 10; { let y = x; } return x; }`);
+    checkOk("fn main() -> int { let x = 10; { let y = x; } return x; }");
   });
 
   test("shadowing: inner variable shadows outer", () => {
@@ -28,11 +28,11 @@ describe("Checker — Scopes", () => {
   });
 
   test("variable not accessible after scope ends", () => {
-    checkError(`fn main() -> int { { let x = 10; } return x; }`, "undeclared variable 'x'");
+    checkError("fn main() -> int { { let x = 10; } return x; }", "undeclared variable 'x'");
   });
 
   test("function parameters in scope inside function body", () => {
-    checkOk(`fn add(a: int, b: int) -> int { return a + b; }`);
+    checkOk("fn add(a: int, b: int) -> int { return a + b; }");
   });
 
   test("nested function scopes don't leak", () => {
@@ -66,12 +66,12 @@ describe("Checker — Scopes", () => {
   });
 
   test("duplicate variable declaration in same scope", () => {
-    checkError(`fn main() -> int { let x = 1; let x = 2; return x; }`, "duplicate variable 'x'");
+    checkError("fn main() -> int { let x = 1; let x = 2; return x; }", "duplicate variable 'x'");
   });
 
   test("for loop variable scoped to loop body", () => {
     checkError(
-      `fn main() -> int { for (let i = 0; i < 10; i = i + 1) { let x = i; } return i; }`,
+      "fn main() -> int { for (let i = 0; i < 10; i = i + 1) { let x = i; } return i; }",
       "undeclared variable 'i'"
     );
   });
@@ -160,7 +160,7 @@ describe("Checker — Scopes", () => {
 
   test("const variables are immutable in scope", () => {
     checkError(
-      `fn main() -> int { const x = 10; x = 20; return x; }`,
+      "fn main() -> int { const x = 10; x = 20; return x; }",
       "cannot assign to immutable variable 'x'"
     );
   });
@@ -284,16 +284,16 @@ describe("Checker — Scopes", () => {
 
   test("duplicate const in same scope → error", () => {
     checkError(
-      `fn main() -> int { const x = 1; const x = 2; return x; }`,
+      "fn main() -> int { const x = 1; const x = 2; return x; }",
       "duplicate variable 'x'"
     );
   });
 
   test("let and const with same name in same scope → error", () => {
-    checkError(`fn main() -> int { let x = 1; const x = 2; return x; }`, "duplicate variable 'x'");
+    checkError("fn main() -> int { let x = 1; const x = 2; return x; }", "duplicate variable 'x'");
   });
 
   test("duplicate parameter name → error", () => {
-    checkError(`fn foo(x: int, x: int) -> int { return x; }`, "duplicate variable 'x'");
+    checkError("fn foo(x: int, x: int) -> int { return x; }", "duplicate variable 'x'");
   });
 });

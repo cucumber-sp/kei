@@ -48,7 +48,7 @@ describe("Checker — Lifecycle", () => {
 
   test("move with non-variable → error", () => {
     checkError(
-      `fn main() -> int { let x = move 42; return 0; }`,
+      "fn main() -> int { let x = move 42; return 0; }",
       "'move' can only be applied to a variable"
     );
   });

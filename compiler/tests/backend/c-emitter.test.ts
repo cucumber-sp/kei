@@ -14,7 +14,7 @@ function compileToC(source: string): string {
 
 describe("c-emitter", () => {
   test("emits runtime header", () => {
-    const c = compileToC(`fn main() -> int { return 0; }`);
+    const c = compileToC("fn main() -> int { return 0; }");
     expect(c).toContain("#include <stdio.h>");
     expect(c).toContain("#include <stdint.h>");
     expect(c).toContain("#include <stdbool.h>");
@@ -23,13 +23,13 @@ describe("c-emitter", () => {
   });
 
   test("emits main as C main with int return", () => {
-    const c = compileToC(`fn main() -> int { return 0; }`);
+    const c = compileToC("fn main() -> int { return 0; }");
     expect(c).toContain("int main(void)");
     expect(c).toContain("return");
   });
 
   test("emits integer constants", () => {
-    const c = compileToC(`fn main() -> int { return 42; }`);
+    const c = compileToC("fn main() -> int { return 42; }");
     expect(c).toContain("42");
   });
 

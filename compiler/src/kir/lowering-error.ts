@@ -393,11 +393,7 @@ export function lowerCatchThrowPropagation(
     }
   }
 
-  if (!needsRemap) {
-    // Direct propagation: same tag numbering, error already in caller's buffer
-    emitAllScopeDestroys(ctx);
-    setTerminator(ctx, { kind: "ret", value: tagVar });
-  } else {
+  if (needsRemap) {
     // Remap: switch on callee tag, return caller's tag
     const cases: { value: VarId; target: string }[] = [];
     const endPropLabel = freshBlockId(ctx, "catch.prop.end");
@@ -437,5 +433,9 @@ export function lowerCatchThrowPropagation(
     sealCurrentBlock(ctx);
     startBlock(ctx, endPropLabel);
     setTerminator(ctx, { kind: "unreachable" });
+  } else {
+    // Direct propagation: same tag numbering, error already in caller's buffer
+    emitAllScopeDestroys(ctx);
+    setTerminator(ctx, { kind: "ret", value: tagVar });
   }
 }

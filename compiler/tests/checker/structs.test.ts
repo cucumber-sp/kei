@@ -229,7 +229,7 @@ describe("Checker — Structs", () => {
 
   test("undeclared struct type → error", () => {
     checkError(
-      `fn main() -> int { let p = FooBar{ x: 1 }; return 0; }`,
+      "fn main() -> int { let p = FooBar{ x: 1 }; return 0; }",
       "undeclared type 'FooBar'"
     );
   });

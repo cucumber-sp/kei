@@ -78,7 +78,7 @@ export async function runDriver(flags: CliFlags): Promise<number> {
 
   // Codegen path: --emit-c, --build, or --run
   if (flags.emitC || flags.build || flags.run) {
-    const kir = await compileToKir(flags.filePath, program, source, allDiagnostics);
+    const kir = compileToKir(flags.filePath, program, source, allDiagnostics);
     if (kir === null) return 1;
 
     const optimized = runDeSsa(runMem2Reg(kir));
@@ -93,7 +93,7 @@ export async function runDriver(flags: CliFlags): Promise<number> {
 
   // KIR-print path
   if (flags.showKir || flags.showKirOpt) {
-    const kir = await compileToKir(flags.filePath, program, source, allDiagnostics);
+    const kir = compileToKir(flags.filePath, program, source, allDiagnostics);
     if (kir === null) return 1;
     const out = flags.showKirOpt ? runMem2Reg(kir) : kir;
     console.log(printKir(out));
@@ -124,12 +124,12 @@ export async function runDriver(flags: CliFlags): Promise<number> {
  * Type-check (single or multi-module depending on imports) and lower to KIR.
  * Returns null on errors (already printed).
  */
-async function compileToKir(
+function compileToKir(
   filePath: string,
   program: Program,
   source: SourceFile,
   allDiagnostics: Diagnostic[]
-): Promise<KirModule | null> {
+): KirModule | null {
   const hasImports = program.declarations.some((d) => d.kind === "ImportDecl");
 
   if (hasImports) {

@@ -260,51 +260,51 @@ describe("Checker — Implicit Literal Conversions (comprehensive)", () => {
 
   describe("let/const declarations", () => {
     test("let x: double = 1", () => {
-      checkOk(`fn main() -> int { let x: double = 1; return 0; }`);
+      checkOk("fn main() -> int { let x: double = 1; return 0; }");
     });
 
     test("let x: f32 = 1", () => {
-      checkOk(`fn main() -> int { let x: f32 = 1; return 0; }`);
+      checkOk("fn main() -> int { let x: f32 = 1; return 0; }");
     });
 
     test("const x: i64 = 42", () => {
-      checkOk(`fn main() -> int { const x: i64 = 42; return 0; }`);
+      checkOk("fn main() -> int { const x: i64 = 42; return 0; }");
     });
 
     test("let x: double = -10", () => {
-      checkOk(`fn main() -> int { let x: double = -10; return 0; }`);
+      checkOk("fn main() -> int { let x: double = -10; return 0; }");
     });
 
     test("let x: double = 0", () => {
-      checkOk(`fn main() -> int { let x: double = 0; return 0; }`);
+      checkOk("fn main() -> int { let x: double = 0; return 0; }");
     });
 
     test("let x: f32 = 3.14", () => {
-      checkOk(`fn main() -> int { let x: f32 = 3.14; return 0; }`);
+      checkOk("fn main() -> int { let x: f32 = 3.14; return 0; }");
     });
 
     test("const x: u8 = 255", () => {
-      checkOk(`fn main() -> int { const x: u8 = 255; return 0; }`);
+      checkOk("fn main() -> int { const x: u8 = 255; return 0; }");
     });
 
     test("const x: u16 = 1000", () => {
-      checkOk(`fn main() -> int { const x: u16 = 1000; return 0; }`);
+      checkOk("fn main() -> int { const x: u16 = 1000; return 0; }");
     });
 
     test("const x: u32 = 100000", () => {
-      checkOk(`fn main() -> int { const x: u32 = 100000; return 0; }`);
+      checkOk("fn main() -> int { const x: u32 = 100000; return 0; }");
     });
 
     test("const x: u64 = 42", () => {
-      checkOk(`fn main() -> int { const x: u64 = 42; return 0; }`);
+      checkOk("fn main() -> int { const x: u64 = 42; return 0; }");
     });
 
     test("let x: i8 = -128", () => {
-      checkOk(`fn main() -> int { let x: i8 = -128; return 0; }`);
+      checkOk("fn main() -> int { let x: i8 = -128; return 0; }");
     });
 
     test("let x: i16 = -32768", () => {
-      checkOk(`fn main() -> int { let x: i16 = -32768; return 0; }`);
+      checkOk("fn main() -> int { let x: i16 = -32768; return 0; }");
     });
   });
 
@@ -431,23 +431,23 @@ describe("Checker — Implicit Literal Conversions (comprehensive)", () => {
     });
 
     test("float literal → i32 let: error", () => {
-      checkError(`fn main() -> int { let x: i32 = 2.5; return 0; }`, "type mismatch");
+      checkError("fn main() -> int { let x: i32 = 2.5; return 0; }", "type mismatch");
     });
 
     test("float literal → u8 let: error", () => {
-      checkError(`fn main() -> int { let x: u8 = 1.0; return 0; }`, "type mismatch");
+      checkError("fn main() -> int { let x: u8 = 1.0; return 0; }", "type mismatch");
     });
 
     test("float literal → i64 let: error", () => {
-      checkError(`fn main() -> int { let x: i64 = 3.14; return 0; }`, "type mismatch");
+      checkError("fn main() -> int { let x: i64 = 3.14; return 0; }", "type mismatch");
     });
 
     test("int literal overflow in let: u8 = 256", () => {
-      checkError(`fn main() -> int { let x: u8 = 256; return 0; }`, "type mismatch");
+      checkError("fn main() -> int { let x: u8 = 256; return 0; }", "type mismatch");
     });
 
     test("int literal overflow in let: i8 = 200", () => {
-      checkError(`fn main() -> int { let x: i8 = 200; return 0; }`, "type mismatch");
+      checkError("fn main() -> int { let x: i8 = 200; return 0; }", "type mismatch");
     });
 
     test("int literal overflow in function arg", () => {
@@ -475,11 +475,11 @@ describe("Checker — Implicit Literal Conversions (comprehensive)", () => {
     });
 
     test("int literal overflow in return: u8 = 300", () => {
-      checkError(`fn foo() -> u8 { return 300; }`, "return type mismatch");
+      checkError("fn foo() -> u8 { return 300; }", "return type mismatch");
     });
 
     test("float literal in i32 return: error", () => {
-      checkError(`fn foo() -> i32 { return 3.14; }`, "return type mismatch");
+      checkError("fn foo() -> i32 { return 3.14; }", "return type mismatch");
     });
   });
 
@@ -487,31 +487,31 @@ describe("Checker — Implicit Literal Conversions (comprehensive)", () => {
 
   describe("return statement conversions", () => {
     test("return int literal as double", () => {
-      checkOk(`fn foo() -> double { return 42; }`);
+      checkOk("fn foo() -> double { return 42; }");
     });
 
     test("return int literal as f32", () => {
-      checkOk(`fn foo() -> f32 { return 10; }`);
+      checkOk("fn foo() -> f32 { return 10; }");
     });
 
     test("return float literal as f32", () => {
-      checkOk(`fn foo() -> f32 { return 2.5; }`);
+      checkOk("fn foo() -> f32 { return 2.5; }");
     });
 
     test("return int literal as i64", () => {
-      checkOk(`fn foo() -> i64 { return 100; }`);
+      checkOk("fn foo() -> i64 { return 100; }");
     });
 
     test("return int literal as u8 (in range)", () => {
-      checkOk(`fn foo() -> u8 { return 127; }`);
+      checkOk("fn foo() -> u8 { return 127; }");
     });
 
     test("return negative int literal as double", () => {
-      checkOk(`fn foo() -> double { return -99; }`);
+      checkOk("fn foo() -> double { return -99; }");
     });
 
     test("return zero as double", () => {
-      checkOk(`fn foo() -> double { return 0; }`);
+      checkOk("fn foo() -> double { return 0; }");
     });
   });
 
