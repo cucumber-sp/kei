@@ -5,149 +5,41 @@
 
 import { Severity } from "../errors";
 import type { Lexer } from "./lexer";
-import { isAlpha, isAlphaNumeric, isBinaryDigit, isDigit, isHexDigit, isOctalDigit } from "./lexer";
+import { isAlphaNumeric, isBinaryDigit, isDigit, isHexDigit, isOctalDigit } from "./lexer";
 import type { Token } from "./token";
 import { TokenKind } from "./token";
 
-// ─── Number scanning ──────────────────────────────────────────────────────
+// ─── Predicates ───────────────────────────────────────────────────────────
 
-export function readNumber(this: Lexer): Token {
-  const start = this.pos;
+/**
+ * Characters that — when they immediately follow a `.` after integer digits —
+ * confirm the dot is the decimal point of a float literal (rather than e.g.
+ * field access, range, or a deref).
+ *
+ *   `1.`  at EOF / whitespace / `;` `)` `}` `,`   → float (`1.0`)
+ *   `1.5`                                        → float (digit follows)
+ *   `1.e10`                                      → float (exponent follows)
+ *   `1.foo`                                      → IntLiteral, Dot, Ident
+ *   `1..2`                                       → IntLiteral, DotDot, IntLiteral
+ *   `1.*`                                        → IntLiteral, Dot, Star
+ */
+const FLOAT_TRAILING_TERMINATORS: ReadonlySet<string> = new Set([
+  "",
+  " ",
+  "\t",
+  "\n",
+  "\r",
+  ";",
+  ")",
+  "}",
+  ",",
+]);
 
-  // Handle leading dot (.75)
-  if (this.peek() === ".") {
-    return this.readDecimalFraction(start);
-  }
-
-  // Check for prefix: 0x, 0b, 0o
-  if (this.peek() === "0" && this.pos + 1 < this.source.length) {
-    const next = this.peek(1);
-    if (next === "x" || next === "X") {
-      return this.readHexNumber(start);
-    }
-    if (next === "b" || next === "B") {
-      return this.readBinaryNumber(start);
-    }
-    if (next === "o" || next === "O") {
-      return this.readOctalNumber(start);
-    }
-  }
-
-  // Decimal number
-  this.consumeDigits(isDigit);
-
-  // Check for float (but not range `..` or deref `.*`)
-  if (this.peek() === "." && this.peek(1) !== "*" && this.peek(1) !== ".") {
-    // Could be float or just integer followed by dot
-    const nextAfterDot = this.peek(1);
-    if (
-      nextAfterDot === "" ||
-      !isAlpha(nextAfterDot) ||
-      nextAfterDot === "e" ||
-      nextAfterDot === "E"
-    ) {
-      if (
-        isDigit(nextAfterDot) ||
-        nextAfterDot === "e" ||
-        nextAfterDot === "E" ||
-        nextAfterDot === "" ||
-        nextAfterDot === " " ||
-        nextAfterDot === ";" ||
-        nextAfterDot === ")" ||
-        nextAfterDot === "}" ||
-        nextAfterDot === "," ||
-        nextAfterDot === "\n" ||
-        nextAfterDot === "\r" ||
-        nextAfterDot === "\t"
-      ) {
-        this.pos++; // consume dot
-        if (isDigit(this.peek())) {
-          this.consumeDigits(isDigit);
-        }
-        if (!this.consumeExponent()) {
-          this.addDiagnostic(Severity.Error, "Expected digit in exponent", start);
-          return this.makeToken(TokenKind.Error, start, this.pos);
-        }
-        return this.makeNumberToken(TokenKind.FloatLiteral, start);
-      }
-    }
-  }
-
-  if (this.peek() === "e" || this.peek() === "E") {
-    if (!this.consumeExponent()) {
-      this.addDiagnostic(Severity.Error, "Expected digit in exponent", start);
-      return this.makeToken(TokenKind.Error, start, this.pos);
-    }
-    return this.makeNumberToken(TokenKind.FloatLiteral, start);
-  }
-
-  return this.makeNumberToken(TokenKind.IntLiteral, start);
+function canFollowTrailingDot(ch: string): boolean {
+  return isDigit(ch) || ch === "e" || ch === "E" || FLOAT_TRAILING_TERMINATORS.has(ch);
 }
 
-export function readDecimalFraction(this: Lexer, start: number): Token {
-  this.pos++; // consume dot
-  this.consumeDigits(isDigit);
-  if (!this.consumeExponent()) {
-    this.addDiagnostic(Severity.Error, "Expected digit in exponent", start);
-    return this.makeToken(TokenKind.Error, start, this.pos);
-  }
-  return this.makeNumberToken(TokenKind.FloatLiteral, start);
-}
-
-export function readHexNumber(this: Lexer, start: number): Token {
-  this.pos += 2; // skip 0x
-  if (!isHexDigit(this.peek())) {
-    this.addDiagnostic(Severity.Error, "Expected hex digit after '0x'", start);
-    return this.makeToken(TokenKind.Error, start, this.pos);
-  }
-  this.consumeDigits(isHexDigit);
-  return this.makeNumberToken(TokenKind.IntLiteral, start);
-}
-
-export function readBinaryNumber(this: Lexer, start: number): Token {
-  this.pos += 2; // skip 0b
-  if (!isBinaryDigit(this.peek()) && this.peek() !== "_") {
-    this.addDiagnostic(Severity.Error, "Expected binary digit after '0b'", start);
-    return this.makeToken(TokenKind.Error, start, this.pos);
-  }
-  this.consumeDigits(isBinaryDigit);
-  return this.makeNumberToken(TokenKind.IntLiteral, start);
-}
-
-export function readOctalNumber(this: Lexer, start: number): Token {
-  this.pos += 2; // skip 0o
-  if (!isOctalDigit(this.peek()) && this.peek() !== "_") {
-    this.addDiagnostic(Severity.Error, "Expected octal digit after '0o'", start);
-    return this.makeToken(TokenKind.Error, start, this.pos);
-  }
-  this.consumeDigits(isOctalDigit);
-  return this.makeNumberToken(TokenKind.IntLiteral, start);
-}
-
-export function consumeDigits(this: Lexer, isValidDigit: (ch: string) => boolean): void {
-  while (this.pos < this.source.length) {
-    const ch = this.peek();
-    if (isValidDigit(ch) || ch === "_") {
-      this.pos++;
-    } else {
-      break;
-    }
-  }
-}
-
-export function consumeExponent(this: Lexer): boolean {
-  if (this.peek() === "e" || this.peek() === "E") {
-    this.pos++;
-    if (this.peek() === "+" || this.peek() === "-") {
-      this.pos++;
-    }
-    if (!isDigit(this.peek())) {
-      return false;
-    }
-    this.consumeDigits(isDigit);
-  }
-  return true;
-}
+// ─── Suffix table ─────────────────────────────────────────────────────────
 
 const NUMERIC_SUFFIXES: ReadonlySet<string> = new Set([
   "i8",
@@ -166,54 +58,160 @@ const NUMERIC_SUFFIXES: ReadonlySet<string> = new Set([
 
 const FLOAT_SUFFIXES: ReadonlySet<string> = new Set(["f32", "f64"]);
 
+// Longest suffix is `isize`/`usize` (5); shortest is `i8`/`u8` (2). Try longest
+// first so `i32` doesn't shadow a longer prefix match (none today, but safe).
+const SUFFIX_LENGTHS = [5, 3, 2] as const;
+
+// ─── Number scanning ──────────────────────────────────────────────────────
+
+export function readNumber(this: Lexer): Token {
+  const start = this.pos;
+
+  // `.75` — leading dot.
+  if (this.peek() === ".") {
+    return this.readDecimalFraction(start);
+  }
+
+  // Radix prefixes: `0x…`, `0b…`, `0o…`.
+  if (this.peek() === "0") {
+    const next = this.peek(1);
+    if (next === "x" || next === "X") return this.readHexNumber(start);
+    if (next === "b" || next === "B") return this.readBinaryNumber(start);
+    if (next === "o" || next === "O") return this.readOctalNumber(start);
+  }
+
+  // Decimal integer part.
+  this.consumeDigits(isDigit);
+
+  // Optional fractional part: `.<digits>?`. We only consume the dot when
+  // what follows confirms a float — never field access, range, or deref.
+  if (this.peek() === "." && canFollowTrailingDot(this.peek(1))) {
+    this.pos++; // consume '.'
+    this.consumeDigits(isDigit);
+    return this.finishFloatWithExponent(start);
+  }
+
+  // No fraction, but a bare exponent (`1e10`).
+  if (this.peek() === "e" || this.peek() === "E") {
+    return this.finishFloatWithExponent(start);
+  }
+
+  return this.makeNumberToken(TokenKind.IntLiteral, start);
+}
+
+export function readDecimalFraction(this: Lexer, start: number): Token {
+  this.pos++; // consume '.'
+  this.consumeDigits(isDigit);
+  return this.finishFloatWithExponent(start);
+}
+
+/**
+ * Consume an optional exponent and emit a FloatLiteral token, or an Error
+ * token if the exponent is malformed (`1e`, `1e+`).
+ */
+export function finishFloatWithExponent(this: Lexer, start: number): Token {
+  if (!this.consumeExponent()) {
+    this.addDiagnostic(Severity.Error, "Expected digit in exponent", start);
+    return this.makeToken(TokenKind.Error, start, this.pos);
+  }
+  return this.makeNumberToken(TokenKind.FloatLiteral, start);
+}
+
+export function readHexNumber(this: Lexer, start: number): Token {
+  return this.readPrefixedInt(start, "x", isHexDigit, "hex digit", false);
+}
+
+export function readBinaryNumber(this: Lexer, start: number): Token {
+  return this.readPrefixedInt(start, "b", isBinaryDigit, "binary digit", true);
+}
+
+export function readOctalNumber(this: Lexer, start: number): Token {
+  return this.readPrefixedInt(start, "o", isOctalDigit, "octal digit", true);
+}
+
+/**
+ * Shared body for `0x` / `0b` / `0o` literals.
+ *
+ * `allowLeadingUnderscore` mirrors the original behaviour: binary and octal
+ * accept `0b_…` / `0o_…` (an underscore in the very first position), while
+ * hex does not.
+ */
+export function readPrefixedInt(
+  this: Lexer,
+  start: number,
+  prefixLetter: string,
+  isDigitInRadix: (ch: string) => boolean,
+  digitDescription: string,
+  allowLeadingUnderscore: boolean
+): Token {
+  this.pos += 2; // skip `0x` / `0b` / `0o`
+  const first = this.peek();
+  if (!isDigitInRadix(first) && !(allowLeadingUnderscore && first === "_")) {
+    this.addDiagnostic(
+      Severity.Error,
+      `Expected ${digitDescription} after '0${prefixLetter}'`,
+      start
+    );
+    return this.makeToken(TokenKind.Error, start, this.pos);
+  }
+  this.consumeDigits(isDigitInRadix);
+  return this.makeNumberToken(TokenKind.IntLiteral, start);
+}
+
+export function consumeDigits(this: Lexer, isValidDigit: (ch: string) => boolean): void {
+  while (this.pos < this.source.length) {
+    const ch = this.peek();
+    if (!isValidDigit(ch) && ch !== "_") break;
+    this.pos++;
+  }
+}
+
+/**
+ * If positioned at `e`/`E`, consume the exponent (with optional sign and
+ * required digits) and return true; an `e` with no following digits returns
+ * false. If not at an exponent intro, returns true (no-op).
+ */
+export function consumeExponent(this: Lexer): boolean {
+  if (this.peek() !== "e" && this.peek() !== "E") return true;
+  this.pos++;
+  if (this.peek() === "+" || this.peek() === "-") this.pos++;
+  if (!isDigit(this.peek())) return false;
+  this.consumeDigits(isDigit);
+  return true;
+}
+
+/**
+ * Try to consume a numeric type suffix (`i32`, `usize`, `f64`, …) immediately
+ * after the digit sequence. Returns the matched suffix or `undefined`.
+ */
 export function consumeSuffix(this: Lexer): string | undefined {
-  // Try to match a type suffix immediately after the number digits.
-  // We look ahead without advancing, then consume if we find a valid suffix.
   const remaining = this.source.content.slice(this.pos);
 
-  // Try longest suffixes first (isize, usize are 5 chars; others are 2-3)
-  for (const len of [5, 3, 2]) {
+  for (const len of SUFFIX_LENGTHS) {
     const candidate = remaining.slice(0, len);
-    if (NUMERIC_SUFFIXES.has(candidate)) {
-      // Make sure the suffix isn't followed by more alphanumeric chars
-      // (e.g. `42i32x` should NOT match `i32` as a suffix)
-      const afterSuffix = remaining.charAt(len);
-      if (afterSuffix === "" || !isAlphaNumeric(afterSuffix)) {
-        this.pos += len;
-        return candidate;
-      }
-    }
+    if (!NUMERIC_SUFFIXES.has(candidate)) continue;
+    // Reject `42i32x` — a suffix must be followed by a non-alphanumeric
+    // boundary, otherwise `i32x` is the start of an identifier.
+    if (isAlphaNumeric(remaining.charAt(len))) continue;
+    this.pos += len;
+    return candidate;
   }
   return undefined;
 }
 
 export function makeNumberToken(this: Lexer, kind: TokenKind, start: number): Token {
-  // Try to consume a type suffix
   const suffix = this.consumeSuffix();
 
-  // If an integer literal has a float suffix, promote to FloatLiteral
-  let effectiveKind = kind;
-  if (suffix && kind === TokenKind.IntLiteral && FLOAT_SUFFIXES.has(suffix)) {
-    effectiveKind = TokenKind.FloatLiteral;
-  }
+  // An integer literal with `f32`/`f64` becomes a float.
+  const effectiveKind =
+    suffix && kind === TokenKind.IntLiteral && FLOAT_SUFFIXES.has(suffix)
+      ? TokenKind.FloatLiteral
+      : kind;
 
   const lexeme = this.source.content.slice(start, this.pos);
-  // Strip both underscores and suffix from the numeric part for parsing
-  const numericPart = suffix ? lexeme.slice(0, lexeme.length - suffix.length) : lexeme;
+  const numericPart = suffix ? lexeme.slice(0, -suffix.length) : lexeme;
   const cleaned = numericPart.replace(/_/g, "");
-  let value: number;
-
-  if (effectiveKind === TokenKind.FloatLiteral) {
-    value = Number.parseFloat(cleaned);
-  } else if (cleaned.startsWith("0x") || cleaned.startsWith("0X")) {
-    value = Number.parseInt(cleaned.slice(2), 16);
-  } else if (cleaned.startsWith("0b") || cleaned.startsWith("0B")) {
-    value = Number.parseInt(cleaned.slice(2), 2);
-  } else if (cleaned.startsWith("0o") || cleaned.startsWith("0O")) {
-    value = Number.parseInt(cleaned.slice(2), 8);
-  } else {
-    value = Number.parseInt(cleaned, 10);
-  }
+  const value = parseNumericValue(cleaned, effectiveKind);
 
   const { line, column } = this.source.lineCol(start);
   const token: Token = {
@@ -224,8 +222,19 @@ export function makeNumberToken(this: Lexer, kind: TokenKind, start: number): To
     column,
     value,
   };
-  if (suffix) {
-    token.suffix = suffix;
-  }
+  if (suffix) token.suffix = suffix;
   return token;
+}
+
+function parseNumericValue(cleaned: string, kind: TokenKind): number {
+  if (kind === TokenKind.FloatLiteral) {
+    return Number.parseFloat(cleaned);
+  }
+  if (cleaned.length >= 2 && cleaned[0] === "0") {
+    const marker = cleaned[1];
+    if (marker === "x" || marker === "X") return Number.parseInt(cleaned.slice(2), 16);
+    if (marker === "b" || marker === "B") return Number.parseInt(cleaned.slice(2), 2);
+    if (marker === "o" || marker === "O") return Number.parseInt(cleaned.slice(2), 8);
+  }
+  return Number.parseInt(cleaned, 10);
 }
