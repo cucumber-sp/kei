@@ -8,8 +8,10 @@
 
 export const VERSION = "0.1.0";
 
-/** Action flags + input file. Multiple action flags are allowed; the driver
- * picks the highest-priority one (codegen > KIR-print > check > AST > lex). */
+/**
+ * Action flags + input file. Multiple action flags are allowed; the driver
+ * picks the highest-priority one (codegen > KIR-print > check > AST > lex).
+ */
 export interface CliFlags {
   filePath: string;
   showAst: boolean;
@@ -28,50 +30,67 @@ export type ParseResult =
   | { kind: "error"; message: string }
   | { kind: "compile"; flags: CliFlags };
 
-const KNOWN_FLAGS = new Set([
-  "--ast",
-  "--ast-json",
-  "--check",
-  "--kir",
-  "--kir-opt",
-  "--emit-c",
-  "--build",
-  "--run",
-  "--help",
-  "--version",
+/** Boolean-flag keys on CliFlags (excludes filePath). */
+type BooleanFlagKey = Exclude<keyof CliFlags, "filePath">;
+
+/** Long flag → corresponding boolean field on `CliFlags`. */
+const FLAG_FIELDS: Record<string, BooleanFlagKey> = {
+  "--ast": "showAst",
+  "--ast-json": "showAstJson",
+  "--check": "runCheck",
+  "--kir": "showKir",
+  "--kir-opt": "showKirOpt",
+  "--emit-c": "emitC",
+  "--build": "build",
+  "--run": "run",
+};
+
+/** Short flag → long flag (meta-flags handled before action-flag parsing). */
+const SHORT_ALIASES: Record<string, string> = {
+  "-h": "--help",
+  "-V": "--version",
+};
+
+const META_FLAGS = new Set(["--help", "--version"]);
+
+const KNOWN_FLAGS = new Set<string>([
+  ...Object.keys(FLAG_FIELDS),
+  ...Object.keys(SHORT_ALIASES),
+  ...META_FLAGS,
 ]);
 
-const SHORT_FLAGS = new Set(["-h", "-V"]);
+function normalizeFlag(arg: string): string {
+  return SHORT_ALIASES[arg] ?? arg;
+}
 
 export function parseArgs(argv: readonly string[]): ParseResult {
-  if (argv.includes("--help") || argv.includes("-h")) return { kind: "help" };
-  if (argv.includes("--version") || argv.includes("-V")) return { kind: "version" };
+  const flagArgs = argv.filter((a) => a.startsWith("-")).map(normalizeFlag);
+
+  if (flagArgs.includes("--help")) return { kind: "help" };
+  if (flagArgs.includes("--version")) return { kind: "version" };
+
+  const unknown = flagArgs.find((f) => !KNOWN_FLAGS.has(f));
+  if (unknown) return { kind: "error", message: `unknown flag '${unknown}'` };
 
   const filePath = argv.find((a) => !a.startsWith("-"));
   if (!filePath) return { kind: "error", message: "no input file provided" };
 
-  const flagArgs = argv.filter((a) => a.startsWith("-"));
-  for (const flag of flagArgs) {
-    if (!KNOWN_FLAGS.has(flag) && !SHORT_FLAGS.has(flag)) {
-      return { kind: "error", message: `unknown flag '${flag}'` };
-    }
-  }
-
   const flagSet = new Set(flagArgs);
-  return {
-    kind: "compile",
-    flags: {
-      filePath,
-      showAst: flagSet.has("--ast"),
-      showAstJson: flagSet.has("--ast-json"),
-      runCheck: flagSet.has("--check"),
-      showKir: flagSet.has("--kir"),
-      showKirOpt: flagSet.has("--kir-opt"),
-      emitC: flagSet.has("--emit-c"),
-      build: flagSet.has("--build"),
-      run: flagSet.has("--run"),
-    },
+  const compiled: CliFlags = {
+    filePath,
+    showAst: false,
+    showAstJson: false,
+    runCheck: false,
+    showKir: false,
+    showKirOpt: false,
+    emitC: false,
+    build: false,
+    run: false,
   };
+  for (const [flag, field] of Object.entries(FLAG_FIELDS)) {
+    if (flagSet.has(flag)) compiled[field] = true;
+  }
+  return { kind: "compile", flags: compiled };
 }
 
 export function printHelp(): void {
