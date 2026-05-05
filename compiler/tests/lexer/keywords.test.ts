@@ -1,12 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { Lexer, TokenKind } from "../../src/lexer";
-import { SourceFile } from "../../src/utils/source";
-
-function tokenize(input: string) {
-  const source = new SourceFile("test.kei", input);
-  const lexer = new Lexer(source);
-  return { tokens: lexer.tokenize(), diagnostics: lexer.getDiagnostics() };
-}
+import { TokenKind } from "../../src/lexer";
+import { lex } from "./helpers";
 
 const KEYWORD_MAP: [string, TokenKind][] = [
   ["assert", TokenKind.Assert],
@@ -75,24 +69,24 @@ const KEYWORD_MAP: [string, TokenKind][] = [
 describe("keywords", () => {
   for (const [keyword, expectedKind] of KEYWORD_MAP) {
     test(`keyword '${keyword}'`, () => {
-      const { tokens } = tokenize(keyword);
+      const { tokens } = lex(keyword);
       expect(tokens[0]?.kind).toBe(expectedKind);
       expect(tokens[0]?.lexeme).toBe(keyword);
     });
   }
 
   test("true has boolean value", () => {
-    const { tokens } = tokenize("true");
+    const { tokens } = lex("true");
     expect(tokens[0]?.value).toBe(true);
   });
 
   test("false has boolean value", () => {
-    const { tokens } = tokenize("false");
+    const { tokens } = lex("false");
     expect(tokens[0]?.value).toBe(false);
   });
 
   test("identifiers are not keywords", () => {
-    const { tokens } = tokenize("foo bar _test");
+    const { tokens } = lex("foo bar _test");
     expect(tokens[0]?.kind).toBe(TokenKind.Identifier);
     expect(tokens[1]?.kind).toBe(TokenKind.Identifier);
     expect(tokens[2]?.kind).toBe(TokenKind.Identifier);
@@ -123,7 +117,7 @@ const RESERVED_KEYWORDS = [
 describe("reserved keywords", () => {
   for (const keyword of RESERVED_KEYWORDS) {
     test(`reserved keyword '${keyword}' produces diagnostic`, () => {
-      const { diagnostics } = tokenize(keyword);
+      const { diagnostics } = lex(keyword);
       expect(diagnostics.length).toBe(1);
       expect(diagnostics[0]?.message).toContain("reserved for future use");
     });

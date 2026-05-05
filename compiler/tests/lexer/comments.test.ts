@@ -4,15 +4,13 @@
 
 import { describe, expect, test } from "bun:test";
 import { Severity } from "../../src/errors";
-import { Lexer, TokenKind } from "../../src/lexer";
-import { SourceFile } from "../../src/utils/source";
+import { TokenKind } from "../../src/lexer";
+import { lex } from "./helpers";
 
 describe("Comments", () => {
   describe("Single-line comments", () => {
     test("should skip single-line comments", () => {
-      const source = new SourceFile("test.kei", "// This is a comment\nlet x = 42;");
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex("// This is a comment\nlet x = 42;");
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
@@ -29,9 +27,7 @@ describe("Comments", () => {
     });
 
     test("should handle comment at end of line", () => {
-      const source = new SourceFile("test.kei", "let x = 42; // This is an end-of-line comment");
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex("let x = 42; // This is an end-of-line comment");
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
@@ -43,18 +39,13 @@ describe("Comments", () => {
     });
 
     test("should handle multiple single-line comments", () => {
-      const source = new SourceFile(
-        "test.kei",
-        `
+      const { tokens, lexer } = lex(`
         // First comment
         let x = 1; // Comment after code
         // Another comment
         let y = 2;
         // Final comment
-      `
-      );
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      `);
 
       // let, x, =, 1, ;, let, y, =, 2, ;, EOF
       expect(tokens).toHaveLength(11);
@@ -71,9 +62,7 @@ describe("Comments", () => {
     });
 
     test("should handle comment at end of file", () => {
-      const source = new SourceFile("test.kei", "let x = 42; // Comment at EOF");
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex("let x = 42; // Comment at EOF");
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
@@ -83,9 +72,7 @@ describe("Comments", () => {
     });
 
     test("should handle empty comment", () => {
-      const source = new SourceFile("test.kei", "let x = 42; //");
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex("let x = 42; //");
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
@@ -95,9 +82,7 @@ describe("Comments", () => {
     });
 
     test("should handle comment with only whitespace", () => {
-      const source = new SourceFile("test.kei", "let x = 42; //   \t   ");
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex("let x = 42; //   \t   ");
 
       expect(tokens).toHaveLength(6);
       expect(tokens[5]!.kind).toBe(TokenKind.Eof);
@@ -108,9 +93,7 @@ describe("Comments", () => {
 
   describe("Multi-line comments", () => {
     test("should skip multi-line comments", () => {
-      const source = new SourceFile("test.kei", "/* This is a\nmulti-line comment */\nlet x = 42;");
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex("/* This is a\nmulti-line comment */\nlet x = 42;");
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
@@ -125,9 +108,7 @@ describe("Comments", () => {
     });
 
     test("should handle inline multi-line comments", () => {
-      const source = new SourceFile("test.kei", "let x = /* inline comment */ 42;");
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex("let x = /* inline comment */ 42;");
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
@@ -142,19 +123,14 @@ describe("Comments", () => {
     });
 
     test("should handle multiple multi-line comments", () => {
-      const source = new SourceFile(
-        "test.kei",
-        `
+      const { tokens, lexer } = lex(`
         /* First comment */
         let x = /* inline */ 1;
         /* Another comment
            spanning multiple
            lines */
         let y = 2;
-      `
-      );
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      `);
 
       // let, x, =, 1, ;, let, y, =, 2, ;, EOF
       expect(tokens).toHaveLength(11);
@@ -170,9 +146,7 @@ describe("Comments", () => {
     });
 
     test("should handle empty multi-line comment", () => {
-      const source = new SourceFile("test.kei", "let x = /**/42;");
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex("let x = /**/42;");
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
@@ -182,15 +156,10 @@ describe("Comments", () => {
     });
 
     test("should handle multi-line comment with special characters", () => {
-      const source = new SourceFile(
-        "test.kei",
-        `
+      const { tokens, lexer } = lex(`
         /* Comment with special chars: @#$%^&*(){}[]<>?/.,;'"!~ */
         let x = 42;
-      `
-      );
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      `);
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
@@ -201,23 +170,14 @@ describe("Comments", () => {
     });
 
     test("should error on unterminated multi-line comment", () => {
-      const source = new SourceFile("test.kei", "/* This comment is not terminated\nlet x = 42;");
-      const lexer = new Lexer(source);
-      const _tokens = lexer.tokenize();
-
-      const diagnostics = lexer.getDiagnostics();
+      const { diagnostics } = lex("/* This comment is not terminated\nlet x = 42;");
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0]!.severity).toBe(Severity.Error);
       expect(diagnostics[0]!.message).toContain("Unterminated multi-line comment");
     });
 
     test("should handle comment that looks like nested comment start", () => {
-      const source = new SourceFile(
-        "test.kei",
-        "/* This has /* inside but no nesting */ let x = 42;"
-      );
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex("/* This has /* inside but no nesting */ let x = 42;");
 
       // let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(6);
@@ -230,9 +190,7 @@ describe("Comments", () => {
 
   describe("Comments mixed with code", () => {
     test("should handle complex code with mixed comments", () => {
-      const source = new SourceFile(
-        "test.kei",
-        `
+      const { tokens, lexer } = lex(`
         // Function definition with comments
         fn main() -> int { /* entry point */
             let x = 42; // local variable
@@ -240,10 +198,7 @@ describe("Comments", () => {
             let result = x * 2; // multiply by 2
             return result; // return the result
         } // end of main
-      `
-      );
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      `);
 
       // fn, main, (, ), ->, int, {, let, x, =, 42, ;, let, result, =, x, *, 2, ;, return, result, ;, }, EOF
       expect(tokens).toHaveLength(24);
@@ -260,9 +215,7 @@ describe("Comments", () => {
     });
 
     test("should not treat // inside string as comment", () => {
-      const source = new SourceFile("test.kei", '"This string has // in it" let x = 42;');
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex('"This string has // in it" let x = 42;');
 
       // string, let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(7);
@@ -275,12 +228,7 @@ describe("Comments", () => {
     });
 
     test("should not treat /* inside string as comment", () => {
-      const source = new SourceFile(
-        "test.kei",
-        '"This string has /* comment */ in it" let x = 42;'
-      );
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex('"This string has /* comment */ in it" let x = 42;');
 
       // string, let, x, =, 42, ;, EOF
       expect(tokens).toHaveLength(7);
@@ -292,9 +240,7 @@ describe("Comments", () => {
     });
 
     test("should handle comment immediately after operators", () => {
-      const source = new SourceFile("test.kei", "a +/* add */ b - // subtract\n c");
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex("a +/* add */ b - // subtract\n c");
 
       // a, +, b, -, c, EOF
       expect(tokens).toHaveLength(6);
@@ -309,16 +255,11 @@ describe("Comments", () => {
     });
 
     test("should preserve line/column information with comments", () => {
-      const source = new SourceFile(
-        "test.kei",
-        `// Line 1 comment
+      const { tokens, lexer } = lex(`// Line 1 comment
 let x = 42; // Line 2 comment
 /* Multi-line comment
    on line 3 and 4 */
-let y = 24;`
-      );
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+let y = 24;`);
 
       // First token after comment should be on line 2
       expect(tokens[0]!.kind).toBe(TokenKind.Let);
@@ -336,9 +277,7 @@ let y = 24;`
 
   test("should handle division operator vs comment disambiguation", () => {
     // Make sure we correctly distinguish / and /* vs //
-    const source = new SourceFile("test.kei", "a / b /*not comment start*/ c // comment\na /= b");
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex("a / b /*not comment start*/ c // comment\na /= b");
 
     expect(tokens[0]!.lexeme).toBe("a");
     expect(tokens[1]!.kind).toBe(TokenKind.Slash);

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { KirBinOp } from "../../src/kir/kir-types";
-import { getInstructions, lowerFunction } from "./helpers";
+import { getInstructions, lower, lowerAndPrint, lowerFunction } from "./helpers";
 
 describe("KIR: nested expressions", () => {
   test("deeply nested arithmetic", () => {
@@ -102,20 +102,20 @@ describe("KIR: nested expressions", () => {
 
 describe("KIR: extern declarations", () => {
   test("extern function creates extern entry", () => {
-    const mod = require("./helpers.ts").lower(`
+    const mod = lower(`
       extern fn c_puts(s: string) -> void;
       fn foo() {}
     `);
     expect(mod.externs).toHaveLength(1);
-    expect(mod.externs[0].name).toBe("c_puts");
-    expect(mod.externs[0].params).toHaveLength(1);
-    expect(mod.externs[0].returnType).toEqual({ kind: "void" });
+    expect(mod.externs[0]!.name).toBe("c_puts");
+    expect(mod.externs[0]!.params).toHaveLength(1);
+    expect(mod.externs[0]!.returnType).toEqual({ kind: "void" });
   });
 });
 
 describe("KIR: enum declarations", () => {
   test("enum generates type decl", () => {
-    const mod = require("./helpers.ts").lower(`
+    const mod = lower(`
       enum Color {
         Red;
         Green;
@@ -124,14 +124,14 @@ describe("KIR: enum declarations", () => {
       fn foo() {}
     `);
     expect(mod.types).toHaveLength(1);
-    expect(mod.types[0].name).toBe("Color");
-    expect(mod.types[0].type.kind).toBe("enum");
+    expect(mod.types[0]!.name).toBe("Color");
+    expect(mod.types[0]!.type.kind).toBe("enum");
   });
 });
 
 describe("KIR: printer output", () => {
   test("basic function prints correctly", () => {
-    const output = require("./helpers.ts").lowerAndPrint(`
+    const output = lowerAndPrint(`
       fn main() -> int {
         return 0;
       }
@@ -144,7 +144,7 @@ describe("KIR: printer output", () => {
   });
 
   test("struct type prints correctly", () => {
-    const output = require("./helpers.ts").lowerAndPrint(`
+    const output = lowerAndPrint(`
       struct Point {
         x: int;
         y: int;
@@ -157,7 +157,7 @@ describe("KIR: printer output", () => {
   });
 
   test("extern prints correctly", () => {
-    const output = require("./helpers.ts").lowerAndPrint(`
+    const output = lowerAndPrint(`
       extern fn puts(s: string) -> void;
       fn foo() {}
     `);

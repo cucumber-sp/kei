@@ -4,17 +4,15 @@
 
 import { describe, expect, test } from "bun:test";
 import { Severity } from "../../src/errors";
-import { Lexer, TokenKind } from "../../src/lexer";
-import { SourceFile } from "../../src/utils/source";
+import { TokenKind } from "../../src/lexer";
+import { lex } from "./helpers";
 
 describe("Error handling", () => {
   test("should handle invalid characters", () => {
     const invalidChars = ["@", "#", "$", "`"];
 
     for (const char of invalidChars) {
-      const source = new SourceFile("test.kei", `let x = ${char} + 1;`);
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex(`let x = ${char} + 1;`);
 
       const diagnostics = lexer.getDiagnostics();
       expect(diagnostics).toHaveLength(1);
@@ -36,9 +34,7 @@ describe("Error handling", () => {
   });
 
   test("should recover from multiple invalid characters", () => {
-    const source = new SourceFile("test.kei", "let @ x # = $ 42 ` ;");
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex("let @ x # = $ 42 ` ;");
 
     const diagnostics = lexer.getDiagnostics();
     expect(diagnostics).toHaveLength(4); // Four invalid characters
@@ -62,16 +58,9 @@ describe("Error handling", () => {
   });
 
   test("should provide correct location information for errors", () => {
-    const source = new SourceFile(
-      "test.kei",
-      `line 1
+    const { diagnostics } = lex(`line 1
 let x = @ + 1;  // error on line 2
-line 3`
-    );
-    const lexer = new Lexer(source);
-    const _tokens = lexer.tokenize();
-
-    const diagnostics = lexer.getDiagnostics();
+line 3`);
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]!.severity).toBe(Severity.Error);
     expect(diagnostics[0]!.message).toContain("Unexpected character '@'");
@@ -82,9 +71,7 @@ line 3`
 
   test("should handle invalid identifiers starting with digits", () => {
     // Numbers followed by letters should be parsed as separate tokens
-    const source = new SourceFile("test.kei", "42abc 123def");
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex("42abc 123def");
 
     expect(tokens).toHaveLength(5); // 42, abc, 123, def, EOF
 
@@ -107,9 +94,7 @@ line 3`
   });
 
   test("should handle reserved keyword usage", () => {
-    const source = new SourceFile("test.kei", "let async = await + match;");
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex("let async = await + match;");
 
     const diagnostics = lexer.getDiagnostics();
     expect(diagnostics).toHaveLength(3); // Three reserved keywords
@@ -137,9 +122,7 @@ line 3`
   });
 
   test("should handle malformed number literals", () => {
-    const source = new SourceFile("test.kei", "0x 0b 0o 1.0e 1.0e+ 1.0e-");
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex("0x 0b 0o 1.0e 1.0e+ 1.0e-");
 
     const diagnostics = lexer.getDiagnostics();
     expect(diagnostics.length).toBeGreaterThan(0);
@@ -156,12 +139,7 @@ line 3`
   });
 
   test("should handle unterminated block comments", () => {
-    const source = new SourceFile(
-      "test.kei",
-      "let x = 42; /* This comment never ends\nlet y = 24;"
-    );
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex("let x = 42; /* This comment never ends\nlet y = 24;");
 
     const diagnostics = lexer.getDiagnostics();
     expect(diagnostics).toHaveLength(1);
@@ -178,9 +156,7 @@ line 3`
   });
 
   test("should handle unterminated string literals", () => {
-    const source = new SourceFile("test.kei", 'let msg = "unterminated string\nlet x = 42;');
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex('let msg = "unterminated string\nlet x = 42;');
 
     const diagnostics = lexer.getDiagnostics();
     expect(diagnostics).toHaveLength(1);
@@ -196,8 +172,7 @@ line 3`
   });
 
   test("should handle multiple error types in one source", () => {
-    const source = new SourceFile(
-      "test.kei",
+    const { diagnostics } = lex(
       `
       let x = @ + 1;          // Invalid character
       let y = "unterminated   // Unterminated string
@@ -206,10 +181,6 @@ line 3`
       /* unterminated comment
     `
     );
-    const lexer = new Lexer(source);
-    const _tokens = lexer.tokenize();
-
-    const diagnostics = lexer.getDiagnostics();
     expect(diagnostics.length).toBeGreaterThan(3); // At least 4 different errors
 
     const severities = diagnostics.map((d) => d.severity);
@@ -223,11 +194,7 @@ line 3`
   });
 
   test("should provide accurate span information for errors", () => {
-    const source = new SourceFile("test.kei", "let x = @@@;");
-    const lexer = new Lexer(source);
-    const _tokens = lexer.tokenize();
-
-    const diagnostics = lexer.getDiagnostics();
+    const { diagnostics } = lex("let x = @@@;");
     expect(diagnostics).toHaveLength(3); // Three @ characters
 
     // Each @ should have its own error with correct span
@@ -238,9 +205,7 @@ line 3`
   });
 
   test("should handle errors at start of file", () => {
-    const source = new SourceFile("test.kei", "@let x = 1;");
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex("@let x = 1;");
 
     const diagnostics = lexer.getDiagnostics();
     expect(diagnostics).toHaveLength(1);
@@ -253,9 +218,7 @@ line 3`
   });
 
   test("should handle errors at end of file", () => {
-    const source = new SourceFile("test.kei", "let x = 1 @");
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex("let x = 1 @");
 
     const diagnostics = lexer.getDiagnostics();
     expect(diagnostics).toHaveLength(1);
@@ -267,9 +230,7 @@ line 3`
   });
 
   test("should handle empty file", () => {
-    const source = new SourceFile("test.kei", "");
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex("");
 
     expect(tokens).toHaveLength(1);
     expect(tokens[0]!.kind).toBe(TokenKind.Eof);
@@ -277,9 +238,7 @@ line 3`
   });
 
   test("should handle whitespace-only file", () => {
-    const source = new SourceFile("test.kei", "   \t\n\r\n   ");
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex("   \t\n\r\n   ");
 
     expect(tokens).toHaveLength(1);
     expect(tokens[0]!.kind).toBe(TokenKind.Eof);
@@ -287,17 +246,12 @@ line 3`
   });
 
   test("should handle comments-only file", () => {
-    const source = new SourceFile(
-      "test.kei",
-      `
+    const { tokens, lexer } = lex(`
       // Just comments
       /* Multiple
          line comment */
       // Another comment
-    `
-    );
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    `);
 
     expect(tokens).toHaveLength(1);
     expect(tokens[0]!.kind).toBe(TokenKind.Eof);
@@ -305,9 +259,7 @@ line 3`
   });
 
   test("should continue lexing after error recovery", () => {
-    const source = new SourceFile("test.kei", "valid @ valid # valid $ valid");
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex("valid @ valid # valid $ valid");
 
     // Should have 3 error diagnostics
     const diagnostics = lexer.getDiagnostics();
@@ -324,9 +276,7 @@ line 3`
 
   test("should handle very long lines with errors", () => {
     const longValidPart = "a".repeat(500);
-    const source = new SourceFile("test.kei", `${longValidPart}@${longValidPart}`);
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex(`${longValidPart}@${longValidPart}`);
 
     const diagnostics = lexer.getDiagnostics();
     expect(diagnostics).toHaveLength(1);

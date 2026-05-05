@@ -4,8 +4,8 @@
 
 import { describe, expect, test } from "bun:test";
 import { Severity } from "../../src/errors";
-import { Lexer, TokenKind } from "../../src/lexer";
-import { SourceFile } from "../../src/utils/source";
+import { TokenKind } from "../../src/lexer";
+import { lex } from "./helpers";
 
 describe("String literals - edge cases", () => {
   test("should handle unicode characters in strings", () => {
@@ -17,9 +17,7 @@ describe("String literals - edge cases", () => {
     ];
 
     for (const { input, expected } of testCases) {
-      const source = new SourceFile("test.kei", input);
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex(input);
 
       expect(tokens).toHaveLength(2);
       expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
@@ -46,9 +44,7 @@ describe("String literals - edge cases", () => {
     ];
 
     for (const { input, expected } of testCases) {
-      const source = new SourceFile("test.kei", input);
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex(input);
 
       expect(tokens).toHaveLength(2);
       expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
@@ -60,12 +56,7 @@ describe("String literals - edge cases", () => {
   });
 
   test("should handle mixed escape sequences", () => {
-    const source = new SourceFile(
-      "test.kei",
-      '"Line 1\\nTab:\\tValue\\r\\nQuote: \\"Hello\\"\\x20End"'
-    );
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex('"Line 1\\nTab:\\tValue\\r\\nQuote: \\"Hello\\"\\x20End"');
 
     expect(tokens).toHaveLength(2);
     expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
@@ -82,9 +73,7 @@ describe("String literals - edge cases", () => {
     ];
 
     for (const { input, expected } of testCases) {
-      const source = new SourceFile("test.kei", input);
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex(input);
 
       expect(tokens).toHaveLength(2);
       expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
@@ -103,9 +92,7 @@ describe("String literals - edge cases", () => {
     ];
 
     for (const { input, expected } of testCases) {
-      const source = new SourceFile("test.kei", input);
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex(input);
 
       expect(tokens).toHaveLength(2);
       expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
@@ -116,9 +103,7 @@ describe("String literals - edge cases", () => {
 
   test("should handle very long strings", () => {
     const longString = "A".repeat(1000);
-    const source = new SourceFile("test.kei", `"${longString}"`);
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex(`"${longString}"`);
 
     expect(tokens).toHaveLength(2);
     expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
@@ -127,9 +112,7 @@ describe("String literals - edge cases", () => {
   });
 
   test("should handle empty string", () => {
-    const source = new SourceFile("test.kei", '""');
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex('""');
 
     expect(tokens).toHaveLength(2);
     expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
@@ -141,9 +124,7 @@ describe("String literals - edge cases", () => {
 
   describe("String error cases", () => {
     test("should error on unterminated string at end of file", () => {
-      const source = new SourceFile("test.kei", '"unterminated string');
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex('"unterminated string');
 
       const diagnostics = lexer.getDiagnostics();
       expect(diagnostics.length).toBeGreaterThan(0);
@@ -153,9 +134,7 @@ describe("String literals - edge cases", () => {
     });
 
     test("should error on unterminated string with newline", () => {
-      const source = new SourceFile("test.kei", '"string with\nnewline');
-      const lexer = new Lexer(source);
-      const tokens = lexer.tokenize();
+      const { tokens, lexer } = lex('"string with\nnewline');
 
       const diagnostics = lexer.getDiagnostics();
       expect(diagnostics.length).toBeGreaterThan(0);
@@ -173,9 +152,7 @@ describe("String literals - edge cases", () => {
       ];
 
       for (const { input, char } of invalidEscapes) {
-        const source = new SourceFile("test.kei", input);
-        const lexer = new Lexer(source);
-        const tokens = lexer.tokenize();
+        const { tokens, lexer } = lex(input);
 
         const diagnostics = lexer.getDiagnostics();
         expect(diagnostics).toHaveLength(1);
@@ -193,11 +170,7 @@ describe("String literals - edge cases", () => {
       ];
 
       for (const input of invalidHexEscapes) {
-        const source = new SourceFile("test.kei", input);
-        const lexer = new Lexer(source);
-        const _tokens = lexer.tokenize();
-
-        const diagnostics = lexer.getDiagnostics();
+        const { diagnostics } = lex(input);
         expect(diagnostics.length).toBeGreaterThan(0);
         expect(diagnostics[0]!.severity).toBe(Severity.Error);
         expect(diagnostics[0]!.message).toContain("hex escape");
@@ -206,11 +179,7 @@ describe("String literals - edge cases", () => {
 
     test("should error on hex escape at end of string", () => {
       // \x with no digits, followed by closing quote
-      const source = new SourceFile("test.kei", '"\\x"');
-      const lexer = new Lexer(source);
-      const _tokens = lexer.tokenize();
-
-      const diagnostics = lexer.getDiagnostics();
+      const { diagnostics } = lex('"\\x"');
       expect(diagnostics.length).toBeGreaterThan(0);
       expect(diagnostics[0]!.severity).toBe(Severity.Error);
       expect(diagnostics[0]!.message).toContain("hex escape");
@@ -218,9 +187,7 @@ describe("String literals - edge cases", () => {
   });
 
   test("should handle multiple strings in sequence", () => {
-    const source = new SourceFile("test.kei", '"first" "second" "third"');
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex('"first" "second" "third"');
 
     // 3 strings + EOF
     expect(tokens).toHaveLength(4);
@@ -239,9 +206,7 @@ describe("String literals - edge cases", () => {
   });
 
   test("should preserve correct source positions for strings", () => {
-    const source = new SourceFile("test.kei", 'let msg = "Hello\\nWorld";');
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex('let msg = "Hello\\nWorld";');
 
     // let, msg, =, string, ;, EOF
     expect(tokens).toHaveLength(6);
@@ -257,14 +222,9 @@ describe("String literals - edge cases", () => {
   });
 
   test("should handle strings on multiple lines with proper positions", () => {
-    const source = new SourceFile(
-      "test.kei",
-      `let a = "first";
+    const { tokens, lexer } = lex(`let a = "first";
 let b = "second";
-let c = "third";`
-    );
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+let c = "third";`);
 
     const strings = tokens.filter((t) => t.kind === TokenKind.StringLiteral);
 
@@ -287,9 +247,7 @@ let c = "third";`
       .filter((c) => c !== '"' && c !== "\\")
       .join("");
 
-    const source = new SourceFile("test.kei", `"${printableChars}"`);
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+    const { tokens, lexer } = lex(`"${printableChars}"`);
 
     expect(tokens).toHaveLength(2);
     expect(tokens[0]!.kind).toBe(TokenKind.StringLiteral);
