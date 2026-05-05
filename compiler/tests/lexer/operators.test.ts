@@ -1,12 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { Lexer, TokenKind } from "../../src/lexer";
-import { SourceFile } from "../../src/utils/source";
-
-function tokenize(input: string) {
-  const source = new SourceFile("test.kei", input);
-  const lexer = new Lexer(source);
-  return lexer.tokenize();
-}
+import { TokenKind } from "../../src/lexer";
+import { tokensOf } from "./helpers";
 
 const OPERATOR_TESTS: [string, TokenKind][] = [
   ["+", TokenKind.Plus],
@@ -57,14 +51,14 @@ const OPERATOR_TESTS: [string, TokenKind][] = [
 describe("operators and punctuation", () => {
   for (const [op, expectedKind] of OPERATOR_TESTS) {
     test(`operator '${op}'`, () => {
-      const tokens = tokenize(op);
+      const tokens = tokensOf(op);
       expect(tokens[0]?.kind).toBe(expectedKind);
       expect(tokens[0]?.lexeme).toBe(op);
     });
   }
 
   test("compound operators in sequence", () => {
-    const tokens = tokenize("a <<= b >>= c");
+    const tokens = tokensOf("a <<= b >>= c");
     expect(tokens[1]?.kind).toBe(TokenKind.LessLessEqual);
     expect(tokens[3]?.kind).toBe(TokenKind.GreaterGreaterEqual);
   });

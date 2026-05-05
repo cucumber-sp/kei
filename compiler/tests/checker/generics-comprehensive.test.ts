@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { checkSource, errorsOf } from "../helpers/pipeline";
 import { checkError, checkOk } from "./helpers";
 
 describe("Checker: Generics (comprehensive)", () => {
@@ -404,22 +405,8 @@ describe("Checker: Generics (comprehensive)", () => {
           return 0;
         }
       `;
-      const { Checker } = require("../../src/checker/checker.ts");
-      const { Lexer } = require("../../src/lexer/index.ts");
-      const { Parser } = require("../../src/parser/index.ts");
-      const { SourceFile } = require("../../src/utils/source.ts");
-
-      const file = new SourceFile("test.kei", source);
-      const lexer = new Lexer(file);
-      const tokens = lexer.tokenize();
-      const parser = new Parser(tokens);
-      const program = parser.parse();
-      const checker = new Checker(program, file);
-      const result = checker.check();
-
-      // biome-ignore lint/suspicious/noExplicitAny: dynamic require loses type info
-      const errors = result.diagnostics.filter((d: any) => d.severity === "error");
-      expect(errors.length).toBe(0);
+      const { result } = checkSource(source);
+      expect(errorsOf(result.diagnostics).length).toBe(0);
       expect(result.generics.monomorphizedStructs.has("Box_i32")).toBe(true);
       expect(result.generics.monomorphizedStructs.has("Box_bool")).toBe(true);
     });
@@ -435,22 +422,8 @@ describe("Checker: Generics (comprehensive)", () => {
           return a;
         }
       `;
-      const { Checker } = require("../../src/checker/checker.ts");
-      const { Lexer } = require("../../src/lexer/index.ts");
-      const { Parser } = require("../../src/parser/index.ts");
-      const { SourceFile } = require("../../src/utils/source.ts");
-
-      const file = new SourceFile("test.kei", source);
-      const lexer = new Lexer(file);
-      const tokens = lexer.tokenize();
-      const parser = new Parser(tokens);
-      const program = parser.parse();
-      const checker = new Checker(program, file);
-      const result = checker.check();
-
-      // biome-ignore lint/suspicious/noExplicitAny: dynamic require loses type info
-      const errors = result.diagnostics.filter((d: any) => d.severity === "error");
-      expect(errors.length).toBe(0);
+      const { result } = checkSource(source);
+      expect(errorsOf(result.diagnostics).length).toBe(0);
       expect(result.generics.monomorphizedFunctions.has("identity_i32")).toBe(true);
       expect(result.generics.monomorphizedFunctions.has("identity_bool")).toBe(true);
     });
@@ -464,22 +437,8 @@ describe("Checker: Generics (comprehensive)", () => {
           return identity<i32>(42);
         }
       `;
-      const { Checker } = require("../../src/checker/checker.ts");
-      const { Lexer } = require("../../src/lexer/index.ts");
-      const { Parser } = require("../../src/parser/index.ts");
-      const { SourceFile } = require("../../src/utils/source.ts");
-
-      const file = new SourceFile("test.kei", source);
-      const lexer = new Lexer(file);
-      const tokens = lexer.tokenize();
-      const parser = new Parser(tokens);
-      const program = parser.parse();
-      const checker = new Checker(program, file);
-      const result = checker.check();
-
-      // biome-ignore lint/suspicious/noExplicitAny: dynamic require loses type info
-      const errors = result.diagnostics.filter((d: any) => d.severity === "error");
-      expect(errors.length).toBe(0);
+      const { result } = checkSource(source);
+      expect(errorsOf(result.diagnostics).length).toBe(0);
       expect(result.generics.resolutions.size).toBeGreaterThan(0);
 
       let foundIdentity = false;

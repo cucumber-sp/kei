@@ -14,9 +14,37 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import type { ImportDecl, Program } from "../ast/nodes";
+import type { Diagnostic } from "../errors/diagnostic";
 import { Lexer } from "../lexer";
 import { Parser } from "../parser";
 import { SourceFile } from "../utils/source";
+
+/** Maximum number of per-stage diagnostics rendered in a resolver error. */
+const MAX_RENDERED_DIAGS = 3;
+
+/**
+ * Format up to {@link MAX_RENDERED_DIAGS} error diagnostics for inclusion in a
+ * resolver error string. Returns null if there are no errors.
+ */
+function formatStageErrors(
+  diags: readonly Diagnostic[],
+  moduleName: string,
+  filePath: string,
+  stage: "lexer" | "parse"
+): string | null {
+  const errors = diags.filter((d) => d.severity === "error");
+  if (errors.length === 0) return null;
+
+  const details = errors
+    .slice(0, MAX_RENDERED_DIAGS)
+    .map((d) => `  ${d.location.line}:${d.location.column}: ${d.message}`)
+    .join("\n");
+  const extra =
+    errors.length > MAX_RENDERED_DIAGS
+      ? `\n  ... and ${errors.length - MAX_RENDERED_DIAGS} more`
+      : "";
+  return `module '${moduleName}': ${stage} errors in '${filePath}':\n${details}${extra}`;
+}
 
 // ─── Module Info ──────────────────────────────────────────────────────────────
 
@@ -156,34 +184,18 @@ export class ModuleResolver {
     const lexer = new Lexer(source);
     const tokens = lexer.tokenize();
 
-    const lexerDiags = lexer.getDiagnostics();
-    const lexErrors = lexerDiags.filter((d) => d.severity === "error");
-    if (lexErrors.length > 0) {
-      const details = lexErrors
-        .slice(0, 3)
-        .map((d) => `  ${d.location.line}:${d.location.column}: ${d.message}`)
-        .join("\n");
-      const extra = lexErrors.length > 3 ? `\n  ... and ${lexErrors.length - 3} more` : "";
-      this.errors.push(
-        `module '${moduleName}': lexer errors in '${filePath}':\n${details}${extra}`
-      );
+    const lexerError = formatStageErrors(lexer.getDiagnostics(), moduleName, filePath, "lexer");
+    if (lexerError !== null) {
+      this.errors.push(lexerError);
       return;
     }
 
     const parser = new Parser(tokens);
     const program = parser.parse();
 
-    const parserDiags = parser.getDiagnostics();
-    const parseErrors = parserDiags.filter((d) => d.severity === "error");
-    if (parseErrors.length > 0) {
-      const details = parseErrors
-        .slice(0, 3)
-        .map((d) => `  ${d.location.line}:${d.location.column}: ${d.message}`)
-        .join("\n");
-      const extra = parseErrors.length > 3 ? `\n  ... and ${parseErrors.length - 3} more` : "";
-      this.errors.push(
-        `module '${moduleName}': parse errors in '${filePath}':\n${details}${extra}`
-      );
+    const parseError = formatStageErrors(parser.getDiagnostics(), moduleName, filePath, "parse");
+    if (parseError !== null) {
+      this.errors.push(parseError);
       return;
     }
 

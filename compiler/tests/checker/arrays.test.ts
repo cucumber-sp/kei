@@ -1,22 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { Checker } from "../../src/checker/checker";
 import type { Type } from "../../src/checker/types";
-import { Lexer } from "../../src/lexer";
-import { Parser } from "../../src/parser";
-import { SourceFile } from "../../src/utils/source";
+import { checkSource } from "../helpers/pipeline";
 import { checkError, checkOk } from "./helpers";
 
 /** Get type of a let-binding by name from checked source */
 function typeOfLet(source: string, varName: string): Type {
-  const file = new SourceFile("test.kei", source);
-  const lexer = new Lexer(file);
-  const tokens = lexer.tokenize();
-  const parser = new Parser(tokens);
-  const program = parser.parse();
-  const checker = new Checker(program, file);
-  const result = checker.check();
+  const { program, result } = checkSource(source);
 
-  // Find the let statement and get the initializer type
   const mainDecl = program.declarations[0];
   if (mainDecl?.kind !== "FunctionDecl") throw new Error("Expected FunctionDecl");
   for (const stmt of mainDecl.body.statements) {

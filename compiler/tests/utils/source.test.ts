@@ -117,6 +117,21 @@ describe("SourceFile.lineCol — leading newline", () => {
   });
 });
 
+describe("SourceFile.lineCol — consecutive blank lines", () => {
+  // "a\n\n\nb": offsets 0='a', 1='\n', 2='\n', 3='\n', 4='b'
+  // Three newlines in a row exercise the binary search across adjacent
+  // line offsets — a regression-prone shape if the offsets array is
+  // mishandled.
+  const f = new SourceFile("a", "a\n\n\nb");
+
+  test("each blank-line newline maps to its own line number", () => {
+    expect(f.lineCol(0)).toEqual({ line: 1, column: 1 });
+    expect(f.lineCol(2)).toEqual({ line: 2, column: 1 });
+    expect(f.lineCol(3)).toEqual({ line: 3, column: 1 });
+    expect(f.lineCol(4)).toEqual({ line: 4, column: 1 });
+  });
+});
+
 describe("SourceFile.lineCol — performance shape", () => {
   // Large file: ensure binary search lookup is correct over many lines.
   const lines = Array.from({ length: 1000 }, (_, i) => `line${i}`);

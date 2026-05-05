@@ -91,6 +91,32 @@ describe("ModuleResolver", () => {
     });
   });
 
+  describe("stage error reporting", () => {
+    test("reports lexer errors with file path and location", () => {
+      const path = join(FIXTURES_DIR, "main_with_lex_error.kei");
+      const resolver = new ModuleResolver(path);
+      const result = resolver.resolve(path);
+
+      expect(result.errors.length).toBeGreaterThan(0);
+      const msg = result.errors.join("\n");
+      expect(msg).toContain("lexer errors");
+      expect(msg).toContain("main_with_lex_error.kei");
+      // location should appear as `line:column:`
+      expect(msg).toMatch(/\d+:\d+:/);
+    });
+
+    test("reports parser errors with file path and location", () => {
+      const path = join(FIXTURES_DIR, "main_with_parse_error.kei");
+      const resolver = new ModuleResolver(path);
+      const result = resolver.resolve(path);
+
+      expect(result.errors.length).toBeGreaterThan(0);
+      const msg = result.errors.join("\n");
+      expect(msg).toContain("parse errors");
+      expect(msg).toContain("main_with_parse_error.kei");
+    });
+  });
+
   describe("path resolution", () => {
     test("resolves import path from source root", () => {
       const resolver = new ModuleResolver(join(FIXTURES_DIR, "math.kei"));

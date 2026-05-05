@@ -2,7 +2,6 @@
  * Test utilities for KIR lowering.
  */
 
-import { Checker } from "../../src/checker/checker";
 import type {
   KirBlock,
   KirFunction,
@@ -10,38 +9,12 @@ import type {
   KirModule,
   KirTerminator,
 } from "../../src/kir/kir-types";
-import { lowerToKir } from "../../src/kir/lowering";
 import { printKir } from "../../src/kir/printer";
-import { Lexer } from "../../src/lexer";
-import { Parser } from "../../src/parser";
-import { SourceFile } from "../../src/utils/source";
+import { lowerSource } from "../helpers/pipeline";
 
 /** Parse, check, and lower source code to KIR. */
 export function lower(source: string): KirModule {
-  const file = new SourceFile("test.kei", source);
-  const lexer = new Lexer(file);
-  const tokens = lexer.tokenize();
-  const parser = new Parser(tokens);
-  const program = parser.parse();
-
-  const parserDiags = parser.getDiagnostics();
-  if (parserDiags.length > 0) {
-    const msgs = parserDiags.map((d) => d.message).join(", ");
-    throw new Error(`Parser errors: ${msgs}`);
-  }
-
-  const checker = new Checker(program, file);
-  const result = checker.check();
-
-  const errors = result.diagnostics.filter((d) => d.severity === "error");
-  if (errors.length > 0) {
-    const msgs = errors
-      .map((d) => `  ${d.message} at ${d.location.line}:${d.location.column}`)
-      .join("\n");
-    throw new Error(`Type errors:\n${msgs}`);
-  }
-
-  return lowerToKir(program, result);
+  return lowerSource(source);
 }
 
 /** Lower and return the printed KIR text. */
