@@ -11,7 +11,7 @@
  *   3. std/ directory (compiler's standard library)
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import type { ImportDecl, Program } from "../ast/nodes";
 import { Lexer } from "../lexer";
@@ -373,7 +373,7 @@ export class ModuleResolver {
   /** Read a file, returning null if it doesn't exist or can't be read. */
   private readFile(filePath: string): string | null {
     try {
-      return require("node:fs").readFileSync(filePath, "utf-8");
+      return readFileSync(filePath, "utf-8");
     } catch {
       return null;
     }
