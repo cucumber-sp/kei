@@ -25,15 +25,22 @@ import {
 } from "./token";
 
 // ─── Character helpers ────────────────────────────────────────────────────
+//
+// `charCodeAt(0)` returns NaN for the empty string, and every NaN-vs-number
+// comparison is false. That means each predicate below safely returns `false`
+// for "" without an explicit guard — relied on by callers that probe one past
+// end-of-input.
 
-const CHAR_0 = 48; // '0'
-const CHAR_9 = 57; // '9'
-const CHAR_a = 97;
-const CHAR_f = 102;
-const CHAR_A = 65;
-const CHAR_F = 70;
-const CHAR_7 = 55;
-const CHAR_UNDERSCORE = 95;
+const CHAR_0 = 0x30;
+const CHAR_7 = 0x37;
+const CHAR_9 = 0x39;
+const CHAR_A = 0x41;
+const CHAR_F = 0x46;
+const CHAR_Z = 0x5a;
+const CHAR_UNDERSCORE = 0x5f;
+const CHAR_a = 0x61;
+const CHAR_f = 0x66;
+const CHAR_z = 0x7a;
 
 export function isDigit(ch: string): boolean {
   const code = ch.charCodeAt(0);
@@ -43,7 +50,9 @@ export function isDigit(ch: string): boolean {
 export function isAlpha(ch: string): boolean {
   const code = ch.charCodeAt(0);
   return (
-    (code >= CHAR_a && code <= 122) || (code >= CHAR_A && code <= 90) || code === CHAR_UNDERSCORE
+    (code >= CHAR_a && code <= CHAR_z) ||
+    (code >= CHAR_A && code <= CHAR_Z) ||
+    code === CHAR_UNDERSCORE
   );
 }
 
@@ -408,9 +417,11 @@ export class Lexer {
   // ─── Number scanning methods (from lexer-numbers.ts) ──────────────────────
   declare readNumber: typeof numberMethods.readNumber;
   declare readDecimalFraction: typeof numberMethods.readDecimalFraction;
+  declare finishFloatWithExponent: typeof numberMethods.finishFloatWithExponent;
   declare readHexNumber: typeof numberMethods.readHexNumber;
   declare readBinaryNumber: typeof numberMethods.readBinaryNumber;
   declare readOctalNumber: typeof numberMethods.readOctalNumber;
+  declare readPrefixedInt: typeof numberMethods.readPrefixedInt;
   declare consumeDigits: typeof numberMethods.consumeDigits;
   declare consumeExponent: typeof numberMethods.consumeExponent;
   declare consumeSuffix: typeof numberMethods.consumeSuffix;
@@ -426,9 +437,11 @@ export class Lexer {
 // Number scanning methods
 Lexer.prototype.readNumber = numberMethods.readNumber;
 Lexer.prototype.readDecimalFraction = numberMethods.readDecimalFraction;
+Lexer.prototype.finishFloatWithExponent = numberMethods.finishFloatWithExponent;
 Lexer.prototype.readHexNumber = numberMethods.readHexNumber;
 Lexer.prototype.readBinaryNumber = numberMethods.readBinaryNumber;
 Lexer.prototype.readOctalNumber = numberMethods.readOctalNumber;
+Lexer.prototype.readPrefixedInt = numberMethods.readPrefixedInt;
 Lexer.prototype.consumeDigits = numberMethods.consumeDigits;
 Lexer.prototype.consumeExponent = numberMethods.consumeExponent;
 Lexer.prototype.consumeSuffix = numberMethods.consumeSuffix;
