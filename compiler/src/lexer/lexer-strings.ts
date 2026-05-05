@@ -1,6 +1,6 @@
 /**
- * String literal scanning methods for Lexer.
- * Extracted from lexer.ts for modularity.
+ * String literal scanning. Free functions taking the {@link Lexer} as their
+ * first argument — the same convention as the parser's per-domain modules.
  */
 
 import { Severity } from "../errors";
@@ -9,62 +9,51 @@ import { isHexDigit } from "./lexer";
 import type { Token } from "./token";
 import { TokenKind } from "./token";
 
-// ─── String scanning ──────────────────────────────────────────────────────
-
-export function readString(this: Lexer): Token {
-  const start = this.pos;
-  this.pos++; // skip opening quote
+export function readString(lexer: Lexer): Token {
+  const start = lexer.pos;
+  lexer.pos++; // skip opening quote
   let value = "";
 
-  while (this.pos < this.source.length) {
-    const ch = this.peek();
+  while (lexer.pos < lexer.source.length) {
+    const ch = lexer.peek();
 
     if (ch === '"') {
-      this.pos++;
-      const { line, column } = this.source.lineCol(start);
-      return {
-        kind: TokenKind.StringLiteral,
-        lexeme: this.source.content.slice(start, this.pos),
-        span: { start, end: this.pos },
-        line,
-        column,
-        value,
-      };
+      lexer.pos++;
+      const base = lexer.makeToken(TokenKind.StringLiteral, start, lexer.pos);
+      return { ...base, value };
     }
 
     if (ch === "\n" || ch === "\r") {
-      this.addDiagnostic(
+      lexer.addDiagnostic(
         Severity.Error,
         "Unterminated string literal (strings cannot contain unescaped newlines)",
         start
       );
-      return this.makeToken(TokenKind.Error, start, this.pos);
+      return lexer.makeToken(TokenKind.Error, start, lexer.pos);
     }
 
     if (ch === "\\") {
-      this.pos++;
-      const escaped = this.readEscapeSequence(start);
-      if (escaped !== undefined) {
-        value += escaped;
-      }
+      lexer.pos++;
+      const escaped = readEscapeSequence(lexer, start);
+      if (escaped !== undefined) value += escaped;
       continue;
     }
 
     value += ch;
-    this.pos++;
+    lexer.pos++;
   }
 
-  this.addDiagnostic(Severity.Error, "Unterminated string literal (missing closing '\"')", start);
-  return this.makeToken(TokenKind.Error, start, this.pos);
+  lexer.addDiagnostic(Severity.Error, "Unterminated string literal (missing closing '\"')", start);
+  return lexer.makeToken(TokenKind.Error, start, lexer.pos);
 }
 
-export function readEscapeSequence(this: Lexer, stringStart: number): string | undefined {
-  if (this.pos >= this.source.length) {
-    this.addDiagnostic(Severity.Error, "Unexpected end of string escape", stringStart);
+function readEscapeSequence(lexer: Lexer, stringStart: number): string | undefined {
+  if (lexer.pos >= lexer.source.length) {
+    lexer.addDiagnostic(Severity.Error, "Unexpected end of string escape", stringStart);
     return undefined;
   }
 
-  const ch = this.advance();
+  const ch = lexer.advance();
   switch (ch) {
     case "n":
       return "\n";
@@ -79,21 +68,21 @@ export function readEscapeSequence(this: Lexer, stringStart: number): string | u
     case "0":
       return "\0";
     case "x": {
-      const hex1 = this.peek();
-      const hex2 = this.peek(1);
+      const hex1 = lexer.peek();
+      const hex2 = lexer.peek(1);
       if (isHexDigit(hex1) && isHexDigit(hex2)) {
-        this.pos += 2;
+        lexer.pos += 2;
         return String.fromCharCode(Number.parseInt(hex1 + hex2, 16));
       }
-      this.addDiagnostic(
+      lexer.addDiagnostic(
         Severity.Error,
         "Invalid hex escape sequence, expected \\xHH",
-        this.pos - 2
+        lexer.pos - 2
       );
       return undefined;
     }
     default:
-      this.addDiagnostic(Severity.Error, `Invalid escape sequence '\\${ch}'`, this.pos - 2);
+      lexer.addDiagnostic(Severity.Error, `Invalid escape sequence '\\${ch}'`, lexer.pos - 2);
       return undefined;
   }
 }

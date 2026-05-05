@@ -1,4 +1,12 @@
-export { Lexer } from "./lexer";
+export {
+  isAlpha,
+  isAlphaNumeric,
+  isBinaryDigit,
+  isDigit,
+  isHexDigit,
+  isOctalDigit,
+  Lexer,
+} from "./lexer";
 export {
   getReservedTokenKind,
   isReservedKeyword,

@@ -1,21 +1,21 @@
 /**
  * Lexer for the Kei language.
  *
- * Converts a {@link SourceFile} into a stream of {@link Token}s.  The lexer
+ * Converts a {@link SourceFile} into a stream of {@link Token}s. The lexer
  * performs error recovery: when it encounters an invalid character or malformed
  * literal it emits a {@link TokenKind.Error} token, records a diagnostic, and
  * continues scanning so that downstream passes receive as many valid tokens as
  * possible.
  *
- * Method implementations are split across:
- *   - lexer-numbers.ts  (number literal scanning)
- *   - lexer-strings.ts  (string literal scanning)
+ * Number- and string-literal scanning live in `lexer-numbers.ts` and
+ * `lexer-strings.ts` as free functions that take the {@link Lexer} as their
+ * first argument. Mirrors the parser/checker convention.
  */
 
 import { type Diagnostic, Severity } from "../errors";
 import type { SourceFile } from "../utils/source";
-import * as numberMethods from "./lexer-numbers";
-import * as stringMethods from "./lexer-strings";
+import { readNumber } from "./lexer-numbers";
+import { readString } from "./lexer-strings";
 import {
   getReservedTokenKind,
   isReservedKeyword,
@@ -78,12 +78,12 @@ export function isOctalDigit(ch: string): boolean {
   return code >= CHAR_0 && code <= CHAR_7;
 }
 
-// ─── Lexer class ──────────────────────────────────────────────────────────
+// ─── Lexer ────────────────────────────────────────────────────────────────
 
 export class Lexer {
-  source: SourceFile;
+  readonly source: SourceFile;
   pos: number;
-  diagnostics: Diagnostic[];
+  private diagnostics: Diagnostic[];
 
   constructor(source: SourceFile) {
     this.source = source;
@@ -99,13 +99,14 @@ export class Lexer {
   /**
    * Scans the entire source file and returns an array of tokens.
    *
-   * The returned array always ends with a {@link TokenKind.Eof} token.
-   * Calling this method resets the lexer position and diagnostics.
+   * The returned array always ends with a {@link TokenKind.Eof} token. Calling
+   * this method resets the lexer position and accumulated diagnostics, so it
+   * is safe to invoke more than once on the same instance.
    */
   tokenize(): Token[] {
-    const tokens: Token[] = [];
     this.pos = 0;
     this.diagnostics = [];
+    const tokens: Token[] = [];
     let token = this.nextToken();
     while (token.kind !== TokenKind.Eof) {
       tokens.push(token);
@@ -127,40 +128,70 @@ export class Lexer {
       return this.makeToken(TokenKind.Eof, this.pos, this.pos);
     }
 
-    const ch = this.source.charAt(this.pos);
+    const ch = this.peek();
 
     if (isAlpha(ch)) {
       return this.readIdentifierOrKeyword();
     }
 
-    if (isDigit(ch)) {
-      return this.readNumber();
-    }
-
-    if (
-      ch === "." &&
-      this.pos + 1 < this.source.length &&
-      isDigit(this.source.charAt(this.pos + 1))
-    ) {
-      return this.readNumber();
+    if (isDigit(ch) || (ch === "." && isDigit(this.peek(1)))) {
+      return readNumber(this);
     }
 
     if (ch === '"') {
-      return this.readString();
+      return readString(this);
     }
 
     return this.readOperatorOrPunctuation();
   }
 
+  // ─── Cursor primitives (used by extracted modules) ──────────────────────
+
+  /** Returns the character at `pos + offset`, or `""` past end-of-input. */
   peek(offset = 0): string {
     return this.source.charAt(this.pos + offset);
   }
 
+  /** Consumes and returns the current character. */
   advance(): string {
     const ch = this.source.charAt(this.pos);
     this.pos++;
     return ch;
   }
+
+  /** Reads a substring of the source between two positions. */
+  slice(start: number, end: number): string {
+    return this.source.content.slice(start, end);
+  }
+
+  /** Builds a token with span/line/column derived from `start` and `end`. */
+  makeToken(kind: TokenKind, start: number, end: number): Token {
+    const { line, column } = this.source.lineCol(start);
+    return {
+      kind,
+      lexeme: this.source.content.slice(start, end),
+      span: { start, end },
+      line,
+      column,
+    };
+  }
+
+  /** Pushes a diagnostic anchored at `offset`. */
+  addDiagnostic(severity: Severity, message: string, offset: number): void {
+    const { line, column } = this.source.lineCol(offset);
+    this.diagnostics.push({
+      severity,
+      message,
+      location: {
+        file: this.source.filename,
+        line,
+        column,
+        offset,
+      },
+    });
+  }
+
+  // ─── Internals ──────────────────────────────────────────────────────────
 
   private skipWhitespaceAndComments(): void {
     while (this.pos < this.source.length) {
@@ -189,9 +220,7 @@ export class Lexer {
     this.pos += 2; // skip //
     while (this.pos < this.source.length) {
       const ch = this.peek();
-      if (ch === "\n" || ch === "\r") {
-        break;
-      }
+      if (ch === "\n" || ch === "\r") return;
       this.pos++;
     }
   }
@@ -219,17 +248,13 @@ export class Lexer {
     while (this.pos < this.source.length && isAlphaNumeric(this.peek())) {
       this.pos++;
     }
-    const lexeme = this.source.content.slice(start, this.pos);
+    const lexeme = this.slice(start, this.pos);
 
     const keywordKind = lookupKeyword(lexeme);
     if (keywordKind !== undefined) {
       const token = this.makeToken(keywordKind, start, this.pos);
-      if (keywordKind === TokenKind.True) {
-        return { ...token, value: true };
-      }
-      if (keywordKind === TokenKind.False) {
-        return { ...token, value: false };
-      }
+      if (keywordKind === TokenKind.True) return { ...token, value: true };
+      if (keywordKind === TokenKind.False) return { ...token, value: false };
       return token;
     }
 
@@ -248,119 +273,73 @@ export class Lexer {
 
     switch (ch) {
       case "+":
-        if (this.peek() === "=") {
-          this.pos++;
-          return this.makeToken(TokenKind.PlusEqual, start, this.pos);
-        }
-        return this.makeToken(TokenKind.Plus, start, this.pos);
+        return this.peek() === "="
+          ? this.consume(TokenKind.PlusEqual, start)
+          : this.makeToken(TokenKind.Plus, start, this.pos);
       case "-":
-        if (this.peek() === "=") {
-          this.pos++;
-          return this.makeToken(TokenKind.MinusEqual, start, this.pos);
-        }
-        if (this.peek() === ">") {
-          this.pos++;
-          return this.makeToken(TokenKind.Arrow, start, this.pos);
-        }
+        if (this.peek() === "=") return this.consume(TokenKind.MinusEqual, start);
+        if (this.peek() === ">") return this.consume(TokenKind.Arrow, start);
         return this.makeToken(TokenKind.Minus, start, this.pos);
       case "*":
-        if (this.peek() === "=") {
-          this.pos++;
-          return this.makeToken(TokenKind.StarEqual, start, this.pos);
-        }
-        return this.makeToken(TokenKind.Star, start, this.pos);
+        return this.peek() === "="
+          ? this.consume(TokenKind.StarEqual, start)
+          : this.makeToken(TokenKind.Star, start, this.pos);
       case "/":
-        if (this.peek() === "=") {
-          this.pos++;
-          return this.makeToken(TokenKind.SlashEqual, start, this.pos);
-        }
-        return this.makeToken(TokenKind.Slash, start, this.pos);
+        return this.peek() === "="
+          ? this.consume(TokenKind.SlashEqual, start)
+          : this.makeToken(TokenKind.Slash, start, this.pos);
       case "%":
-        if (this.peek() === "=") {
-          this.pos++;
-          return this.makeToken(TokenKind.PercentEqual, start, this.pos);
-        }
-        return this.makeToken(TokenKind.Percent, start, this.pos);
+        return this.peek() === "="
+          ? this.consume(TokenKind.PercentEqual, start)
+          : this.makeToken(TokenKind.Percent, start, this.pos);
       case "=":
-        if (this.peek() === "=") {
-          this.pos++;
-          return this.makeToken(TokenKind.EqualEqual, start, this.pos);
-        }
-        if (this.peek() === ">") {
-          this.pos++;
-          return this.makeToken(TokenKind.FatArrow, start, this.pos);
-        }
+        if (this.peek() === "=") return this.consume(TokenKind.EqualEqual, start);
+        if (this.peek() === ">") return this.consume(TokenKind.FatArrow, start);
         return this.makeToken(TokenKind.Equal, start, this.pos);
       case "!":
-        if (this.peek() === "=") {
-          this.pos++;
-          return this.makeToken(TokenKind.BangEqual, start, this.pos);
-        }
-        return this.makeToken(TokenKind.Bang, start, this.pos);
+        return this.peek() === "="
+          ? this.consume(TokenKind.BangEqual, start)
+          : this.makeToken(TokenKind.Bang, start, this.pos);
       case "<":
         if (this.peek() === "<") {
           this.pos++;
-          if (this.peek() === "=") {
-            this.pos++;
-            return this.makeToken(TokenKind.LessLessEqual, start, this.pos);
-          }
-          return this.makeToken(TokenKind.LessLess, start, this.pos);
+          return this.peek() === "="
+            ? this.consume(TokenKind.LessLessEqual, start)
+            : this.makeToken(TokenKind.LessLess, start, this.pos);
         }
-        if (this.peek() === "=") {
-          this.pos++;
-          return this.makeToken(TokenKind.LessEqual, start, this.pos);
-        }
-        return this.makeToken(TokenKind.Less, start, this.pos);
+        return this.peek() === "="
+          ? this.consume(TokenKind.LessEqual, start)
+          : this.makeToken(TokenKind.Less, start, this.pos);
       case ">":
         if (this.peek() === ">") {
           this.pos++;
-          if (this.peek() === "=") {
-            this.pos++;
-            return this.makeToken(TokenKind.GreaterGreaterEqual, start, this.pos);
-          }
-          return this.makeToken(TokenKind.GreaterGreater, start, this.pos);
+          return this.peek() === "="
+            ? this.consume(TokenKind.GreaterGreaterEqual, start)
+            : this.makeToken(TokenKind.GreaterGreater, start, this.pos);
         }
-        if (this.peek() === "=") {
-          this.pos++;
-          return this.makeToken(TokenKind.GreaterEqual, start, this.pos);
-        }
-        return this.makeToken(TokenKind.Greater, start, this.pos);
+        return this.peek() === "="
+          ? this.consume(TokenKind.GreaterEqual, start)
+          : this.makeToken(TokenKind.Greater, start, this.pos);
       case "&":
-        if (this.peek() === "&") {
-          this.pos++;
-          return this.makeToken(TokenKind.AmpAmp, start, this.pos);
-        }
-        if (this.peek() === "=") {
-          this.pos++;
-          return this.makeToken(TokenKind.AmpEqual, start, this.pos);
-        }
+        if (this.peek() === "&") return this.consume(TokenKind.AmpAmp, start);
+        if (this.peek() === "=") return this.consume(TokenKind.AmpEqual, start);
         return this.makeToken(TokenKind.Amp, start, this.pos);
       case "|":
-        if (this.peek() === "|") {
-          this.pos++;
-          return this.makeToken(TokenKind.PipePipe, start, this.pos);
-        }
-        if (this.peek() === "=") {
-          this.pos++;
-          return this.makeToken(TokenKind.PipeEqual, start, this.pos);
-        }
+        if (this.peek() === "|") return this.consume(TokenKind.PipePipe, start);
+        if (this.peek() === "=") return this.consume(TokenKind.PipeEqual, start);
         return this.makeToken(TokenKind.Pipe, start, this.pos);
       case "^":
-        if (this.peek() === "=") {
-          this.pos++;
-          return this.makeToken(TokenKind.CaretEqual, start, this.pos);
-        }
-        return this.makeToken(TokenKind.Caret, start, this.pos);
+        return this.peek() === "="
+          ? this.consume(TokenKind.CaretEqual, start)
+          : this.makeToken(TokenKind.Caret, start, this.pos);
       case "~":
         return this.makeToken(TokenKind.Tilde, start, this.pos);
       case ".":
         if (this.peek() === ".") {
           this.pos++;
-          if (this.peek() === "=") {
-            this.pos++;
-            return this.makeToken(TokenKind.DotDotEqual, start, this.pos);
-          }
-          return this.makeToken(TokenKind.DotDot, start, this.pos);
+          return this.peek() === "="
+            ? this.consume(TokenKind.DotDotEqual, start)
+            : this.makeToken(TokenKind.DotDot, start, this.pos);
         }
         return this.makeToken(TokenKind.Dot, start, this.pos);
       case "{":
@@ -389,64 +368,9 @@ export class Lexer {
     }
   }
 
-  makeToken(kind: TokenKind, start: number, end: number): Token {
-    const { line, column } = this.source.lineCol(start);
-    return {
-      kind,
-      lexeme: this.source.content.slice(start, end),
-      span: { start, end },
-      line,
-      column,
-    };
+  /** Advance once and emit `kind` over [start, this.pos). */
+  private consume(kind: TokenKind, start: number): Token {
+    this.pos++;
+    return this.makeToken(kind, start, this.pos);
   }
-
-  addDiagnostic(severity: Severity, message: string, offset: number): void {
-    const { line, column } = this.source.lineCol(offset);
-    this.diagnostics.push({
-      severity,
-      message,
-      location: {
-        file: this.source.filename,
-        line,
-        column,
-        offset,
-      },
-    });
-  }
-
-  // ─── Number scanning methods (from lexer-numbers.ts) ──────────────────────
-  declare readNumber: typeof numberMethods.readNumber;
-  declare readDecimalFraction: typeof numberMethods.readDecimalFraction;
-  declare finishFloatWithExponent: typeof numberMethods.finishFloatWithExponent;
-  declare readHexNumber: typeof numberMethods.readHexNumber;
-  declare readBinaryNumber: typeof numberMethods.readBinaryNumber;
-  declare readOctalNumber: typeof numberMethods.readOctalNumber;
-  declare readPrefixedInt: typeof numberMethods.readPrefixedInt;
-  declare consumeDigits: typeof numberMethods.consumeDigits;
-  declare consumeExponent: typeof numberMethods.consumeExponent;
-  declare consumeSuffix: typeof numberMethods.consumeSuffix;
-  declare makeNumberToken: typeof numberMethods.makeNumberToken;
-
-  // ─── String scanning methods (from lexer-strings.ts) ──────────────────────
-  declare readString: typeof stringMethods.readString;
-  declare readEscapeSequence: typeof stringMethods.readEscapeSequence;
 }
-
-// ─── Attach extracted methods to Lexer prototype ──────────────────────────────
-
-// Number scanning methods
-Lexer.prototype.readNumber = numberMethods.readNumber;
-Lexer.prototype.readDecimalFraction = numberMethods.readDecimalFraction;
-Lexer.prototype.finishFloatWithExponent = numberMethods.finishFloatWithExponent;
-Lexer.prototype.readHexNumber = numberMethods.readHexNumber;
-Lexer.prototype.readBinaryNumber = numberMethods.readBinaryNumber;
-Lexer.prototype.readOctalNumber = numberMethods.readOctalNumber;
-Lexer.prototype.readPrefixedInt = numberMethods.readPrefixedInt;
-Lexer.prototype.consumeDigits = numberMethods.consumeDigits;
-Lexer.prototype.consumeExponent = numberMethods.consumeExponent;
-Lexer.prototype.consumeSuffix = numberMethods.consumeSuffix;
-Lexer.prototype.makeNumberToken = numberMethods.makeNumberToken;
-
-// String scanning methods
-Lexer.prototype.readString = stringMethods.readString;
-Lexer.prototype.readEscapeSequence = stringMethods.readEscapeSequence;
