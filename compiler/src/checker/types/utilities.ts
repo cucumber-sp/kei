@@ -166,31 +166,8 @@ export function isLiteralAssignableTo(
 /** Format a Type as a human-readable string. */
 export function typeToString(t: Type): string {
   switch (t.kind) {
-    case TypeKind.Int: {
-      if (t.signed) {
-        switch (t.bits) {
-          case 8:
-            return "i8";
-          case 16:
-            return "i16";
-          case 32:
-            return "i32";
-          case 64:
-            return "i64";
-        }
-      }
-      switch (t.bits) {
-        case 8:
-          return "u8";
-        case 16:
-          return "u16";
-        case 32:
-          return "u32";
-        case 64:
-          return "u64";
-      }
-      break;
-    }
+    case TypeKind.Int:
+      return `${t.signed ? "i" : "u"}${t.bits}`;
     case TypeKind.Float:
       return t.bits === 32 ? "f32" : "f64";
     case TypeKind.Bool:
