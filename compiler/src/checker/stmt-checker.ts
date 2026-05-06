@@ -332,18 +332,18 @@ export class StatementChecker {
               );
             } else if (switchCase.bindings) {
               // Validate destructuring bindings against variant fields
-              if (switchCase.bindings.length !== variant.fields.length) {
-                this.checker.error(
-                  `variant '${variant.name}' has ${variant.fields.length} field(s), but ${switchCase.bindings.length} binding(s) provided`,
-                  value.span
-                );
-              } else {
+              if (switchCase.bindings.length === variant.fields.length) {
                 // Store binding info for KIR lowering
                 this.checker.switchCaseBindings.set(switchCase, {
                   variantName: variant.name,
                   fieldNames: variant.fields.map((f) => f.name),
                   fieldTypes: variant.fields.map((f) => f.type),
                 });
+              } else {
+                this.checker.error(
+                  `variant '${variant.name}' has ${variant.fields.length} field(s), but ${switchCase.bindings.length} binding(s) provided`,
+                  value.span
+                );
               }
             }
           } else {

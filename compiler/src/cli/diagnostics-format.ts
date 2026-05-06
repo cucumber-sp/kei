@@ -39,5 +39,5 @@ export function reportDiagnostics(
 
 /** Print a "N error(s) emitted" footer to stderr. */
 export function printErrorSummary(errorCount: number): void {
-  console.error(`\n${errorCount} error${errorCount !== 1 ? "s" : ""} emitted`);
+  console.error(`\n${errorCount} error${errorCount === 1 ? "" : "s"} emitted`);
 }

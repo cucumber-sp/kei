@@ -5,7 +5,7 @@
 import type { KirType, VarId } from "../kir/kir-types";
 import { I32_MAX, I32_MIN } from "../utils/constants";
 
-export { I32_MIN, I32_MAX };
+export { I32_MAX, I32_MIN };
 
 // ─── Type mapping ───────────────────────────────────────────────────────────
 

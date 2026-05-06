@@ -32,7 +32,7 @@ export function emitTypeDecl(td: KirTypeDecl): string {
 
       const tagConstants = td.type.variants
         .map((v, i) => {
-          const val = v.value !== null ? v.value : i;
+          const val = v.value === null ? i : v.value;
           return `    ${sName}_${sanitizeName(v.name)} = ${val}`;
         })
         .join(",\n");

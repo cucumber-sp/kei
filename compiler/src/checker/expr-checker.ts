@@ -329,17 +329,17 @@ export class ExpressionChecker {
                 value.span
               );
             } else if (switchCase.bindings) {
-              if (switchCase.bindings.length !== variant.fields.length) {
-                this.checker.error(
-                  `variant '${variant.name}' has ${variant.fields.length} field(s), but ${switchCase.bindings.length} binding(s) provided`,
-                  value.span
-                );
-              } else {
+              if (switchCase.bindings.length === variant.fields.length) {
                 this.checker.switchCaseBindings.set(switchCase, {
                   variantName: variant.name,
                   fieldNames: variant.fields.map((f) => f.name),
                   fieldTypes: variant.fields.map((f) => f.type),
                 });
+              } else {
+                this.checker.error(
+                  `variant '${variant.name}' has ${variant.fields.length} field(s), but ${switchCase.bindings.length} binding(s) provided`,
+                  value.span
+                );
               }
             }
           } else {
