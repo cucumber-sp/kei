@@ -40,13 +40,20 @@ All imports from `src/` and `deps/` are resolved at compile time. Everything is 
 ## CLI
 
 ```bash
-kei build src/main.kei              # → binary (debug)
-kei build src/main.kei -o app       # custom output name
-kei build src/main.kei --release    # release mode
-kei emit-c src/main.kei             # → .c file only (inspect generated C)
-kei emit-kir src/main.kei           # → KIR text format (inspect IR)
-kei run src/main.kei                # build and execute
+kei src/main.kei --build              # → binary (debug profile)
+kei src/main.kei --build --release    # → binary (release profile)
+kei src/main.kei --build --backend=clang   # pick the C compiler
+kei src/main.kei --run                # build + execute
+kei src/main.kei --emit-c             # generated C → stdout
+kei src/main.kei --kir                # KIR text format (pre-mem2reg)
+kei src/main.kei --kir-opt            # KIR after mem2reg
+kei src/main.kei --check              # type-check only
+kei src/main.kei --ast                # AST tree
+kei src/main.kei                      # lex + dump tokens
 ```
+
+The binary lives next to the source (`src/main.kei` → `src/main`). Custom
+output names are not yet wired through the CLI.
 
 ## Debug vs Release
 
@@ -70,15 +77,18 @@ kei run src/main.kei                # build and execute
 
 ## Linking
 
-External C libraries are linked via the `--link` flag:
+External C libraries will be linked via a `--link` flag:
 
 ```bash
-kei build main.kei --link sqlite3
+kei main.kei --build --link sqlite3
 # → gcc output.c -lsqlite3 -o main
 
-kei build main.kei --link "openssl,zlib"
+kei main.kei --build --link "openssl,zlib"
 # → gcc output.c -lssl -lcrypto -lz -o main
 ```
+
+`--link` is roadmap; today the C compiler invocation is fixed to
+`-g -O0` (debug) or `-O2 -DNDEBUG` (release).
 
 ## C Backend Details
 

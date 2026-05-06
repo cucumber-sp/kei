@@ -238,20 +238,20 @@ let user_size = sizeof(User);  // depends on fields
 
 ## Arena allocators (stdlib)
 
-Arenas are the recommended allocation strategy for "many small allocations with
-one shared lifetime" — request handlers, parsing, frame-based loops, scratch
-buffers. The idea: bump-allocate during the scope, free the whole arena in one
+Arenas are the recommended allocation strategy for "many small allocations
+with one shared lifetime" — request handlers, parsing, frame-based loops,
+scratch buffers. Bump-allocate during the scope, free the whole arena in one
 call at the end.
 
 ```kei
-fn handle(req: Request) -> Response {
-    let a = Arena.new();
-    defer a.destroy();
+import { arena_make, arena_alloc } from arena;
 
-    let buf = a.alloc<u8>(4096);
-    let path = a.dup(req.path);
-    return buildResponse(&a, req);
-    // a.destroy() releases everything allocated in a, in one pass
+fn handle(req: Request) -> Response {
+    let a = arena_make(64 * 1024);
+    // `a` is destroyed at scope exit, freeing the whole buffer
+
+    let buf = arena_alloc(&a, 4096);
+    return build_response(&a, req);
 }
 ```
 
@@ -263,13 +263,16 @@ fn handle(req: Request) -> Response {
 | Arena | many items, shared scope lifetime | bump alloc, bulk free |
 | General heap (`alloc<T>`/`free`) | outlives any scope, or cross-module ownership | malloc + free per object |
 
-**v1 rule — arenas take POD types only.** If a type has a non-trivial `__destroy`,
-it cannot be arena-allocated (compile error). This avoids the "who runs destructors
-on arena reset" rabbit hole. POD covers the common arena use cases — byte buffers,
-parse nodes, response bodies. Managed types go on the regular heap.
+**Rule — arenas take POD types only.** If a type has a non-trivial
+`__destroy`, it cannot be arena-allocated. This avoids the "who runs
+destructors on arena reset" rabbit hole. POD covers the common arena use
+cases — byte buffers, parse nodes, response bodies. Managed types go on the
+regular heap. The checker rule that enforces this is on the roadmap (see
+[SPEC-STATUS.md](../SPEC-STATUS.md)); today `arena_alloc` only hands out raw
+`ptr<u8>`, so the restriction is enforced by the API surface.
 
-Arenas themselves are `unsafe struct`s in stdlib. The compiler has no special
-knowledge of them beyond the POD restriction check.
+`Arena` is an `unsafe struct` in `std/arena.kei`. The compiler has no special
+knowledge of it beyond the eventual POD-restriction check.
 
 ## Concurrency
 
@@ -362,9 +365,11 @@ All checks are **completely removed in release builds** for zero overhead.
 - Slices (`slice`): pointer + length on stack, no ownership
 
 ### Strings
-- Stack struct: `{ ptr, offset, len, cap, count }`
+- Target stack struct (zero-copy substring): `{ ptr, offset, len, cap, count }`
+- Current runtime layout (`runtime.h`): `{ data, len, cap, ref }` — substring
+  deep-copies for now
 - Heap buffer: raw byte data, shared via refcount
-- COW semantics: mutation copies buffer when shared
+- CoW semantics: mutation copies buffer when shared
 
 ## Performance characteristics
 
@@ -378,7 +383,10 @@ All checks are **completely removed in release builds** for zero overhead.
 
 ## Standard library managed types
 
-The following types are implemented as `unsafe struct` in the standard library, using lifecycle hooks for automatic resource management.
+The following types are designed as `unsafe struct`s using lifecycle hooks for
+automatic resource management. `string` is currently implemented in the C
+runtime (`runtime.h`) with the same user-facing semantics; the rest are
+roadmap (see [SPEC-STATUS.md](../SPEC-STATUS.md)).
 
 ### CoW invariants (contract for stdlib authors)
 

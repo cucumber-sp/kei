@@ -76,7 +76,15 @@ bun run src/cli.ts program.kei --kir        # inspect KIR (pre-opt)
 bun run src/cli.ts program.kei --kir-opt    # inspect KIR (post-mem2reg)
 ```
 
-Run the test suite (1,700+ tests):
+Build profiles and C-compiler selection:
+
+```bash
+bun run src/cli.ts program.kei --build --release
+bun run src/cli.ts program.kei --build --backend=clang
+```
+
+Run the test suite (≈1,900 tests across lexer, parser, checker, KIR, backend,
+modules, and end-to-end binaries):
 
 ```bash
 bun test
@@ -89,8 +97,9 @@ bun run build               # writes dist/kei + dist/std/
 ./dist/kei program.kei --run
 ```
 
-The build uses `bun build --compile --minify --bytecode --sourcemap`. The
-binary expects a `std/` directory next to it (the script copies one in).
+The build uses `bun build --compile --bytecode --sourcemap` with whitespace +
+syntax minification. The binary expects a `std/` directory next to it (the
+script copies one in).
 
 The full getting-started flow is in [`docs/getting-started.md`](./docs/getting-started.md).
 
@@ -127,15 +136,19 @@ The full getting-started flow is in [`docs/getting-started.md`](./docs/getting-s
 ## Status
 
 **End-to-end (source → binary):** primitives, structs with methods, simple and
-data enums, error handling, arrays with bounds checks, full control flow,
-modules, `unsafe` blocks, manual `alloc`/`free`, auto-generated `__destroy` /
-`__oncopy`, the `io` and `mem` stdlib modules, C FFI via `extern fn`.
+data enums, generics with monomorphization, operator overloading, error
+handling (`throws` / `catch` / `catch panic` / `catch throw`), arrays with
+bounds checks, full control flow, `defer` (LIFO scope-exit), `move` (with
+destroy elision), modules with cyclic-import detection, `unsafe` blocks,
+manual `alloc` / `free`, auto-generated `__destroy` / `__oncopy`, the `io`,
+`mem`, and `arena` stdlib modules, C FFI via `extern fn`, nullable pointers
+(`T?` lowered to `ptr<T>`).
 
-**Type-checked, backend WIP:** generics monomorphization, operator overloading.
-
-**Spec'd, not yet implemented:** `T?` nullability, `ref T` / `ref mut T`,
-arenas, `defer` lowering, traits, `move` destroy elision. The tracking table
-lives in [SPEC-STATUS.md](./SPEC-STATUS.md).
+**Spec'd, not yet implemented:** `ref T` / `ref mut T`, primitive `T?` with
+tag-byte representation, traits, function-pointer type syntax, variadic
+extern, optimisation passes beyond mem2reg, debug-mode division-by-zero /
+overflow / null-deref checks. The tracking table lives in
+[SPEC-STATUS.md](./SPEC-STATUS.md).
 
 **Not in Kei:** closures, nested functions, borrow checker, GC, green threads.
 

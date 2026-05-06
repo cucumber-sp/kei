@@ -150,7 +150,6 @@ Kei can interface with C libraries through external function declarations and un
 Declare C functions using `extern fn`:
 
 ```kei
-extern fn printf(fmt: ptr<c_char>, ...) -> int;
 extern fn strlen(s: ptr<c_char>) -> usize;
 extern fn strcpy(dest: ptr<c_char>, src: ptr<c_char>) -> ptr<c_char>;
 ```
@@ -159,8 +158,9 @@ extern fn strcpy(dest: ptr<c_char>, src: ptr<c_char>) -> ptr<c_char>;
 - No function body — implemented in C
 - Uses C calling convention
 - May use `ptr<T>` freely (FFI boundary)
-- Supports variadic arguments (`...`)
 - **Calling requires `unsafe` block** — compiler cannot verify foreign code safety
+- Variadic arguments (`...`) are spec'd but not yet parsed — `printf` cannot
+  be spelled directly today (see [SPEC-STATUS.md](../SPEC-STATUS.md)).
 
 ```kei
 extern fn strlen(s: ptr<c_char>) -> usize;

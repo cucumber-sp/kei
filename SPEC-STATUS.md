@@ -1,93 +1,68 @@
 # Spec Status
 
-Tracks what's spec'd versus what's actually implemented in the compiler. Replaces
-the older `SPEC-AUDIT.md` — the spec has since been updated to match intent, so
-most of that document's rows are no longer meaningful.
+What's specified versus what the compiler implements today. The spec describes
+the language we're designing; this file records how far the implementation has
+caught up. Items here are roadmap candidates — pick one and open a PR.
 
-Anything spec'd but not implemented is listed below with a status tag:
+Status tags:
 
-- **PLANNED** — spec'd, not yet touched in the compiler.
-- **WIP** — partially implemented (parser/checker done, backend missing, etc.).
-- **BLOCKED** — depends on another item that isn't done yet.
+- **WIP** — partial: parser/checker may be done, KIR or backend missing pieces.
+- **PLANNED** — specified, no compiler work yet.
+- **BLOCKED** — depends on another item that isn't done.
+
+Anything not listed here is implemented end-to-end (source → KIR → C → binary)
+and covered by tests.
 
 ## Type system
 
 | Item                                      | Status   | Notes                                              |
 |-------------------------------------------|----------|----------------------------------------------------|
-| `T?` nullability (niche for pointers)     | PLANNED  | Lexer tokenises `?`; no parser/checker/KIR yet.    |
-| `T?` tag-byte fallback for primitives     | PLANNED  | Do after pointer niche lands.                      |
-| `ref T` / `ref mut T` (safe references)   | PLANNED  | Parser + checker scope rule; no borrow checker. Compiles to `const T*` / `T*`. |
-| Traits / trait objects                    | PLANNED  | Fat-pointer layout `(data, vtable)` with size+destroy. |
-| Arena allocator (`Arena` stdlib type)     | PLANNED  | POD-only restriction enforced by checker.          |
-| `string` / `array<T>` / `List<T>` stdlib  | PLANNED  | Currently compiler-known; migrate to stdlib-defined. |
+| `T?` niche layout for pointers            | WIP      | Parser/checker accept `T?`; lowers to `ptr<T>`. Niche representation matches naturally. |
+| `T?` tag-byte fallback for primitives     | PLANNED  | Today `i32?` etc. also lower to `ptr<T>` (heap-allocated). Native `{tag, value}` representation is the goal. |
+| Tighten `null` assignability              | PLANNED  | Today `null` is assignable to any `ptr<T>`; once `T?` is the canonical absence story, `null` will be rejected on bare `ptr<T>` and only allowed on `T?`. |
+| `ref T` / `ref mut T` (safe references)   | PLANNED  | `ref` reserved in lexer; no parser/checker work yet. Will compile to `const T*` / `T*`. |
+| Traits / trait objects                    | PLANNED  | Fat-pointer layout `(data, vtable)` with size + destroy slot. |
+| `string` / `array<T>` / `List<T>` as stdlib types | PLANNED | Currently `string` is compiler-known via `runtime.h`; `array<T>` is the inline-array shorthand. Migration needs an `unsafe struct` runtime in stdlib. |
 
 ## Memory model
 
 | Item                                      | Status   | Notes                                              |
 |-------------------------------------------|----------|----------------------------------------------------|
-| `move` elides scope-exit `__destroy`      | WIP      | Parsed + use-after-move checked; KIR still emits destroy. |
-| `defer` lowering                          | WIP      | Parsed; not yet wired into KIR scope-exit emission. |
-| Debug checks (overflow, null deref, move) | PLANNED  | Spec lists them; KIR doesn't emit them yet.        |
-| Optimization passes (const-fold, inline)  | PLANNED  | mem2reg works; no other passes run.                |
+| Arena POD-only checker rule               | WIP      | `std/arena.kei` exists with bump-allocate API; the checker does not yet reject arena-allocating types with non-trivial `__destroy`. |
+| String layout w/ offset (zero-copy substring) | PLANNED | Runtime `kei_string` is `{data, len, cap, ref}`; substring deep-copies. Spec target is `{ptr, offset, len, cap, count}` for refcount-only sub-ranges. |
+| Optimization passes beyond mem2reg        | PLANNED  | Today only mem2reg + de-SSA run. No const fold, copy prop, CSE, inlining, or LICM. |
+
+## Debug-mode runtime checks
+
+| Check               | Status   | Notes                                              |
+|---------------------|----------|----------------------------------------------------|
+| Array bounds check  | done     | Emitted on every indexed access.                   |
+| Division by zero    | PLANNED  | KIR has no `div_check`; runtime is C semantics.    |
+| Integer overflow    | PLANNED  | `overflow_check` instruction unspec'd in lowering. |
+| Null deref          | PLANNED  | `null_check` instruction unspec'd in lowering.     |
+| Use-after-move      | WIP      | Caught in the checker; KIR `move_check` not emitted. |
+| `assert` / `require`| PLANNED  | Parsed; no `assert_check` / `require_check` lowering yet. |
 
 ## Functions
 
 | Item                                      | Status   | Notes                                              |
 |-------------------------------------------|----------|----------------------------------------------------|
-| `main()` must return `int` (validation)   | PLANNED  | Small checker addition, ~5 lines.                  |
-| Function-pointer type syntax `fn(…) -> …` | PLANNED  | Spec'd; parser + checker changes needed. Plain 8-byte C pointer. |
-| Variadic extern (`...`)                   | PLANNED  | Known parser limitation; `printf` can't be spelled today. |
-| No-nested-fn checker rule                 | PLANNED  | Reject `fn` inside block statements.               |
-| Deprecate `self: ptr<T>` method receivers | PLANNED  | Migrate to `self: ref mut T`; add lint / error.    |
+| Function-pointer type syntax `fn(…) -> …` | PLANNED  | Lexer has `fn`; parser doesn't accept it in type position. Plain 8-byte C pointer at runtime. |
+| Variadic extern (`...`)                   | PLANNED  | Known parser limitation; `printf` cannot be spelled today. |
+| No-nested-fn checker rule                 | PLANNED  | The parser only allows `fn` at module/struct level; an explicit error message would help diagnostics. |
+| Migrate methods from `self: ptr<T>` → `self: ref mut T` | BLOCKED | Needs `ref T` first. `self: ptr<T>` is the only mutable-receiver form today. |
 
 ## Error handling
 
 | Item                                      | Status   | Notes                                              |
 |-------------------------------------------|----------|----------------------------------------------------|
-| Generic-function throws propagation       | WIP      | Works for monomorphized cases; edge cases pending. |
+| Generic-function `throws` propagation     | WIP      | Works for monomorphized cases; some edge cases still drop the throws set. |
 
 ## Concurrency
 
 | Item                                      | Status   | Notes                                              |
 |-------------------------------------------|----------|----------------------------------------------------|
-| v1 single-threaded baseline               | current  | Non-atomic refcounts in stdlib; no threading API.  |
-| v2 `spawn` + `Mutex<T>`, `Atomic<T>`      | PLANNED  | Post-v1.                                           |
-| v3 compile-time thread-safety check       | PLANNED  | Post-v2. Transitive type property, not lifetimes.  |
-| Async via compiler state machines         | PLANNED  | Deferred until `T?`, `move` elision, traits land.  |
-
-## Compiler hygiene (not user-visible, but blocks features)
-
-| Item                                      | Status   | Notes                                              |
-|-------------------------------------------|----------|----------------------------------------------------|
-| Delete unused `AstVisitor`                | DONE     | B1: removed 115 LOC dead interface.                |
-| Postfix `++` / `--` removal               | DONE     | B1: lexer/parser/checker/lowering all dropped.     |
-| `main()` return-type validation           | DONE     | B1: must return `int`, no params, no `throws`.     |
-| `KirLowerer` prototype-patching refactor  | DONE     | B2: `LoweringCtx` interface + 13 pure-fn modules.  |
-| `CheckResult` 9-map consolidation         | DONE     | B3: grouped into `types`/`generics`/`lifecycle`.   |
-| `cli.ts` split                            | DONE     | B4: 441→34 LOC; `cli/{args,driver,diagnostics-format,ast-printer}.ts`. |
-| Embed `runtime.h` at build time           | DONE     | B5: Bun text import; no fs read in c-emitter.      |
-| Lifecycle/scope unification               | DEFERRED | B6: checker emits sidecar map; KIR reads it. Not blocking features. |
-
-## Spec cleanup applied in this revision
-
-For reference — items recently **resolved** by rewriting the spec (not the compiler):
-
-- `dynarray` removed (was in grammar, never implemented, duplicated `array<T>`).
-- Fixed-size value-type arrays renamed `array<T, N>` → `inline<T, N>` to remove
-  the name collision with stdlib `array<T>` (heap, CoW). The compiler's
-  built-in is now `inline<T, N>`; `array<T>` (no `N`) is reserved for the
-  stdlib heap type.
-- Postfix `++` / `--` removed from lexical spec (source of evaluation-order bugs).
-- Array CoW moved from language types to stdlib section (it was never a compiler feature).
-- Function overloading: spec said "not supported", compiler has tested support; spec updated.
-- `as` cast operator formalised in keyword list + grammar (was an EXTRA item).
-- Keyword list reconciled across `02-lexical.md`, `13-grammar.md` (they had drifted).
-- **Closures rejected as a language feature.** Functions are module-level or
-  struct-member only; no capture lists, no heap-promoted closure type. State is
-  always passed explicitly, or (eventually) bundled via traits.
-- **`ptr<T>` confirmed unsafe-only.** The old `self: ptr<T>` method pattern is
-  deprecated in favour of `self: ref mut T`, which is safe and needs no `unsafe`
-  block in the method body.
-- **Substring of `string` returns `string`** (not `slice<u8>`). CoW heap types
-  share their buffer via refcount; they do not produce views whose lifetime the
-  compiler can't see.
+| v1 single-threaded baseline               | current  | Stdlib refcounts are non-atomic; no threading API. |
+| v2 `spawn` + `Mutex<T>` / `Atomic<T>`     | PLANNED  | Post-v1.                                           |
+| v3 compile-time thread-safety check       | PLANNED  | Post-v2. Transitive type property (single bit), not a borrow check. |
+| Async via compiler state machines         | PLANNED  | Deferred until `T?`, `move` elision, and traits land. |

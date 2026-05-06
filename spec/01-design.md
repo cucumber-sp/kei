@@ -13,17 +13,13 @@ Kei avoids:
 - Multiple ways to accomplish the same task
 
 ```kei
-// Good: Clear and explicit
 fn processUser(user: User) -> bool {
-    if (user.active) {
+    if user.active {
         updateDatabase(user);
         return true;
     }
     return false;
 }
-
-// Avoided: Clever but obscure
-// (hypothetical complex feature)
 ```
 
 ## Explicit over implicit
@@ -191,10 +187,11 @@ managed heap. The stdlib is regular Kei code with `unsafe struct` at its lowest
 level — nothing magic.
 
 **v1 is single-threaded.** Concurrency primitives (threads, async, channels) are
-deliberately out of scope for v1; adding them requires explicit design choices
-and is staged in `spec/08-memory.md` under **Concurrency**. Programs that need
+deliberately out of scope for v1; the staged plan lives in
+[`spec/08-memory.md`](./08-memory.md) under **Concurrency**. Programs that need
 threads today use FFI and accept the rules there.
 
 ---
 
-These principles guide every decision in Kei's design. Features that conflict with these principles are reconsidered or rejected.
+These principles guide every decision in Kei's design. Features that conflict
+with them are reconsidered or rejected.

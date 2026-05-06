@@ -36,7 +36,7 @@ variant          = IDENT [ "(" field_list ")" ]
 type             = ref_type | nullable_type ;
 
 ref_type         = "ref" [ "mut" ] base_type ;
-   (* v1: ref types are valid only in parameter and local-binding positions.
+   (* `ref T` is valid only in parameter and local-binding positions (initially).
       Struct fields, return types, and collection element types reject `ref T`.
       Enforced by the checker, not the grammar. *)
 
@@ -102,55 +102,43 @@ type_alias       = ["pub"] "type" IDENT "=" type ";" ;
 block            = "{" { statement } "}" ;
 ```
 
-## Keyword List
+## Keyword list
+
+Active — recognised by the parser today:
 
 ```
-as          assert      bool        break       case
-catch       const       continue    default     defer
-else        enum        extern      false       fn
-for         if          import      in          int
-let         match       move        mut         null
-panic       ptr         pub         ref         require
-return      self        slice       static      string
-struct      switch      throw       throws      true
-type        uint        unsafe      void        while
+as          assert      bool        break       byte
+case        catch       const       continue    default
+defer       double      else        enum        extern
+false       float       fn          for         if
+import      in          inline      int         let
+long        move        mut         null        panic
+ptr         pub         require     return      self
+short       slice       static      string      struct
+switch      throw       throws      true        type
+uint        unsafe      void        while
+
+i8  i16  i32  i64  u8  u16  u32  u64  f32  f64  isize  usize
 ```
 
-`string` and `slice` are reserved words even though they resolve to stdlib or
-compiler types — to keep the lexer rules local and simple.
+`string`, `slice`, and `array` are keywords (not user-defined identifiers)
+even when they resolve to stdlib or compiler-built types — keeping lexer
+rules local and simple.
 
-## Reserved for Future
+## Reserved keywords
+
+Recognised by the lexer; rejected as identifiers; not yet usable as syntax:
 
 ```
-async       await       impl        macro       shared
-super       trait       where       yield
+async       await       impl        macro       match
+ref         shared      super       trait       where
+yield
 ```
 
-Items removed from this list since earlier drafts (now spec'd above): `closure`,
-`generic`, `interface`, `override`, `private`, `protected`, `ref`, `virtual`, `match`.
-
-## Changes from v0.0.1 Draft
-
-> **Note:** The grammar above reflects current design decisions:
-> - `ref struct` removed — two-tier model with `struct` and `unsafe struct`.
-> - `str` type removed — single `string` stdlib type with CoW semantics.
-> - Lifecycle hooks `__destroy`/`__oncopy` auto-generated for `struct` types.
-> - Generics via `<T>` syntax with compile-time monomorphization.
-> - `throws`/`catch`/`throw` for error handling.
-> - `move` keyword for explicit ownership transfer.
-> - `enum` supports both data variants and simple numeric enums.
-> - **`T?` added** as suffix nullability with niche optimization.
-> - **`as` added** as explicit cast operator.
-> - **`ref T` / `ref mut T` added** as safe, scope-bound references (replaces the
->   earlier `self: ptr<T>` pattern in method receivers).
-> - **No closures, no nested functions** — functions are module- or struct-level only.
-> - **`dynarray` removed** — use `List<T>` (stdlib, growable) or `array<T>` (stdlib, CoW fixed).
-> - **Fixed-size value-type arrays renamed** `array<T, N>` → `inline<T, N>` —
->   removes the name collision with stdlib `array<T>` (heap, CoW). `inline<T, N>`
->   is the compiler built-in; `array<T>` (no `N`) is a stdlib type.
-> - **Postfix `++`/`--` removed** — use `x += 1` / `x -= 1`.
-> - **Function-pointer type syntax** `fn(…) -> …` is a first-class type; plain C
->   function pointers, 8 bytes, no environment.
+`ref` is reserved for safe references (`ref T` / `ref mut T`); `match` is
+reserved for fuller pattern matching beyond what `switch` covers today. Both
+are spec'd elsewhere; their planned status lives in
+[`SPEC-STATUS.md`](../SPEC-STATUS.md).
 
 ## Assertions
 
