@@ -73,3 +73,65 @@ describe("Parser — Array Literals", () => {
     expect(expr.elements[0]?.kind).toBe("StringLiteral");
   });
 });
+
+describe("Parser — inline<T, N> type", () => {
+  test("inline<int, 4> parses as GenericType with element + integer length", () => {
+    const program = parse("fn test() { let a: inline<int, 4> = [1, 2, 3, 4]; }");
+    const fn = program.declarations[0]!;
+    if (fn.kind !== "FunctionDecl") return;
+    const stmt = fn.body.statements[0]!;
+    if (stmt.kind !== "LetStmt") return;
+    const ann = stmt.typeAnnotation;
+    expect(ann?.kind).toBe("GenericType");
+    if (ann?.kind !== "GenericType") return;
+    expect(ann.name).toBe("inline");
+    expect(ann.typeArgs.length).toBe(2);
+    expect(ann.typeArgs[0]?.kind).toBe("NamedType");
+    if (ann.typeArgs[0]?.kind === "NamedType") {
+      expect(ann.typeArgs[0].name).toBe("int");
+    }
+    // Length: parsed as a NamedType whose name is the integer literal text
+    expect(ann.typeArgs[1]?.kind).toBe("NamedType");
+    if (ann.typeArgs[1]?.kind === "NamedType") {
+      expect(ann.typeArgs[1].name).toBe("4");
+    }
+  });
+
+  test("inline<bool, 1> parses with single-element length", () => {
+    const program = parse("fn test() { let a: inline<bool, 1> = [true]; }");
+    const fn = program.declarations[0]!;
+    if (fn.kind !== "FunctionDecl") return;
+    const stmt = fn.body.statements[0]!;
+    if (stmt.kind !== "LetStmt") return;
+    const ann = stmt.typeAnnotation;
+    if (ann?.kind !== "GenericType") return;
+    expect(ann.name).toBe("inline");
+    if (ann.typeArgs[1]?.kind === "NamedType") {
+      expect(ann.typeArgs[1].name).toBe("1");
+    }
+  });
+
+  test("inline accepted in struct field declaration", () => {
+    const program = parse("struct S { data: inline<int, 8>; }");
+    const decl = program.declarations[0]!;
+    if (decl.kind !== "StructDecl") return;
+    expect(decl.fields[0]?.name).toBe("data");
+    const ft = decl.fields[0]?.typeAnnotation;
+    expect(ft?.kind).toBe("GenericType");
+    if (ft?.kind === "GenericType") {
+      expect(ft.name).toBe("inline");
+    }
+  });
+
+  test("inline accepted in function parameter type", () => {
+    const program = parse("fn f(xs: inline<int, 3>) -> int { return 0; }");
+    const fn = program.declarations[0]!;
+    if (fn.kind !== "FunctionDecl") return;
+    const param = fn.params[0]!;
+    expect(param.name).toBe("xs");
+    expect(param.typeAnnotation.kind).toBe("GenericType");
+    if (param.typeAnnotation.kind === "GenericType") {
+      expect(param.typeAnnotation.name).toBe("inline");
+    }
+  });
+});

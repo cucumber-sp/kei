@@ -124,7 +124,7 @@ export function lowerTypeNode(ctx: LoweringCtx, typeNode: TypeNode): KirType {
         ],
       };
     }
-    if (typeNode.name === "array" || typeNode.name === "dynarray") {
+    if (typeNode.name === "inline" || typeNode.name === "array" || typeNode.name === "dynarray") {
       const arg1 = typeNode.typeArgs[1];
       const length = arg1?.kind === "NamedType" ? Number.parseInt(arg1.name, 10) || 0 : 0;
       return {

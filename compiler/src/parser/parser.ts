@@ -63,6 +63,7 @@ const TYPE_KEYWORDS: ReadonlySet<TokenKind> = new Set([
   TokenKind.Double,
   TokenKind.Ptr,
   TokenKind.Array,
+  TokenKind.Inline,
   TokenKind.Slice,
   TokenKind.Dynarray,
 ]);
@@ -277,10 +278,11 @@ export class Parser implements ParserContext {
   private parseBaseType(): TypeNode {
     const token = this.current();
 
-    // Handle generic type keywords: ptr<T>, array<T, N>, slice<T>, dynarray<T>
+    // Handle generic type keywords: ptr<T>, inline<T, N>, array<T>, slice<T>, dynarray<T>
     if (
       token.kind === TokenKind.Ptr ||
       token.kind === TokenKind.Array ||
+      token.kind === TokenKind.Inline ||
       token.kind === TokenKind.Slice ||
       token.kind === TokenKind.Dynarray
     ) {
@@ -289,7 +291,7 @@ export class Parser implements ParserContext {
         this.advance();
         const typeArgs: TypeNode[] = [this.parseType()];
         while (this.match(TokenKind.Comma)) {
-          // For array<T, N>, second arg could be a number — treat as named type
+          // For inline<T, N>, second arg is a number — treat as named type
           if (this.check(TokenKind.IntLiteral)) {
             const numToken = this.advance();
             typeArgs.push({

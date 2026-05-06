@@ -95,8 +95,8 @@ for item, index in numbers {
 ```
 
 **Supported collection types:**
-- `array<T, N>` — fixed-size arrays
-- `array<T>` — dynamic arrays  
+- `inline<T, N>` — fixed-size inline arrays
+- `array<T>` — heap arrays (stdlib)
 - `slice<T>` — array slices
 
 #### Loop variable scope

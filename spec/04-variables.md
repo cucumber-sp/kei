@@ -59,7 +59,7 @@ let x = 42;          // int (default integer type)
 let y = 3.14;        // f64 (default float type)
 let z = true;        // bool
 let s = "hello";     // string
-let arr = [1, 2, 3]; // array<int, 3>
+let arr = [1, 2, 3]; // inline<int, 3>
 ```
 
 ### When explicit types are needed
@@ -67,7 +67,7 @@ let arr = [1, 2, 3]; // array<int, 3>
 ```kei
 let a: u32 = 42;     // specific integer size
 let b: f32 = 3.14;   // specific float size
-let c: array<int> = [1, 2, 3]; // specific collection type
+let c: inline<int, 3> = [1, 2, 3]; // explicit inline-array type
 ```
 
 ## Shadowing

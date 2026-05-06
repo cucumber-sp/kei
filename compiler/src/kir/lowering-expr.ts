@@ -134,6 +134,11 @@ export function lowerExprAsPtr(ctx: LoweringCtx, expr: Expression): VarId {
       return varId;
     }
   }
+  // Struct/enum literals already return their backing alloc pointer from
+  // lowerExpr — no need to re-wrap.
+  if (expr.kind === "StructLiteral") {
+    return lowerExpr(ctx, expr);
+  }
   // For complex expressions like (a + b).x, lower the expression and wrap in alloc if needed
   const valueId = lowerExpr(ctx, expr);
   const exprType = ctx.checkResult.types.typeMap.get(expr);
@@ -189,7 +194,13 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
     return dest;
   }
 
-  const args = expr.args.map((a) => lowerExpr(ctx, a));
+  // Struct args lower to pointers — the called function takes them as
+  // pointers (matches method-call convention). Non-struct args lower to
+  // values as usual.
+  const args = expr.args.map((a) => {
+    const argType = ctx.checkResult.types.typeMap.get(a);
+    return argType?.kind === "struct" ? lowerExprAsPtr(ctx, a) : lowerExpr(ctx, a);
+  });
   const resultType = getExprKirType(ctx, expr);
   const isVoid = resultType.kind === "void";
 
@@ -258,23 +269,9 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
         funcName = methodName;
       }
 
-      // Methods wrap struct params in ptr<>, so re-lower struct args as pointers.
-      // The `args` array already lowered them as values; for struct args, we need
-      // to wrap the already-lowered value into a stack_alloc + store to get a pointer.
-      const methodArgs = args.map((argId, i) => {
-        const argExpr = expr.args[i];
-        const argType = argExpr ? ctx.checkResult.types.typeMap.get(argExpr) : undefined;
-        if (argType?.kind === "struct") {
-          const kirType = lowerCheckerType(ctx, argType);
-          const alloc = emitStackAlloc(ctx, kirType);
-          emit(ctx, { kind: "store", ptr: alloc, value: argId });
-          return alloc;
-        }
-        return argId;
-      });
-
+      // Struct args were already lowered as pointers above; no re-wrap needed.
       if (isVoid) {
-        emit(ctx, { kind: "call_void", func: funcName, args: [objId, ...methodArgs] });
+        emit(ctx, { kind: "call_void", func: funcName, args: [objId, ...args] });
         return objId; // void calls return nothing meaningful
       }
 
@@ -283,7 +280,7 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
         kind: "call",
         dest,
         func: funcName,
-        args: [objId, ...methodArgs],
+        args: [objId, ...args],
         type: resultType,
       });
       return dest;
@@ -355,6 +352,35 @@ export function lowerMemberExpr(ctx: LoweringCtx, expr: MemberExpr): VarId {
   return emitFieldLoad(ctx, baseId, expr.property, resultType);
 }
 
+/**
+ * Lower an array-typed expression to a pointer to its contiguous storage.
+ * C cannot pass arrays by value, so for indexing we always want the storage
+ * pointer (`T*` decayed from the underlying `T[N]`), never a memcpy'd copy.
+ *
+ * - `s.data` (array field): emit `field_ptr` (no load).
+ * - Anything else: fall back to `lowerExpr`. Stack-alloc identifiers already
+ *   yield their alloc pointer; struct/array literals already yield an alloc.
+ */
+function lowerArrayAsStoragePtr(ctx: LoweringCtx, expr: Expression): VarId {
+  if (expr.kind === "MemberExpr") {
+    const objectType = ctx.checkResult.types.typeMap.get(expr.object);
+    if (objectType?.kind === "struct") {
+      const fieldType = getExprKirType(ctx, expr);
+      const baseId = lowerExprAsPtr(ctx, expr.object);
+      const dest = freshVar(ctx);
+      emit(ctx, {
+        kind: "field_ptr",
+        dest,
+        base: baseId,
+        field: expr.property,
+        type: fieldType,
+      });
+      return dest;
+    }
+  }
+  return lowerExpr(ctx, expr);
+}
+
 export function lowerIndexExpr(ctx: LoweringCtx, expr: IndexExpr): VarId {
   // Check for operator overloading (e.g., obj[i] → obj.op_index(i))
   const opMethod = ctx.checkResult.types.operatorMethods.get(expr);
@@ -364,7 +390,11 @@ export function lowerIndexExpr(ctx: LoweringCtx, expr: IndexExpr): VarId {
     ]);
   }
 
-  const baseId = lowerExpr(ctx, expr.object);
+  const objType = ctx.checkResult.types.typeMap.get(expr.object);
+  const baseId =
+    objType?.kind === "array"
+      ? lowerArrayAsStoragePtr(ctx, expr.object)
+      : lowerExpr(ctx, expr.object);
   const indexId = lowerExpr(ctx, expr.index);
   const resultType = getExprKirType(ctx, expr);
 
@@ -443,11 +473,18 @@ export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
       }
     }
   } else if (expr.target.kind === "MemberExpr") {
-    // (*p).field = v — use inner ptr directly instead of loading a struct value.
-    const baseId =
-      expr.target.object.kind === "DerefExpr"
-        ? lowerExpr(ctx, expr.target.object.operand)
-        : lowerExpr(ctx, expr.target.object);
+    // s.field = v — we need a *pointer* to the struct, never a loaded value
+    // (C does not allow `&value->field`). Use the alloc pointer for stack vars,
+    // the inner ptr for `(*p).field`, and the param pointer for `self.field`.
+    const objectType = ctx.checkResult.types.typeMap.get(expr.target.object);
+    let baseId: VarId;
+    if (expr.target.object.kind === "DerefExpr") {
+      baseId = lowerExpr(ctx, expr.target.object.operand);
+    } else if (expr.target.object.kind === "Identifier" && objectType?.kind === "struct") {
+      baseId = lowerExprAsPtr(ctx, expr.target.object);
+    } else {
+      baseId = lowerExpr(ctx, expr.target.object);
+    }
     const ptrDest = freshVar(ctx);
     const fieldType = getExprKirType(ctx, expr.target);
     emit(ctx, {
@@ -480,7 +517,11 @@ export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
     const ptrId = lowerExpr(ctx, expr.target.operand);
     emit(ctx, { kind: "store", ptr: ptrId, value: valueId });
   } else if (expr.target.kind === "IndexExpr") {
-    const baseId = lowerExpr(ctx, expr.target.object);
+    const objType = ctx.checkResult.types.typeMap.get(expr.target.object);
+    const baseId =
+      objType?.kind === "array"
+        ? lowerArrayAsStoragePtr(ctx, expr.target.object)
+        : lowerExpr(ctx, expr.target.object);
     const indexId = lowerExpr(ctx, expr.target.index);
     const elemType = getExprKirType(ctx, expr.target);
     const ptrDest = freshVar(ctx);

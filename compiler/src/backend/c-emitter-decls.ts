@@ -114,12 +114,28 @@ export function emitGlobal(g: KirGlobal): string {
 
 // ─── Function prototypes ────────────────────────────────────────────────────
 
+/** Suffix used on the C-level parameter name when the Kei param is an
+ * `inline<T, N>` (array). Kei semantics are value-type, but C decays array
+ * params to pointers — so the body copies from the suffix-named parameter
+ * into a local of the original name. */
+export const ARRAY_PARAM_SUFFIX = "_in";
+
 export function emitFunctionPrototype(fn: KirFunction): string {
   const name = fn.name === "main" ? "main" : sanitizeName(fn.name);
   const retType = fn.name === "main" ? "int" : emitCType(fn.returnType);
   const params =
     fn.params.length === 0
       ? "void"
-      : fn.params.map((p) => `${emitCType(p.type)} ${varName(p.name)}`).join(", ");
+      : fn.params
+          .map((p) => {
+            // For inline-array params, the *prototype* takes the incoming
+            // pointer (decayed) under a suffixed name. The function body
+            // copies into a same-named local (`varName(p.name)`) so that
+            // inside the function it has true value semantics.
+            const cName =
+              p.type.kind === "array" ? `${varName(p.name)}${ARRAY_PARAM_SUFFIX}` : varName(p.name);
+            return emitCTypeForDecl(p.type, cName);
+          })
+          .join(", ");
   return `${retType} ${name}(${params})`;
 }

@@ -119,18 +119,23 @@ The `null` literal can be assigned to any `ptr<T>`:
 let p: ptr<int> = null;
 ```
 
-### Arrays
+### Inline arrays
 
-Fixed-size, stack-allocated arrays:
+Fixed-size, value-type "bag of N elements" stored inline (on the stack as a
+local, or embedded directly in a struct field). Spelled `inline<T, N>`:
 
 ```kei
-let arr = [10, 20, 30, 40, 50];   // type inferred: array of i32, length 5
+let arr = [10, 20, 30, 40, 50];   // type inferred: inline<i32, 5>
+let buf: inline<u8, 16> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
 print(arr[0]);         // 10 — indexing
 print(arr.len as int); // 5  — .len returns usize, cast to int for print
 
 arr[0] = 99;           // index assignment
 ```
+
+Copying an inline array copies all elements. The heap-allocated, CoW
+`array<T>` (no `N`) is a separate stdlib type — see the spec.
 
 Array access is bounds-checked at runtime. Accessing an out-of-bounds index triggers a panic.
 

@@ -45,6 +45,7 @@ const KEYWORD_MAP: [string, TokenKind][] = [
   ["void", TokenKind.Void],
   ["while", TokenKind.While],
   ["array", TokenKind.Array],
+  ["inline", TokenKind.Inline],
   ["dynarray", TokenKind.Dynarray],
   ["slice", TokenKind.Slice],
   ["byte", TokenKind.Byte],
