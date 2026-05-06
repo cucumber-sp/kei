@@ -2129,7 +2129,9 @@ describe("Complex: realistic programs", () => {
     expect(r.stdout).toBe("idle\nrunning\npaused\nrunning\ndone\n");
   });
 
-  // skip: parser does not support typed array syntax [type; N] in struct fields
+  // skip: C backend mishandles `array<T, N>` as a struct field — generates
+  // `*ptr = arr` for whole-array copies, which is invalid C, and decays the
+  // field address to `int*` instead of `int(*)[N]`. Parser/checker are fine.
   test.skip("struct-based stack (LIFO) with fixed array", () => {
     const r = run(
       "complex_stack",
@@ -2137,7 +2139,7 @@ describe("Complex: realistic programs", () => {
       import { print } from io;
 
       struct Stack {
-        data: [int; 16];
+        data: array<int, 16>;
         top: int;
 
         fn push(self: Stack, val: int) -> Stack {
@@ -2190,7 +2192,9 @@ describe("Complex: realistic programs", () => {
     expect(r.stdout).toBe("true\n3\n30\n20\n2\ntrue\n");
   });
 
-  // skip: parser does not support typed array syntax [type; N] as function parameter type
+  // skip: C backend lowers `array<T, N>` parameters to a plain scalar
+  // (`int32_t _vm`) instead of `int32_t (*)[N]`/`int32_t*`, so callers pass a
+  // pointer where the callee expects an int. Parser/checker are fine.
   test.skip("matrix-like computation with nested arrays", () => {
     const r = run(
       "complex_matrix",
@@ -2198,15 +2202,15 @@ describe("Complex: realistic programs", () => {
       import { print } from io;
 
       // Simulate 3x3 matrix as flat array
-      fn mat_get(m: [int; 9], row: int, col: int) -> int {
+      fn mat_get(m: array<int, 9>, row: int, col: int) -> int {
         return m[row * 3 + col];
       }
 
-      fn mat_trace(m: [int; 9]) -> int {
+      fn mat_trace(m: array<int, 9>) -> int {
         return mat_get(m, 0, 0) + mat_get(m, 1, 1) + mat_get(m, 2, 2);
       }
 
-      fn mat_row_sum(m: [int; 9], row: int) -> int {
+      fn mat_row_sum(m: array<int, 9>, row: int) -> int {
         let sum: int = 0;
         for (let col = 0; col < 3; col = col + 1) {
           sum = sum + mat_get(m, row, col);
