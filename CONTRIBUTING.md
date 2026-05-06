@@ -56,6 +56,9 @@ bun src/cli.ts file.kei --kir       # Print KIR
 bun src/cli.ts file.kei --kir-opt   # Print KIR after mem2reg + de-SSA
 bun src/cli.ts file.kei --emit-c    # Emit C code
 bun src/cli.ts file.kei --build     # Compile to binary
+
+# Build a standalone kei binary (uses bun build --compile --minify --bytecode --sourcemap)
+bun run build                       # writes dist/kei + dist/std/
 ```
 
 ## Code Style

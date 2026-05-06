@@ -3,6 +3,9 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "build": "bun build --compile --minify --bytecode --sourcemap --target=bun src/cli.ts --outfile dist/kei && cp -R std dist/std"
+  },
   "devDependencies": {
     "@biomejs/biome": "^2.4.0",
     "@types/bun": "latest"
