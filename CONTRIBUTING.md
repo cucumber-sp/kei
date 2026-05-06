@@ -30,7 +30,7 @@ kei/
 │   └── std/              # Standard library (io.kei, mem.kei)
 ├── spec/                 # Language specification (01-design.md … 13-grammar.md)
 ├── docs/                 # Getting started guide, language reference
-└── SPEC-AUDIT.md         # Audit of spec compliance — good first issues live here
+└── SPEC-STATUS.md        # Spec vs implementation status — good first issues live here
 ```
 
 ## Getting Started
@@ -140,7 +140,7 @@ Write tests for every change. Match existing naming style (`describe("Checker �
 
 ## Finding Things to Work On
 
-Check **[SPEC-AUDIT.md](./SPEC-AUDIT.md)** — it lists every gap between the language spec and the current implementation, marked as `MISSING`, `PARTIAL`, or `DIVERGENT`. Items marked `MISSING` are good candidates for contribution.
+Check **[SPEC-STATUS.md](./SPEC-STATUS.md)** — it tracks every gap between the language spec and the current implementation, tagged `PLANNED`, `WIP`, or `BLOCKED`. Items marked `PLANNED` are good candidates for contribution.
 
 ## PR Process
 
