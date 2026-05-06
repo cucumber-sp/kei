@@ -62,10 +62,31 @@ describe("parseArgs — error cases", () => {
       message: "unknown flag '--bogus'",
     });
   });
+
+  test("--backend without a value errors", () => {
+    expect(parseArgs(["foo.kei", "--backend"])).toEqual({
+      kind: "error",
+      message: "flag '--backend' requires a value (use --backend=VALUE)",
+    });
+  });
+
+  test("--backend with unknown value errors", () => {
+    expect(parseArgs(["foo.kei", "--backend=msvc"])).toEqual({
+      kind: "error",
+      message: "unknown backend 'msvc' (expected one of: cc, gcc, clang)",
+    });
+  });
+
+  test("bool flag with =value errors", () => {
+    expect(parseArgs(["foo.kei", "--check=true"])).toEqual({
+      kind: "error",
+      message: "flag '--check' does not take a value",
+    });
+  });
 });
 
 describe("parseArgs — compile flag mapping", () => {
-  test("bare file path produces all-false flags", () => {
+  test("bare file path produces defaults (debug profile, auto backend)", () => {
     const result = parseArgs(["foo.kei"]);
     expect(result.kind).toBe("compile");
     if (result.kind !== "compile") return;
@@ -79,6 +100,8 @@ describe("parseArgs — compile flag mapping", () => {
       emitC: false,
       build: false,
       run: false,
+      profile: "debug",
+      backend: null,
     });
   });
 
@@ -142,6 +165,63 @@ describe("parseArgs — compile flag mapping", () => {
   });
 });
 
+describe("parseArgs — profile flags", () => {
+  test("--debug sets profile to 'debug' (also the default)", () => {
+    const result = parseArgs(["foo.kei", "--debug"]);
+    expect(result.kind).toBe("compile");
+    if (result.kind !== "compile") return;
+    expect(result.flags.profile).toBe("debug");
+  });
+
+  test("--release sets profile to 'release'", () => {
+    const result = parseArgs(["foo.kei", "--release"]);
+    expect(result.kind).toBe("compile");
+    if (result.kind !== "compile") return;
+    expect(result.flags.profile).toBe("release");
+  });
+
+  test("later profile flag wins (--debug then --release)", () => {
+    const result = parseArgs(["foo.kei", "--debug", "--release"]);
+    expect(result.kind).toBe("compile");
+    if (result.kind !== "compile") return;
+    expect(result.flags.profile).toBe("release");
+  });
+
+  test("later profile flag wins (--release then --debug)", () => {
+    const result = parseArgs(["foo.kei", "--release", "--debug"]);
+    expect(result.kind).toBe("compile");
+    if (result.kind !== "compile") return;
+    expect(result.flags.profile).toBe("debug");
+  });
+});
+
+describe("parseArgs — backend selection", () => {
+  for (const cc of ["cc", "gcc", "clang"]) {
+    test(`--backend=${cc} sets backend to '${cc}'`, () => {
+      const result = parseArgs(["foo.kei", `--backend=${cc}`]);
+      expect(result.kind).toBe("compile");
+      if (result.kind !== "compile") return;
+      expect(result.flags.backend).toBe(cc as "cc" | "gcc" | "clang");
+    });
+  }
+
+  test("later --backend= wins", () => {
+    const result = parseArgs(["foo.kei", "--backend=gcc", "--backend=clang"]);
+    expect(result.kind).toBe("compile");
+    if (result.kind !== "compile") return;
+    expect(result.flags.backend).toBe("clang");
+  });
+
+  test("--backend coexists with --release", () => {
+    const result = parseArgs(["foo.kei", "--build", "--release", "--backend=gcc"]);
+    expect(result.kind).toBe("compile");
+    if (result.kind !== "compile") return;
+    expect(result.flags.build).toBe(true);
+    expect(result.flags.profile).toBe("release");
+    expect(result.flags.backend).toBe("gcc");
+  });
+});
+
 describe("VERSION", () => {
   test("is a non-empty string", () => {
     expect(typeof VERSION).toBe("string");
@@ -161,5 +241,7 @@ function getFlags() {
     emitC: false,
     build: false,
     run: false,
+    profile: "debug" as "debug" | "release",
+    backend: null as "cc" | "gcc" | "clang" | null,
   };
 }

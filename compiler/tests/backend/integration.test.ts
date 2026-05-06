@@ -49,7 +49,7 @@ async function compileAndRun(
   await Bun.write(cPath, cCode);
 
   const compile = Bun.spawnSync({
-    cmd: [compiler, "-o", binPath, cPath, "-lm", "-std=c11"],
+    cmd: [compiler, "-o", binPath, cPath, "-std=c11"],
     stderr: "pipe",
   });
 

@@ -172,6 +172,6 @@ export function emitTerminator(term: KirTerminator): string {
       return lines.join("\n    ");
     }
     case "unreachable":
-      return "__builtin_unreachable();";
+      return `kei_panic("unreachable");`;
   }
 }

@@ -25,7 +25,8 @@ import { Lexer } from "../lexer";
 import { ModuleResolver } from "../modules";
 import { Parser } from "../parser";
 import { SourceFile } from "../utils/source";
-import type { CliFlags } from "./args";
+import type { CcChoice, CliFlags, Profile } from "./args";
+import { CC_CHOICES } from "./args";
 import { printAst } from "./ast-printer";
 import { printErrorSummary, reportDiagnostics } from "./diagnostics-format";
 
@@ -66,7 +67,12 @@ export async function runDriver(flags: CliFlags): Promise<number> {
       console.log(cCode);
       return 0;
     }
-    return await compileAndMaybeRun(flags.filePath, cCode, flags.build, flags.run);
+    return await compileAndMaybeRun(flags.filePath, cCode, {
+      announceBuild: flags.build,
+      shouldRun: flags.run,
+      profile: flags.profile,
+      backend: flags.backend,
+    });
   }
 
   if (flags.showKir || flags.showKirOpt) {
@@ -228,30 +234,54 @@ function runCheckOnly(filePath: string, program: Program, source: SourceFile): n
   return 0;
 }
 
+/** Compile-step options derived from the parsed CLI flags. */
+interface BuildOptions {
+  announceBuild: boolean;
+  shouldRun: boolean;
+  profile: Profile;
+  /** Explicit C compiler name. `null` = auto-detect. */
+  backend: CcChoice | null;
+}
+
 /**
- * Write C, find a C compiler, build, optionally run. Returns exit code.
+ * Profile → extra C-compiler flags. Kept here (not in args.ts) because the
+ * mapping is a backend concern, not a CLI surface concern.
+ *
+ * Debug:   `-g -O0`             — symbols, no optimisation, fast rebuilds.
+ * Release: `-O2 -DNDEBUG`       — optimised, asserts compiled out.
+ */
+const PROFILE_CFLAGS: Record<Profile, readonly string[]> = {
+  debug: ["-g", "-O0"],
+  release: ["-O2", "-DNDEBUG"],
+};
+
+/**
+ * Write C, pick a C compiler, build, optionally run. Returns exit code.
  * `--build` prints "Compiled: ..."; `--run` executes the binary;
  * if both set, prints then runs.
  */
 async function compileAndMaybeRun(
   filePath: string,
   cCode: string,
-  announceBuild: boolean,
-  shouldRun: boolean
+  opts: BuildOptions
 ): Promise<number> {
   const outBase = filePath.replace(/\.kei$/, "");
   const cPath = `${outBase}.c`;
   const binPath = outBase;
   await Bun.write(cPath, cCode);
 
-  const compiler = findCCompiler();
+  const compiler = resolveCompiler(opts.backend);
   if (!compiler) {
-    console.error("error: no C compiler found (tried cc, gcc, clang)");
+    if (opts.backend) {
+      console.error(`error: requested backend '${opts.backend}' not found on PATH`);
+    } else {
+      console.error(`error: no C compiler found (tried ${CC_CHOICES.join(", ")})`);
+    }
     return 1;
   }
 
   const compile = Bun.spawnSync({
-    cmd: [compiler, "-o", binPath, cPath, "-lm"],
+    cmd: [compiler, ...PROFILE_CFLAGS[opts.profile], "-o", binPath, cPath],
     stderr: "pipe",
   });
 
@@ -260,9 +290,9 @@ async function compileAndMaybeRun(
     return 1;
   }
 
-  if (announceBuild) console.log(`Compiled: ${binPath}`);
+  if (opts.announceBuild) console.log(`Compiled: ${binPath}`);
 
-  if (shouldRun) {
+  if (opts.shouldRun) {
     const run = Bun.spawnSync({
       cmd: [binPath],
       stdout: "inherit",
@@ -273,14 +303,23 @@ async function compileAndMaybeRun(
   return 0;
 }
 
-function findCCompiler(): string | null {
-  for (const cc of ["cc", "gcc", "clang"]) {
-    try {
-      const which = Bun.spawnSync({ cmd: ["which", cc] });
-      if (which.exitCode === 0) return cc;
-    } catch {
-      // try next
-    }
+/**
+ * Pick a C compiler to invoke. If `requested` is set, only that one is tried;
+ * otherwise auto-detect the first available from {@link CC_CHOICES}.
+ */
+function resolveCompiler(requested: CcChoice | null): string | null {
+  const candidates = requested ? [requested] : CC_CHOICES;
+  for (const cc of candidates) {
+    if (isOnPath(cc)) return cc;
   }
   return null;
+}
+
+function isOnPath(cmd: string): boolean {
+  try {
+    const which = Bun.spawnSync({ cmd: ["which", cmd] });
+    return which.exitCode === 0;
+  } catch {
+    return false;
+  }
 }

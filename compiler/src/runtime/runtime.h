@@ -98,7 +98,15 @@ static kei_string kei_string_substr(kei_string s, int64_t start, int64_t end) {
 
 /* ─── Panic ───────────────────────────────────────────────────────────────── */
 
-static void kei_panic(const char* msg) {
+#if defined(__GNUC__) || defined(__clang__) || defined(__TINYC__)
+#define KEI_NORETURN __attribute__((noreturn))
+#elif defined(_MSC_VER)
+#define KEI_NORETURN __declspec(noreturn)
+#else
+#define KEI_NORETURN
+#endif
+
+static KEI_NORETURN void kei_panic(const char* msg) {
     fprintf(stderr, "panic: %s\n", msg);
     exit(1);
 }
