@@ -17,10 +17,9 @@ import { TokenKind } from "../lexer/token";
 import type { ParserContext } from "./parser";
 import { parsePostfixExpression } from "./postfix-parser";
 import {
-  Associativity,
-  getBinaryAssociativity,
-  getBinaryPrecedence,
+  getBinaryOperator,
   isAssignmentOperator,
+  nextMinPrecedence,
   Precedence,
 } from "./precedence";
 import { parseSwitchCase } from "./stmt-parser";
@@ -46,35 +45,31 @@ function parsePrattExpression(ctx: ParserContext, minPrecedence: Precedence): Ex
     }
 
     const kind = ctx.current().kind;
-    const prec = getBinaryPrecedence(kind);
-    if (prec === Precedence.None || prec <= minPrecedence) {
+    const op = getBinaryOperator(kind);
+    if (!op || op.precedence <= minPrecedence) {
       break;
     }
 
-    // For right-associative, use prec - 1 so same-precedence binds right
-    const assoc = getBinaryAssociativity(kind);
-    const nextMinPrec = assoc === Associativity.Right ? (prec as number) - 1 : (prec as number);
+    const opToken = ctx.advance();
+    const right = parsePrattExpression(ctx, nextMinPrecedence(op.precedence, op.associativity));
+    const span = { start: left.span.start, end: right.span.end };
 
     if (isAssignmentOperator(kind)) {
-      const opToken = ctx.advance();
-      const right = parsePrattExpression(ctx, nextMinPrec as Precedence);
       const assignExpr: AssignExpr = {
         kind: "AssignExpr",
         target: left,
         operator: opToken.lexeme,
         value: right,
-        span: { start: left.span.start, end: right.span.end },
+        span,
       };
       left = assignExpr;
     } else {
-      const opToken = ctx.advance();
-      const right = parsePrattExpression(ctx, nextMinPrec as Precedence);
       left = {
         kind: "BinaryExpr",
         left,
         operator: opToken.lexeme,
         right,
-        span: { start: left.span.start, end: right.span.end },
+        span,
       };
     }
   }
