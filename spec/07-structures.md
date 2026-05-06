@@ -53,9 +53,11 @@ let len = point.length();     // implicit &point (ref Point)
 point.translate(5.0, 3.0);    // implicit &mut point (ref mut Point)
 ```
 
-`self: ptr<Self>` is **not** a valid method receiver. The earlier pattern
-(`self: ptr<Point>` with `unsafe { self->x = … }` in the body) is deprecated —
-use `self: ref mut Self`, which is safe and reads naturally.
+> `ref T` / `ref mut T` are spec'd but not yet implemented. Until they land,
+> `self: ptr<Self>` is the only mutable-receiver form; the call site auto-takes
+> the address (`p.method()` becomes `(&p).method()`), and the body uses
+> `unsafe { self->x = … }` for field writes. Once `ref mut T` is in, that
+> pattern will be replaced by safe `self: ref mut Self`.
 
 ### Auto-generated lifecycle hooks
 

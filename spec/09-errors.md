@@ -146,23 +146,29 @@ struct DbError {
 }
 ```
 
-### Error hierarchies
+### Composing errors with embedded fields
+
+Kei has no error hierarchies or interfaces — error structs are flat. To share
+common context, embed a struct field:
+
 ```kei
-// Base error interface (future feature)
-struct NetworkError {
+struct NetworkContext {
     message: string;
 }
 
 struct TimeoutError {
-    network: NetworkError;
+    network: NetworkContext;
     duration_ms: int;
 }
 
 struct ConnectionError {
-    network: NetworkError;
+    network: NetworkContext;
     host: string;
 }
 ```
+
+Each variant is still its own type in the `throws` clause; pattern-matching
+extracts the embedded `network` field explicitly.
 
 ## `enum` for data variants (not errors)
 

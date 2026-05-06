@@ -14,20 +14,24 @@ kei/
 │   │   ├── backend/      # C code emission (c-emitter*.ts, de-ssa.ts)
 │   │   ├── modules/      # Module resolution, topological sort, cycle detection
 │   │   ├── errors/       # Diagnostics
-│   │   ├── runtime/      # Runtime support
+│   │   ├── runtime/      # Runtime C header (embedded into emitted .c)
 │   │   ├── utils/        # Source tracking utilities
+│   │   ├── cli/          # CLI internals: args, driver, AST printer, diagnostics formatter
 │   │   └── cli.ts        # Entry point
 │   ├── tests/
-│   │   ├── lexer/        # 6 test files
-│   │   ├── parser/       # 8 test files
-│   │   ├── checker/      # 30 test files
-│   │   ├── kir/          # 17 test files
+│   │   ├── lexer/        # 8 test files
+│   │   ├── parser/       # 9 test files
+│   │   ├── checker/      # 32 test files
+│   │   ├── kir/          # 20 test files
 │   │   ├── backend/      # 6 test files
 │   │   ├── modules/      # 4 test files
-│   │   ├── e2e/          # End-to-end tests
+│   │   ├── cli/          # 3 test files
+│   │   ├── e2e/          # End-to-end (compile + run binaries)
 │   │   ├── stress/       # Stress tests
+│   │   ├── utils/        # Source-tracking utility tests
+│   │   ├── helpers/      # Shared test utilities
 │   │   └── fixtures/     # .kei and .c test data
-│   └── std/              # Standard library (io.kei, mem.kei)
+│   └── std/              # Standard library (io.kei, mem.kei, arena.kei)
 ├── spec/                 # Language specification (01-design.md … 13-grammar.md)
 ├── docs/                 # Getting started guide, language reference
 └── SPEC-STATUS.md        # Spec vs implementation status — good first issues live here
@@ -50,14 +54,16 @@ bun test tests/checker/arrays.test.ts
 bun src/cli.ts examples/hello.kei --run
 
 # Other useful flags
-bun src/cli.ts file.kei --ast       # Print AST
-bun src/cli.ts file.kei --check     # Type check only
-bun src/cli.ts file.kei --kir       # Print KIR
-bun src/cli.ts file.kei --kir-opt   # Print KIR after mem2reg + de-SSA
-bun src/cli.ts file.kei --emit-c    # Emit C code
-bun src/cli.ts file.kei --build     # Compile to binary
+bun src/cli.ts file.kei --ast              # Print AST
+bun src/cli.ts file.kei --check            # Type check only
+bun src/cli.ts file.kei --kir              # Print KIR (pre-mem2reg)
+bun src/cli.ts file.kei --kir-opt          # Print KIR after mem2reg
+bun src/cli.ts file.kei --emit-c           # Emit C code
+bun src/cli.ts file.kei --build            # Compile to binary (debug, default)
+bun src/cli.ts file.kei --build --release  # Compile to binary (-O2 -DNDEBUG)
+bun src/cli.ts file.kei --build --backend=clang   # Pick the C compiler
 
-# Build a standalone kei binary (uses bun build --compile --minify --bytecode --sourcemap)
+# Build a standalone kei binary
 bun run build                       # writes dist/kei + dist/std/
 ```
 

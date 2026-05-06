@@ -4,24 +4,24 @@ Kei has a structured type system organized into primitive types, compound types,
 
 ## Language types vs stdlib types
 
-A few types in this document are **compiler-known** — the parser has dedicated syntax
-for them and the checker reasons about them directly. Everything else — including
-`string`, `array<T>` (heap), `List<T>`, and `Shared<T>` — is an **`unsafe struct`
-written in Kei itself** and lives in the standard library. Having a small language
-core and a larger library is deliberate: it keeps the compiler tight and lets the
-stdlib evolve without breaking the frontend.
+A few types are **compiler-known** — the parser has dedicated syntax for them
+and the checker reasons about them directly. Everything else — `array<T>`
+(heap), `List<T>`, `Shared<T>` — is an **`unsafe struct` written in Kei
+itself** and lives (or will live) in the standard library. Having a small
+language core and a larger library is deliberate: it keeps the compiler tight
+and lets the stdlib evolve without breaking the frontend.
 
 | Type                | Defined in | Notes                                      |
 |---------------------|------------|--------------------------------------------|
-| primitives (`i32`, `f64`, `bool`, …) | compiler | builtin                                    |
+| primitives (`i32`, `f64`, `bool`, …) | compiler | builtin                          |
 | `ptr<T>`            | compiler   | raw pointer, non-null                      |
 | `T?` (nullable)     | compiler   | see **Nullability**                        |
 | `inline<T, N>`      | compiler   | fixed-size value-type bag of N elements    |
 | `slice<T>`          | compiler   | non-owning view                            |
-| `string`            | stdlib     | CoW refcounted byte string                 |
-| `array<T>`          | stdlib     | heap array, CoW                            |
-| `List<T>`           | stdlib     | growable, deep-copy                        |
-| `Shared<T>`         | stdlib     | refcounted handle                          |
+| `string`            | compiler today / stdlib goal | CoW refcounted byte string. Today the runtime is in C (`runtime.h`); the planned move is an `unsafe struct` in stdlib. |
+| `array<T>`          | stdlib (planned) | heap array, CoW                       |
+| `List<T>`           | stdlib (planned) | growable, deep-copy                   |
+| `Shared<T>`         | stdlib (planned) | refcounted handle                     |
 
 ## View vs owned
 
@@ -47,9 +47,10 @@ bumped refcount.
 | **`List<T>` (stdlib, owned)**    | copy or arena-slice         | no free lunch — explicit                   |
 
 Concretely: `let sub = s[6..]` where `s: string` returns a **`string`**, not a
-`slice<u8>`. The internal representation of `string` is already `{ptr, offset,
-len, cap, count}`, so the substring is zero-copy — it's just offset/len
-adjustment plus a refcount bump. But it's a tracked owner, not a dangling view.
+`slice<u8>`. The intended representation of `string` is `{ptr, offset, len,
+cap, count}`, so the substring is zero-copy — offset/len adjustment plus a
+refcount bump. The current runtime layout is simpler (`{data, len, cap, ref}`)
+and substring deep-copies; the user-facing type rule still holds.
 
 ## Primitive types
 
@@ -179,27 +180,28 @@ let mut c = Counter{ value: 0 };
 c.increment();                  // compiler inserts &mut c
 ```
 
-### v1 restrictions on `ref`
+### Initial restrictions on `ref`
 
-`ref T` and `ref mut T` are **parameter types and local bindings only** in v1.
+`ref T` and `ref mut T` are **parameter types and local bindings only**.
 They may NOT appear as:
 - struct fields (would require real lifetime tracking),
 - return types (same reason),
 - array or collection element types.
 
 These restrictions let the "scope-bound" rule be a trivial syntactic check
-instead of a full borrow analysis. Future versions may relax them once a
-concrete lifetime story is in place.
+instead of a full borrow analysis. They may be relaxed later once a concrete
+lifetime story is in place.
 
 ### When to use `ptr<T>` vs `ref T`
 
-- **`ref T`** is the default for safe code: methods, handler parameters, anywhere
-  a borrow is appropriate.
-- **`ptr<T>`** is for the two cases safe references can't cover: FFI boundaries
+- **`ref T`** is the default for safe code: methods, handler parameters,
+  anywhere a borrow is appropriate.
+- **`ptr<T>`** is for the cases safe references can't cover: FFI boundaries
   (`extern fn` signatures) and internal pointers inside `unsafe struct`
   implementations (`Shared<T>` etc.).
-- **Do not use `ptr<T>` in ordinary `fn` signatures** — this was an earlier spec
-  ambiguity. It's now unsafe-only.
+- Ordinary `fn` signatures should not take `ptr<T>` once `ref T` is available.
+  Until then, `self: ptr<T>` is the only mutable-method-receiver form (see
+  [SPEC-STATUS.md](../SPEC-STATUS.md)).
 
 ### Taking references: `&expr` and `&mut expr`
 
@@ -336,12 +338,14 @@ let n = a.len;          // compile-time constant (3)
 - **Performance:** Zero overhead, compiles to a C fixed-size array `T[N]`
 - **Common use:** Buffers, matrices, small fixed-shape collections inside structs
 
-### `array<T>` — Heap-allocated array (stdlib)
+### `array<T>` — Heap-allocated array (planned stdlib)
 
-Heap-allocated array with runtime-determined size, CoW semantics. Not resizable —
-use `List<T>` for growable collections. **Defined in stdlib** as an `unsafe struct`;
-the `array<T>` spelling is not a built-in type constructor. See
-[`spec/08-memory.md`](./08-memory.md) for the internal layout and lifecycle contract.
+Heap-allocated array with runtime-determined size, CoW semantics. Not
+resizable — use `List<T>` for growable collections. Designed as an `unsafe
+struct` in stdlib; the `array<T>` spelling is not yet a working type
+constructor (see [SPEC-STATUS.md](../SPEC-STATUS.md)). See
+[`spec/08-memory.md`](./08-memory.md) for the planned internal layout and
+lifecycle contract.
 
 ```kei
 let nums: array<int> = array.of(1, 2, 3);
@@ -350,10 +354,11 @@ let x = nums[0];
 let copy = nums;                // refcount++ (CoW, no data copy)
 ```
 
-### `List<T>` — Growable collection (stdlib)
+### `List<T>` — Growable collection (planned stdlib)
 
-Resizable list for when elements need to be added or removed. **Defined in stdlib.**
-See [`spec/08-memory.md`](./08-memory.md) for layout.
+Resizable list for when elements need to be added or removed. Designed as an
+`unsafe struct` in stdlib; not yet implemented. See
+[`spec/08-memory.md`](./08-memory.md) for layout.
 
 ```kei
 let items = List.of<int>();
@@ -382,23 +387,23 @@ let len = s.len;
 
 ## String type
 
-### `string` — CoW byte string (stdlib)
+### `string` — CoW byte string
 
-Kei has one user-facing string type. It is **defined in stdlib** as an `unsafe
-struct` using CoW refcount semantics. The compiler knows enough about `string`
-to lower string literals and indexing, but the implementation is Kei code.
+Kei has one user-facing string type. The runtime today is C code in
+`runtime.h`; the goal is an `unsafe struct` in stdlib using CoW refcount
+semantics. Either way, the user-facing semantics are identical:
 
 ```kei
 let s = "hello";              // string literal -> string value (rodata-backed)
-let sub = s[6..];             // substring is a slice<u8> view — no refcount change
+let sub = s[6..];             // substring is a `string`, sharing the buffer via refcount
 let copy = s;                 // __oncopy: refcount++, no data copy
 ```
 
 **Contract (users can rely on these):** strings are immutable from the outside —
 `s[i] = x` is not a valid operation. Building strings uses `StringBuilder` (or
 `List<u8>`); the result is converted to `string` once. See
-[`spec/08-memory.md`](./08-memory.md) for internal layout and the CoW invariants
-the stdlib implementation is required to uphold.
+[`spec/08-memory.md`](./08-memory.md) for internal layout and the CoW
+invariants the implementation is required to uphold.
 
 ## Type comparison
 
@@ -408,9 +413,9 @@ the stdlib implementation is required to uphold.
 | `unsafe struct` | Stack | Manual | User-defined (required with `ptr<T>`) | Yes |
 | `inline<T,N>` | Inline (stack or in-struct) | N/A | Per-element | No |
 | `slice<T>` | Stack (view) | No | None | No |
-| `array<T>` (stdlib) | Stack + Heap | Yes (CoW) | User-defined | No |
-| `List<T>` (stdlib) | Stack + Heap | Yes | User-defined | No |
-| `string` (stdlib) | Stack + Heap | Yes (CoW) | User-defined | No |
+| `string` | Stack + Heap | Yes (CoW) | Built-in | No |
+| `array<T>` (planned stdlib) | Stack + Heap | Yes (CoW) | User-defined | No |
+| `List<T>` (planned stdlib)  | Stack + Heap | Yes        | User-defined | No |
 
 ## Special types
 
@@ -430,15 +435,20 @@ fn explicit() -> void {     // equivalent
 
 ### `null`
 
-`null` is the literal for the absent state of any nullable type `T?`. It is **not**
-a value of non-nullable types — `ptr<int> = null` is a type error; use `ptr<int>? = null`.
+`null` is the literal for the absent state of any nullable type `T?`. It is
+**not** a value of non-nullable types — `ptr<int> = null` is a type error; use
+`ptr<int>? = null`.
 
 ```kei
 let p: ptr<int>? = null;    // nullable pointer, absent
 if p != null {
-    *p = 42;                 // narrowed to ptr<int>, safe to deref
+    *p = 42;                // narrowed to ptr<int>, safe to deref
 }
 ```
+
+> Today the parser/checker accept `T?` and lower it to `ptr<T>`, including for
+> primitives — `i32?` becomes `ptr<i32>`. The tag-byte representation for
+> non-pointer types is on the roadmap; see [SPEC-STATUS.md](../SPEC-STATUS.md).
 
 ## Type aliases
 

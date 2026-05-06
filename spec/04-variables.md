@@ -120,8 +120,8 @@ let c = 10 % 3;       // 1 (modulo)
 - `||` only evaluates right operand if left is `false`
 
 ```kei
-if (ptr != null && ptr->value > 0) {
-    // ptr->value only evaluated if ptr != null
+if p != null && p.value > 0 {
+    // p.value only evaluated if p != null
 }
 ```
 

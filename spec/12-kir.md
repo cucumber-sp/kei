@@ -394,27 +394,33 @@ catch.ok:
 
 ## Optimization Passes
 
-Each pass takes a `KirModule` and returns a (possibly modified) `KirModule`. Passes are composable and order-independent where possible.
+Each pass takes a `KirModule` and returns a (possibly modified) `KirModule`.
+Passes are composable and order-independent where possible.
 
-### Mandatory passes (always run)
+### Today
+
 | Pass | Description |
 |---|---|
-| **Lifecycle elision** | Remove `destroy`/`oncopy` calls for primitive-only structs (no-op hooks) |
-| **Dead code elimination** | Remove instructions whose results are never used |
-| **De-SSA** | Eliminate phi nodes (C backend only) |
+| **mem2reg** | Promote `stack_alloc` slots that don't escape into SSA values, inserting phis at dominance frontiers. |
+| **De-SSA** | Eliminate phi nodes by inserting copies at predecessor block ends (C backend only). |
 
-### Optimization passes (release mode)
+Lifecycle elision happens during *lowering*, not as a pass — the lowerer skips
+`destroy`/`oncopy` for primitive-only structs and for variables marked
+`move`d. That keeps the post-mem2reg KIR clean without a dedicated pass.
+
+### Roadmap
+
 | Pass | Description |
 |---|---|
 | **Constant folding** | Evaluate constant expressions at compile time |
 | **Constant propagation** | Replace variable uses with known constant values |
 | **Copy propagation** | Replace `%b = %a` with direct use of `%a` |
 | **Common subexpression elimination** | Deduplicate identical computations |
-| **Dead store elimination** | Remove writes to variables that are never read |
+| **Dead-code / dead-store elimination** | Remove instructions whose results are unused; remove writes never read |
 | **Last-use move** | Auto-convert last use of a variable to `move` (skip `oncopy`/`destroy`) |
 | **Function inlining** | Inline small functions at call sites |
 | **Loop-invariant code motion** | Hoist invariant computations out of loops |
-| **Debug check removal** | Strip all `assert_check`, `bounds_check`, `overflow_check`, etc. |
+| **Debug check stripping** | Drop `assert_check`, `bounds_check`, `overflow_check`, etc. in release builds |
 
 ## Text Format (Debug)
 
@@ -486,11 +492,12 @@ loop.exit:
 }
 ```
 
-## Binary Format (Future)
+## Binary Format (planned)
 
 A compact binary serialization of KIR for:
 - **Incremental compilation** — cache KIR per module, recompile only changed files
 - **Pre-compiled libraries** — distribute KIR instead of source
 - **Cross-compilation** — serialize on one machine, codegen on another
 
-Not specified in v0.0.1 — text format and in-memory representation are sufficient.
+Not yet specified — text format and the in-memory representation are
+sufficient for now.

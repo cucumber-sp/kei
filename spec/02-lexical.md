@@ -34,7 +34,7 @@ that spans multiple lines
 let y = /* inline comment */ 10;
 ```
 
-**Note:** Nested multi-line comments are not supported in version 0.0.1.
+Nested multi-line comments are not supported.
 
 ## Identifiers
 
@@ -127,36 +127,42 @@ Strings are enclosed in double quotes and support escape sequences:
 - `\0` — null byte
 - `\xHH` — hexadecimal byte (00-FF)
 
-#### Raw strings (future)
-*Not implemented in v0.0.1, but planned:*
-```kei
-r"raw string with \n literal backslashes"
-r#"raw string with "quotes" inside"#
-```
-
 ## Keywords
 
-The following identifiers are reserved as keywords:
+Active keywords — recognised by the parser today:
 
 ```
-as          assert      bool        break       case
-catch       const       continue    default     defer
-else        enum        extern      false       fn
-for         if          import      in          inline
-int         let         match       move        mut
-null        panic       ptr         pub         ref
-require     return      self        slice       static
-string      struct      switch      throw       throws
-true        type        uint        unsafe      void
-while
+as          assert      bool        break       byte
+case        catch       const       continue    default
+defer       double      else        enum        extern
+false       float       fn          for         if
+import      in          inline      int         let
+long        move        mut         null        panic
+ptr         pub         require     return      self
+short       slice       static      string      struct
+switch      throw       throws      true        type
+uint        unsafe      void        while
+
+i8  i16  i32  i64  u8  u16  u32  u64  f32  f64  isize  usize
 ```
 
-Reserved for future use (not yet usable as identifiers or as syntax):
+`array` is also a keyword; today it parses the same as `inline` shorthand for
+fixed-size value arrays (`array<T>` parses but the heap CoW `array<T>` stdlib
+type is not yet implemented — see [SPEC-STATUS.md](../SPEC-STATUS.md)).
+
+Reserved keywords — recognised by the lexer but rejected as identifiers; not
+yet usable as syntax:
 
 ```
-async       await       impl        macro       shared
-super       trait       where       yield
+async       await       impl        macro       match
+ref         shared      super       trait       where
+yield
 ```
+
+`ref` is reserved for safe reference types (`ref T` / `ref mut T`); `match`
+is reserved for full pattern-matching with destructuring beyond what `switch`
+covers today. Both are spec'd; see [`03-types.md`](./03-types.md) and
+[`05-control.md`](./05-control.md).
 
 ## Operators
 
@@ -255,7 +261,7 @@ fn readable() -> int {
 
 - **Source files:** Must be valid UTF-8
 - **String literals:** UTF-8 encoded
-- **Identifiers:** ASCII letters, digits, underscore only (Unicode identifiers not supported in v0.0.1)
+- **Identifiers:** ASCII letters, digits, underscore only (Unicode identifiers are not supported)
 
 ---
 

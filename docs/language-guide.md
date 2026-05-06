@@ -1,6 +1,9 @@
 # Kei Language Guide
 
-A comprehensive reference for all implemented features in Kei v0.1.0.
+A practical reference for the Kei features that work end-to-end (source → KIR
+→ C → binary) today. Anything spec'd but not yet implemented lives in
+[`SPEC-STATUS.md`](../SPEC-STATUS.md); the full language is described in
+[`spec/`](../spec/).
 
 ## Table of Contents
 
@@ -18,6 +21,8 @@ A comprehensive reference for all implemented features in Kei v0.1.0.
 - [Memory Management](#memory-management)
 - [Implicit Conversions and Literal Suffixes](#implicit-conversions-and-literal-suffixes)
 - [Move Semantics](#move-semantics)
+- [The Standard Library](#the-standard-library)
+- [Operators Reference](#operators-reference)
 
 ---
 
@@ -135,7 +140,8 @@ arr[0] = 99;           // index assignment
 ```
 
 Copying an inline array copies all elements. The heap-allocated, CoW
-`array<T>` (no `N`) is a separate stdlib type — see the spec.
+`array<T>` (no `N`) is a separate stdlib type — spec'd, not yet implemented
+(see [SPEC-STATUS.md](../SPEC-STATUS.md)).
 
 Array access is bounds-checked at runtime. Accessing an out-of-bounds index triggers a panic.
 
@@ -848,7 +854,8 @@ error: circular dependency detected: a → b → a
 
 ## Operator Overloading
 
-Structs can define operator methods to support standard operators. This is currently **type-checked only** — the checker validates the code but it cannot be compiled to a binary yet.
+Structs can define operator methods to support standard operators. The
+checker, KIR lowerer, and C backend all support this end-to-end.
 
 ### Binary Operators
 
@@ -904,8 +911,6 @@ fn main() -> int {
 }
 ```
 
-> **Note**: Operator overloading type-checks correctly but the KIR/backend do not yet lower operator method calls. This code will pass `--check` but cannot be compiled with `--build` or `--run`.
-
 ---
 
 ## Lifecycle Hooks
@@ -923,7 +928,7 @@ struct Resource {
     id: int;
 
     fn __destroy(self: Resource) {
-        print("destroying resource ");
+        print("destroying resource");
         print(self.id);
     }
 }
@@ -940,7 +945,8 @@ Output:
 
 ```
 using resource
-destroying resource 1
+destroying resource
+1
 ```
 
 ### `__oncopy` — Custom Copy Behavior
@@ -959,7 +965,7 @@ struct Counter {
     }
 
     fn __destroy(self: Counter) {
-        print("destroy ");
+        print("destroy");
         print(self.val);
     }
 }
@@ -1173,7 +1179,8 @@ fn main() -> int {
 }
 ```
 
-> **Note**: `move` is parsed and checked (use-after-move is a compile error) but does not yet affect codegen — the lifecycle elision optimization is not implemented in the backend.
+Moved variables are skipped by the auto-emitted `__destroy` at scope exit, so
+`move` produces a real zero-cost transfer in codegen.
 
 ---
 
@@ -1187,17 +1194,18 @@ import { print, newline, putc, getc } from io;
 
 | Function | Description |
 |----------|-------------|
-| `print(value: string)` | Print a string |
-| `print(value: i32)` | Print an i32 |
-| `print(value: i64)` | Print an i64 |
-| `print(value: f64)` | Print an f64 |
-| `print(value: f32)` | Print an f32 |
-| `print(value: bool)` | Print a bool |
-| `newline()` | Print a newline character |
-| `putc(c: i32)` | Print a single character by ASCII code |
+| `print(value: string)` | Print a string + newline |
+| `print(value: i32)` | Print an i32 + newline |
+| `print(value: i64)` | Print an i64 + newline |
+| `print(value: f64)` | Print an f64 + newline |
+| `print(value: f32)` | Print an f32 + newline |
+| `print(value: bool)` | Print a bool + newline |
+| `newline()` | Print a bare newline character |
+| `putc(c: i32)` | Print a single character by ASCII code (no newline) |
 | `getc() -> i32` | Read a character from stdin |
 
-`print` is overloaded for each type. There is no `println` — use `print(...)` followed by `newline()`.
+`print` is overloaded for each type and always appends `\n`. For
+no-newline output use `putc`, or build a string and `print` once.
 
 ### `mem` — Memory Utilities
 
@@ -1220,7 +1228,9 @@ These are safe wrappers — they call C stdlib functions internally so callers d
 
 ### Arithmetic
 
-`+`, `-`, `*`, `/`, `%`, `++` (postfix), `--` (postfix)
+`+`, `-`, `*`, `/`, `%`
+
+Postfix `++` / `--` are not part of Kei. Use `x += 1` / `x -= 1`.
 
 ### Comparison
 

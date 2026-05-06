@@ -131,7 +131,9 @@ fn factorial(n: int) -> int {
 }
 ```
 
-**Stack safety:** Kei does not provide automatic tail-call optimization or stack overflow protection in v0.0.1. Deep recursion may cause stack overflow.
+**Stack safety:** Kei does not provide automatic tail-call optimization or
+stack-overflow protection. Deep recursion can blow the stack — handle with
+care or use an explicit work queue.
 
 ## External functions
 
@@ -180,8 +182,8 @@ fn main() -> int {
 **Requirements (compiler-enforced):**
 - Must be named exactly `main`.
 - Must return `int` — compile error if the return type is anything else.
-- Takes no parameters in v0.0.1. Command-line arguments (likely `args: slice<string>`)
-  will be added in a later version.
+- Takes no parameters today. Command-line arguments (likely
+  `args: slice<string>`) will be added once `slice<T>` of stdlib types lands.
 - Cannot declare `throws` — unhandled errors at the entry point are a program
   termination concern, not a type-system concern.
 
@@ -270,7 +272,8 @@ and matches the no-closures decision — there is never an outer scope to captur
 ## Performance considerations
 
 ### Inlining
-The compiler may inline small functions when beneficial. No manual `inline` keyword in v0.0.1.
+The compiler may inline small functions when beneficial. There is no manual
+`inline` keyword.
 
 ### Zero-cost abstractions
 Functions that operate only on value types compile to efficient C code with no overhead.

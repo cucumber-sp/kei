@@ -1,7 +1,8 @@
 # Getting Started with Kei
 
 Kei is a statically-typed systems programming language that compiles to C.
-It aims for Rust-like safety, Go-like simplicity, and C-level performance.
+The goal: Rust-flavoured safety, Go-flavoured simplicity, and C-level
+performance — without a borrow checker, GC, or runtime.
 
 ## Prerequisites
 
@@ -87,6 +88,9 @@ kei <file.kei> [options]
 | `--emit-c` | Print the generated C code to stdout |
 | `--build` | Compile to a native binary |
 | `--run` | Compile and immediately execute |
+| `--debug` | Build with `-g -O0` (default for `--build` / `--run`) |
+| `--release` | Build with `-O2 -DNDEBUG` |
+| `--backend=NAME` | Pick the C compiler: `cc`, `gcc`, or `clang` (auto-detects by default) |
 | `--help`, `-h` | Show help |
 | `--version`, `-V` | Show compiler version |
 
@@ -113,7 +117,7 @@ Let's write something more interesting — a Fibonacci calculator with error han
 Create `fib.kei`:
 
 ```kei
-import { print, newline } from io;
+import { print } from io;
 
 struct InvalidInput {
     n: int;
@@ -137,20 +141,17 @@ fn fibonacci(n: int) -> int throws InvalidInput {
 }
 
 fn main() -> int {
-    // Print the first 10 Fibonacci numbers
+    // Print the first 10 Fibonacci numbers (one per line)
     for (let i = 0; i < 10; i = i + 1) {
         let result = fibonacci(i) catch panic;
         print(result);
-        print(" ");
     }
-    newline();
 
     // Try an invalid input
     let bad = fibonacci(-1) catch {
         InvalidInput e: {
-            print("Error: invalid input ");
+            print("invalid input:");
             print(e.n);
-            newline();
             return 1;
         }
     };
@@ -168,9 +169,23 @@ bun run src/cli.ts fib.kei --run
 Output:
 
 ```
-0 1 1 2 3 5 8 13 21 34
-Error: invalid input -1
+0
+1
+1
+2
+3
+5
+8
+13
+21
+34
+invalid input:
+-1
 ```
+
+`print` always appends a newline — that's why every value ends up on its own
+line. To omit it, write to stdout via `putc` (or build a string and print
+once).
 
 This program demonstrates several Kei features:
 - **Structs** (`InvalidInput`) used as error types

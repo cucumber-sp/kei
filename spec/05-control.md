@@ -189,17 +189,12 @@ let description = switch status_code {
 };
 ```
 
-### `match` statements (future)
+### `match` (planned)
 
-*Planned for future versions - advanced pattern matching with destructuring:*
-
-```kei
-match shape {
-    Circle(radius): return 3.14 * radius * radius;
-    Rectangle(w, h): return w * h;
-    Point: return 0.0;
-}
-```
+`match` is reserved for fuller pattern matching — guards, nested
+destructuring, value patterns inside data variants — beyond what `switch`
+covers. Today, `switch` already supports enum-variant destructuring
+(`case Circle(r): ...`), which handles the common cases.
 
 ## Scope and cleanup
 
