@@ -82,6 +82,16 @@ Run the test suite (1,700+ tests):
 bun test
 ```
 
+Build a standalone `kei` binary (no Bun runtime needed to run it):
+
+```bash
+bun run build               # writes dist/kei + dist/std/
+./dist/kei program.kei --run
+```
+
+The build uses `bun build --compile --minify --bytecode --sourcemap`. The
+binary expects a `std/` directory next to it (the script copies one in).
+
 The full getting-started flow is in [`docs/getting-started.md`](./docs/getting-started.md).
 
 ## Architecture

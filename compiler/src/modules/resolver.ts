@@ -128,14 +128,25 @@ export class ModuleResolver {
 
   /**
    * Find the `std/` directory relative to the compiler installation.
-   * Looks for `std/` as a sibling to the compiler's `src/` directory.
+   *
+   * In source mode (`bun run src/cli.ts`), `import.meta.url` points at this
+   * file and `std/` sits two directories up. In a `bun build --compile`
+   * standalone binary, `import.meta.url` resolves into a virtual `$bunfs/`
+   * root, so we fall back to `process.execPath` and look for `std/` shipped
+   * alongside the executable.
    */
   private findStdRoot(): string | null {
-    const thisDir = dirname(new URL(import.meta.url).pathname);
-    // thisDir = .../compiler/src/modules
-    const compilerRoot = resolve(thisDir, "..", "..");
-    const stdDir = join(compilerRoot, "std");
-    if (existsSync(stdDir)) return stdDir;
+    try {
+      const thisDir = dirname(new URL(import.meta.url).pathname);
+      const sourceStd = resolve(thisDir, "..", "..", "std");
+      if (existsSync(sourceStd)) return sourceStd;
+    } catch {
+      // import.meta.url unavailable or not a file URL — fall through.
+    }
+
+    const execStd = join(dirname(process.execPath), "std");
+    if (existsSync(execStd)) return execStd;
+
     return null;
   }
 

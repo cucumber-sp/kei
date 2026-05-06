@@ -14,19 +14,23 @@
 import { parseArgs, printHelp, VERSION } from "./cli/args";
 import { runDriver } from "./cli/driver";
 
-const result = parseArgs(process.argv.slice(2));
+// Wrapped in an async IIFE so the entry has no top-level `await` — required
+// for `bun build --compile --bytecode`, which forces a CJS module format.
+(async () => {
+  const result = parseArgs(process.argv.slice(2));
 
-if (result.kind === "help") {
-  printHelp();
-  process.exit(0);
-} else if (result.kind === "version") {
-  console.log(`kei ${VERSION}`);
-  process.exit(0);
-} else if (result.kind === "error") {
-  console.error(`error: ${result.message}\n`);
-  printHelp();
-  process.exit(1);
-} else {
-  const code = await runDriver(result.flags);
-  process.exit(code);
-}
+  if (result.kind === "help") {
+    printHelp();
+    process.exit(0);
+  } else if (result.kind === "version") {
+    console.log(`kei ${VERSION}`);
+    process.exit(0);
+  } else if (result.kind === "error") {
+    console.error(`error: ${result.message}\n`);
+    printHelp();
+    process.exit(1);
+  } else {
+    const code = await runDriver(result.flags);
+    process.exit(code);
+  }
+})();
