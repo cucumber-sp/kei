@@ -135,8 +135,9 @@ export function parseArgs(argv: readonly string[]): ParseResult {
       return { kind: "error", message: `flag '${key}' does not take a value` };
     }
 
-    if (key in PROFILE_FLAGS) {
-      compiled.profile = PROFILE_FLAGS[key]!;
+    const profile = PROFILE_FLAGS[key];
+    if (profile !== undefined) {
+      compiled.profile = profile;
       continue;
     }
 
