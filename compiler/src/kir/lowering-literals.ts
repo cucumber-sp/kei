@@ -72,7 +72,10 @@ export function lowerStructLiteral(ctx: LoweringCtx, expr: StructLiteral): VarId
       field: field.name,
       type: fieldType,
     });
-    emit(ctx, { kind: "store", ptr: fieldPtrId, value: valueId });
+    // Tag array stores with their type so the C backend emits `memcpy` —
+    // C cannot assign a whole array via `*ptr = src`.
+    const storeType = fieldType.kind === "array" ? fieldType : undefined;
+    emit(ctx, { kind: "store", ptr: fieldPtrId, value: valueId, type: storeType });
   }
 
   return ptrId;

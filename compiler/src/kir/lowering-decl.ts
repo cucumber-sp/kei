@@ -166,9 +166,12 @@ export function lowerFunction(ctx: LoweringCtx, decl: FunctionDecl): KirFunction
 
   const params: KirParam[] = decl.params.map((p) => {
     const type = resolveParamType(ctx, decl, p.name);
+    // Struct params lower to pointers — `field_ptr` always emits `base->field`,
+    // so the body needs a pointer base. Caller passes `&value`.
+    const paramType: KirType = type.kind === "struct" ? { kind: "ptr", pointee: type } : type;
     const varId: VarId = `%${p.name}`;
     ctx.varMap.set(p.name, varId);
-    return { name: p.name, type };
+    return { name: p.name, type: paramType };
   });
 
   // For throws functions: add __out and __err pointer params
@@ -263,9 +266,10 @@ export function lowerMonomorphizedFunction(
       throw new Error("invariant: monomorphized function params must match declaration params");
     }
     const type = lowerCheckerType(ctx, concreteParam.type);
+    const paramType: KirType = type.kind === "struct" ? { kind: "ptr", pointee: type } : type;
     const varId: VarId = `%${p.name}`;
     ctx.varMap.set(p.name, varId);
-    params.push({ name: p.name, type });
+    params.push({ name: p.name, type: paramType });
   }
 
   // For throws functions: add __out and __err pointer params

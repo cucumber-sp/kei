@@ -194,7 +194,13 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
     return dest;
   }
 
-  const args = expr.args.map((a) => lowerExpr(ctx, a));
+  // Struct args lower to pointers — the called function takes them as
+  // pointers (matches method-call convention). Non-struct args lower to
+  // values as usual.
+  const args = expr.args.map((a) => {
+    const argType = ctx.checkResult.types.typeMap.get(a);
+    return argType?.kind === "struct" ? lowerExprAsPtr(ctx, a) : lowerExpr(ctx, a);
+  });
   const resultType = getExprKirType(ctx, expr);
   const isVoid = resultType.kind === "void";
 
@@ -263,23 +269,9 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
         funcName = methodName;
       }
 
-      // Methods wrap struct params in ptr<>, so re-lower struct args as pointers.
-      // The `args` array already lowered them as values; for struct args, we need
-      // to wrap the already-lowered value into a stack_alloc + store to get a pointer.
-      const methodArgs = args.map((argId, i) => {
-        const argExpr = expr.args[i];
-        const argType = argExpr ? ctx.checkResult.types.typeMap.get(argExpr) : undefined;
-        if (argType?.kind === "struct") {
-          const kirType = lowerCheckerType(ctx, argType);
-          const alloc = emitStackAlloc(ctx, kirType);
-          emit(ctx, { kind: "store", ptr: alloc, value: argId });
-          return alloc;
-        }
-        return argId;
-      });
-
+      // Struct args were already lowered as pointers above; no re-wrap needed.
       if (isVoid) {
-        emit(ctx, { kind: "call_void", func: funcName, args: [objId, ...methodArgs] });
+        emit(ctx, { kind: "call_void", func: funcName, args: [objId, ...args] });
         return objId; // void calls return nothing meaningful
       }
 
@@ -288,7 +280,7 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
         kind: "call",
         dest,
         func: funcName,
-        args: [objId, ...methodArgs],
+        args: [objId, ...args],
         type: resultType,
       });
       return dest;

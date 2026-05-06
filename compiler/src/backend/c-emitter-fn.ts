@@ -3,9 +3,9 @@
  */
 
 import type { KirFunction, KirInst, KirType, VarId } from "../kir/kir-types";
-import { emitFunctionPrototype } from "./c-emitter-decls";
+import { ARRAY_PARAM_SUFFIX, emitFunctionPrototype } from "./c-emitter-decls";
 import { emitInst, emitTerminator } from "./c-emitter-insts";
-import { emitCTypeForDecl, sanitizeName, varName } from "./c-emitter-types";
+import { emitCType, emitCTypeForDecl, sanitizeName, varName } from "./c-emitter-types";
 
 // ─── Function emission ──────────────────────────────────────────────────────
 
@@ -14,10 +14,30 @@ export function emitFunction(fn: KirFunction): string {
   out.push(`${emitFunctionPrototype(fn)} {`);
 
   const varDecls = collectVarDecls(fn);
+  // Inline-array params arrive as decayed pointers under a suffixed name; we
+  // also need a same-named local of the array type to memcpy into so the body
+  // sees value-type semantics.
+  for (const p of fn.params) {
+    if (p.type.kind === "array") {
+      varDecls.set(varName(p.name), p.type);
+    }
+  }
   for (const [name, type] of varDecls) {
     out.push(`    ${emitCTypeForDecl(type, name)};`);
   }
   if (varDecls.size > 0) out.push("");
+
+  // Copy each inline-array param into its same-named local — restores Kei's
+  // value-type semantics on top of C's decay-to-pointer convention.
+  for (const p of fn.params) {
+    if (p.type.kind === "array" && p.type.length && p.type.length > 0) {
+      const dst = varName(p.name);
+      const src = `${dst}${ARRAY_PARAM_SUFFIX}`;
+      out.push(
+        `    memcpy(${dst}, ${src}, sizeof(${emitCType(p.type.element)}) * ${p.type.length});`
+      );
+    }
+  }
 
   const varTypes = collectVarTypes(fn);
 
