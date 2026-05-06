@@ -16,7 +16,7 @@ stdlib evolve without breaking the frontend.
 | primitives (`i32`, `f64`, `bool`, …) | compiler | builtin                                    |
 | `ptr<T>`            | compiler   | raw pointer, non-null                      |
 | `T?` (nullable)     | compiler   | see **Nullability**                        |
-| `array<T, N>`       | compiler   | fixed-size stack array                     |
+| `inline<T, N>`      | compiler   | fixed-size value-type bag of N elements    |
 | `slice<T>`          | compiler   | non-owning view                            |
 | `string`            | stdlib     | CoW refcounted byte string                 |
 | `array<T>`          | stdlib     | heap array, CoW                            |
@@ -38,7 +38,7 @@ bumped refcount.
 
 | Source                           | Sub-range / borrow produces | Why |
 |----------------------------------|-----------------------------|-----|
-| Stack array `array<T, N>`        | `slice<T>`                  | source lifetime = scope, trivially checked |
+| Inline array `inline<T, N>`      | `slice<T>`                  | source lifetime = scope, trivially checked |
 | String literal, `.rodata`        | `string` (or `slice<u8>`)   | `.rodata` is permanent                     |
 | Another `slice<T>`               | `slice<T>`                  | inherits source's scope bound              |
 | Stack value                      | `ref T`                     | source lifetime = scope                    |
@@ -319,19 +319,22 @@ No runtime overhead — generics are a purely compile-time feature.
 
 ## Array and collection types
 
-### `array<T, N>` — Fixed-size array
+### `inline<T, N>` — Fixed-size value-type array
 
-Compile-time sized arrays that live on the stack:
+Compile-time sized "bag of N elements" that lives inline wherever it is used —
+on the stack as a local, or embedded directly in a struct field. Value-type:
+copying an `inline<T, N>` copies all N elements element-by-element.
 
 ```kei
-let a: array<int, 3> = [1, 2, 3];
+let a: inline<int, 3> = [1, 2, 3];
 let x = a[0];           // element access
 let n = a.len;          // compile-time constant (3)
 ```
 
-- **Memory:** Stack-allocated
+- **Memory:** Stored inline (stack local, or in-place inside a struct/enum)
 - **Safety:** Bounds-checked in debug builds
-- **Performance:** Zero overhead, compiles to C array
+- **Performance:** Zero overhead, compiles to a C fixed-size array `T[N]`
+- **Common use:** Buffers, matrices, small fixed-shape collections inside structs
 
 ### `array<T>` — Heap-allocated array (stdlib)
 
@@ -403,7 +406,7 @@ the stdlib implementation is required to uphold.
 |----------|----------|-------------|-----------------|---------------------|
 | `struct` | Stack | N/A | Auto-generated | No |
 | `unsafe struct` | Stack | Manual | User-defined (required with `ptr<T>`) | Yes |
-| `array<T,N>` | Stack | N/A | Per-element | No |
+| `inline<T,N>` | Inline (stack or in-struct) | N/A | Per-element | No |
 | `slice<T>` | Stack (view) | No | None | No |
 | `array<T>` (stdlib) | Stack + Heap | Yes (CoW) | User-defined | No |
 | `List<T>` (stdlib) | Stack + Heap | Yes | User-defined | No |

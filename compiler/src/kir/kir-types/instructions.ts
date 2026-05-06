@@ -66,6 +66,9 @@ export interface KirStore {
   kind: "store";
   ptr: VarId;
   value: VarId;
+  /** Type of the value being stored. Required for array-typed stores so the
+   * C backend can emit `memcpy` (C does not allow whole-array assignment). */
+  type?: KirType;
 }
 
 /** Compute a pointer to a named field within a struct. */

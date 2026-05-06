@@ -19,6 +19,8 @@ export function emitFunction(fn: KirFunction): string {
   }
   if (varDecls.size > 0) out.push("");
 
+  const varTypes = collectVarTypes(fn);
+
   for (const [i, block] of fn.blocks.entries()) {
     if (i > 0) {
       out.push(`${sanitizeName(block.id)}:`);
@@ -27,7 +29,7 @@ export function emitFunction(fn: KirFunction): string {
     }
 
     for (const inst of block.instructions) {
-      const line = emitInst(inst);
+      const line = emitInst(inst, varTypes);
       if (line) out.push(`    ${line}`);
     }
 
@@ -37,6 +39,22 @@ export function emitFunction(fn: KirFunction): string {
 
   out.push("}");
   return out.join("\n");
+}
+
+/** Map every VarId in the function (params + instruction destinations) to its KIR type. */
+function collectVarTypes(fn: KirFunction): Map<VarId, KirType> {
+  const types = new Map<VarId, KirType>();
+  for (const p of fn.params) {
+    types.set(p.name, p.type);
+  }
+  for (const block of fn.blocks) {
+    for (const inst of block.instructions) {
+      const dest = getInstDest(inst);
+      const type = getInstType(inst);
+      if (dest && type) types.set(dest, type);
+    }
+  }
+  return types;
 }
 
 // ─── Variable collection ────────────────────────────────────────────────────

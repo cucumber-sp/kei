@@ -86,6 +86,30 @@ export class TypeResolver {
       return ptrType(pointee);
     }
 
+    if (name === "inline") {
+      if (typeArgs.length !== 2) {
+        this.addError("'inline' expects exactly 2 type arguments: inline<T, N>", span);
+        return ERROR_TYPE;
+      }
+      const elemArg = typeArgs[0];
+      const lengthArg = typeArgs[1];
+      if (!elemArg || !lengthArg) return ERROR_TYPE;
+      const element = this.resolve(elemArg, scope);
+      let length: number | undefined;
+      if (lengthArg.kind === "NamedType") {
+        const n = Number.parseInt(lengthArg.name, 10);
+        if (!Number.isNaN(n) && n > 0) length = n;
+      }
+      if (length === undefined) {
+        this.addError(
+          "'inline' second argument must be a positive integer literal (the array length)",
+          span
+        );
+        return ERROR_TYPE;
+      }
+      return arrayType(element, length);
+    }
+
     if (name === "array" || name === "dynarray") {
       if (typeArgs.length < 1) {
         this.addError(`'${name}' expects at least 1 type argument`, span);

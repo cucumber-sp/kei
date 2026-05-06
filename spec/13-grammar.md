@@ -44,7 +44,7 @@ nullable_type    = base_type [ "?" ] ;
 
 base_type        = primitive_type | IDENT [generic_args]
                  | "ptr" "<" type ">"
-                 | "array" "<" type "," INTEGER ">"
+                 | "inline" "<" type "," INTEGER ">"
                  | "slice" "<" type ">"
                  | "fn" "(" [type_list] ")" [ "->" type ] ;
 
@@ -145,6 +145,9 @@ Items removed from this list since earlier drafts (now spec'd above): `closure`,
 >   earlier `self: ptr<T>` pattern in method receivers).
 > - **No closures, no nested functions** — functions are module- or struct-level only.
 > - **`dynarray` removed** — use `List<T>` (stdlib, growable) or `array<T>` (stdlib, CoW fixed).
+> - **Fixed-size value-type arrays renamed** `array<T, N>` → `inline<T, N>` —
+>   removes the name collision with stdlib `array<T>` (heap, CoW). `inline<T, N>`
+>   is the compiler built-in; `array<T>` (no `N`) is a stdlib type.
 > - **Postfix `++`/`--` removed** — use `x += 1` / `x -= 1`.
 > - **Function-pointer type syntax** `fn(…) -> …` is a first-class type; plain C
 >   function pointers, 8 bytes, no environment.

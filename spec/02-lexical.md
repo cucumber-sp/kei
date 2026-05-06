@@ -142,12 +142,13 @@ The following identifiers are reserved as keywords:
 as          assert      bool        break       case
 catch       const       continue    default     defer
 else        enum        extern      false       fn
-for         if          import      in          int
-let         match       move        mut         null
-panic       ptr         pub         ref         require
-return      self        slice       static      string
-struct      switch      throw       throws      true
-type        uint        unsafe      void        while
+for         if          import      in          inline
+int         let         match       move        mut
+null        panic       ptr         pub         ref
+require     return      self        slice       static
+string      struct      switch      throw       throws
+true        type        uint        unsafe      void
+while
 ```
 
 Reserved for future use (not yet usable as identifiers or as syntax):

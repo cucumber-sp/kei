@@ -73,6 +73,10 @@ Anything spec'd but not implemented is listed below with a status tag:
 For reference — items recently **resolved** by rewriting the spec (not the compiler):
 
 - `dynarray` removed (was in grammar, never implemented, duplicated `array<T>`).
+- Fixed-size value-type arrays renamed `array<T, N>` → `inline<T, N>` to remove
+  the name collision with stdlib `array<T>` (heap, CoW). The compiler's
+  built-in is now `inline<T, N>`; `array<T>` (no `N`) is reserved for the
+  stdlib heap type.
 - Postfix `++` / `--` removed from lexical spec (source of evaluation-order bugs).
 - Array CoW moved from language types to stdlib section (it was never a compiler feature).
 - Function overloading: spec said "not supported", compiler has tested support; spec updated.

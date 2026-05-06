@@ -38,7 +38,13 @@ export function emitCType(t: KirType): string {
 
 export function emitCTypeForDecl(t: KirType, varName: string): string {
   if (t.kind === "array") {
-    return `${emitCType(t.element)} ${varName}[${t.length}]`;
+    // `inline<T, N>` lowers to a fixed-size C array. With no known length
+    // (legacy `array<T>` placeholder), decay to `T*` since `T name[0]` is
+    // not valid C.
+    if (t.length && t.length > 0) {
+      return `${emitCType(t.element)} ${varName}[${t.length}]`;
+    }
+    return `${emitCType(t.element)}* ${varName}`;
   }
   if (t.kind === "struct" && t.name.startsWith("__err_union_")) {
     const members = t.fields.map((f) => `${emitCType(f.type)} ${sanitizeName(f.name)};`).join(" ");

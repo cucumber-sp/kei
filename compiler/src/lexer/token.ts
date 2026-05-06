@@ -72,6 +72,7 @@ export enum TokenKind {
 
   // Collection type keywords
   Array = "array",
+  Inline = "inline",
 
   // Primitive type keywords
   I8 = "i8",
@@ -245,6 +246,7 @@ const KEYWORD_MAP: ReadonlyMap<string, TokenKind> = new Map([
   ["void", TokenKind.Void],
   ["while", TokenKind.While],
   ["array", TokenKind.Array],
+  ["inline", TokenKind.Inline],
   ["i8", TokenKind.I8],
   ["i16", TokenKind.I16],
   ["i32", TokenKind.I32],

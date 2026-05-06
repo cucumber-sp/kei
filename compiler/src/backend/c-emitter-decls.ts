@@ -120,6 +120,6 @@ export function emitFunctionPrototype(fn: KirFunction): string {
   const params =
     fn.params.length === 0
       ? "void"
-      : fn.params.map((p) => `${emitCType(p.type)} ${varName(p.name)}`).join(", ");
+      : fn.params.map((p) => emitCTypeForDecl(p.type, varName(p.name))).join(", ");
   return `${retType} ${name}(${params})`;
 }

@@ -22,7 +22,7 @@ import type {
 } from "../ast/nodes";
 import type { KirType, VarId } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
-import { lowerExpr } from "./lowering-expr";
+import { lowerExpr, lowerExprAsPtr } from "./lowering-expr";
 import {
   emitAllScopeDestroys,
   emitAllScopeDestroysExceptNamed,
@@ -209,17 +209,24 @@ export function lowerReturnStmt(ctx: LoweringCtx, stmt: ReturnStmt): void {
     setTerminator(ctx, { kind: "ret", value: zeroTag });
   } else {
     if (stmt.value) {
-      let valueId = lowerExpr(ctx, stmt.value);
-      // Emit destroys for all scope variables, but skip the returned variable
-      const returnedVarName = stmt.value.kind === "Identifier" ? stmt.value.name : null;
-      emitAllScopeDestroysExceptNamed(ctx, returnedVarName);
-      // If returning a struct value and the function returns by value,
-      // we need to load from the pointer (structs are always stack_alloc'd as pointers in KIR)
       const retType = ctx.currentFunctionOrigReturnType;
+      let valueId: VarId;
+      // For struct returns, we need to load from a pointer exactly once.
+      // `lowerExprAsPtr` always returns a pointer (alloc, param, or wraps a
+      // value in a fresh alloc), avoiding the double-load that `lowerExpr`
+      // would cause for stack-allocated struct identifiers (which already
+      // emit their own load).
       if (retType.kind === "struct") {
+        const ptrId = lowerExprAsPtr(ctx, stmt.value);
+        const returnedVarName = stmt.value.kind === "Identifier" ? stmt.value.name : null;
+        emitAllScopeDestroysExceptNamed(ctx, returnedVarName);
         const loaded = freshVar(ctx);
-        emit(ctx, { kind: "load", dest: loaded, ptr: valueId, type: retType });
+        emit(ctx, { kind: "load", dest: loaded, ptr: ptrId, type: retType });
         valueId = loaded;
+      } else {
+        valueId = lowerExpr(ctx, stmt.value);
+        const returnedVarName = stmt.value.kind === "Identifier" ? stmt.value.name : null;
+        emitAllScopeDestroysExceptNamed(ctx, returnedVarName);
       }
       setTerminator(ctx, { kind: "ret", value: valueId });
     } else {

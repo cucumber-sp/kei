@@ -14,7 +14,7 @@ import {
 
 // ─── Instruction emission ───────────────────────────────────────────────────
 
-export function emitInst(inst: KirInst): string {
+export function emitInst(inst: KirInst, varTypes?: Map<VarId, KirType>): string {
   switch (inst.kind) {
     case "stack_alloc":
       if (inst.type.kind === "array") {
@@ -22,14 +22,29 @@ export function emitInst(inst: KirInst): string {
       }
       return `${varName(inst.dest)} = &${varName(inst.dest)}_alloc;`;
     case "load":
+      // C does not allow whole-array assignment; arrays must be memcpy'd.
+      if (inst.type.kind === "array" && inst.type.length && inst.type.length > 0) {
+        return `memcpy(${varName(inst.dest)}, ${varName(inst.ptr)}, sizeof(${emitCType(inst.type.element)}) * ${inst.type.length});`;
+      }
       return `${varName(inst.dest)} = *${varName(inst.ptr)};`;
-    case "store":
+    case "store": {
+      const valueType = inst.type ?? varTypes?.get(inst.value);
+      if (valueType?.kind === "array" && valueType.length && valueType.length > 0) {
+        return `memcpy(${varName(inst.ptr)}, ${varName(inst.value)}, sizeof(${emitCType(valueType.element)}) * ${valueType.length});`;
+      }
       return `*${varName(inst.ptr)} = ${varName(inst.value)};`;
+    }
     case "field_ptr": {
       // Dotted field paths (e.g. "data.Circle.radius") are used for enum tagged union access
       const fieldPath = inst.field.includes(".")
         ? inst.field.split(".").map(sanitizeName).join(".")
         : sanitizeName(inst.field);
+      // Array fields: `&base->arr` has C type `T(*)[N]`, but the dest is
+      // declared `T*`. Use `base->arr` directly so the array decays naturally
+      // to a pointer-to-first-element of the right type.
+      if (inst.type.kind === "array") {
+        return `${varName(inst.dest)} = ${varName(inst.base)}->${fieldPath};`;
+      }
       return `${varName(inst.dest)} = &${varName(inst.base)}->${fieldPath};`;
     }
     case "index_ptr":
