@@ -510,7 +510,6 @@ unsafe struct List<T> {
 ```
 
 **Note:** `List<T>` always deep copies on assignment — no COW. Mutable by design (push/pop/insert/remove).
-```
 
 ## Cyclic reference handling
 

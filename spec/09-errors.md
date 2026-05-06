@@ -177,9 +177,9 @@ enum Shape {
 
 fn area(shape: Shape) -> f64 {
     switch shape {
-        Circle(r): return 3.14159 * r * r;
-        Rectangle(w, h): return w * h;
-        Point: return 0.0;
+        case Circle(r): return 3.14159 * r * r;
+        case Rectangle(w, h): return w * h;
+        case Point: return 0.0;
     }
 }
 ```
@@ -194,9 +194,9 @@ enum Color : u8 {
 
 fn colorName(c: Color) -> string {
     switch c {
-        Red: return "red";
-        Green: return "green";
-        Blue: return "blue";
+        case Red: return "red";
+        case Green: return "green";
+        case Blue: return "blue";
     }
 }
 ```
@@ -322,7 +322,7 @@ fn processFiles(paths: slice<string>) -> int throws ProcessingError {
                 continue;  // skip this file
             };
         };
-        processed++;
+        processed += 1;
     }
     
     if processed == 0 {

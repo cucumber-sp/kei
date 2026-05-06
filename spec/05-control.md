@@ -290,9 +290,6 @@ let result = switch mode {
 };
 ```
 
----
-
-This control flow system provides familiar constructs with modern safety features, ensuring predictable execution while maintaining the performance characteristics needed for systems programming.
 ## Assertions
 
 ### `assert` — Debug-only check
@@ -329,3 +326,7 @@ require(input.len <= MAX_INPUT);
 | **Failure means** | Bug in code | Invalid input/state |
 | **Release** | Removed | Kept |
 | **Performance** | Zero cost in release | Always has cost |
+
+---
+
+This control flow system provides familiar constructs with modern safety features, ensuring predictable execution while maintaining the performance characteristics needed for systems programming.
