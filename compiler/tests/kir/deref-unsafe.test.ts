@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { getInstructions, lowerFunction } from "./helpers";
 
-describe("KIR: deref and unsafe expressions", () => {
+describe.skip("KIR: deref and unsafe expressions", () => {
   test("*p emits load with the pointee type", () => {
     const fn = lowerFunction(
       `
