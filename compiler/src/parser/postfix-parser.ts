@@ -189,12 +189,18 @@ function tryParseTypeArgs(ctx: ParserContext): TypeNode[] | null {
     while (ctx.match(TokenKind.Comma)) {
       typeArgs.push(ctx.parseType());
     }
-    if (!ctx.check(TokenKind.Greater)) {
+    // Accept either `>` or `>>` (the latter is split in-place — half is
+    // consumed here, the other half stays for the outer generic-args
+    // close).
+    if (
+      !ctx.check(TokenKind.Greater) &&
+      !ctx.check(TokenKind.GreaterGreater)
+    ) {
       ctx.restorePos(saved);
       ctx.restoreDiagnosticsLength(savedDiagLen);
       return null;
     }
-    ctx.advance(); // consume >
+    ctx.expectGenericGreater();
 
     // Only commit if followed by ( or { or . — the latter for static
     // method calls on generic types like `Shared<i32>.wrap(n)`.

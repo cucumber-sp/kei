@@ -225,9 +225,7 @@ describe("§4.7 — `init` is unsafe-only at the field level", () => {
 
 // ─── §4.10 — Nested `Shared<T>` requires explicit unwrapping ─────────────────
 
-// Pending: lexer/parser splits `>>` as a single right-shift token, so
-// `Shared<Shared<i32>>` doesn't parse. Re-enable once that's fixed.
-describe.skip("§4.10 — `Shared<T>` does not auto-deref recursively", () => {
+describe("§4.10 — `Shared<T>` does not auto-deref recursively", () => {
   test("`let v: i32 = s` from `Shared<Shared<i32>>` is a compile error", () => {
     checkError(
       `
@@ -247,9 +245,7 @@ describe.skip("§4.10 — `Shared<T>` does not auto-deref recursively", () => {
     );
   });
 
-  test.skip("explicit `s.value.value` is OK", () => {
-    // Pending: parser splits `>>` as a single right-shift token rather
-    // than two closing-`>`s. The lexer-level fix lives in a follow-up.
+  test("explicit `s.value.value` is OK", () => {
     checkOk(`
       unsafe struct Shared<T> {
         refcount: ref i64;
@@ -483,16 +479,6 @@ describe.skip("future: parser supports `Type<T>.method(args)` on generic types",
   // `Shared<T> stdlib semantics` describe and the e2e shared.test.ts
   // skeleton can be flipped on.
   test("Shared<i32>.wrap(n) parses and binds T = i32", () => {
-    // Marker test.
-  });
-});
-
-describe.skip("future: lexer splits `>>` in type-position for nested generics", () => {
-  // `Shared<Shared<i32>>` lexes the trailing `>>` as a single
-  // `GreaterGreater` (right-shift) token, so the inner generic-args
-  // close fails. Standard fix: contextual split when the parser is
-  // inside a type-args context. Blocks §4.10 nested-Shared tests.
-  test("Shared<Shared<i32>> parses as a doubly-wrapped generic type", () => {
     // Marker test.
   });
 });

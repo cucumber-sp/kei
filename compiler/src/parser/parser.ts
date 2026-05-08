@@ -102,6 +102,7 @@ export interface ParserContext {
   advance(): Token;
   match(...kinds: TokenKind[]): boolean;
   expect(kind: TokenKind): Token;
+  expectGenericGreater(): Token;
   expectIdentifier(): Token;
   addError(message: string, token: Token): void;
   throwParseError(): never;
@@ -203,6 +204,46 @@ export class Parser implements ParserContext {
     }
     const token = this.current();
     this.addError(`Expected '${kind}' but found '${token.kind}'`, token);
+    throw new ParseError();
+  }
+
+  /**
+   * Consume the closing `>` of a generic-args list, with `>>` splitting.
+   *
+   * When the next token is `>` it's consumed normally. When it's `>>` the
+   * token is split in-place: the lexer's single `GreaterGreater` is
+   * mutated to a `Greater` whose span starts at the second `>`'s offset
+   * and `pos` is NOT advanced — so the surrounding parser (which will
+   * call this again to close the outer generic) sees a plain `>` next.
+   *
+   * Returns a synthetic `Greater` token covering the consumed `>`.
+   */
+  expectGenericGreater(): Token {
+    const token = this.current();
+    if (token.kind === TokenKind.Greater) {
+      return this.advance();
+    }
+    if (token.kind === TokenKind.GreaterGreater) {
+      // Split `>>` into two `>`s. The current token becomes the second
+      // half (a single `>` whose span starts one column later); we
+      // return a synthetic token for the first half.
+      const firstSpan = { start: token.span.start, end: token.span.start + 1 };
+      const secondSpan = { start: token.span.start + 1, end: token.span.end };
+      const second: Token = {
+        ...token,
+        kind: TokenKind.Greater,
+        lexeme: ">",
+        span: secondSpan,
+      };
+      this.tokens[this.pos] = second;
+      return {
+        ...token,
+        kind: TokenKind.Greater,
+        lexeme: ">",
+        span: firstSpan,
+      };
+    }
+    this.addError(`Expected '>' but found '${token.kind}'`, token);
     throw new ParseError();
   }
 
@@ -351,7 +392,7 @@ export class Parser implements ParserContext {
             typeArgs.push(this.parseType());
           }
         }
-        const end = this.expect(TokenKind.Greater);
+        const end = this.expectGenericGreater();
         return {
           kind: "GenericType",
           name: token.lexeme,
@@ -378,7 +419,7 @@ export class Parser implements ParserContext {
         while (this.match(TokenKind.Comma)) {
           typeArgs.push(this.parseType());
         }
-        const end = this.expect(TokenKind.Greater);
+        const end = this.expectGenericGreater();
         return {
           kind: "GenericType",
           name: token.lexeme,
