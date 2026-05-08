@@ -641,32 +641,51 @@ describe.skip("future: std `Shared<T>` runs end-to-end", () => {
   });
 });
 
-describe.skip("future: discarded return value fires __destroy on the temporary", () => {
-  // Confirmed gap as of the ref-redesign rollout: when a function's
-  // return value is dropped at the statement level (no `let`, no
-  // assignment, no further use), the temporary's `__destroy` is NOT
-  // emitted. The bytes leak.
-  //
-  // Repro (run via the CLI):
-  //
-  //   unsafe struct Res {
-  //     id: i32;
-  //     fn __destroy(self: ref Res) { print(self.id); }
-  //     fn __oncopy(self: ref Res) {}
-  //   }
-  //   fn make(id: i32) -> Res { return Res { id: id }; }
-  //   fn main() -> int {
-  //     make(42);   // discarded — `__destroy` should print 42
-  //     print(99);
-  //     return 0;
-  //   }
-  //
-  // Expected stdout: "42\n99\n". Actual: "99\n".
-  //
-  // Fix lives in KIR lowering for ExprStmt where the expression's type
-  // has a non-trivial __destroy: emit a temporary slot, store the call
-  // result, then emit `destroy &temp` before the statement ends.
+describe("discarded return value fires __destroy on the temporary", () => {
   test("discarded `make()` result destroys before the next statement runs", () => {
-    // Marker test.
+    // The expression-statement's call result is owned by nobody. The
+    // KIR must destroy it before moving on; otherwise the `Res`
+    // returned by `make()` leaks. Today's lowering does NOT emit the
+    // destroy — this test pins the corrected behavior.
+    const fn = lowerFunctionLocal(
+      `
+      unsafe struct Res {
+        id: i32;
+        fn __destroy(self: ref Res) {}
+      }
+      fn make(id: i32) -> Res { return Res { id: id }; }
+      fn next() -> int { return 0; }
+      fn main() -> int {
+        make(42);
+        next();
+        return 0;
+      }
+    `,
+      "main"
+    );
+
+    // Walk the entry block; we expect `call make(...)` followed by a
+    // `destroy` (for the discarded `Res`), then `call next(...)`. The
+    // destroy must appear BEFORE the second call.
+    const entry = fn.blocks[0];
+    expect(entry).toBeTruthy();
+    const insts = entry?.instructions ?? [];
+    let firstCallIdx = -1;
+    let nextCallIdx = -1;
+    let destroyIdx = -1;
+    for (let i = 0; i < insts.length; i++) {
+      const inst = insts[i];
+      if (!inst) continue;
+      if (inst.kind === "call" && "func" in inst && inst.func.endsWith("make")) {
+        firstCallIdx = i;
+      } else if (inst.kind === "call" && "func" in inst && inst.func.endsWith("next")) {
+        nextCallIdx = i;
+      } else if (inst.kind === "destroy" && firstCallIdx !== -1 && destroyIdx === -1) {
+        destroyIdx = i;
+      }
+    }
+    expect(firstCallIdx).toBeGreaterThanOrEqual(0);
+    expect(destroyIdx).toBeGreaterThan(firstCallIdx);
+    expect(nextCallIdx).toBeGreaterThan(destroyIdx);
   });
 });
