@@ -120,6 +120,16 @@ export class Checker {
   /** Cache of monomorphized function types, keyed by mangled name */
   private monomorphizedFunctions: Map<string, MonomorphizedFunction> = new Map();
 
+  /**
+   * When true, `check()` skips the per-instantiation body-check pass.
+   * The multi-module orchestrator sets this before running each module's
+   * `check()` and then drives the body-check pass externally after all
+   * modules have pre-checked, so cross-module monomorphizations
+   * (`B.kei` calls `A.Foo<i32>.method`) get re-checked under `A`'s
+   * scope where A's imports are visible.
+   */
+  deferMonomorphizedBodyChecks = false;
+
   /** Operator overload resolution info: maps expression nodes to their resolved operator method */
   operatorMethods: Map<Expression, { methodName: string; structType: StructType }> = new Map();
 
@@ -260,8 +270,14 @@ export class Checker {
       this.error(`call to function that throws (${throwNames}) must use 'catch'`, callExpr.span);
     }
 
-    // Pass 3: Check bodies of monomorphized generic functions
-    this.checkMonomorphizedBodies();
+    // Pass 3: Check bodies of monomorphized generic functions/structs.
+    // In multi-module mode the orchestrator runs this pass externally
+    // after every module has pre-checked, so the body of a generic
+    // method defined in module A but instantiated by module B is
+    // checked under A's scope (where A's imports are visible).
+    if (!this.deferMonomorphizedBodyChecks) {
+      this.checkMonomorphizedBodies();
+    }
 
     // Collect auto-destroy struct types
     const autoDestroyStructs = new Map<string, StructType>();
@@ -309,6 +325,27 @@ export class Checker {
    * Check the bodies of monomorphized generic functions so that all expressions
    * inside them get entries in the typeMap (needed for KIR lowering).
    */
+  /**
+   * Adopt a monomorphized struct that was registered by another module's
+   * checker. Used by the multi-module orchestrator to route per-instantiation
+   * body checks to the DEFINING module's checker (where imports resolve).
+   * Doesn't re-check the body — the caller orchestrates that via
+   * {@link checkMonomorphizedBodies}.
+   */
+  adoptMonomorphizedStruct(mangledName: string, mono: MonomorphizedStruct): void {
+    if (!this.monomorphizedStructs.has(mangledName)) {
+      this.monomorphizedStructs.set(mangledName, mono);
+    }
+  }
+
+  /**
+   * Public wrapper around the body-check pass so the multi-module
+   * orchestrator can drive it after every module has pre-checked.
+   */
+  runMonomorphizedBodyChecks(): void {
+    this.checkMonomorphizedBodies();
+  }
+
   private checkMonomorphizedBodies(): void {
     for (const [_mangledName, monoFunc] of this.monomorphizedFunctions) {
       if (!monoFunc.declaration) {
@@ -487,12 +524,56 @@ export class Checker {
     // "main" and emits its top-level symbols without a module prefix. We
     // mirror that rule here so structs declared in main keep modulePrefix "".
     const mainModule = modules[modules.length - 1];
+
+    // Wave 1: pre-check every module (passes 1 + 1.5 + 2). The
+    // per-instantiation body-check pass is deferred so cross-module
+    // monomorphizations can be routed to the defining module's checker.
+    const checkers = new Map<string, Checker>();
+    const moduleNameForPrefix = new Map<string, string>(); // modulePrefix → module name
+    const preResults = new Map<string, CheckResult>();
     for (const mod of modules) {
       const moduleName = mod === mainModule ? "" : mod.name;
       const checker = new Checker(mod.program, mod.source, moduleName);
       checker.setModuleExports(moduleExports);
-
+      checker.deferMonomorphizedBodyChecks = true;
       const result = checker.check();
+      preResults.set(mod.name, result);
+      checkers.set(mod.name, checker);
+      moduleNameForPrefix.set(moduleName, mod.name);
+      const pubSymbols = checker.collectPublicSymbols();
+      moduleExports.set(mod.name, pubSymbols);
+    }
+
+    // Wave 2: route each monomorphization to its defining module's checker
+    // and run its body-check pass there. The defining module's scope has
+    // its imports in place, so a generic struct method that uses
+    // `import { alloc } from mem` resolves correctly.
+    for (const [, checker] of checkers) {
+      // Adopt monomorphizations registered in OTHER modules but whose
+      // original struct/function lives in THIS module.
+      for (const [otherModName, otherChecker] of checkers) {
+        if (otherChecker === checker) continue;
+        const otherResult = preResults.get(otherModName);
+        if (!otherResult) continue;
+        for (const [name, mono] of otherResult.generics.monomorphizedStructs) {
+          const definingPrefix = mono.original.modulePrefix ?? "";
+          if (definingPrefix === checker.modulePrefix) {
+            checker.adoptMonomorphizedStruct(name, mono);
+          }
+        }
+      }
+      checker.runMonomorphizedBodyChecks();
+    }
+
+    // Wave 3: merge results. Pull from each checker (which now has any
+    // adopted monomorphizations) plus the original pre-result diagnostics.
+    for (const mod of modules) {
+      const checker = checkers.get(mod.name);
+      const result = preResults.get(mod.name);
+      if (!checker || !result) continue;
+      // The pre-check result holds map references that the wave-2
+      // body checks mutated in place — same map identity, updated
+      // contents. Just merge them.
       allResults.set(mod.name, result);
 
       for (const [expr, type] of result.types.typeMap) types.typeMap.set(expr, type);
@@ -521,11 +602,8 @@ export class Checker {
         lifecycle.autoOncopyStructs.set(name, st);
       }
       combinedDiags.push(...result.diagnostics);
-
-      // Collect this module's public symbols for use by later modules
-      const pubSymbols = checker.collectPublicSymbols();
-      moduleExports.set(mod.name, pubSymbols);
     }
+    void moduleNameForPrefix;
 
     return {
       results: allResults,

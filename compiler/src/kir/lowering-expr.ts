@@ -569,6 +569,43 @@ export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
       type: fieldType,
     });
 
+    // Compound assignment on a field: `obj.field op= rhs` lowers to
+    // load → bin_op → store on the field slot. Field-level lifecycle
+    // hooks don't fire here (we're updating the value, not replacing).
+    if (expr.operator !== "=") {
+      const op = mapCompoundAssignOp(ctx, expr.operator);
+      if (op) {
+        // For a `ref T` field the slot holds a `*T`, so ptrDest is
+        // `**T`. We need to load through one extra layer to get the
+        // T-storing slot. The checker's typeMap entry preserves the
+        // isRef bit even though the lowered KIR type is `ptr`.
+        const checkerType = ctx.checkResult.types.typeMap.get(expr.target);
+        const isRefField =
+          checkerType?.kind === "ptr" && (checkerType as { isRef?: boolean }).isRef === true;
+        let loadPtr = ptrDest;
+        let elemType = fieldType;
+        if (isRefField && fieldType.kind === "ptr") {
+          const innerPtr = freshVar(ctx);
+          emit(ctx, { kind: "load", dest: innerPtr, ptr: ptrDest, type: fieldType });
+          loadPtr = innerPtr;
+          elemType = fieldType.pointee;
+        }
+        const currentVal = freshVar(ctx);
+        emit(ctx, { kind: "load", dest: currentVal, ptr: loadPtr, type: elemType });
+        const result = freshVar(ctx);
+        emit(ctx, {
+          kind: "bin_op",
+          op,
+          dest: result,
+          lhs: currentVal,
+          rhs: valueId,
+          type: elemType,
+        });
+        emit(ctx, { kind: "store", ptr: loadPtr, value: result });
+        return result;
+      }
+    }
+
     // Destroy old field value if it has lifecycle hooks
     const checkerType = ctx.checkResult.types.typeMap.get(expr.target);
     const lifecycle = getStructLifecycle(ctx, checkerType);

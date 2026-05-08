@@ -41,10 +41,18 @@ function checkSizeofCall(checker: Checker, expr: CallExpr): Type | null {
   const arg = expr.args[0];
   if (!arg) return ERROR_TYPE;
   if (arg.kind === "Identifier") {
+    // Try a regular value/type lookup first; fall back to type-only
+    // resolution so `sizeof(T)` inside a generic body works (the
+    // substitution map is set up during the per-instantiation body
+    // check and {@link resolveType} consults it).
     const sym = checker.currentScope.lookup(arg.name);
     if (!sym) {
-      checker.error(`undeclared type '${arg.name}'`, arg.span);
-      return ERROR_TYPE;
+      const typeNode = { kind: "NamedType" as const, name: arg.name, span: arg.span };
+      const t = checker.resolveType(typeNode);
+      if (t.kind === "error") {
+        checker.error(`undeclared type '${arg.name}'`, arg.span);
+        return ERROR_TYPE;
+      }
     }
   } else {
     checker.checkExpression(arg);

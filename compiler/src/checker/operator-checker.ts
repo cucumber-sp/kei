@@ -121,12 +121,20 @@ export function checkBinaryExpression(checker: Checker, expr: BinaryExpr): Type 
 
   // Equality operators
   if (EQUALITY_OPS.has(op)) {
-    // Allow equality between same types, or ptr and null
-    if (
-      !typesEqual(left, right) &&
-      !(isPtrType(left) && right.kind === TypeKind.Null) &&
-      !(left.kind === TypeKind.Null && isPtrType(right))
-    ) {
+    // Allow equality between same types, ptr/null, or a same-kind integer
+    // literal that fits in the wider integer (e.g. `i64 == 0`).
+    let ok = typesEqual(left, right);
+    if (!ok && isPtrType(left) && right.kind === TypeKind.Null) ok = true;
+    if (!ok && left.kind === TypeKind.Null && isPtrType(right)) ok = true;
+    if (!ok && isNumericType(left)) {
+      const litInfo = extractLiteralInfo(expr.right);
+      if (litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, left)) ok = true;
+    }
+    if (!ok && isNumericType(right)) {
+      const litInfo = extractLiteralInfo(expr.left);
+      if (litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, right)) ok = true;
+    }
+    if (!ok) {
       checker.error(
         `operator '${op}' requires same types, got '${typeToString(left)}' and '${typeToString(right)}'`,
         expr.span
@@ -309,11 +317,11 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
   // `self.refcount += 1` where `refcount: ref i64`) — auto-deref so
   // the numeric check sees the underlying T.
   if (COMPOUND_ASSIGN_OPS.has(op)) {
-    let effectiveTarget = targetType;
+    let effectiveTarget: Type = targetType;
     if (effectiveTarget.kind === TypeKind.Ptr && effectiveTarget.isRef) {
       effectiveTarget = effectiveTarget.pointee;
     }
-    let effectiveValue = valueType;
+    let effectiveValue: Type = valueType;
     if (effectiveValue.kind === TypeKind.Ptr && effectiveValue.isRef) {
       effectiveValue = effectiveValue.pointee;
     }
@@ -324,8 +332,21 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
       );
       return ERROR_TYPE;
     }
-    if (!requireSameTypes(checker, op, effectiveTarget, effectiveValue, expr.span))
-      return ERROR_TYPE;
+    if (!typesEqual(effectiveTarget, effectiveValue)) {
+      // Integer-literal coercion: `count += 1` where count: i64 — the
+      // literal 1 defaults to i32 but fits in i64.
+      const litInfo = extractLiteralInfo(expr.value);
+      if (
+        !litInfo ||
+        !isLiteralAssignableTo(litInfo.kind, litInfo.value, effectiveTarget)
+      ) {
+        checker.error(
+          `operator '${op}' requires same types, got '${typeToString(effectiveTarget)}' and '${typeToString(effectiveValue)}'`,
+          expr.span
+        );
+        return ERROR_TYPE;
+      }
+    }
     return effectiveTarget;
   }
 
