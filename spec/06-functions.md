@@ -32,29 +32,67 @@ fn add(a: int, b: int) -> int { // returns int
 
 ### Parameter mutability
 
-Function parameters are **immutable by default**. Use `mut` to create a mutable local copy:
+Function parameters bind mutably by default — you can reassign the local
+slot inside the function body. To opt out, use the `readonly` modifier:
 
 ```kei
-fn increment(mut x: int) -> int {
-    x += 1;        // ok - x is a mutable copy
+fn increment(x: int) -> int {
+    x += 1;        // ok - parameter slot is mutable
     return x;
+}
+
+fn rangeOf(readonly x: int) -> int {
+    // x = 0;       // ERROR: readonly forbids reassigning the slot
+    return x * 2;
 }
 
 let value = 5;
 let result = increment(value);  // value is still 5, result is 6
 ```
 
-**Important:** `mut` creates a copy of the parameter. Changes do not affect the caller's original value.
+**Important:** Plain (non-`ref`) parameters are *copies* of the caller's
+value. Reassigning a mutable parameter does not affect the caller. The
+`readonly` modifier exists for clarity and (in the `ref T` case) for
+forbidding write-through to the caller's slot.
+
+There is no `mut` keyword. The previous `mut x: T` parameter form is
+removed.
+
+### `ref T` and `readonly ref T` parameters
+
+To take a parameter by reference, use `ref T` (mutable through the ref,
+≈ C# `ref`) or `readonly ref T` (immutable through the ref, ≈ C# `in`).
+Auto-deref makes the body look as if the parameter were `T`:
+
+```kei
+fn translate(self: ref Point, dx: f64, dy: f64) {
+    self.x += dx;       // auto-deref: writes through the ref to the caller's slot
+    self.y += dy;
+}
+
+fn lengthSquared(self: readonly ref Point) -> f64 {
+    return self.x * self.x + self.y * self.y;
+}
+
+let p = Point{ x: 1.0, y: 2.0 };
+p.translate(5.0, 3.0);          // implicit &p at the call site
+let len2 = p.lengthSquared();   // implicit &p; readonly forbids writes
+```
+
+`ref T` parameters compile to `T*` and `readonly ref T` to `const T*`.
+The C-level ABI is identical to today's `ptr<T>` — only the source
+spelling and the safety rules differ.
 
 ### Parameter passing
 
-All parameters are copied by default with `__oncopy` called. For primitive-only structs this is just a memcpy. For structs with managed fields, lifecycle hooks are called:
+Plain (non-`ref`) parameters are copied with `__oncopy` called. For
+primitive-only structs this is just a memcpy. For structs with managed
+fields, lifecycle hooks are called:
 
 ```kei
 // Primitive-only struct - just memcpy
 struct Point { x: f64; y: f64; }
 fn distance(p1: Point, p2: Point) -> f64 {
-    // p1 and p2 are independent copies
     let dx = p1.x - p2.x;
     let dy = p1.y - p2.y;
     return sqrt(dx * dx + dy * dy);
@@ -81,12 +119,16 @@ fn createUser(name: string) -> User {
 }
 ```
 
-### Move parameters
-Use `move` for zero-cost transfer of ownership:
+### Move expression
+
+`move` survives as an **expression form only** — `consume(move user)` at
+the call site, or `let b = move a` for explicit consumption before last
+use. The parameter form (`fn consume(move x: T)`) is removed; auto-last-
+use analysis covers the case.
 
 ```kei
-fn consume(move user: User) {
-    // user is moved, no __oncopy
+fn consume(user: User) {
+    // user is moved in by the caller; no __oncopy at boundary
     print(user.name);
 }   // __destroy called here
 
@@ -137,34 +179,38 @@ care or use an explicit work queue.
 
 ## External functions
 
-External C functions are declared with `extern`:
+External C functions are declared with `extern` and use `*T` for raw
+pointers:
 
 ```kei
-extern fn strlen(s: ptr<c_char>) -> usize;
-extern fn memcpy(dest: ptr<u8>, src: ptr<u8>, n: usize) -> ptr<u8>;
-extern fn sqlite3_open(filename: ptr<c_char>, db: ptr<ptr<void>>) -> int;
+extern fn strlen(s: *c_char) -> usize;
+extern fn memcpy(dest: *u8, src: *u8, n: usize) -> *u8;
+extern fn sqlite3Open(filename: *c_char, db: **void) -> int;
 ```
 
 ### Calling extern functions requires `unsafe`
 
-The compiler cannot verify safety of foreign code, so all `extern fn` calls must be inside an `unsafe` block:
+The compiler cannot verify safety of foreign code, so all `extern fn`
+calls must be inside an `unsafe` block:
 
 ```kei
-extern fn strlen(s: ptr<c_char>) -> usize;
+extern fn strlen(s: *c_char) -> usize;
 
-fn stringLength(s: ptr<c_char>) -> usize {
+fn stringLength(s: *c_char) -> usize {
     return unsafe { strlen(s) };  // must be in unsafe block
 }
 ```
 
-This is intentional — calling into C is inherently unsafe (no bounds checking, no lifetime guarantees, possible UB). Safe wrappers expose a safe API:
+This is intentional — calling into C is inherently unsafe (no bounds
+checking, no lifetime guarantees, possible UB). Safe wrappers expose a
+safe API:
 
 ```kei
-extern fn c_abs(x: i32) -> i32;
+extern fn cAbs(x: i32) -> i32;
 
 // Safe wrapper — users call this without unsafe
 pub fn abs(x: i32) -> i32 {
-    return unsafe { c_abs(x) };
+    return unsafe { cAbs(x) };
 }
 ```
 
@@ -183,9 +229,9 @@ fn main() -> int {
 - Must be named exactly `main`.
 - Must return `int` — compile error if the return type is anything else.
 - Takes no parameters today. Command-line arguments (likely
-  `args: slice<string>`) will be added once `slice<T>` of stdlib types lands.
-- Cannot declare `throws` — unhandled errors at the entry point are a program
-  termination concern, not a type-system concern.
+  `args: Array<String>`) will be added once stdlib `Array<T>` lands.
+- Cannot declare `throws` — unhandled errors at the entry point are a
+  program termination concern, not a type-system concern.
 
 ## Calling conventions
 
@@ -222,8 +268,8 @@ that state as an **explicit parameter**:
 
 ```kei
 // Bundle state into a struct
-struct App {
-    db: ptr<DB>;
+unsafe struct App {
+    db: *Db;
     config: Config;
 }
 

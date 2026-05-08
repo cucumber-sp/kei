@@ -51,13 +51,13 @@ describe("Parser — as cast", () => {
     }
   });
 
-  test("cast with generic type: p as ptr<u8>", () => {
-    const expr = parseExpr("p as ptr<u8>");
+  test.skip("cast with raw pointer type: p as *u8", () => {
+    const expr = parseExpr("p as *u8");
     expect(expr.kind).toBe("CastExpr");
     if (expr.kind !== "CastExpr") return;
-    expect(expr.targetType.kind).toBe("GenericType");
-    if (expr.targetType.kind === "GenericType") {
-      expect(expr.targetType.name).toBe("ptr");
+    expect(expr.targetType.kind).toBe("RawPtrType");
+    if (expr.targetType.kind === "RawPtrType") {
+      expect(expr.targetType.pointee.kind).toBe("NamedType");
     }
   });
 

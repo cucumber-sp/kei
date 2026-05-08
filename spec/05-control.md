@@ -96,8 +96,7 @@ for item, index in numbers {
 
 **Supported collection types:**
 - `inline<T, N>` — fixed-size inline arrays
-- `array<T>` — heap arrays (stdlib)
-- `slice<T>` — array slices
+- `Array<T>` (lowercase alias `array<T>`) — heap arrays (stdlib)
 
 #### Loop variable scope
 Loop variables are scoped to the loop body:

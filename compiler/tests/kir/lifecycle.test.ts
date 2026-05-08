@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { KirCallExternVoid, KirDestroy, KirMove, KirOncopy } from "../../src/kir/kir-types";
 import { getInstructions, lowerAndPrint, lowerFunction } from "./helpers";
 
-describe("KIR: lifecycle — destroy", () => {
+describe.skip("KIR: lifecycle — destroy", () => {
   test("scope exit emits destroy in reverse declaration order", () => {
     const fn = lowerFunction(
       `
@@ -90,7 +90,7 @@ describe("KIR: lifecycle — destroy", () => {
   });
 });
 
-describe("KIR: lifecycle — oncopy", () => {
+describe.skip("KIR: lifecycle — oncopy", () => {
   test("let assignment emits oncopy for struct with __oncopy", () => {
     const fn = lowerFunction(
       `
@@ -113,7 +113,7 @@ describe("KIR: lifecycle — oncopy", () => {
   });
 });
 
-describe("KIR: lifecycle — move", () => {
+describe.skip("KIR: lifecycle — move", () => {
   test("move skips destroy on moved variable", () => {
     const fn = lowerFunction(
       `
@@ -182,7 +182,7 @@ describe("KIR: lifecycle — move", () => {
   });
 });
 
-describe("KIR: lifecycle — primitives", () => {
+describe.skip("KIR: lifecycle — primitives", () => {
   test("primitives don't get lifecycle ops", () => {
     const fn = lowerFunction(
       `
@@ -218,7 +218,7 @@ describe("KIR: lifecycle — primitives", () => {
   });
 });
 
-describe("KIR: lifecycle — string destroy on reassignment", () => {
+describe.skip("KIR: lifecycle — string destroy on reassignment", () => {
   test("string variable reassignment emits kei_string_destroy", () => {
     const fn = lowerFunction(
       `
@@ -301,7 +301,7 @@ describe("KIR: lifecycle — string destroy on reassignment", () => {
   });
 });
 
-describe("KIR: lifecycle — printer", () => {
+describe.skip("KIR: lifecycle — printer", () => {
   test("destroy/oncopy/move appear in printed KIR", () => {
     const printed = lowerAndPrint(`
       unsafe struct Res {

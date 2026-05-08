@@ -15,14 +15,23 @@ and covered by tests.
 
 ## Type system
 
-| Item                                      | Status   | Notes                                              |
-|-------------------------------------------|----------|----------------------------------------------------|
-| `T?` niche layout for pointers            | WIP      | Parser/checker accept `T?`; lowers to `ptr<T>`. Niche representation matches naturally. |
-| `T?` tag-byte fallback for primitives     | PLANNED  | Today `i32?` etc. also lower to `ptr<T>` (heap-allocated). Native `{tag, value}` representation is the goal. |
-| Tighten `null` assignability              | PLANNED  | Today `null` is assignable to any `ptr<T>`; once `T?` is the canonical absence story, `null` will be rejected on bare `ptr<T>` and only allowed on `T?`. |
-| `ref T` / `ref mut T` (safe references)   | PLANNED  | `ref` reserved in lexer; no parser/checker work yet. Will compile to `const T*` / `T*`. |
-| Traits / trait objects                    | PLANNED  | Fat-pointer layout `(data, vtable)` with size + destroy slot. |
-| `string` / `array<T>` / `List<T>` as stdlib types | PLANNED | Currently `string` is compiler-known via `runtime.h`; `array<T>` is the inline-array shorthand. Migration needs an `unsafe struct` runtime in stdlib. |
+| Item                                                          | Status   | Notes                                              |
+|---------------------------------------------------------------|----------|----------------------------------------------------|
+| `T?` niche layout for raw pointers                            | WIP      | Parser/checker accept `T?`; lowers to a nullable raw pointer. Niche representation matches naturally. |
+| `T?` tag-byte fallback for primitives                         | PLANNED  | Today `i32?` etc. also lower to a nullable raw pointer (heap-allocated). Native `{tag, value}` representation is the goal. |
+| Tighten `null` assignability                                  | PLANNED  | Today `null` is assignable to any raw pointer; once `T?` is the canonical absence story, `null` will be rejected on bare `*T` and only allowed on `T?`. |
+| `ref T` / `readonly ref T` (safe references)                  | PLANNED  | `ref` reserved in lexer; no parser/checker work yet. Will compile to `T*` / `const T*`. |
+| Auto-deref insertion for `ref T` values                       | PLANNED  | Type-directed: applies only to values of type `ref T` (param or unsafe-struct field), not to `Shared<T>` or other wrapper types. |
+| `addr(field)` operator                                        | PLANNED  | Slot lvalue for a `ref T` field; unsafe-only. |
+| `init field = value` initialization-write                     | PLANNED  | Unsafe-only at field level; emitted implicitly inside struct literals. |
+| `readonly` modifier on fields/params                          | PLANNED  | Two senses: blocks reassignment for plain types; blocks write-through for `ref T`. |
+| Lifecycle hook ABI flip (`fn __oncopy(self: ref T)`, void)    | PLANNED  | Today `__oncopy(self: T) -> T`. New ABI mutates the slot in place via the ref. |
+| Drop `mut` keyword everywhere                                 | PLANNED  | Removes `mut` parameter form, `let mut`, `&mut`, `ref mut T`. |
+| Drop `ptr<T>` / `slice<T>` keywords                           | PLANNED  | `ptr<T>` replaced by `*T` (unsafe) and `ref T` (safe). `slice<T>` removed entirely. |
+| Un-reserve `shared`                                           | PLANNED  | `shared` is no longer a keyword; `Shared<T>` is a regular stdlib unsafe struct. |
+| Traits / trait objects                                        | PLANNED  | Fat-pointer layout `(data, vtable)` with size + destroy slot. |
+| `Shared<T>` stdlib                                            | PLANNED  | Canonical refcount primitive. Single-allocation layout via two `ref` fields. |
+| `String` / `Array<T>` / `List<T>` as stdlib types             | PLANNED  | `String` migration deferred — runtime currently in C (`runtime.h`). `Array<T>` and `List<T>` follow once `Shared<T>` is real. |
 
 ## Memory model
 
@@ -50,7 +59,7 @@ and covered by tests.
 | Function-pointer type syntax `fn(…) -> …` | PLANNED  | Lexer has `fn`; parser doesn't accept it in type position. Plain 8-byte C pointer at runtime. |
 | Variadic extern (`...`)                   | PLANNED  | Known parser limitation; `printf` cannot be spelled today. |
 | No-nested-fn checker rule                 | PLANNED  | The parser only allows `fn` at module/struct level; an explicit error message would help diagnostics. |
-| Migrate methods from `self: ptr<T>` → `self: ref mut T` | BLOCKED | Needs `ref T` first. `self: ptr<T>` is the only mutable-receiver form today. |
+| Migrate methods from `self: ptr<T>` → `self: ref T` | BLOCKED | Needs `ref T` first. `self: ptr<T>` is the only mutable-receiver form today. |
 
 ## Error handling
 
@@ -60,9 +69,9 @@ and covered by tests.
 
 ## Concurrency
 
-| Item                                      | Status   | Notes                                              |
-|-------------------------------------------|----------|----------------------------------------------------|
-| v1 single-threaded baseline               | current  | Stdlib refcounts are non-atomic; no threading API. |
-| v2 `spawn` + `Mutex<T>` / `Atomic<T>`     | PLANNED  | Post-v1.                                           |
-| v3 compile-time thread-safety check       | PLANNED  | Post-v2. Transitive type property (single bit), not a borrow check. |
-| Async via compiler state machines         | PLANNED  | Deferred until `T?`, `move` elision, and traits land. |
+| Item                                              | Status   | Notes                                              |
+|---------------------------------------------------|----------|----------------------------------------------------|
+| v1 single-threaded baseline                       | current  | Stdlib refcounts are non-atomic; no threading API. |
+| v2 `spawn` + `Mutex<T>` / `Atomic<T>` / `AtomicShared<T>` | PLANNED  | Post-v1.                                  |
+| v3 compile-time thread-safety check               | PLANNED  | Post-v2. Transitive type property (single bit), not a borrow check. |
+| Async via compiler state machines                 | PLANNED  | Deferred until `T?`, `move` elision, and traits land. |

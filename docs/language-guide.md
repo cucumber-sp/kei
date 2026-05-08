@@ -33,14 +33,16 @@ Kei has three kinds of bindings: `let`, `const`, and `static`.
 ### `let` — Mutable Variables
 
 ```kei
-let x = 42;          // type inferred as i32
-let y: f64 = 3.14;   // explicit type annotation
+let x = 42;           // type inferred as i32
+let y: f64 = 3.14;    // explicit type annotation
 let name = "Alice";   // string type
 
 x = 100;              // reassignment is fine
 ```
 
-Variables must be initialized at declaration — uninitialized variables are a compile error.
+Variables must be initialized at declaration — uninitialized variables
+are a compile error. There is no `let mut`; `let` is mutable by default
+and `const` is the immutable-binding form.
 
 ### `const` — Immutable Bindings
 
@@ -51,7 +53,8 @@ const MAX = 100;
 PI = 2.0;  // compile error: cannot reassign const
 ```
 
-`const` prevents reassignment. The value can be computed at runtime; it just can't change.
+`const` prevents reassignment. The value can be computed at runtime; it
+just can't change.
 
 ### `static` — Compile-Time Constants
 
@@ -60,7 +63,8 @@ static MAX_USERS = 1000;
 pub static VERSION = 1;
 ```
 
-`static` values are inlined at every use site. They can be exported with `pub`.
+`static` values are inlined at every use site. They can be exported with
+`pub`. Names follow SCREAMING_SNAKE_CASE.
 
 ### Shadowing
 
@@ -104,24 +108,52 @@ print(x);         // 10
 | `float` | `f32` |
 | `double` | `f64` |
 
-### Pointers
+### References and pointers
 
-Raw pointers are available but require `unsafe` to use:
+Kei has two reference forms for safe code and one raw pointer for
+unsafe code:
+
+| Type             | Use                                                     | Where it's legal                                  |
+|------------------|---------------------------------------------------------|---------------------------------------------------|
+| `ref T`          | safe mutable reference (≈ C# `ref`); auto-derefs        | function/method params; `unsafe struct` fields    |
+| `readonly ref T` | safe immutable reference (≈ C# `in`); auto-derefs (read)| same as `ref T`                                   |
+| `*T`             | raw pointer (no auto-deref)                             | `unsafe struct` fields; locals inside `unsafe`; `extern fn` signatures |
+
+```kei
+fn lengthSquared(p: readonly ref Point) -> f64 {
+    return p.x * p.x + p.y * p.y;     // auto-deref through ref
+}
+
+fn translate(p: ref Point, dx: f64, dy: f64) {
+    p.x += dx;                         // write-through fires lifecycle on caller's slot
+    p.y += dy;
+}
+
+let pt = Point{ x: 3.0, y: 4.0 };
+let len2 = pt.lengthSquared();         // implicit &pt at call site
+pt.translate(1.0, 2.0);
+```
+
+Raw pointers are unsafe-only:
 
 ```kei
 fn main() -> int {
     let x: int = 42;
-    let p: ptr<int> = unsafe { &x };   // address-of requires unsafe
-    let val = unsafe { *p };           // dereference requires unsafe (prefix *)
-    print(val);                        // 42
+    unsafe {
+        let p: *int = &x;             // raw address-of (unsafe-only)
+        let val = *p;                  // explicit deref of *T (unsafe-only)
+        print(val);                    // 42
+    }
     return 0;
 }
 ```
 
-The `null` literal can be assigned to any `ptr<T>`:
+The `null` literal can be assigned to any nullable raw pointer:
 
 ```kei
-let p: ptr<int> = null;
+unsafe {
+    let p: *int? = null;
+}
 ```
 
 ### Inline arrays
@@ -211,18 +243,27 @@ pub fn add(a: int, b: int) -> int {
 }
 ```
 
-### `mut` Parameters
+### Parameter Mutability
 
-Parameters are immutable by default. Use `mut` to get a mutable local copy:
+Parameters bind mutably by default — you can reassign the local slot
+inside the function body. To opt out, use `readonly`:
 
 ```kei
-fn countdown(mut n: int) {
+fn countdown(n: int) {
     while n > 0 {
         print(n);
         n = n - 1;    // modifying local copy, caller's value unchanged
     }
 }
+
+fn read(readonly n: int) -> int {
+    // n = 0;          // ERROR: readonly forbids reassignment
+    return n * 2;
+}
 ```
+
+Plain (non-`ref`) parameters are *copies* — reassigning a mutable
+parameter does not affect the caller. There is no `mut` keyword.
 
 ### Recursion
 
@@ -260,10 +301,11 @@ fn main() -> int {
 
 ### Extern Functions (FFI)
 
-Declare C functions with `extern fn` and call them inside `unsafe`:
+Declare C functions with `extern fn` and call them inside `unsafe`. Use
+`*T` for raw pointers in extern signatures:
 
 ```kei
-extern fn puts(s: ptr<c_char>) -> int;
+extern fn puts(s: *c_char) -> int;
 extern fn abs(n: int) -> int;
 
 fn main() -> int {
@@ -321,28 +363,26 @@ fn main() -> int {
 }
 ```
 
-#### By-pointer (`self: ptr<T>`) — can mutate
+#### By-reference (`self: ref T` / `self: readonly ref T`)
 
 ```kei
 struct Counter {
     value: int;
 
-    fn increment(self: ptr<Counter>) {
-        unsafe {
-            self->value = self->value + 1;
-        }
+    fn increment(self: ref Counter) {
+        self.value = self.value + 1;     // auto-deref + lifecycle on caller's slot
     }
 
-    fn get(self: Counter) -> int {
-        return self.value;
+    fn get(self: readonly ref Counter) -> int {
+        return self.value;               // readonly ref forbids writes
     }
 }
 
 fn main() -> int {
     let c = Counter{ value: 0 };
-    c.increment();     // auto address-of: compiler passes &c
+    c.increment();     // implicit &c (ref); permits write-through
     c.increment();
-    print(c.get());    // 2
+    print(c.get());    // 2; implicit &c (readonly ref)
     return 0;
 }
 ```
@@ -403,25 +443,30 @@ struct Box<T> {
 
 ### Unsafe Structs
 
-Regular structs cannot contain `ptr<T>` fields. If you need raw pointers, use `unsafe struct`:
+Regular structs cannot contain `*T` fields or `ref T` fields. If you
+need raw pointers or `ref T` slots, use `unsafe struct`:
 
 ```kei
 pub unsafe struct Buffer {
-    data: ptr<u8>;
+    data: *u8;
     size: usize;
 
-    fn __destroy(self: Buffer) {
+    fn __destroy(self: ref Buffer) {
         unsafe { free(self.data); }
     }
 
-    fn __oncopy(self: Buffer) -> Buffer {
-        let new_data = unsafe { alloc(self.size) };
-        return Buffer{ data: new_data, size: self.size };
+    fn __oncopy(self: ref Buffer) {
+        unsafe {
+            let newData = alloc(self.size);
+            self.data = newData;
+        }
     }
 }
 ```
 
-An `unsafe struct` with `ptr<T>` fields must define both `__destroy` and `__oncopy`.
+An `unsafe struct` with `*T` fields must define both `__destroy` and
+`__oncopy`. Both hooks take `self: ref Self` and return void; they
+mutate the slot in place.
 
 ---
 
@@ -919,7 +964,8 @@ Kei structs can define lifecycle hooks that are called automatically by the comp
 
 ### `__destroy` — Cleanup at Scope Exit
 
-Called when a variable goes out of scope or is overwritten by reassignment:
+Called when a variable goes out of scope or is overwritten by
+reassignment. Takes `self: ref T`, returns void:
 
 ```kei
 import { print } from io;
@@ -927,7 +973,7 @@ import { print } from io;
 struct Resource {
     id: int;
 
-    fn __destroy(self: Resource) {
+    fn __destroy(self: ref Resource) {
         print("destroying resource");
         print(self.id);
     }
@@ -936,7 +982,7 @@ struct Resource {
 fn main() -> int {
     let r = Resource{ id: 1 };
     print("using resource");
-    // r.__destroy() called automatically here (scope exit)
+    // __destroy(&r) called automatically here (scope exit)
     return 0;
 }
 ```
@@ -951,7 +997,9 @@ destroying resource
 
 ### `__oncopy` — Custom Copy Behavior
 
-Called when a struct value is copied (assignment, parameter passing, return):
+Called *after* a struct value is bitwise-copied (assignment, parameter
+passing, return). Takes `self: ref T` of the destination slot, returns
+void; mutates the slot in place:
 
 ```kei
 import { print } from io;
@@ -959,12 +1007,12 @@ import { print } from io;
 struct Counter {
     val: int;
 
-    fn __oncopy(self: Counter) -> Counter {
+    fn __oncopy(self: ref Counter) {
         print("copying");
-        return Counter{ val: self.val + 100 };
+        self.val += 100;        // mutate the new copy in place
     }
 
-    fn __destroy(self: Counter) {
+    fn __destroy(self: ref Counter) {
         print("destroy");
         print(self.val);
     }
@@ -972,8 +1020,8 @@ struct Counter {
 
 fn main() -> int {
     let a = Counter{ val: 42 };
-    let b = a;           // triggers __oncopy
-    print(a.val);        // 42
+    let b = a;           // bitwise copy, then __oncopy(&b)
+    print(a.val);        // 42 (a was not touched)
     print(b.val);        // 142 (100 added by oncopy)
     return 0;
 }
@@ -1033,7 +1081,7 @@ Kei is stack-first — all struct data lives on the stack by default. Heap alloc
 ```kei
 fn main() -> int {
     unsafe {
-        let buf = alloc(1024);   // allocate 1024 bytes, returns ptr<u8>
+        let buf = alloc(1024);   // allocate 1024 bytes, returns *u8
         // use buf...
         free(buf);               // free the memory
     }
@@ -1056,8 +1104,10 @@ These operations require `unsafe`:
 
 - `alloc` / `free`
 - Calling `extern fn` functions
-- Address-of (`&x`)
-- Pointer dereference (`*p`)
+- Raw address-of (`&x` — produces `*T`)
+- Raw pointer dereference (`*p` where `p: *T`)
+- `addr(field)` (slot lvalue for a `ref T` field)
+- `init field = value` (initialization-write)
 - Pointer casts
 
 ```kei
@@ -1065,8 +1115,8 @@ fn main() -> int {
     let x: int = 42;
 
     unsafe {
-        let p: ptr<int> = &x;     // address-of
-        let val = *p;              // dereference
+        let p: *int = &x;         // raw address-of
+        let val = *p;              // explicit deref of *T
         print(val);                // 42
     }
 
@@ -1076,15 +1126,16 @@ fn main() -> int {
 
 ### Standard Library Memory Helpers
 
-The `mem` module provides safe wrappers so callers don't need their own `unsafe`:
+The `mem` module provides safe wrappers so callers don't need their own
+`unsafe`:
 
 ```kei
 import { alloc, dealloc, copy, set } from mem;
 
 fn main() -> int {
     let buf = alloc(256 as usize);     // allocate 256 bytes
-    set(buf, 0, 256 as usize);        // zero the memory
-    dealloc(buf as ptr<void>);         // free it
+    set(buf, 0, 256 as usize);         // zero the memory
+    dealloc(buf as *void);              // free it
     return 0;
 }
 ```
@@ -1167,20 +1218,22 @@ fn main() -> int {
 ### Moving into Function Parameters
 
 ```kei
-fn consume(move d: Data) -> int {
+fn consume(d: Data) -> int {
     return d.value;
 }
 
 fn main() -> int {
     let d = Data{ value: 42 };
-    let result = consume(move d);
+    let result = consume(move d);   // explicit `move` at the call site
     // d is now invalid — can't use it
     return result;
 }
 ```
 
-Moved variables are skipped by the auto-emitted `__destroy` at scope exit, so
-`move` produces a real zero-cost transfer in codegen.
+`move` survives as an **expression form** only — `let b = move a` and
+`f(move x)` at call sites. The previous `move` parameter form is
+removed. Moved variables are skipped by the auto-emitted `__destroy`
+at scope exit, so `move` produces a real zero-cost transfer in codegen.
 
 ---
 
@@ -1215,10 +1268,10 @@ import { alloc, dealloc, copy, set } from mem;
 
 | Function | Description |
 |----------|-------------|
-| `alloc(count: usize) -> ptr<u8>` | Allocate `count` bytes |
-| `dealloc(p: ptr<void>)` | Free memory |
-| `copy(dest: ptr<u8>, src: ptr<u8>, n: usize)` | Copy `n` bytes |
-| `set(dest: ptr<u8>, c: i32, n: usize)` | Fill `n` bytes with value `c` |
+| `alloc(count: usize) -> *u8` | Allocate `count` bytes |
+| `dealloc(p: *void)` | Free memory |
+| `copy(dest: *u8, src: *u8, n: usize)` | Copy `n` bytes |
+| `set(dest: *u8, c: i32, n: usize)` | Fill `n` bytes with value `c` |
 
 These are safe wrappers — they call C stdlib functions internally so callers don't need their own `unsafe` blocks.
 
@@ -1250,12 +1303,12 @@ Postfix `++` / `--` are not part of Kei. Use `x += 1` / `x -= 1`.
 
 ### Other
 
-| Operator | Description |
-|----------|-------------|
-| `.` | Field access |
-| `*` | Pointer dereference (prefix) |
-| `->` | Arrow member access (pointer) |
-| `&` | Address-of (unsafe) |
-| `as` | Type cast |
-| `..` | Exclusive range |
-| `..=` | Inclusive range |
+| Operator   | Description                                                  |
+|------------|--------------------------------------------------------------|
+| `.`        | Field access (auto-derefs through `ref T`)                   |
+| `*`        | Raw pointer dereference (prefix, unsafe-only)                |
+| `&`        | Raw address-of (unsafe-only) — produces `*T`                 |
+| `addr(...)`| Slot lvalue for a `ref T` field (unsafe-only) — produces `*T` |
+| `as`       | Type cast                                                    |
+| `..`       | Exclusive range                                              |
+| `..=`      | Inclusive range                                              |

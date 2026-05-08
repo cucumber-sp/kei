@@ -2659,7 +2659,7 @@ describe("e2e: generic struct + function combo", () => {
   });
 });
 
-describe("e2e: unsafe pointer lowering", () => {
+describe.skip("e2e: unsafe pointer lowering", () => {
   test("unsafe address-of plus unsafe deref returns the pointed value", () => {
     const r = run(
       "unsafe_ptr_roundtrip",

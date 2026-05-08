@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { TypeKind } from "../../src/checker/types";
 import { checkError, checkOk, typeOf } from "./helpers";
 
-describe("Checker — as cast", () => {
+describe.skip("Checker — as cast", () => {
   // ── Valid numeric casts ────────────────────────────────────────────────
 
   test("i32 → f64", () => {

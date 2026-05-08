@@ -13,14 +13,17 @@ top_level_decl   = function_decl | struct_decl
 struct_decl      = ["pub"] "struct" IDENT [generic_params] "{" { struct_member } "}" ;
 unsafe_struct_decl = ["pub"] "unsafe" "struct" IDENT [generic_params] "{" { struct_member } "}" ;
 struct_member    = field_decl | method_decl ;
-field_decl       = IDENT ":" type ";" ;
+field_decl       = ["readonly"] IDENT ":" type ";" ;
 method_decl      = "fn" IDENT [generic_params] "(" [param_list] ")" ["->" type] ["throws" type_list] block ;
 
 (* Functions *)
 function_decl    = ["pub"] "fn" IDENT [generic_params] "(" [param_list] ")" ["->" type] ["throws" type_list] block ;
 extern_fn_decl   = "extern" "fn" IDENT "(" [extern_param_list] ")" ["->" type] ";" ;
 param_list       = param { "," param } ;
-param            = ["mut" | "move"] IDENT ":" type ;
+param            = ["readonly"] IDENT ":" type ;
+   (* The `mut` parameter form is removed; parameters bind mutably by default,
+      `readonly` opts out. The `move` parameter form is also removed; use
+      the `move` expression at the call site instead. *)
 
 (* Generics *)
 generic_params   = "<" IDENT { "," IDENT } ">" ;
@@ -33,19 +36,25 @@ variant          = IDENT [ "(" field_list ")" ]
                  | IDENT [ "=" INTEGER ] ;
 
 (* Types *)
-type             = ref_type | nullable_type ;
+type             = ref_type | raw_ptr_type | nullable_type ;
 
-ref_type         = "ref" [ "mut" ] base_type ;
-   (* `ref T` is valid only in parameter and local-binding positions (initially).
-      Struct fields, return types, and collection element types reject `ref T`.
-      Enforced by the checker, not the grammar. *)
+ref_type         = ["readonly"] "ref" base_type ;
+   (* `ref T` and `readonly ref T` are valid only in:
+      - function/method parameter types,
+      - `unsafe struct` field types.
+      They are rejected in: return types, safe-struct fields, local
+      bindings, generic argument positions, array/collection element
+      types, `static` global types. Enforced by the checker.
+      `readonly ref T` ≈ C# `in`; `ref T` ≈ C# `ref`. *)
+
+raw_ptr_type     = "*" base_type ;
+   (* `*T` is unsafe-only: `unsafe struct` fields, locals inside `unsafe`
+      blocks, and `extern fn` signatures. *)
 
 nullable_type    = base_type [ "?" ] ;
 
 base_type        = primitive_type | IDENT [generic_args]
-                 | "ptr" "<" type ">"
                  | "inline" "<" type "," INTEGER ">"
-                 | "slice" "<" type ">"
                  | "fn" "(" [type_list] ")" [ "->" type ] ;
 
 type_list        = type { "," type } ;
@@ -56,8 +65,10 @@ primitive_type   = "i8" | "i16" | "i32" | "i64"
                  | "int" | "uint"
                  | "bool" | "void" ;
 
-(* Note: `string`, `array<T>` (heap), `List<T>`, `Shared<T>` are stdlib types,
-   not built-in base_types. Users write them as user-defined IDENT references. *)
+(* Note: `string`, `array<T>`, `List<T>`, `Shared<T>` are stdlib types.
+   `string` and `array` are lowercase keyword aliases for the canonical
+   `String` and `Array<T>`; `List<T>` and `Shared<T>` are written
+   PascalCase directly. `inline<T, N>` is a compiler intrinsic. *)
 
 (* Statements *)
 statement        = let_stmt | const_stmt | assign_stmt | return_stmt
@@ -67,23 +78,34 @@ statement        = let_stmt | const_stmt | assign_stmt | return_stmt
 let_stmt         = "let" IDENT [":" type] "=" expr ";" ;
 const_stmt       = "const" IDENT [":" type] "=" expr ";" ;
 static_decl      = "static" IDENT [":" type] "=" expr ";" ;
+   (* `static` names follow SCREAMING_SNAKE_CASE (lint-only — not grammar). *)
+init_stmt        = "init" lvalue "=" expr ";" ;
+   (* `init` is unsafe-only at the field level: skips destroy of garbage,
+      bitwise-writes the new value, runs `__oncopy` on it. Inside struct
+      literals the same semantics fire implicitly per field. *)
 return_stmt      = "return" [expr] ";" ;
 defer_stmt       = "defer" statement ;
 unsafe_block     = "unsafe" block ;
 
 (* Expressions *)
 expr             = literal | IDENT | expr bin_op expr | unary_op expr
-                 | expr "." IDENT | "*" expr | expr "->" IDENT
+                 | expr "." IDENT | "*" expr
                  | expr "[" expr "]"
                  | expr "(" [arg_list] ")" | "if" expr block "else" block
                  | struct_literal | "(" expr ")"
-                 | "&" expr                    (* address-of: ref T in safe, ptr<T> in unsafe *)
-                 | "&" "mut" expr              (* mutable address-of: ref mut T *)
+                 | "&" expr                    (* raw address-of (unsafe-only): produces *T *)
+                 | "addr" "(" expr ")"          (* slot lvalue for a `ref T` field (unsafe-only): produces *T *)
                  | "move" expr
                  | expr "as" type
                  | expr "catch" catch_block
                  | expr "catch" "panic"
                  | expr "catch" "throw" ;
+
+(* Note: the `->` arrow operator is removed. For raw pointers (`*T`)
+   write `(*p).field`; for `ref T` values the `.` operator auto-derefs.
+   The `&mut` form is also removed; `&` is unsafe-only and produces `*T`.
+   At call sites taking `ref T` parameters, the address is taken
+   implicitly (no `&` needed). *)
 
 (* Note: Kei has no postfix `++` / `--`. Use compound assignment `x += 1` / `x -= 1`. *)
 (* Note: Kei has no closures and no nested fn declarations. Functions are
@@ -104,26 +126,26 @@ block            = "{" { statement } "}" ;
 
 ## Keyword list
 
-Active — recognised by the parser today:
+Active — recognised by the parser:
 
 ```
-as          assert      bool        break       byte
-case        catch       const       continue    default
-defer       double      else        enum        extern
-false       float       fn          for         if
-import      in          inline      int         let
-long        move        mut         null        panic
-ptr         pub         require     return      self
-short       slice       static      string      struct
-switch      throw       throws      true        type
-uint        unsafe      void        while
+addr        as          assert      bool        break
+byte        case        catch       const       continue
+default     defer       double      else        enum
+extern      false       float       fn          for
+if          import      in          init        inline
+int         let         long        move        null
+panic       pub         readonly    ref         require
+return      self        short       static      string
+struct      switch      throw       throws      true
+type        uint        unsafe      void        while
 
 i8  i16  i32  i64  u8  u16  u32  u64  f32  f64  isize  usize
 ```
 
-`string`, `slice`, and `array` are keywords (not user-defined identifiers)
-even when they resolve to stdlib or compiler-built types — keeping lexer
-rules local and simple.
+`string` and `array` are lowercase keyword aliases for the canonical
+stdlib types `String` and `Array<T>`. `inline<T, N>` is a compiler
+intrinsic for fixed-size value-type arrays.
 
 ## Reserved keywords
 
@@ -131,14 +153,25 @@ Recognised by the lexer; rejected as identifiers; not yet usable as syntax:
 
 ```
 async       await       impl        macro       match
-ref         shared      super       trait       where
-yield
+super       trait       where       yield
 ```
 
-`ref` is reserved for safe references (`ref T` / `ref mut T`); `match` is
-reserved for fuller pattern matching beyond what `switch` covers today. Both
-are spec'd elsewhere; their planned status lives in
-[`SPEC-STATUS.md`](../SPEC-STATUS.md).
+`match` is reserved for fuller pattern matching beyond what `switch`
+covers today.
+
+## Removed keywords
+
+These keywords were active in earlier versions and have been removed:
+
+- `mut` — replaced by `readonly` (see §07-structures.md). Bindings are
+  mutable by default; `readonly` opts out.
+- `ptr` — replaced by `ref T` / `readonly ref T` (safe) and `*T`
+  (unsafe). The `ptr<T>` generic-style spelling is gone.
+- `slice` — `slice<T>` removed entirely. Use `Array<T>` for refcounted
+  views, `ref inline<T, N>` for stack views, or raw `*T` + `usize` at
+  C boundaries.
+- `shared` — un-reserved. The stdlib type is `Shared<T>` (no lowercase
+  alias).
 
 ## Assertions
 

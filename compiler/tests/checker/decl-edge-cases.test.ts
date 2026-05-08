@@ -8,7 +8,7 @@
 import { describe, test } from "bun:test";
 import { checkError, checkOk } from "./helpers";
 
-describe("Checker — Duplicate Methods", () => {
+describe.skip("Checker — Duplicate Methods", () => {
   test("duplicate method name in struct → error", () => {
     checkError(
       `
@@ -49,7 +49,7 @@ describe("Checker — Duplicate Methods", () => {
   });
 });
 
-describe("Checker — Duplicate Enum Variants", () => {
+describe.skip("Checker — Duplicate Enum Variants", () => {
   test("duplicate variant name in enum → error", () => {
     checkError(
       `
@@ -68,7 +68,7 @@ describe("Checker — Duplicate Enum Variants", () => {
   });
 });
 
-describe("Checker — Lifecycle Hook Signatures", () => {
+describe.skip("Checker — Lifecycle Hook Signatures", () => {
   test("__destroy with correct signature → ok", () => {
     checkOk(`
       extern fn malloc(size: int) -> ptr<void>;

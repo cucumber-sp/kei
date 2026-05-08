@@ -25,15 +25,13 @@ pub struct Point {
     x: f64;
     y: f64;
 
-    fn length(self: Point) -> f64 {
+    fn length(self: readonly ref Point) -> f64 {
         return self.x * self.x + self.y * self.y;
     }
 
-    fn translate(self: ptr<Point>, dx: f64, dy: f64) {
-        unsafe {
-            self->x = self->x + dx;
-            self->y = self->y + dy;
-        }
+    fn translate(self: ref Point, dx: f64, dy: f64) {
+        self.x = self.x + dx;
+        self.y = self.y + dy;
     }
 }
 
@@ -43,18 +41,20 @@ struct Pair<A, B> {
 }
 
 pub unsafe struct Buffer {
-    data: ptr<u8>;
+    data: *u8;
     size: usize;
 
-    fn __destroy(self: Buffer) {
+    fn __destroy(self: ref Buffer) {
         unsafe {
             free(self.data);
         }
     }
 
-    fn __oncopy(self: Buffer) -> Buffer {
-        let new_data = unsafe { alloc(self.size) };
-        return Buffer{ data: new_data, size: self.size };
+    fn __oncopy(self: ref Buffer) {
+        unsafe {
+            let newData = alloc(self.size);
+            self.data = newData;
+        }
     }
 }
 
@@ -64,7 +64,7 @@ struct DbError {
     code: int;
 }
 
-extern fn puts(s: ptr<c_char>) -> int;
+extern fn puts(s: *c_char) -> int;
 
 pub fn add(a: int, b: int) -> int {
     return a + b;
@@ -136,10 +136,10 @@ fn main() -> int {
     x++;
     y--;
 
-    let addr = unsafe { &x };
+    let address = unsafe { &x };
     let bits = ~x;
     let neg = -x;
-    let not_flag = !flag;
+    let notFlag = !flag;
 
     x += 10;
     x -= 5;

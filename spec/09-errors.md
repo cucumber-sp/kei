@@ -317,7 +317,7 @@ fn loadConfig(path: string) -> Config throws ConfigError {
 
 ### Partial success with cleanup
 ```kei
-fn processFiles(paths: slice<string>) -> int throws ProcessingError {
+fn processFiles(paths: Array<String>) -> int throws ProcessingError {
     let processed = 0;
     defer cleanupTempFiles();
     

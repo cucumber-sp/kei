@@ -150,22 +150,22 @@ Kei can interface with C libraries through external function declarations and un
 Declare C functions using `extern fn`:
 
 ```kei
-extern fn strlen(s: ptr<c_char>) -> usize;
-extern fn strcpy(dest: ptr<c_char>, src: ptr<c_char>) -> ptr<c_char>;
+extern fn strlen(s: *c_char) -> usize;
+extern fn strcpy(dest: *c_char, src: *c_char) -> *c_char;
 ```
 
 **Characteristics:**
 - No function body — implemented in C
 - Uses C calling convention
-- May use `ptr<T>` freely (FFI boundary)
+- May use `*T` freely (FFI boundary; raw pointers are unsafe-only)
 - **Calling requires `unsafe` block** — compiler cannot verify foreign code safety
 - Variadic arguments (`...`) are spec'd but not yet parsed — `printf` cannot
   be spelled directly today (see [SPEC-STATUS.md](../SPEC-STATUS.md)).
 
 ```kei
-extern fn strlen(s: ptr<c_char>) -> usize;
+extern fn strlen(s: *c_char) -> usize;
 
-fn safeStrlen(s: ptr<c_char>) -> usize {
+fn safeStrlen(s: *c_char) -> usize {
     return unsafe { strlen(s) };
 }
 ```
@@ -178,9 +178,9 @@ The idiomatic pattern is to wrap C libraries in safe Kei interfaces:
 
 ```kei
 // SQLite wrapper example
-extern fn sqlite3_open(filename: ptr<c_char>, db: ptr<ptr<void>>) -> int;
-extern fn sqlite3_close(db: ptr<void>) -> int;
-extern fn sqlite3_exec(db: ptr<void>, sql: ptr<c_char>, callback: ptr<void>, data: ptr<void>, errmsg: ptr<ptr<c_char>>) -> int;
+extern fn sqlite3Open(filename: *c_char, db: **void) -> int;
+extern fn sqlite3Close(db: *void) -> int;
+extern fn sqlite3Exec(db: *void, sql: *c_char, callback: *void, data: *void, errmsg: **c_char) -> int;
 
 struct DbError {
     code: int;
@@ -188,37 +188,37 @@ struct DbError {
 }
 
 unsafe struct Database {
-    handle: ptr<void>;
-    
-    fn Database(path: string) -> Database throws DbError {
+    handle: *void;
+
+    fn open(path: string) -> Database throws DbError {
         let db = Database{ handle: null };
-        
+
         unsafe {
-            let c_path = path.toCString();  
-            let rc = sqlite3_open(c_path, &db.handle);
+            let cPath = path.toCString();
+            let rc = sqlite3Open(cPath, &db.handle);
             if rc != 0 {
                 throw DbError{ code: rc, message: "Failed to open database" };
             }
         }
-        
+
         return db;
     }
-    
-    fn exec(self: Database, sql: string) -> bool throws DbError {
+
+    fn exec(self: ref Database, sql: string) -> bool throws DbError {
         unsafe {
-            let c_sql = sql.toCString();
-            let rc = sqlite3_exec(self.handle, c_sql, null, null, null);
+            let cSql = sql.toCString();
+            let rc = sqlite3Exec(self.handle, cSql, null, null, null);
             if rc != 0 {
                 throw DbError{ code: rc, message: "Query failed" };
             }
         }
         return true;
     }
-    
-    fn __destroy(self: Database) {
+
+    fn __destroy(self: ref Database) {
         unsafe {
-            if (self.handle != null) {
-                sqlite3_close(self.handle);
+            if self.handle != null {
+                sqlite3Close(self.handle);
             }
         }
     }
@@ -226,20 +226,20 @@ unsafe struct Database {
 
 // Safe usage
 fn useDatabase() -> int {
-    let db = Database.Database("data.db") catch {
+    let db = Database.open("data.db") catch {
         DbError e: {
             print("Database error: " + e.message);
             return -1;
         };
     };
-    
+
     db.exec("CREATE TABLE users (id INTEGER, name TEXT)") catch {
         DbError e: {
             print("SQL error: " + e.message);
             return -1;
         };
     };
-    
+
     return 0;
 }
 ```
@@ -263,7 +263,9 @@ fn useDatabase() -> int {
 | `f64` | `double` | |
 | `bool` | `bool` | C99 |
 | `c_char` | `char` | C character |
-| `ptr<T>` | `T*` | Raw pointer |
+| `*T` | `T*` | Raw pointer (unsafe-only) |
+| `ref T` | `T*` | Mutable reference (auto-deref'd in safe code) |
+| `readonly ref T` | `const T*` | Immutable reference (auto-deref'd in safe code) |
 | `struct` | `struct` | Direct mapping |
 
 ### Linking external libraries
@@ -280,13 +282,13 @@ kei build main.kei --link sqlite3 --link math
 Converting between Kei strings and C strings:
 
 ```kei
-extern fn puts(s: ptr<c_char>) -> int;
+extern fn puts(s: *c_char) -> int;
 
 fn printString(message: string) {
     unsafe {
-        let c_str = message.toCString();
-        puts(c_str);
-        // c_str automatically freed when it goes out of scope
+        let cStr = message.toCString();
+        puts(cStr);
+        // cStr automatically freed when it goes out of scope
     }
 }
 ```
@@ -301,34 +303,34 @@ fn printString(message: string) {
 - Use Kei's `alloc`/`free` for Kei-managed heap memory
 
 ```kei
-extern fn fopen(filename: ptr<c_char>, mode: ptr<c_char>) -> ptr<void>;
-extern fn fclose(file: ptr<void>) -> int;
-extern fn fread(buffer: ptr<void>, size: usize, count: usize, file: ptr<void>) -> usize;
+extern fn fopen(filename: *c_char, mode: *c_char) -> *void;
+extern fn fclose(file: *void) -> int;
+extern fn fread(buffer: *void, size: usize, count: usize, file: *void) -> usize;
 
 unsafe struct File {
-    handle: ptr<void>;
-    
-    fn File(path: string, mode: string) -> File throws IOError {
+    handle: *void;
+
+    fn open(path: string, mode: string) -> File throws IoError {
         unsafe {
-            let c_path = path.toCString();
-            let c_mode = mode.toCString();
-            let handle = fopen(c_path, c_mode);
+            let cPath = path.toCString();
+            let cMode = mode.toCString();
+            let handle = fopen(cPath, cMode);
             if handle == null {
-                throw IOError{ message: "Failed to open file" };
+                throw IoError{ message: "Failed to open file" };
             }
             return File{ handle: handle };
         }
     }
-    
-    fn read(self: File, buffer: ptr<u8>, size: usize) -> usize {
+
+    fn read(self: ref File, buffer: *u8, size: usize) -> usize {
         unsafe {
             return fread(buffer, 1, size, self.handle);
         }
     }
-    
-    fn __destroy(self: File) {
+
+    fn __destroy(self: ref File) {
         unsafe {
-            if (self.handle != null) {
+            if self.handle != null {
                 fclose(self.handle);
             }
         }
