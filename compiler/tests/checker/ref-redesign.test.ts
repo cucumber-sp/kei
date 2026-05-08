@@ -428,3 +428,140 @@ describe.skip("Shared<T> stdlib semantics", () => {
     `);
   });
 });
+
+// ─── Documented future work ──────────────────────────────────────────────────
+//
+// Each describe.skip / test.skip below pins a known limitation that the
+// initial ref-redesign rollout deliberately deferred. Future PRs should
+// flip these back on as the underlying feature lands. They exist so the
+// remaining work is a checklist, not tribal knowledge.
+
+describe.skip("future: auto-generated lifecycle hooks use `self: ref T` ABI", () => {
+  // Auto-derived __destroy / __oncopy on a `struct` with managed fields
+  // (e.g. `string`) currently emit `fn __destroy(self: T)` (by-value).
+  // Per §3.1 / §07-structures the canonical ABI is `fn __destroy(self:
+  // ref T)` returning void. User-defined hooks already accept the new
+  // form; this is about flipping the COMPILER-generated ones too. Once
+  // KIR's auto-destroy/oncopy emit the ref-self form, this test can
+  // assert (against KIR or against the emitted C signature) that the
+  // synthetic hook signature reads `Foo* self` rather than `Foo self`
+  // followed by an implicit pointer wrap.
+  test("auto-generated __destroy emits `self: ref T`", () => {
+    // Marker test — fill in once the KIR auto-gen is flipped.
+  });
+});
+
+describe.skip("future: parser supports `Type<T>.method(args)` on generic types", () => {
+  // The parser parses `Identifier<TypeArgs>` followed by `(args)` (call)
+  // or `{ ... }` (struct literal), but NOT `.method(args)`. Static method
+  // calls on generic types like `Shared<i32>.wrap(n)` therefore don't
+  // parse — the user's only options today are non-generic dispatch
+  // (`Shared.wrap(n)`, which fails to bind T) or a workaround. Once
+  // postfix-parser handles `.member` after a closing `>`, the
+  // `Shared<T> stdlib semantics` describe and the e2e shared.test.ts
+  // skeleton can be flipped on.
+  test("Shared<i32>.wrap(n) parses and binds T = i32", () => {
+    // Marker test.
+  });
+});
+
+describe.skip("future: lexer splits `>>` in type-position for nested generics", () => {
+  // `Shared<Shared<i32>>` lexes the trailing `>>` as a single
+  // `GreaterGreater` (right-shift) token, so the inner generic-args
+  // close fails. Standard fix: contextual split when the parser is
+  // inside a type-args context. Blocks §4.10 nested-Shared tests.
+  test("Shared<Shared<i32>> parses as a doubly-wrapped generic type", () => {
+    // Marker test.
+  });
+});
+
+describe.skip("future: `ptr<T>` source form is rejected", () => {
+  // The type-resolver still accepts `ptr<T>` as a back-compat path so
+  // older fixtures continue working through the rollout. Per the
+  // redesign the canonical raw-pointer spelling is `*T` and `ptr<T>`
+  // should be rejected with a hint to migrate.
+  test("`ptr<T>` parameter is a compile error pointing at `*T`", () => {
+    // Marker test.
+  });
+});
+
+describe.skip("future: `dynarray<T>` source form is rejected", () => {
+  // Same back-compat story as `ptr<T>` — the keyword is still active
+  // and the type-resolver routes it through the array path. Per the
+  // redesign neither `dynarray` nor `slice` exist; only `Array<T>` and
+  // `inline<T, N>` survive at the source level.
+  test("`dynarray<T>` parameter is a compile error", () => {
+    // Marker test.
+  });
+});
+
+describe.skip("future: `mut` keyword fully removed from the lexer", () => {
+  // `mut` is rejected at the parser level (parseParam doesn't accept
+  // it, parseLetStatement doesn't accept it, parseType doesn't accept
+  // `ref mut T`) — the existing `mut keyword is removed` cases pass.
+  // Cosmetic follow-up: also drop `mut` from the active KEYWORD_MAP so
+  // `mut` becomes a regular identifier. This test pins that future state.
+  test("`mut` is a regular identifier (no keyword diagnostic)", () => {
+    // Marker test.
+  });
+});
+
+describe.skip("future: reverse-declaration-order destruction (§6.9)", () => {
+  // The spec pins that fields are destroyed in reverse declaration
+  // order. The auto-generated __destroy emits them in declaration
+  // order today. Test would build a struct whose fields print on
+  // destroy and assert the output is in reverse.
+  test("struct with two managed fields destroys them in reverse order", () => {
+    // Marker test.
+  });
+});
+
+describe.skip("future: equality + sameHandle for `Shared<T>` (§6.5)", () => {
+  // `==` on Shared<T> recursively compares fields (matches plain struct
+  // equality). `sameHandle(a, b)` is a separate identity primitive that
+  // pointer-compares the underlying allocation. Neither is implemented
+  // yet — both depend on having a working Shared<T> end-to-end first.
+  test("Shared<T> == Shared<T> compares by value", () => {
+    // Marker test.
+  });
+  test("sameHandle(a, b) is true when a and b share the same allocation", () => {
+    // Marker test.
+  });
+});
+
+describe.skip("future: auto-last-use elision (§3.5)", () => {
+  // When the caller does not use a value after a call, the compiler
+  // should elide the oncopy/destroy pair: `f(s)` with `s` unused
+  // afterwards becomes `f(move s)`. Requires liveness-style analysis
+  // on the AST or KIR; not implemented in v1.
+  test("last-use of `s` before the end of scope is treated as `move s`", () => {
+    // Marker test.
+  });
+});
+
+describe.skip("future: `copy(x)` builtin (§6.3)", () => {
+  // Optional explicit-copy builtin deferred unless user code asks for
+  // it. Pin a test so the question is rediscoverable.
+  test("`copy(x)` produces a fresh duplicate firing __oncopy", () => {
+    // Marker test.
+  });
+});
+
+describe.skip("future: `weak<T>` companion type (§6.8)", () => {
+  // Non-owning reference-counted pointer for breaking cycles. Out of
+  // scope for v1; depends on Shared<T> being real first.
+  test("Weak<T> upgrade returns Shared<T>? (None when count == 0)", () => {
+    // Marker test.
+  });
+});
+
+describe.skip("future: SliceType cleanup", () => {
+  // Source-level `slice<T>` is rejected (see "`slice<T>` is removed"
+  // above), but the internal SliceType semantic representation and
+  // the type-resolver's slice-related code paths still exist for
+  // back-compat. Cleanup is internal and not user-visible.
+  test("SliceType is removed from the internal type system", () => {
+    // Marker test.
+  });
+});
+
