@@ -175,8 +175,12 @@ export function lowerAutoDestroy(
 
 /**
  * Synthesize an __oncopy KIR function for a struct with auto-generated oncopy.
- * Takes self by pointer, increments refcounts for string fields via kei_string_copy,
- * calls nested __oncopy for struct fields, then loads and returns the modified struct.
+ *
+ * Takes self by pointer, increments refcounts for string fields via
+ * `kei_string_copy`, recursively calls nested struct __oncopy hooks, and
+ * returns void. The mutations are observed by the caller through the
+ * pointer — no return-value copy is needed (the canonical ref-T-self
+ * lifecycle ABI; see `docs/design/ref-redesign.md` §3.1).
  */
 export function lowerAutoOncopy(
   _ctx: LoweringCtx,
@@ -219,6 +223,11 @@ export function lowerAutoOncopy(
       insts.push({ kind: "store", ptr: fieldPtr, value: copied });
     } else if (fieldType.kind === "struct" && fieldType.methods.has("__oncopy")) {
       // fieldPtr = &self->fieldName; val = *fieldPtr; oncopy val; *fieldPtr = val;
+      //
+      // The C emit for `oncopy val` becomes `X___oncopy(&val)` (void
+      // return), which mutates `val` in place via the pointer. The
+      // surrounding load/store pair propagates the mutation back to
+      // the field slot.
       const fieldPtr = freshVar();
       const kirFieldType: KirType = { kind: "struct", name: fieldType.name, fields: [] };
       insts.push({
@@ -239,21 +248,17 @@ export function lowerAutoOncopy(
     }
   }
 
-  // Load the modified struct and return it
-  const result = freshVar();
-  insts.push({ kind: "load", dest: result, ptr: selfVar, type: structKirType });
-
   const entryBlock: KirBlock = {
     id: "entry",
     phis: [],
     instructions: insts,
-    terminator: { kind: "ret", value: result },
+    terminator: { kind: "ret_void" },
   };
 
   return {
     name: mangledName,
     params: [{ name: "self", type: selfType }],
-    returnType: structKirType,
+    returnType: { kind: "void" },
     blocks: [entryBlock],
     localCount: varCounter,
   };

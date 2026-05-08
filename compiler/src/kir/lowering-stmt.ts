@@ -184,9 +184,47 @@ export function lowerLetStmt(ctx: LoweringCtx, stmt: LetStmt): void {
 }
 
 export function lowerConstStmt(ctx: LoweringCtx, stmt: ConstStmt): void {
-  // Const is just like let but immutable — same lowering
+  // `const` is "immutable binding" — the spec only blocks rebinding `x = v`
+  // (the checker enforces that). Field paths `x.field = v` are allowed, so
+  // const struct values need their own stack slot just like `let` does.
+  // Otherwise `&x->field` would target the source's slot or worse, fall on
+  // a loaded SSA value with no address.
+  const type = getExprKirType(ctx, stmt.initializer);
   const valueId = lowerExpr(ctx, stmt.initializer);
-  ctx.varMap.set(stmt.name, valueId);
+
+  if (type.kind === "struct" && isStackAllocVar(ctx, valueId)) {
+    // Initializer is itself a freshly-stack-allocated struct (e.g. a
+    // struct literal); alias the binding to its slot — no copy needed.
+    ctx.varMap.set(stmt.name, valueId);
+    trackScopeVar(ctx, stmt.name, valueId, stmt.initializer);
+    return;
+  }
+
+  // Allocate a fresh slot, store the initialiser, fire oncopy when the
+  // initialiser was an existing owner (same rule as `let`).
+  const ptrId = emitStackAlloc(ctx, type);
+
+  const initKind = stmt.initializer.kind;
+  const isRValue =
+    initKind === "MoveExpr" ||
+    initKind === "CallExpr" ||
+    initKind === "StructLiteral" ||
+    initKind === "IfExpr" ||
+    initKind === "SwitchExpr" ||
+    initKind === "UnsafeExpr" ||
+    initKind === "GroupExpr" ||
+    initKind === "CastExpr";
+  if (!isRValue) {
+    const checkerType = ctx.checkResult.types.typeMap.get(stmt.initializer);
+    const lifecycle = getStructLifecycle(ctx, checkerType);
+    if (lifecycle?.hasOncopy) {
+      emit(ctx, { kind: "oncopy", value: valueId, structName: lifecycle.structName });
+    }
+  }
+
+  emit(ctx, { kind: "store", ptr: ptrId, value: valueId });
+  ctx.varMap.set(stmt.name, ptrId);
+  trackScopeVar(ctx, stmt.name, ptrId, stmt.initializer);
 }
 
 export function lowerReturnStmt(ctx: LoweringCtx, stmt: ReturnStmt): void {

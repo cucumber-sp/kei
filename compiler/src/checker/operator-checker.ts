@@ -329,7 +329,17 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
 }
 
 function checkAssignTarget(checker: Checker, target: Expression): void {
-  // Step 1: check the assigned-to slot itself (only the OUTERMOST node).
+  // Direct rebinding `x = v` — the const/readonly binding rule only
+  // fires here. `let mut x` and `let x` (today's mutable default) bind
+  // mutably; `const x` and `readonly x` bind immutably.
+  if (target.kind === "Identifier") {
+    const sym = checker.currentScope.lookup(target.name);
+    if (sym && sym.kind === SymbolKind.Variable && !sym.isMutable) {
+      checker.error(`cannot assign to immutable variable '${target.name}'`, target.span);
+    }
+  }
+
+  // Field-level readonly on the OUTERMOST member-access target.
   // Intermediate field accesses on the path don't matter — we're not
   // writing to them, just reading them to find the leaf slot.
   if (target.kind === "MemberExpr") {
@@ -349,25 +359,31 @@ function checkAssignTarget(checker: Checker, target: Expression): void {
     }
   }
 
-  // Step 2: walk to the root binding and check it's mutable.
+  // Walk to the root identifier for type-level rules that flow through
+  // member/index paths (currently just `readonly ref T` write-through).
+  // Binding mutability is NOT re-checked along the way; per the spec
+  // `const`/`readonly` lock the binding only, not its fields.
   checkAssignRoot(checker, target);
 }
 
 /**
- * Walk down `target` to the root identifier and check its binding mutability.
- * Does NOT re-check field-level readonly along the way — that's only the
- * outermost field's concern.
+ * Walk down `target` to the root identifier and apply the rules that flow
+ * from the root *type*, not from binding mutability. `const` and ordinary
+ * `readonly` only lock the binding itself (`x = v` form); field mutation
+ * `x.field = v` is allowed because the slot for `x` is unchanged. The
+ * exception is `readonly ref T`, where write-through THROUGH the ref —
+ * including via field paths — is forbidden.
+ *
+ * Direct rebinding (`x = v` with target = Identifier) is checked
+ * separately in {@link checkAssignTarget} so the `const`/`readonly`
+ * binding rule applies there but not here.
  */
 function checkAssignRoot(checker: Checker, target: Expression): void {
   if (target.kind === "Identifier") {
     const sym = checker.currentScope.lookup(target.name);
     if (sym && sym.kind === SymbolKind.Variable) {
-      if (!sym.isMutable) {
-        checker.error(`cannot assign to immutable variable '${target.name}'`, target.span);
-      }
-      // `readonly ref T` parameter — write-through is forbidden (the
-      // surface form is `x = v;` since auto-deref makes the param look
-      // like T at the use site).
+      // `readonly ref T` parameter — write-through is forbidden, and
+      // field paths rooted at `x` count as writes through the ref.
       if (sym.type.kind === TypeKind.Ptr && sym.type.isRef && sym.type.isReadonly) {
         checker.error(
           `cannot write through readonly reference '${target.name}'`,
