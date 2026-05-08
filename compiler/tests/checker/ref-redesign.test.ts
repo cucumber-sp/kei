@@ -378,12 +378,13 @@ describe("`mut` keyword is removed", () => {
 
 // ─── `slice<T>` removal ──────────────────────────────────────────────────────
 
-describe.skip("`slice<T>` is removed", () => {
+describe("`slice<T>` is removed", () => {
   test("`slice<T>` parameter is a compile error", () => {
     const errs = errorsOf(
       check(`fn f(x: slice<i32>) { } fn main() -> int { return 0; }`)
     );
     expect(errs.length).toBeGreaterThan(0);
+    expect(errs[0]?.message).toContain("'slice<T>' was removed");
   });
 });
 
