@@ -137,6 +137,13 @@ export class ExpressionChecker {
     }
     const operandType = this.checkExpression(expr.operand);
     if (isErrorType(operandType)) return ERROR_TYPE;
+    // `addr(field)` aliases the raw pointer slot underlying a `ref T` field
+    // (or any other slot). Per the redesign, when the field is declared
+    // `ref T`, the slot itself stores a plain `*T` — addr() yields `*T`,
+    // not `**T`. For non-`ref` operands, return `*operand`.
+    if (operandType.kind === TypeKind.Ptr && operandType.isRef) {
+      return { kind: TypeKind.Ptr, pointee: operandType.pointee };
+    }
     return { kind: TypeKind.Ptr, pointee: operandType };
   }
 

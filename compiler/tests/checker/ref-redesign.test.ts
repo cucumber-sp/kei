@@ -207,8 +207,7 @@ describe("§4.7 — `init` is unsafe-only at the field level", () => {
     );
   });
 
-  test.skip("`init` inside `unsafe` is OK", () => {
-    // Pending auto-deref + struct-literal-with-ref-fields support.
+  test("`init` inside `unsafe` is OK", () => {
     checkOk(`
       unsafe struct Box { data: ref i32; fn __destroy(self: ref Box) {} fn __oncopy(self: ref Box) {} }
       fn make(item: ref i32) -> Box {

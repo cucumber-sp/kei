@@ -201,14 +201,26 @@ export function checkStructLiteral(checker: Checker, expr: StructLiteral): Type 
     }
   }
 
-  // Check all required fields are present
-  for (const [fieldName] of structType.fields) {
-    if (!providedFields.has(fieldName)) {
-      checker.error(
-        `missing field '${fieldName}' in struct literal '${structType.name}'`,
-        expr.span
-      );
+  // Check all required fields are present.
+  //
+  // Exception: for `unsafe struct`s, fields of type `ref T` may be omitted
+  // — the construction protocol is to leave the slot uninitialized, then
+  // set it via `addr(s.field) = ptr` and `init s.field = value` inside
+  // an `unsafe` block. This is the canonical pattern for stdlib types
+  // like `Shared<T>` (see `docs/design/ref-redesign.md` §3.1).
+  for (const [fieldName, fieldType] of structType.fields) {
+    if (providedFields.has(fieldName)) continue;
+    if (
+      structType.isUnsafe &&
+      fieldType.kind === "ptr" &&
+      fieldType.isRef
+    ) {
+      continue;
     }
+    checker.error(
+      `missing field '${fieldName}' in struct literal '${structType.name}'`,
+      expr.span
+    );
   }
 
   return structType;
@@ -307,14 +319,21 @@ function checkGenericStructLiteralInferred(
     fieldValueTypes.set(field.name, valueType);
   }
 
-  // Check all required fields are present
-  for (const [fieldName] of structType.fields) {
-    if (!providedFields.has(fieldName)) {
-      checker.error(
-        `missing field '${fieldName}' in struct literal '${structType.name}'`,
-        expr.span
-      );
+  // Check all required fields are present (same `unsafe struct` ref-T
+  // exception as in the explicit-args path above).
+  for (const [fieldName, fieldType] of structType.fields) {
+    if (providedFields.has(fieldName)) continue;
+    if (
+      structType.isUnsafe &&
+      fieldType.kind === "ptr" &&
+      fieldType.isRef
+    ) {
+      continue;
     }
+    checker.error(
+      `missing field '${fieldName}' in struct literal '${structType.name}'`,
+      expr.span
+    );
   }
 
   // Infer type param substitutions from field types (recursive)
