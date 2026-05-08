@@ -6,7 +6,11 @@
 
 import type { CallExpr, Expression, FunctionDecl } from "../ast/nodes";
 import type { Checker } from "./checker";
-import { mangleGenericName, substituteFunctionType } from "./generics";
+import {
+  mangleGenericName,
+  substituteFunctionType,
+  substituteType as substituteTypeGeneric,
+} from "./generics";
 import { extractTypeParamSubs } from "./literal-checker";
 import type { FunctionOverload } from "./symbols";
 import { SymbolKind } from "./symbols";
@@ -227,8 +231,10 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
         if (method) {
           // For `Type<TypeArgs>.method(args)` the parser stashes the
           // type-args on the outer CallExpr. Bind them to the struct's
-          // generic parameters and substitute through the method's
-          // signature so the body sees concrete types.
+          // generic parameters, substitute through the method's
+          // signature so the body sees concrete types, and register
+          // the monomorphization so KIR emits the instance + its
+          // methods.
           let resolvedMethod = method;
           if (expr.typeArgs.length > 0 && structType.genericParams.length > 0) {
             if (expr.typeArgs.length !== structType.genericParams.length) {
@@ -239,15 +245,23 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
               return ERROR_TYPE;
             }
             const subs = new Map<string, Type>();
+            const resolvedArgs: Type[] = [];
             for (let i = 0; i < structType.genericParams.length; i++) {
               const paramName = structType.genericParams[i];
               const arg = expr.typeArgs[i];
               if (paramName && arg) {
-                subs.set(paramName, checker.resolveType(arg));
+                const resolved = checker.resolveType(arg);
+                subs.set(paramName, resolved);
+                resolvedArgs.push(resolved);
               }
             }
             resolvedMethod = substituteFunctionType(method, subs);
+            registerStaticCallMonomorphization(checker, structType, resolvedArgs, subs);
           }
+          // Stash the resolved (substituted) FunctionType on the callee
+          // MemberExpr so KIR lowering can match args against param types
+          // and apply the auto-reference rule (T → ref T at the boundary).
+          checker.setExprType(expr.callee, resolvedMethod);
           return checkFunctionCallArgs(checker, resolvedMethod, expr.args, expr, false);
         }
         checker.error(
@@ -623,4 +637,46 @@ function checkGenericFunctionCallInferred(
   }
 
   return concreteType.returnType;
+}
+
+/**
+ * Register the monomorphization triggered by a `Type<TypeArgs>.method(args)`
+ * static call. Mirrors the registration that happens for a struct literal
+ * `Type<TypeArgs>{...}` in literal-checker so KIR lowering finds the
+ * concrete struct in `monomorphizedStructs` and emits its methods.
+ */
+function registerStaticCallMonomorphization(
+  checker: Checker,
+  baseStruct: import("./types").StructType,
+  resolvedTypeArgs: Type[],
+  subs: Map<string, Type>
+): void {
+  const mangledName = mangleGenericName(baseStruct.name, resolvedTypeArgs);
+  if (checker.getMonomorphizedStruct(mangledName)) return;
+
+  const concreteFields = new Map<string, Type>();
+  for (const [fieldName, fieldType] of baseStruct.fields) {
+    concreteFields.set(fieldName, substituteTypeGeneric(fieldType, subs));
+  }
+  const concreteMethods = new Map<string, FunctionType>();
+  for (const [methodName, methodType] of baseStruct.methods) {
+    concreteMethods.set(methodName, substituteFunctionType(methodType, subs));
+  }
+  const concrete: import("./types").StructType = {
+    kind: TypeKind.Struct,
+    name: mangledName,
+    fields: concreteFields,
+    methods: concreteMethods,
+    isUnsafe: baseStruct.isUnsafe,
+    genericParams: [],
+    modulePrefix: baseStruct.modulePrefix,
+    genericBaseName: baseStruct.name,
+    genericTypeArgs: resolvedTypeArgs,
+    readonlyFields: baseStruct.readonlyFields,
+  };
+  checker.registerMonomorphizedStruct(mangledName, {
+    original: baseStruct,
+    typeArgs: resolvedTypeArgs,
+    concrete,
+  });
 }

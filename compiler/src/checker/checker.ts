@@ -359,7 +359,11 @@ export class Checker {
       monoFunc.bodyGenericResolutions = bodyGenericResolutions;
     }
 
-    // Also store struct declarations in MonomorphizedStruct
+    // Also store struct declarations in MonomorphizedStruct, then check
+    // each method's body under a per-instantiation type-substitution map
+    // so the body's typeMap holds concrete types (not unsubstituted
+    // TypeParams). KIR lowering picks these up to emit signatures and
+    // field accesses with the concrete types.
     for (const [_mangledName, monoStruct] of this.monomorphizedStructs) {
       if (!monoStruct.originalDecl) {
         for (const decl of this.program.declarations) {
@@ -373,6 +377,71 @@ export class Checker {
           }
         }
       }
+
+      if (!monoStruct.originalDecl) continue;
+      this.checkMonomorphizedStructMethodBodies(monoStruct);
+    }
+  }
+
+  /**
+   * Walk every method on a monomorphized generic struct under the type-
+   * substitution map for this instantiation, populating per-method body
+   * type maps so KIR lowering sees concrete types.
+   */
+  private checkMonomorphizedStructMethodBodies(monoStruct: MonomorphizedStruct): void {
+    const decl = monoStruct.originalDecl;
+    if (!decl) return;
+    if (decl.methods.length === 0) return;
+
+    // Build the type-substitution map (e.g. T → i32).
+    const typeSubs = new Map<string, Type>();
+    for (let i = 0; i < decl.genericParams.length; i++) {
+      const paramName = decl.genericParams[i];
+      const concreteArg = monoStruct.typeArgs[i];
+      if (paramName && concreteArg) typeSubs.set(paramName, concreteArg);
+    }
+
+    monoStruct.methodBodyTypeMaps ??= new Map();
+
+    for (const method of decl.methods) {
+      // Skip if we've already checked this method for this instantiation.
+      if (monoStruct.methodBodyTypeMaps.has(method.name)) continue;
+
+      this.typeResolver.setSubstitutions(typeSubs);
+      const bodyTypeMap = new Map<Expression, Type>();
+      const bodyGenericResolutions = new Map<Expression, string>();
+      this.currentBodyTypeMap = bodyTypeMap;
+      this.currentBodyGenericResolutions = bodyGenericResolutions;
+
+      // Pull the method's already-substituted FunctionType from the
+      // concrete struct so the param types match what KIR will emit.
+      const concreteMethod = monoStruct.concrete.methods.get(method.name);
+
+      // The pushed scope's `functionContext` carries the substituted
+      // FunctionType through; that's what return-type checks read.
+      this.pushScope({ functionContext: concreteMethod ?? null });
+      for (let i = 0; i < method.params.length; i++) {
+        const param = method.params[i];
+        if (!param) continue;
+        // For self-typed params (`self`, `self: ref Self`, etc.) the
+        // concrete struct type was substituted into the method's
+        // FunctionType; use it directly. Other params come from the
+        // method type, which is already substituted.
+        const paramType =
+          concreteMethod?.params[i]?.type ?? this.resolveType(param.typeAnnotation);
+        this.defineVariable(param.name, paramType, !param.isReadonly, false, param.span);
+      }
+
+      for (const stmt of method.body.statements) {
+        this.checkStatement(stmt);
+      }
+
+      this.popScope();
+      this.typeResolver.clearSubstitutions();
+      this.currentBodyTypeMap = null;
+      this.currentBodyGenericResolutions = null;
+
+      monoStruct.methodBodyTypeMaps.set(method.name, bodyTypeMap);
     }
   }
 

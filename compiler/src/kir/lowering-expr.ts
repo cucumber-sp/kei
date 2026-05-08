@@ -242,11 +242,25 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
     return dest;
   }
 
-  // Struct args lower to pointers — the called function takes them as
-  // pointers (matches method-call convention). Non-struct args lower to
-  // values as usual.
-  const args = expr.args.map((a) => {
+  // Resolve the callee's function type so we can match each arg against
+  // its corresponding param. Used for two auto-conversions:
+  //   - struct arg → pointer (existing convention).
+  //   - T arg → `ref T` param (auto-reference at call site; emits &arg).
+  const calleeFnType = (() => {
+    const t = ctx.checkResult.types.typeMap.get(expr.callee);
+    return t && t.kind === "function" ? (t as FunctionType) : null;
+  })();
+  const args = expr.args.map((a, i) => {
     const argType = ctx.checkResult.types.typeMap.get(a);
+    const paramType = calleeFnType?.params[i]?.type;
+    // T → ref T at the call boundary: take the address.
+    if (
+      paramType?.kind === "ptr" &&
+      (paramType as { isRef?: boolean }).isRef &&
+      argType?.kind !== "ptr"
+    ) {
+      return lowerExprAsPtr(ctx, a);
+    }
     return argType?.kind === "struct" ? lowerExprAsPtr(ctx, a) : lowerExpr(ctx, a);
   });
   const resultType = getExprKirType(ctx, expr);
