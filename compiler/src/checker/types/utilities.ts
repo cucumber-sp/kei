@@ -10,7 +10,6 @@ import type {
   ModuleType,
   PtrType,
   RangeType,
-  SliceType,
   StructType,
   Type,
   TypeParamType,
@@ -37,8 +36,6 @@ export function typesEqual(a: Type, b: Type): boolean {
       return typesEqual(a.pointee, (b as PtrType).pointee);
     case TypeKind.Array:
       return typesEqual(a.element, (b as ArrayType).element);
-    case TypeKind.Slice:
-      return typesEqual(a.element, (b as SliceType).element);
     case TypeKind.Range:
       return typesEqual(a.element, (b as RangeType).element);
     case TypeKind.Struct:
@@ -100,11 +97,6 @@ export function isAssignableTo(source: Type, target: Type): boolean {
     if (source.signed === target.signed && source.bits < target.bits) return true;
     // unsigned to larger signed (u8 → i16, u16 → i32, etc)
     if (!source.signed && target.signed && source.bits < target.bits) return true;
-  }
-
-  // Array → slice implicit conversion (same element type)
-  if (source.kind === TypeKind.Array && target.kind === TypeKind.Slice) {
-    return typesEqual(source.element, target.element);
   }
 
   return false;
@@ -195,8 +187,6 @@ export function typeToString(t: Type): string {
       return `ptr<${typeToString(t.pointee)}>`;
     case TypeKind.Array:
       return `array<${typeToString(t.element)}>`;
-    case TypeKind.Slice:
-      return `slice<${typeToString(t.element)}>`;
     case TypeKind.Range:
       return `Range<${typeToString(t.element)}>`;
     case TypeKind.Struct:

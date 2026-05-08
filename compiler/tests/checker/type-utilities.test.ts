@@ -25,7 +25,6 @@ import {
   ptrType,
   rangeType,
   STRING_TYPE,
-  sliceType,
   U8_TYPE,
   U16_TYPE,
   U32_TYPE,
@@ -193,16 +192,6 @@ describe("typesEqual", () => {
     });
   });
 
-  describe("slice types", () => {
-    test("slice<i32> equals slice<i32>", () => {
-      expect(typesEqual(sliceType(I32_TYPE), sliceType(I32_TYPE))).toBe(true);
-    });
-
-    test("slice<i32> does not equal slice<f64>", () => {
-      expect(typesEqual(sliceType(I32_TYPE), sliceType(F64_TYPE))).toBe(false);
-    });
-  });
-
   describe("range types", () => {
     test("Range<i32> equals Range<i32>", () => {
       expect(typesEqual(rangeType(I32_TYPE), rangeType(I32_TYPE))).toBe(true);
@@ -237,14 +226,8 @@ describe("typesEqual", () => {
 
   describe("function types", () => {
     test("same params and return type are equal", () => {
-      const a = functionType(
-        [{ name: "x", type: I32_TYPE, isReadonly: false }],
-        BOOL_TYPE
-      );
-      const b = functionType(
-        [{ name: "x", type: I32_TYPE, isReadonly: false }],
-        BOOL_TYPE
-      );
+      const a = functionType([{ name: "x", type: I32_TYPE, isReadonly: false }], BOOL_TYPE);
+      const b = functionType([{ name: "x", type: I32_TYPE, isReadonly: false }], BOOL_TYPE);
       expect(typesEqual(a, b)).toBe(true);
     });
 
@@ -255,23 +238,14 @@ describe("typesEqual", () => {
     });
 
     test("different param counts are not equal", () => {
-      const a = functionType(
-        [{ name: "x", type: I32_TYPE, isReadonly: false }],
-        VOID_TYPE
-      );
+      const a = functionType([{ name: "x", type: I32_TYPE, isReadonly: false }], VOID_TYPE);
       const b = functionType([], VOID_TYPE);
       expect(typesEqual(a, b)).toBe(false);
     });
 
     test("different param types are not equal", () => {
-      const a = functionType(
-        [{ name: "x", type: I32_TYPE, isReadonly: false }],
-        VOID_TYPE
-      );
-      const b = functionType(
-        [{ name: "x", type: BOOL_TYPE, isReadonly: false }],
-        VOID_TYPE
-      );
+      const a = functionType([{ name: "x", type: I32_TYPE, isReadonly: false }], VOID_TYPE);
+      const b = functionType([{ name: "x", type: BOOL_TYPE, isReadonly: false }], VOID_TYPE);
       expect(typesEqual(a, b)).toBe(false);
     });
 
@@ -319,10 +293,6 @@ describe("typesEqual", () => {
 
     test("Ptr vs Array with same element is false", () => {
       expect(typesEqual(ptrType(I32_TYPE), arrayType(I32_TYPE))).toBe(false);
-    });
-
-    test("Array vs Slice with same element is false", () => {
-      expect(typesEqual(arrayType(I32_TYPE), sliceType(I32_TYPE))).toBe(false);
     });
 
     test("Struct vs Enum with same name is false", () => {
@@ -463,24 +433,6 @@ describe("isAssignableTo", () => {
       expect(isAssignableTo(I8_TYPE, U16_TYPE)).toBe(false);
       expect(isAssignableTo(I8_TYPE, U32_TYPE)).toBe(false);
       expect(isAssignableTo(I8_TYPE, U64_TYPE)).toBe(false);
-    });
-  });
-
-  describe("array to slice conversion", () => {
-    test("array<i32> is assignable to slice<i32>", () => {
-      expect(isAssignableTo(arrayType(I32_TYPE), sliceType(I32_TYPE))).toBe(true);
-    });
-
-    test("array<bool> is assignable to slice<bool>", () => {
-      expect(isAssignableTo(arrayType(BOOL_TYPE), sliceType(BOOL_TYPE))).toBe(true);
-    });
-
-    test("array<i32> is NOT assignable to slice<bool> (element type mismatch)", () => {
-      expect(isAssignableTo(arrayType(I32_TYPE), sliceType(BOOL_TYPE))).toBe(false);
-    });
-
-    test("slice<i32> is NOT assignable to array<i32>", () => {
-      expect(isAssignableTo(sliceType(I32_TYPE), arrayType(I32_TYPE))).toBe(false);
     });
   });
 
@@ -691,10 +643,6 @@ describe("typeToString", () => {
       expect(typeToString(arrayType(F64_TYPE))).toBe("array<f64>");
     });
 
-    test("slice<string>", () => {
-      expect(typeToString(sliceType(STRING_TYPE))).toBe("slice<string>");
-    });
-
     test("Range<i32>", () => {
       expect(typeToString(rangeType(I32_TYPE))).toBe("Range<i32>");
     });
@@ -717,10 +665,7 @@ describe("typeToString", () => {
     });
 
     test("single param function", () => {
-      const t = functionType(
-        [{ name: "x", type: I32_TYPE, isReadonly: false }],
-        BOOL_TYPE
-      );
+      const t = functionType([{ name: "x", type: I32_TYPE, isReadonly: false }], BOOL_TYPE);
       expect(typeToString(t)).toBe("fn(x: i32) -> bool");
     });
 

@@ -99,7 +99,9 @@ export function emitInst(inst: KirInst, varTypes?: Map<VarId, KirType>): string 
     case "destroy":
       return `${sanitizeName(inst.structName)}___destroy(${varName(inst.value)});`;
     case "oncopy":
-      return `${varName(inst.value)} = ${sanitizeName(inst.structName)}___oncopy(&${varName(inst.value)});`;
+      // Canonical __oncopy ABI is `fn __oncopy(self: ref T)` returning
+      // void — mutates the slot in place via `&value`. No assignment.
+      return `${sanitizeName(inst.structName)}___oncopy(&${varName(inst.value)});`;
     case "move":
       return `${varName(inst.dest)} = ${varName(inst.source)};`;
     case "call_throws": {

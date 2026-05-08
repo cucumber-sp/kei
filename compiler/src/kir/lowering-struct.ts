@@ -104,6 +104,65 @@ export function lowerMethod(
 }
 
 /**
+ * Lower a generic struct method for a specific monomorphization.
+ *
+ * Same shape as {@link lowerMethod} but uses the *substituted* FunctionType
+ * (param + return) from the monomorphized struct, plus the per-method body
+ * type map populated during `checkMonomorphizedStructMethodBodies`. Without
+ * this, signatures and field accesses inside the body would be emitted with
+ * the unsubstituted TypeParam (e.g. `struct T*` instead of `int32_t*`).
+ */
+export function lowerMonomorphizedMethod(
+  ctx: LoweringCtx,
+  decl: FunctionDecl,
+  mangledName: string,
+  _structName: string,
+  concrete: import("../checker/types").FunctionType,
+  bodyTypeMap?: Map<import("../ast/nodes").Expression, import("../checker/types").Type>
+): KirFunction {
+  resetFunctionState(ctx);
+  pushScope(ctx);
+
+  const params: KirParam[] = [];
+  for (let i = 0; i < decl.params.length; i++) {
+    const p = decl.params[i];
+    const concreteParam = concrete.params[i];
+    if (!p || !concreteParam) {
+      throw new Error("invariant: monomorphized method params must match decl params");
+    }
+    const type = lowerCheckerType(ctx, concreteParam.type);
+    const alreadyPointer = type.kind === "ptr";
+    const paramType: KirType =
+      !alreadyPointer && (p.name === "self" || type.kind === "struct")
+        ? { kind: "ptr", pointee: type }
+        : type;
+    const varId: VarId = `%${p.name}`;
+    ctx.varMap.set(p.name, varId);
+    params.push({ name: p.name, type: paramType });
+  }
+
+  const returnType = lowerCheckerType(ctx, concrete.returnType);
+  ctx.currentFunctionOrigReturnType = returnType;
+
+  // Per-instantiation override so getExprKirType / lowerCheckerType see
+  // concrete types for every body expression.
+  if (bodyTypeMap) ctx.currentBodyTypeMap = bodyTypeMap;
+
+  lowerBlock(ctx, decl.body);
+
+  ctx.currentBodyTypeMap = null;
+  finalizeFunctionBody(ctx, false, returnType);
+
+  return {
+    name: mangledName,
+    params,
+    returnType,
+    blocks: ctx.blocks,
+    localCount: ctx.varCounter,
+  };
+}
+
+/**
  * Synthesize a __destroy KIR function for a struct with auto-generated destroy.
  * Emits field_ptr + call_extern_void("kei_string_destroy") for string fields,
  * and field_ptr + destroy for struct fields that have __destroy.
@@ -175,8 +234,12 @@ export function lowerAutoDestroy(
 
 /**
  * Synthesize an __oncopy KIR function for a struct with auto-generated oncopy.
- * Takes self by pointer, increments refcounts for string fields via kei_string_copy,
- * calls nested __oncopy for struct fields, then loads and returns the modified struct.
+ *
+ * Takes self by pointer, increments refcounts for string fields via
+ * `kei_string_copy`, recursively calls nested struct __oncopy hooks, and
+ * returns void. The mutations are observed by the caller through the
+ * pointer — no return-value copy is needed (the canonical ref-T-self
+ * lifecycle ABI; see `docs/design/ref-redesign.md` §3.1).
  */
 export function lowerAutoOncopy(
   _ctx: LoweringCtx,
@@ -219,6 +282,11 @@ export function lowerAutoOncopy(
       insts.push({ kind: "store", ptr: fieldPtr, value: copied });
     } else if (fieldType.kind === "struct" && fieldType.methods.has("__oncopy")) {
       // fieldPtr = &self->fieldName; val = *fieldPtr; oncopy val; *fieldPtr = val;
+      //
+      // The C emit for `oncopy val` becomes `X___oncopy(&val)` (void
+      // return), which mutates `val` in place via the pointer. The
+      // surrounding load/store pair propagates the mutation back to
+      // the field slot.
       const fieldPtr = freshVar();
       const kirFieldType: KirType = { kind: "struct", name: fieldType.name, fields: [] };
       insts.push({
@@ -239,21 +307,17 @@ export function lowerAutoOncopy(
     }
   }
 
-  // Load the modified struct and return it
-  const result = freshVar();
-  insts.push({ kind: "load", dest: result, ptr: selfVar, type: structKirType });
-
   const entryBlock: KirBlock = {
     id: "entry",
     phis: [],
     instructions: insts,
-    terminator: { kind: "ret", value: result },
+    terminator: { kind: "ret_void" },
   };
 
   return {
     name: mangledName,
     params: [{ name: "self", type: selfType }],
-    returnType: structKirType,
+    returnType: { kind: "void" },
     blocks: [entryBlock],
     localCount: varCounter,
   };

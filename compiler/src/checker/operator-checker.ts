@@ -66,10 +66,16 @@ export const BINARY_OP_METHODS: Record<string, string> = {
 };
 
 export function checkBinaryExpression(checker: Checker, expr: BinaryExpr): Type {
-  const left = checker.checkExpression(expr.left);
-  const right = checker.checkExpression(expr.right);
+  let left = checker.checkExpression(expr.left);
+  let right = checker.checkExpression(expr.right);
 
   if (isErrorType(left) || isErrorType(right)) return ERROR_TYPE;
+
+  // Auto-deref `ref T` operands so binary ops see the underlying T.
+  // `self.refcount == 0` where `refcount: ref i64` should compare i64s,
+  // not `ref i64` against `i32`.
+  if (left.kind === TypeKind.Ptr && left.isRef) left = left.pointee;
+  if (right.kind === TypeKind.Ptr && right.isRef) right = right.pointee;
 
   const op = expr.operator;
 
@@ -115,12 +121,20 @@ export function checkBinaryExpression(checker: Checker, expr: BinaryExpr): Type 
 
   // Equality operators
   if (EQUALITY_OPS.has(op)) {
-    // Allow equality between same types, or ptr and null
-    if (
-      !typesEqual(left, right) &&
-      !(isPtrType(left) && right.kind === TypeKind.Null) &&
-      !(left.kind === TypeKind.Null && isPtrType(right))
-    ) {
+    // Allow equality between same types, ptr/null, or a same-kind integer
+    // literal that fits in the wider integer (e.g. `i64 == 0`).
+    let ok = typesEqual(left, right);
+    if (!ok && isPtrType(left) && right.kind === TypeKind.Null) ok = true;
+    if (!ok && left.kind === TypeKind.Null && isPtrType(right)) ok = true;
+    if (!ok && isNumericType(left)) {
+      const litInfo = extractLiteralInfo(expr.right);
+      if (litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, left)) ok = true;
+    }
+    if (!ok && isNumericType(right)) {
+      const litInfo = extractLiteralInfo(expr.left);
+      if (litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, right)) ok = true;
+    }
+    if (!ok) {
       checker.error(
         `operator '${op}' requires same types, got '${typeToString(left)}' and '${typeToString(right)}'`,
         expr.span
@@ -299,17 +313,38 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
     return targetType;
   }
 
-  // Compound assignment
+  // Compound assignment. The target may be a `ref T` lvalue (e.g.
+  // `self.refcount += 1` where `refcount: ref i64`) — auto-deref so
+  // the numeric check sees the underlying T.
   if (COMPOUND_ASSIGN_OPS.has(op)) {
-    if (!isNumericType(targetType)) {
+    let effectiveTarget: Type = targetType;
+    if (effectiveTarget.kind === TypeKind.Ptr && effectiveTarget.isRef) {
+      effectiveTarget = effectiveTarget.pointee;
+    }
+    let effectiveValue: Type = valueType;
+    if (effectiveValue.kind === TypeKind.Ptr && effectiveValue.isRef) {
+      effectiveValue = effectiveValue.pointee;
+    }
+    if (!isNumericType(effectiveTarget)) {
       checker.error(
         `operator '${op}' requires numeric type, got '${typeToString(targetType)}'`,
         expr.span
       );
       return ERROR_TYPE;
     }
-    if (!requireSameTypes(checker, op, targetType, valueType, expr.span)) return ERROR_TYPE;
-    return targetType;
+    if (!typesEqual(effectiveTarget, effectiveValue)) {
+      // Integer-literal coercion: `count += 1` where count: i64 — the
+      // literal 1 defaults to i32 but fits in i64.
+      const litInfo = extractLiteralInfo(expr.value);
+      if (!litInfo || !isLiteralAssignableTo(litInfo.kind, litInfo.value, effectiveTarget)) {
+        checker.error(
+          `operator '${op}' requires same types, got '${typeToString(effectiveTarget)}' and '${typeToString(effectiveValue)}'`,
+          expr.span
+        );
+        return ERROR_TYPE;
+      }
+    }
+    return effectiveTarget;
   }
 
   if (COMPOUND_BITWISE_OPS.has(op)) {
@@ -329,7 +364,17 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
 }
 
 function checkAssignTarget(checker: Checker, target: Expression): void {
-  // Step 1: check the assigned-to slot itself (only the OUTERMOST node).
+  // Direct rebinding `x = v` — the const/readonly binding rule only
+  // fires here. `let mut x` and `let x` (today's mutable default) bind
+  // mutably; `const x` and `readonly x` bind immutably.
+  if (target.kind === "Identifier") {
+    const sym = checker.currentScope.lookup(target.name);
+    if (sym && sym.kind === SymbolKind.Variable && !sym.isMutable) {
+      checker.error(`cannot assign to immutable variable '${target.name}'`, target.span);
+    }
+  }
+
+  // Field-level readonly on the OUTERMOST member-access target.
   // Intermediate field accesses on the path don't matter — we're not
   // writing to them, just reading them to find the leaf slot.
   if (target.kind === "MemberExpr") {
@@ -342,37 +387,37 @@ function checkAssignTarget(checker: Checker, target: Expression): void {
       objectType.kind === TypeKind.Struct &&
       objectType.readonlyFields?.has(target.property)
     ) {
-      checker.error(
-        `cannot assign to readonly field '${target.property}'`,
-        target.span
-      );
+      checker.error(`cannot assign to readonly field '${target.property}'`, target.span);
     }
   }
 
-  // Step 2: walk to the root binding and check it's mutable.
+  // Walk to the root identifier for type-level rules that flow through
+  // member/index paths (currently just `readonly ref T` write-through).
+  // Binding mutability is NOT re-checked along the way; per the spec
+  // `const`/`readonly` lock the binding only, not its fields.
   checkAssignRoot(checker, target);
 }
 
 /**
- * Walk down `target` to the root identifier and check its binding mutability.
- * Does NOT re-check field-level readonly along the way — that's only the
- * outermost field's concern.
+ * Walk down `target` to the root identifier and apply the rules that flow
+ * from the root *type*, not from binding mutability. `const` and ordinary
+ * `readonly` only lock the binding itself (`x = v` form); field mutation
+ * `x.field = v` is allowed because the slot for `x` is unchanged. The
+ * exception is `readonly ref T`, where write-through THROUGH the ref —
+ * including via field paths — is forbidden.
+ *
+ * Direct rebinding (`x = v` with target = Identifier) is checked
+ * separately in {@link checkAssignTarget} so the `const`/`readonly`
+ * binding rule applies there but not here.
  */
 function checkAssignRoot(checker: Checker, target: Expression): void {
   if (target.kind === "Identifier") {
     const sym = checker.currentScope.lookup(target.name);
     if (sym && sym.kind === SymbolKind.Variable) {
-      if (!sym.isMutable) {
-        checker.error(`cannot assign to immutable variable '${target.name}'`, target.span);
-      }
-      // `readonly ref T` parameter — write-through is forbidden (the
-      // surface form is `x = v;` since auto-deref makes the param look
-      // like T at the use site).
+      // `readonly ref T` parameter — write-through is forbidden, and
+      // field paths rooted at `x` count as writes through the ref.
       if (sym.type.kind === TypeKind.Ptr && sym.type.isRef && sym.type.isReadonly) {
-        checker.error(
-          `cannot write through readonly reference '${target.name}'`,
-          target.span
-        );
+        checker.error(`cannot write through readonly reference '${target.name}'`, target.span);
       }
     }
     return;

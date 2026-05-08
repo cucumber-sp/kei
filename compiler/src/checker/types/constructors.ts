@@ -12,7 +12,6 @@ import type {
   ParamInfo,
   PtrType,
   RangeType,
-  SliceType,
   StringType,
   Type,
   VoidType,
@@ -45,10 +44,6 @@ export function refType(pointee: Type, readonly = false): PtrType {
 
 export function arrayType(element: Type, length?: number): ArrayType {
   return { kind: TypeKind.Array, element, length };
-}
-
-export function sliceType(element: Type): SliceType {
-  return { kind: TypeKind.Slice, element };
 }
 
 export function rangeType(element: Type): RangeType {

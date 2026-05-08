@@ -18,7 +18,6 @@ import {
   ptrType,
   rangeType,
   STRING_TYPE,
-  sliceType,
   TypeKind,
   U8_TYPE,
   U64_TYPE,
@@ -79,12 +78,6 @@ describe("substituteType", () => {
     const t = arrayType(typeParam("T"));
     const result = substituteType(t, new Map([["T", I64_TYPE]]));
     expect(result).toEqual(arrayType(I64_TYPE));
-  });
-
-  test("substitutes Slice element", () => {
-    const t = sliceType(typeParam("T"));
-    const result = substituteType(t, new Map([["T", STRING_TYPE]]));
-    expect(result).toEqual(sliceType(STRING_TYPE));
   });
 
   test("substitutes Range element", () => {
@@ -158,28 +151,19 @@ describe("substituteType", () => {
 
 describe("substituteFunctionType", () => {
   test("returns original when typeMap is empty", () => {
-    const fn = functionType(
-      [{ name: "x", type: I32_TYPE, isReadonly: false }],
-      VOID_TYPE
-    );
+    const fn = functionType([{ name: "x", type: I32_TYPE, isReadonly: false }], VOID_TYPE);
     const result = substituteFunctionType(fn, new Map());
     expect(result).toBe(fn);
   });
 
   test("returns original when nothing changes", () => {
-    const fn = functionType(
-      [{ name: "x", type: I32_TYPE, isReadonly: false }],
-      VOID_TYPE
-    );
+    const fn = functionType([{ name: "x", type: I32_TYPE, isReadonly: false }], VOID_TYPE);
     const result = substituteFunctionType(fn, new Map([["T", BOOL_TYPE]]));
     expect(result).toBe(fn);
   });
 
   test("substitutes parameter types", () => {
-    const fn = functionType(
-      [{ name: "x", type: typeParam("T"), isReadonly: false }],
-      VOID_TYPE
-    );
+    const fn = functionType([{ name: "x", type: typeParam("T"), isReadonly: false }], VOID_TYPE);
     const result = substituteFunctionType(fn, new Map([["T", I32_TYPE]]));
     expect(result.params[0]!.type).toEqual(I32_TYPE);
   });
@@ -253,10 +237,6 @@ describe("mangleGenericName", () => {
 
   test("mangles with array types", () => {
     expect(mangleGenericName("Wrap", [arrayType(BOOL_TYPE)])).toBe("Wrap_array_bool");
-  });
-
-  test("mangles with slice types", () => {
-    expect(mangleGenericName("Wrap", [sliceType(I32_TYPE)])).toBe("Wrap_slice_i32");
   });
 
   test("mangles with struct types", () => {

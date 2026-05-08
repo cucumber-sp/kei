@@ -64,7 +64,7 @@ describe("Checker — Integration", () => {
 
   test("program with unsafe block and extern fn", () => {
     checkOk(`
-      extern fn puts(s: ptr<c_char>) -> int;
+      extern fn puts(s: *c_char) -> int;
 
       fn main() -> int {
         unsafe {
@@ -162,8 +162,8 @@ describe("Checker — Integration", () => {
       import math;
       import { HashMap } from collections;
 
-      fn alloc(count: usize) -> ptr<u8> { return null; }
-      fn free(p: ptr<u8>) {}
+      fn alloc(count: usize) -> *u8 { return null; }
+      fn free(p: *u8) {}
 
       static MAX_USERS = 1000;
       pub static VERSION = 1;
@@ -193,7 +193,7 @@ describe("Checker — Integration", () => {
       struct NotFound {}
       struct DbError { message: string; code: int; }
 
-      extern fn puts(s: ptr<c_char>) -> int;
+      extern fn puts(s: *c_char) -> int;
 
       pub fn add(a: int, b: int) -> int { return a + b; }
 

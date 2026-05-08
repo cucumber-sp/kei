@@ -113,6 +113,8 @@ export function lowerExpr(ctx: LoweringCtx, expr: Expression): VarId {
       return lowerArrayLiteral(ctx, expr);
     case "SwitchExpr":
       return lowerSwitchExpr(ctx, expr);
+    case "AddrExpr":
+      return lowerAddrExpr(ctx, expr);
     default:
       // Unhandled expression types return a placeholder
       return emitConstInt(ctx, 0);
@@ -170,6 +172,45 @@ export function lowerIdentifier(ctx: LoweringCtx, expr: Identifier): VarId {
   return varId;
 }
 
+/**
+ * True iff `callee` is a `Type.method` access where `Type` is an Identifier
+ * referring to a struct type in the current scope (rather than a value
+ * variable). Used to dispatch static method calls without a self-argument.
+ */
+function isTypeQualifiedStaticCall(ctx: LoweringCtx, callee: MemberExpr): boolean {
+  if (callee.object.kind !== "Identifier") return false;
+  // The checker records the Identifier's resolved type in typeMap. For a
+  // type reference there is no recorded value-type — fall back to a scope
+  // lookup against the program's struct/unsafe-struct decls.
+  const objType = ctx.checkResult.types.typeMap.get(callee.object);
+  if (objType) return false; // it's a value (variable) — instance call
+  const name = callee.object.name;
+  for (const decl of ctx.program.declarations) {
+    if ((decl.kind === "StructDecl" || decl.kind === "UnsafeStructDecl") && decl.name === name) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Resolve the mangled struct name for a `Type<TypeArgs>.method(args)` call.
+ * For non-generic `Type.method(args)` returns the bare struct name.
+ */
+function resolveStructNameForStaticCall(ctx: LoweringCtx, expr: CallExpr): string {
+  const callee = expr.callee as MemberExpr;
+  const baseName = (callee.object as { name: string }).name;
+  if (expr.typeArgs.length === 0) return baseName;
+  // Mangle using the type-args' suffix forms — matches how generic struct
+  // monomorphization names instances in lowering-types.ts.
+  const argSuffixes = expr.typeArgs.map((t) => {
+    if (t.kind === "NamedType") return t.name;
+    if (t.kind === "RawPtrType" || t.kind === "RefType") return "ptr";
+    return "T";
+  });
+  return `${baseName}_${argSuffixes.join("_")}`;
+}
+
 export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
   // Enum variant construction: Shape.Circle(3.14) → stack_alloc + tag + data fields
   const enumResult = lowerEnumVariantConstruction(ctx, expr);
@@ -194,11 +235,25 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
     return dest;
   }
 
-  // Struct args lower to pointers — the called function takes them as
-  // pointers (matches method-call convention). Non-struct args lower to
-  // values as usual.
-  const args = expr.args.map((a) => {
+  // Resolve the callee's function type so we can match each arg against
+  // its corresponding param. Used for two auto-conversions:
+  //   - struct arg → pointer (existing convention).
+  //   - T arg → `ref T` param (auto-reference at call site; emits &arg).
+  const calleeFnType = (() => {
+    const t = ctx.checkResult.types.typeMap.get(expr.callee);
+    return t && t.kind === "function" ? (t as FunctionType) : null;
+  })();
+  const args = expr.args.map((a, i) => {
     const argType = ctx.checkResult.types.typeMap.get(a);
+    const paramType = calleeFnType?.params[i]?.type;
+    // T → ref T at the call boundary: take the address.
+    if (
+      paramType?.kind === "ptr" &&
+      (paramType as { isRef?: boolean }).isRef &&
+      argType?.kind !== "ptr"
+    ) {
+      return lowerExprAsPtr(ctx, a);
+    }
     return argType?.kind === "struct" ? lowerExprAsPtr(ctx, a) : lowerExpr(ctx, a);
   });
   const resultType = getExprKirType(ctx, expr);
@@ -254,6 +309,18 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
       } else {
         funcName = baseMangledName;
       }
+    } else if (
+      ctx.checkResult.types.staticMethodCalls.has(expr) ||
+      isTypeQualifiedStaticCall(ctx, expr.callee)
+    ) {
+      // Static method call: `Type.method(args)` or `Type<TypeArgs>.method(args)`.
+      // No self-arg; resolve the struct type (with type-arg substitution if
+      // present) so the mangled name matches the monomorphized struct.
+      const recorded = ctx.checkResult.types.staticMethodCalls.get(expr);
+      const structName = recorded
+        ? recorded.mangledStructName
+        : resolveStructNameForStaticCall(ctx, expr);
+      funcName = `${structName}_${expr.callee.property}`;
     } else {
       // Instance method call: obj.method(args) → StructName_method(obj, args)
       // Methods expect self as a pointer, so use lowerExprAsPtr for struct objects
@@ -495,6 +562,43 @@ export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
       type: fieldType,
     });
 
+    // Compound assignment on a field: `obj.field op= rhs` lowers to
+    // load → bin_op → store on the field slot. Field-level lifecycle
+    // hooks don't fire here (we're updating the value, not replacing).
+    if (expr.operator !== "=") {
+      const op = mapCompoundAssignOp(ctx, expr.operator);
+      if (op) {
+        // For a `ref T` field the slot holds a `*T`, so ptrDest is
+        // `**T`. We need to load through one extra layer to get the
+        // T-storing slot. The checker's typeMap entry preserves the
+        // isRef bit even though the lowered KIR type is `ptr`.
+        const checkerType = ctx.checkResult.types.typeMap.get(expr.target);
+        const isRefField =
+          checkerType?.kind === "ptr" && (checkerType as { isRef?: boolean }).isRef === true;
+        let loadPtr = ptrDest;
+        let elemType = fieldType;
+        if (isRefField && fieldType.kind === "ptr") {
+          const innerPtr = freshVar(ctx);
+          emit(ctx, { kind: "load", dest: innerPtr, ptr: ptrDest, type: fieldType });
+          loadPtr = innerPtr;
+          elemType = fieldType.pointee;
+        }
+        const currentVal = freshVar(ctx);
+        emit(ctx, { kind: "load", dest: currentVal, ptr: loadPtr, type: elemType });
+        const result = freshVar(ctx);
+        emit(ctx, {
+          kind: "bin_op",
+          op,
+          dest: result,
+          lhs: currentVal,
+          rhs: valueId,
+          type: elemType,
+        });
+        emit(ctx, { kind: "store", ptr: loadPtr, value: result });
+        return result;
+      }
+    }
+
     // Destroy old field value if it has lifecycle hooks
     const checkerType = ctx.checkResult.types.typeMap.get(expr.target);
     const lifecycle = getStructLifecycle(ctx, checkerType);
@@ -647,6 +751,47 @@ export function lowerMoveExpr(ctx: LoweringCtx, expr: MoveExpr): VarId {
   }
 
   return dest;
+}
+
+/**
+ * Lower `addr(field)` — alias the raw pointer slot underlying a `ref T`
+ * field. Returns a `*T` that points at the same slot (ignoring the
+ * source-level `ref` indirection): writing through `addr(field) = ptr`
+ * sets where the reference points; reading `*addr(field)` accesses the
+ * pointed-to memory without firing lifecycle hooks. The checker
+ * guarantees we're inside an `unsafe` block.
+ *
+ * For an operand of the form `obj.field` where `field: ref T`, the IR
+ * already emits a `field_ptr` to the slot — we just return that
+ * pointer, since the slot's storage type is `*T` (the C-level ref bits).
+ */
+function lowerAddrExpr(ctx: LoweringCtx, expr: import("../ast/nodes").AddrExpr): VarId {
+  const operand = expr.operand;
+  if (operand.kind === "MemberExpr") {
+    const objectType = ctx.checkResult.types.typeMap.get(operand.object);
+    let baseId: VarId;
+    if (operand.object.kind === "Identifier" && objectType?.kind === "struct") {
+      baseId = lowerExprAsPtr(ctx, operand.object);
+    } else if (operand.object.kind === "Identifier") {
+      baseId = lowerExprAsPtr(ctx, operand.object);
+    } else {
+      baseId = lowerExpr(ctx, operand.object);
+    }
+    // The field's KIR type is the slot's type (a `ptr<T>` for `ref T`
+    // fields). field_ptr returns a pointer to that slot.
+    const fieldType = getExprKirType(ctx, operand);
+    const dest = freshVar(ctx);
+    emit(ctx, {
+      kind: "field_ptr",
+      dest,
+      base: baseId,
+      field: operand.property,
+      type: fieldType,
+    });
+    return dest;
+  }
+  // Fallback: lower the operand as a pointer (best-effort).
+  return lowerExprAsPtr(ctx, operand);
 }
 
 export function lowerCastExpr(ctx: LoweringCtx, expr: CastExpr): VarId {

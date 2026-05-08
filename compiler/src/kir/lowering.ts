@@ -29,7 +29,7 @@ import type { CheckResult, ModuleCheckInfo, MultiModuleCheckResult } from "../ch
 import type { KirModule } from "./kir-types";
 import { createLoweringCtx, type LoweringCtx } from "./lowering-ctx";
 import { lowerDeclaration, lowerMonomorphizedFunction } from "./lowering-decl";
-import { lowerMethod, lowerMonomorphizedStruct } from "./lowering-struct";
+import { lowerMethod, lowerMonomorphizedMethod, lowerMonomorphizedStruct } from "./lowering-struct";
 import { lowerTypeNode, mangleFunctionName } from "./lowering-types";
 
 /**
@@ -82,12 +82,32 @@ export function runLowering(ctx: LoweringCtx): KirModule {
   // Emit monomorphized struct definitions from generics
   for (const [mangledName, monoStruct] of ctx.checkResult.generics.monomorphizedStructs) {
     ctx.typeDecls.push(lowerMonomorphizedStruct(ctx, mangledName, monoStruct));
-    // Lower methods for monomorphized structs
+    // Lower methods for monomorphized structs. Each method's body was
+    // re-checked under the per-instantiation type substitution, so its
+    // typeMap is on `monoStruct.methodBodyTypeMaps`. Using `lowerMonomorphizedMethod`
+    // emits the method with the concrete FunctionType (from
+    // `monoStruct.concrete.methods`) for params/return + the per-method
+    // bodyTypeMap so all expressions inside the body see concrete types.
     if (monoStruct.originalDecl) {
       for (const method of monoStruct.originalDecl.methods) {
         const structPrefix = ctx.modulePrefix ? `${ctx.modulePrefix}_${mangledName}` : mangledName;
         const methodMangledName = `${structPrefix}_${method.name}`;
-        ctx.functions.push(lowerMethod(ctx, method, methodMangledName, mangledName));
+        const concreteMethod = monoStruct.concrete.methods.get(method.name);
+        const bodyTypeMap = monoStruct.methodBodyTypeMaps?.get(method.name);
+        if (concreteMethod) {
+          ctx.functions.push(
+            lowerMonomorphizedMethod(
+              ctx,
+              method,
+              methodMangledName,
+              mangledName,
+              concreteMethod,
+              bodyTypeMap
+            )
+          );
+        } else {
+          ctx.functions.push(lowerMethod(ctx, method, methodMangledName, mangledName));
+        }
       }
     }
   }

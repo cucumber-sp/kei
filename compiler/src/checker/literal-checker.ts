@@ -16,7 +16,7 @@ import { I32_MAX, I32_MIN } from "../utils/constants";
 import type { Checker } from "./checker";
 import { mangleGenericName, substituteFunctionType, substituteType } from "./generics";
 import { SymbolKind } from "./symbols";
-import type { ArrayType, PtrType, RangeType, SliceType, StructType, Type } from "./types";
+import type { ArrayType, PtrType, RangeType, StructType, Type } from "./types";
 import {
   arrayType,
   BOOL_TYPE,
@@ -210,17 +210,10 @@ export function checkStructLiteral(checker: Checker, expr: StructLiteral): Type 
   // like `Shared<T>` (see `docs/design/ref-redesign.md` §3.1).
   for (const [fieldName, fieldType] of structType.fields) {
     if (providedFields.has(fieldName)) continue;
-    if (
-      structType.isUnsafe &&
-      fieldType.kind === "ptr" &&
-      fieldType.isRef
-    ) {
+    if (structType.isUnsafe && fieldType.kind === "ptr" && fieldType.isRef) {
       continue;
     }
-    checker.error(
-      `missing field '${fieldName}' in struct literal '${structType.name}'`,
-      expr.span
-    );
+    checker.error(`missing field '${fieldName}' in struct literal '${structType.name}'`, expr.span);
   }
 
   return structType;
@@ -323,17 +316,10 @@ function checkGenericStructLiteralInferred(
   // exception as in the explicit-args path above).
   for (const [fieldName, fieldType] of structType.fields) {
     if (providedFields.has(fieldName)) continue;
-    if (
-      structType.isUnsafe &&
-      fieldType.kind === "ptr" &&
-      fieldType.isRef
-    ) {
+    if (structType.isUnsafe && fieldType.kind === "ptr" && fieldType.isRef) {
       continue;
     }
-    checker.error(
-      `missing field '${fieldName}' in struct literal '${structType.name}'`,
-      expr.span
-    );
+    checker.error(`missing field '${fieldName}' in struct literal '${structType.name}'`, expr.span);
   }
 
   // Infer type param substitutions from field types (recursive)
@@ -437,9 +423,6 @@ export function extractTypeParamSubs(
       break;
     case TypeKind.Array:
       extractTypeParamSubs(declared.element, (concrete as ArrayType).element, subs);
-      break;
-    case TypeKind.Slice:
-      extractTypeParamSubs(declared.element, (concrete as SliceType).element, subs);
       break;
     case TypeKind.Range:
       extractTypeParamSubs(declared.element, (concrete as RangeType).element, subs);

@@ -21,8 +21,8 @@ import { registerBuiltins } from "./builtins";
 import { DeclarationChecker } from "./decl-checker";
 import { ExpressionChecker } from "./expr-checker";
 import type { MonomorphizedFunction, MonomorphizedStruct } from "./generics";
-import { Scope } from "./scope";
 import { validateRefPositions } from "./ref-position-checker";
+import { Scope } from "./scope";
 import { StatementChecker } from "./stmt-checker";
 import type { ScopeSymbol } from "./symbols";
 import { SymbolKind, typeSymbol, variableSymbol } from "./symbols";
@@ -41,6 +41,14 @@ export interface CheckTypes {
     SwitchCase,
     { variantName: string; fieldNames: string[]; fieldTypes: Type[] }
   >;
+  /**
+   * Calls dispatched as `Type.method(args)` or `Type<TypeArgs>.method(args)`
+   * — i.e., static method calls on a type identifier rather than instance
+   * method calls. KIR lowering reads this to skip the synthetic self-arg
+   * and emit the StructName_method(args) form, optionally with type-arg
+   * mangling for monomorphized generics.
+   */
+  staticMethodCalls: Map<Expression, { structName: string; mangledStructName: string }>;
 }
 
 /** Generic monomorphization output. */
@@ -112,6 +120,16 @@ export class Checker {
   /** Cache of monomorphized function types, keyed by mangled name */
   private monomorphizedFunctions: Map<string, MonomorphizedFunction> = new Map();
 
+  /**
+   * When true, `check()` skips the per-instantiation body-check pass.
+   * The multi-module orchestrator sets this before running each module's
+   * `check()` and then drives the body-check pass externally after all
+   * modules have pre-checked, so cross-module monomorphizations
+   * (`B.kei` calls `A.Foo<i32>.method`) get re-checked under `A`'s
+   * scope where A's imports are visible.
+   */
+  deferMonomorphizedBodyChecks = false;
+
   /** Operator overload resolution info: maps expression nodes to their resolved operator method */
   operatorMethods: Map<Expression, { methodName: string; structType: StructType }> = new Map();
 
@@ -123,6 +141,9 @@ export class Checker {
     SwitchCase,
     { variantName: string; fieldNames: string[]; fieldTypes: Type[] }
   > = new Map();
+
+  /** Static method calls dispatched as `Type.method` / `Type<TypeArgs>.method` */
+  staticMethodCalls: Map<Expression, { structName: string; mangledStructName: string }> = new Map();
 
   /** Per-instantiation type map, set during checkMonomorphizedBodies */
   private currentBodyTypeMap: Map<Expression, Type> | null = null;
@@ -248,8 +269,14 @@ export class Checker {
       this.error(`call to function that throws (${throwNames}) must use 'catch'`, callExpr.span);
     }
 
-    // Pass 3: Check bodies of monomorphized generic functions
-    this.checkMonomorphizedBodies();
+    // Pass 3: Check bodies of monomorphized generic functions/structs.
+    // In multi-module mode the orchestrator runs this pass externally
+    // after every module has pre-checked, so the body of a generic
+    // method defined in module A but instantiated by module B is
+    // checked under A's scope (where A's imports are visible).
+    if (!this.deferMonomorphizedBodyChecks) {
+      this.checkMonomorphizedBodies();
+    }
 
     // Collect auto-destroy struct types
     const autoDestroyStructs = new Map<string, StructType>();
@@ -279,6 +306,7 @@ export class Checker {
         typeMap: this.typeMap,
         operatorMethods: this.operatorMethods,
         switchCaseBindings: this.switchCaseBindings,
+        staticMethodCalls: this.staticMethodCalls,
       },
       generics: {
         monomorphizedStructs: this.monomorphizedStructs,
@@ -296,6 +324,27 @@ export class Checker {
    * Check the bodies of monomorphized generic functions so that all expressions
    * inside them get entries in the typeMap (needed for KIR lowering).
    */
+  /**
+   * Adopt a monomorphized struct that was registered by another module's
+   * checker. Used by the multi-module orchestrator to route per-instantiation
+   * body checks to the DEFINING module's checker (where imports resolve).
+   * Doesn't re-check the body — the caller orchestrates that via
+   * {@link checkMonomorphizedBodies}.
+   */
+  adoptMonomorphizedStruct(mangledName: string, mono: MonomorphizedStruct): void {
+    if (!this.monomorphizedStructs.has(mangledName)) {
+      this.monomorphizedStructs.set(mangledName, mono);
+    }
+  }
+
+  /**
+   * Public wrapper around the body-check pass so the multi-module
+   * orchestrator can drive it after every module has pre-checked.
+   */
+  runMonomorphizedBodyChecks(): void {
+    this.checkMonomorphizedBodies();
+  }
+
   private checkMonomorphizedBodies(): void {
     for (const [_mangledName, monoFunc] of this.monomorphizedFunctions) {
       if (!monoFunc.declaration) {
@@ -359,7 +408,11 @@ export class Checker {
       monoFunc.bodyGenericResolutions = bodyGenericResolutions;
     }
 
-    // Also store struct declarations in MonomorphizedStruct
+    // Also store struct declarations in MonomorphizedStruct, then check
+    // each method's body under a per-instantiation type-substitution map
+    // so the body's typeMap holds concrete types (not unsubstituted
+    // TypeParams). KIR lowering picks these up to emit signatures and
+    // field accesses with the concrete types.
     for (const [_mangledName, monoStruct] of this.monomorphizedStructs) {
       if (!monoStruct.originalDecl) {
         for (const decl of this.program.declarations) {
@@ -373,6 +426,70 @@ export class Checker {
           }
         }
       }
+
+      if (!monoStruct.originalDecl) continue;
+      this.checkMonomorphizedStructMethodBodies(monoStruct);
+    }
+  }
+
+  /**
+   * Walk every method on a monomorphized generic struct under the type-
+   * substitution map for this instantiation, populating per-method body
+   * type maps so KIR lowering sees concrete types.
+   */
+  private checkMonomorphizedStructMethodBodies(monoStruct: MonomorphizedStruct): void {
+    const decl = monoStruct.originalDecl;
+    if (!decl) return;
+    if (decl.methods.length === 0) return;
+
+    // Build the type-substitution map (e.g. T → i32).
+    const typeSubs = new Map<string, Type>();
+    for (let i = 0; i < decl.genericParams.length; i++) {
+      const paramName = decl.genericParams[i];
+      const concreteArg = monoStruct.typeArgs[i];
+      if (paramName && concreteArg) typeSubs.set(paramName, concreteArg);
+    }
+
+    monoStruct.methodBodyTypeMaps ??= new Map();
+
+    for (const method of decl.methods) {
+      // Skip if we've already checked this method for this instantiation.
+      if (monoStruct.methodBodyTypeMaps.has(method.name)) continue;
+
+      this.typeResolver.setSubstitutions(typeSubs);
+      const bodyTypeMap = new Map<Expression, Type>();
+      const bodyGenericResolutions = new Map<Expression, string>();
+      this.currentBodyTypeMap = bodyTypeMap;
+      this.currentBodyGenericResolutions = bodyGenericResolutions;
+
+      // Pull the method's already-substituted FunctionType from the
+      // concrete struct so the param types match what KIR will emit.
+      const concreteMethod = monoStruct.concrete.methods.get(method.name);
+
+      // The pushed scope's `functionContext` carries the substituted
+      // FunctionType through; that's what return-type checks read.
+      this.pushScope({ functionContext: concreteMethod ?? null });
+      for (let i = 0; i < method.params.length; i++) {
+        const param = method.params[i];
+        if (!param) continue;
+        // For self-typed params (`self`, `self: ref Self`, etc.) the
+        // concrete struct type was substituted into the method's
+        // FunctionType; use it directly. Other params come from the
+        // method type, which is already substituted.
+        const paramType = concreteMethod?.params[i]?.type ?? this.resolveType(param.typeAnnotation);
+        this.defineVariable(param.name, paramType, !param.isReadonly, false, param.span);
+      }
+
+      for (const stmt of method.body.statements) {
+        this.checkStatement(stmt);
+      }
+
+      this.popScope();
+      this.typeResolver.clearSubstitutions();
+      this.currentBodyTypeMap = null;
+      this.currentBodyGenericResolutions = null;
+
+      monoStruct.methodBodyTypeMaps.set(method.name, bodyTypeMap);
     }
   }
 
@@ -389,6 +506,7 @@ export class Checker {
       typeMap: new Map(),
       operatorMethods: new Map(),
       switchCaseBindings: new Map(),
+      staticMethodCalls: new Map(),
     };
     const generics: CheckGenerics = {
       monomorphizedStructs: new Map(),
@@ -404,12 +522,56 @@ export class Checker {
     // "main" and emits its top-level symbols without a module prefix. We
     // mirror that rule here so structs declared in main keep modulePrefix "".
     const mainModule = modules[modules.length - 1];
+
+    // Wave 1: pre-check every module (passes 1 + 1.5 + 2). The
+    // per-instantiation body-check pass is deferred so cross-module
+    // monomorphizations can be routed to the defining module's checker.
+    const checkers = new Map<string, Checker>();
+    const moduleNameForPrefix = new Map<string, string>(); // modulePrefix → module name
+    const preResults = new Map<string, CheckResult>();
     for (const mod of modules) {
       const moduleName = mod === mainModule ? "" : mod.name;
       const checker = new Checker(mod.program, mod.source, moduleName);
       checker.setModuleExports(moduleExports);
-
+      checker.deferMonomorphizedBodyChecks = true;
       const result = checker.check();
+      preResults.set(mod.name, result);
+      checkers.set(mod.name, checker);
+      moduleNameForPrefix.set(moduleName, mod.name);
+      const pubSymbols = checker.collectPublicSymbols();
+      moduleExports.set(mod.name, pubSymbols);
+    }
+
+    // Wave 2: route each monomorphization to its defining module's checker
+    // and run its body-check pass there. The defining module's scope has
+    // its imports in place, so a generic struct method that uses
+    // `import { alloc } from mem` resolves correctly.
+    for (const [, checker] of checkers) {
+      // Adopt monomorphizations registered in OTHER modules but whose
+      // original struct/function lives in THIS module.
+      for (const [otherModName, otherChecker] of checkers) {
+        if (otherChecker === checker) continue;
+        const otherResult = preResults.get(otherModName);
+        if (!otherResult) continue;
+        for (const [name, mono] of otherResult.generics.monomorphizedStructs) {
+          const definingPrefix = mono.original.modulePrefix ?? "";
+          if (definingPrefix === checker.modulePrefix) {
+            checker.adoptMonomorphizedStruct(name, mono);
+          }
+        }
+      }
+      checker.runMonomorphizedBodyChecks();
+    }
+
+    // Wave 3: merge results. Pull from each checker (which now has any
+    // adopted monomorphizations) plus the original pre-result diagnostics.
+    for (const mod of modules) {
+      const checker = checkers.get(mod.name);
+      const result = preResults.get(mod.name);
+      if (!checker || !result) continue;
+      // The pre-check result holds map references that the wave-2
+      // body checks mutated in place — same map identity, updated
+      // contents. Just merge them.
       allResults.set(mod.name, result);
 
       for (const [expr, type] of result.types.typeMap) types.typeMap.set(expr, type);
@@ -418,6 +580,9 @@ export class Checker {
       }
       for (const [sc, info] of result.types.switchCaseBindings) {
         types.switchCaseBindings.set(sc, info);
+      }
+      for (const [expr, info] of result.types.staticMethodCalls) {
+        types.staticMethodCalls.set(expr, info);
       }
       for (const [name, mono] of result.generics.monomorphizedStructs) {
         generics.monomorphizedStructs.set(name, mono);
@@ -435,11 +600,8 @@ export class Checker {
         lifecycle.autoOncopyStructs.set(name, st);
       }
       combinedDiags.push(...result.diagnostics);
-
-      // Collect this module's public symbols for use by later modules
-      const pubSymbols = checker.collectPublicSymbols();
-      moduleExports.set(mod.name, pubSymbols);
     }
+    void moduleNameForPrefix;
 
     return {
       results: allResults,

@@ -13,15 +13,7 @@
 
 import type { Expression, FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes";
 import type { FunctionType, StructType, Type } from "./types";
-import {
-  arrayType,
-  functionType,
-  ptrType,
-  rangeType,
-  sliceType,
-  TypeKind,
-  typeToString,
-} from "./types";
+import { arrayType, functionType, ptrType, rangeType, TypeKind, typeToString } from "./types";
 
 /**
  * Recursively substitute type parameters in a type using the given map.
@@ -53,8 +45,6 @@ export function substituteType(type: Type, typeMap: Map<string, Type>): Type {
     }
     case TypeKind.Array:
       return arrayType(substituteType(type.element, typeMap), type.length);
-    case TypeKind.Slice:
-      return sliceType(substituteType(type.element, typeMap));
     case TypeKind.Range:
       return rangeType(substituteType(type.element, typeMap));
     case TypeKind.Struct: {
@@ -175,8 +165,6 @@ function mangleTypeName(t: Type): string {
       return `ptr_${mangleTypeName(t.pointee)}`;
     case TypeKind.Array:
       return `array_${mangleTypeName(t.element)}`;
-    case TypeKind.Slice:
-      return `slice_${mangleTypeName(t.element)}`;
     case TypeKind.Struct:
       return t.name;
     case TypeKind.Enum:
@@ -202,6 +190,14 @@ export interface MonomorphizedStruct {
   concrete: StructType;
   /** Original AST declaration (needed for lowering methods). */
   originalDecl?: StructDecl | UnsafeStructDecl;
+  /**
+   * Per-method body type maps populated during checkMonomorphizedBodies.
+   * Keyed by method name; each map records the concrete types of every
+   * expression node in that method's body for this instantiation. KIR
+   * lowering uses these to emit signatures and field accesses with
+   * concrete types instead of the unsubstituted TypeParams.
+   */
+  methodBodyTypeMaps?: Map<string, Map<Expression, Type>>;
 }
 
 /**

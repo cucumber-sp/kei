@@ -5,7 +5,7 @@ describe("KIR: deref and unsafe expressions", () => {
   test("*p emits load with the pointee type", () => {
     const fn = lowerFunction(
       `
-      fn read(p: ptr<i32>) -> i32 {
+      fn read(p: *i32) -> i32 {
         return unsafe { *p };
       }
     `,
@@ -53,7 +53,7 @@ describe("KIR: deref and unsafe expressions", () => {
   test("unsafe { *p } emits the nested dereference load", () => {
     const fn = lowerFunction(
       `
-      fn read_nested(p: ptr<i32>) -> i32 {
+      fn read_nested(p: *i32) -> i32 {
         return unsafe { *p };
       }
     `,

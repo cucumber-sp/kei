@@ -10,8 +10,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { check, checkError, checkOk } from "./helpers";
 import { errorsOf } from "../helpers/pipeline";
+import { check, checkError, checkOk } from "./helpers";
 
 // ─── §4.1 — `ref T` is not a return type ─────────────────────────────────────
 
@@ -225,9 +225,7 @@ describe("§4.7 — `init` is unsafe-only at the field level", () => {
 
 // ─── §4.10 — Nested `Shared<T>` requires explicit unwrapping ─────────────────
 
-// Pending: lexer/parser splits `>>` as a single right-shift token, so
-// `Shared<Shared<i32>>` doesn't parse. Re-enable once that's fixed.
-describe.skip("§4.10 — `Shared<T>` does not auto-deref recursively", () => {
+describe("§4.10 — `Shared<T>` does not auto-deref recursively", () => {
   test("`let v: i32 = s` from `Shared<Shared<i32>>` is a compile error", () => {
     checkError(
       `
@@ -247,9 +245,7 @@ describe.skip("§4.10 — `Shared<T>` does not auto-deref recursively", () => {
     );
   });
 
-  test.skip("explicit `s.value.value` is OK", () => {
-    // Pending: parser splits `>>` as a single right-shift token rather
-    // than two closing-`>`s. The lexer-level fix lives in a follow-up.
+  test("explicit `s.value.value` is OK", () => {
     checkOk(`
       unsafe struct Shared<T> {
         refcount: ref i64;
@@ -363,15 +359,15 @@ describe("`mut` keyword is removed", () => {
   // `mut` is rejected at the parser level — these sources fail to parse,
   // which propagates as an error from `check()` (the helper throws).
   test("`mut x: T` parameter form fails to parse", () => {
-    expect(() => check(`fn f(mut x: int) { } fn main() -> int { return 0; }`)).toThrow();
+    expect(() => check("fn f(mut x: int) { } fn main() -> int { return 0; }")).toThrow();
   });
 
   test("`let mut x` fails to parse", () => {
-    expect(() => check(`fn main() -> int { let mut x = 1; return x; }`)).toThrow();
+    expect(() => check("fn main() -> int { let mut x = 1; return x; }")).toThrow();
   });
 
   test("`ref mut T` fails to parse", () => {
-    expect(() => check(`fn f(x: ref mut int) { } fn main() -> int { return 0; }`)).toThrow();
+    expect(() => check("fn f(x: ref mut int) { } fn main() -> int { return 0; }")).toThrow();
   });
 });
 
@@ -379,9 +375,7 @@ describe("`mut` keyword is removed", () => {
 
 describe("`slice<T>` is removed", () => {
   test("`slice<T>` parameter is a compile error", () => {
-    const errs = errorsOf(
-      check(`fn f(x: slice<i32>) { } fn main() -> int { return 0; }`)
-    );
+    const errs = errorsOf(check("fn f(x: slice<i32>) { } fn main() -> int { return 0; }"));
     expect(errs.length).toBeGreaterThan(0);
     expect(errs[0]?.message).toContain("'slice<T>' was removed");
   });
@@ -389,7 +383,29 @@ describe("`slice<T>` is removed", () => {
 
 // ─── `Shared<T>` end-to-end (semantics) ──────────────────────────────────────
 
-describe.skip("Shared<T> stdlib semantics", () => {
+describe("Shared<T> stdlib semantics — checker only (KIR/codegen pending)", () => {
+  test("`Shared<T>.wrap(item)` typechecks (parser + static method dispatch)", () => {
+    checkOk(`
+      unsafe struct Shared<T> {
+        refcount: ref i64;
+        value: ref T;
+        fn wrap(item: ref T) -> Shared<T> {
+          let s = Shared<T>{};
+          return s;
+        }
+        fn __oncopy(self: ref Shared<T>) {}
+        fn __destroy(self: ref Shared<T>) {}
+      }
+      fn main() -> int {
+        let n: i32 = 42;
+        let s = Shared<i32>.wrap(n);
+        return 0;
+      }
+    `);
+  });
+});
+
+describe.skip("Shared<T> stdlib semantics — original placeholder (e2e + monomorphization pending)", () => {
   test("Shared<T>::wrap takes `ref T` and returns `Shared<T>`", () => {
     checkOk(`
       unsafe struct Shared<T> {
@@ -465,44 +481,45 @@ describe.skip("future: parser supports `Type<T>.method(args)` on generic types",
   });
 });
 
-describe.skip("future: lexer splits `>>` in type-position for nested generics", () => {
-  // `Shared<Shared<i32>>` lexes the trailing `>>` as a single
-  // `GreaterGreater` (right-shift) token, so the inner generic-args
-  // close fails. Standard fix: contextual split when the parser is
-  // inside a type-args context. Blocks §4.10 nested-Shared tests.
-  test("Shared<Shared<i32>> parses as a doubly-wrapped generic type", () => {
-    // Marker test.
-  });
-});
-
-describe.skip("future: `ptr<T>` source form is rejected", () => {
-  // The type-resolver still accepts `ptr<T>` as a back-compat path so
-  // older fixtures continue working through the rollout. Per the
-  // redesign the canonical raw-pointer spelling is `*T` and `ptr<T>`
-  // should be rejected with a hint to migrate.
+describe("`ptr<T>` source form is rejected", () => {
   test("`ptr<T>` parameter is a compile error pointing at `*T`", () => {
-    // Marker test.
+    checkError(
+      `
+        fn read(p: ptr<i32>) -> i32 { return 0; }
+      `,
+      "'ptr<T>' was removed"
+    );
+  });
+
+  test("`ptr<T>` field is a compile error", () => {
+    checkError(
+      `
+        unsafe struct Box { data: ptr<u8>; }
+      `,
+      "'ptr<T>' was removed"
+    );
   });
 });
 
-describe.skip("future: `dynarray<T>` source form is rejected", () => {
-  // Same back-compat story as `ptr<T>` — the keyword is still active
-  // and the type-resolver routes it through the array path. Per the
-  // redesign neither `dynarray` nor `slice` exist; only `Array<T>` and
-  // `inline<T, N>` survive at the source level.
+describe("`dynarray<T>` source form is rejected", () => {
   test("`dynarray<T>` parameter is a compile error", () => {
-    // Marker test.
+    checkError(
+      `
+        fn first(xs: dynarray<i32>) -> i32 { return 0; }
+      `,
+      "'dynarray<T>' was removed"
+    );
   });
 });
 
-describe.skip("future: `mut` keyword fully removed from the lexer", () => {
-  // `mut` is rejected at the parser level (parseParam doesn't accept
-  // it, parseLetStatement doesn't accept it, parseType doesn't accept
-  // `ref mut T`) — the existing `mut keyword is removed` cases pass.
-  // Cosmetic follow-up: also drop `mut` from the active KEYWORD_MAP so
-  // `mut` becomes a regular identifier. This test pins that future state.
+describe("`mut` keyword fully removed from the lexer", () => {
   test("`mut` is a regular identifier (no keyword diagnostic)", () => {
-    // Marker test.
+    checkOk(`
+      fn main() -> int {
+        let mut = 7;
+        return mut;
+      }
+    `);
   });
 });
 
@@ -539,10 +556,19 @@ describe.skip("future: auto-last-use elision (§3.5)", () => {
   });
 });
 
-describe.skip("future: `copy(x)` builtin (§6.3)", () => {
-  // Optional explicit-copy builtin deferred unless user code asks for
-  // it. Pin a test so the question is rediscoverable.
-  test("`copy(x)` produces a fresh duplicate firing __oncopy", () => {
+describe.skip("future: `copy(x)` builtin (§6.3) — depends on §3.5 first", () => {
+  // `copy(x)` is the de-optimizer for auto-last-use elision (§3.5).
+  // Without elision it's redundant: `let temp = a; takeOwnership(move
+  // temp);` already does an explicit oncopy + move. With elision the
+  // compiler can convert `takeOwnership(a)` into `takeOwnership(move
+  // a)` when `a` isn't used after the call — at which point the user
+  // needs a way to say "no, I want the oncopy, keep `a` alive":
+  //
+  //   takeOwnership(copy(a));  // bumps refcount; `a` survives
+  //
+  // Until §3.5 lands `copy()` is a no-op in user-visible behaviour, so
+  // this stays a skipped marker.
+  test("`copy(x)` keeps the source alive across an otherwise-eliding call", () => {
     // Marker test.
   });
 });
@@ -555,13 +581,75 @@ describe.skip("future: `weak<T>` companion type (§6.8)", () => {
   });
 });
 
-describe.skip("future: SliceType cleanup", () => {
-  // Source-level `slice<T>` is rejected (see "`slice<T>` is removed"
-  // above), but the internal SliceType semantic representation and
-  // the type-resolver's slice-related code paths still exist for
-  // back-compat. Cleanup is internal and not user-visible.
+describe("SliceType cleanup", () => {
   test("SliceType is removed from the internal type system", () => {
+    // The checker `types/` module no longer exports `sliceType` /
+    // `SliceType`. We assert by import — if either name leaked back in,
+    // this test would fail to type-check. The runtime check below is a
+    // belt-and-suspenders sanity confirmation.
+    const types = require("../../src/checker/types") as Record<string, unknown>;
+    expect(types.sliceType).toBeUndefined();
+    expect((types.TypeKind as Record<string, unknown>).Slice).toBeUndefined();
+  });
+});
+
+describe.skip("future: std `Shared<T>` runs end-to-end", () => {
+  // The cross-module monomorphization scaffolding landed: a
+  // `Shared<T>` defined in std/shared.kei and instantiated in main
+  // type-checks cleanly under `Shared<i32>.wrap(n)` etc. Body
+  // checks are routed to the defining module's checker, so its
+  // imports (`alloc`, `dealloc`) are visible. What's still loose
+  // before the full runtime path works:
+  //
+  //  1. mem2reg eliminates the trivial `let s = Shared<T>{}; return s;`
+  //     alloca (it's never stored to before the load), leaving
+  //     `ret %1` with %1 undef. The fix is either to keep unstored
+  //     allocas or to materialise a zero-init for the return slot.
+  //
+  //  2. KIR lowering of generic-struct method bodies uses MAIN's
+  //     `ctx.importedNames` to resolve free identifiers like
+  //     `dealloc(...)`, not the defining module's. Result: the C
+  //     output has `dealloc(...)` instead of `mem_dealloc(...)`.
+  //
+  //  3. Lifecycle hooks (`__destroy`, `__oncopy`) get emitted twice
+  //     for monomorphized structs — once with the defining module's
+  //     prefix (`shared_Shared_i32___destroy`) and once without
+  //     (`Shared_i32___destroy`). Pick one canonical form (probably
+  //     the prefixed one) and route call sites accordingly.
+  //
+  // Once those three are fixed, this test (and `tests/e2e/shared
+  // .test.ts` in general) can flip back on.
+  test("std `Shared<T>::wrap(item)` runs end-to-end through the C output", () => {
     // Marker test.
   });
 });
 
+describe.skip("future: discarded return value fires __destroy on the temporary", () => {
+  // Confirmed gap as of the ref-redesign rollout: when a function's
+  // return value is dropped at the statement level (no `let`, no
+  // assignment, no further use), the temporary's `__destroy` is NOT
+  // emitted. The bytes leak.
+  //
+  // Repro (run via the CLI):
+  //
+  //   unsafe struct Res {
+  //     id: i32;
+  //     fn __destroy(self: ref Res) { print(self.id); }
+  //     fn __oncopy(self: ref Res) {}
+  //   }
+  //   fn make(id: i32) -> Res { return Res { id: id }; }
+  //   fn main() -> int {
+  //     make(42);   // discarded — `__destroy` should print 42
+  //     print(99);
+  //     return 0;
+  //   }
+  //
+  // Expected stdout: "42\n99\n". Actual: "99\n".
+  //
+  // Fix lives in KIR lowering for ExprStmt where the expression's type
+  // has a non-trivial __destroy: emit a temporary slot, store the call
+  // result, then emit `destroy &temp` before the statement ends.
+  test("discarded `make()` result destroys before the next statement runs", () => {
+    // Marker test.
+  });
+});

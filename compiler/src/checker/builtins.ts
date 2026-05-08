@@ -75,13 +75,7 @@ export function registerBuiltins(scope: Scope): void {
   scope.define(
     functionSymbol(
       "sizeof",
-      functionType(
-        [{ name: "T", type: VOID_TYPE, isReadonly: false }],
-        USIZE_TYPE,
-        [],
-        [],
-        false
-      ),
+      functionType([{ name: "T", type: VOID_TYPE, isReadonly: false }], USIZE_TYPE, [], [], false),
       false
     )
   );
