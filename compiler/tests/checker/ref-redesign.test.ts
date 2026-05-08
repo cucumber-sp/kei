@@ -11,6 +11,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { errorsOf } from "../helpers/pipeline";
+import { lowerFunction as lowerFunctionLocal } from "../kir/helpers";
 import { check, checkError, checkOk } from "./helpers";
 
 // ─── §4.1 — `ref T` is not a return type ─────────────────────────────────────
@@ -523,13 +524,29 @@ describe("`mut` keyword fully removed from the lexer", () => {
   });
 });
 
-describe.skip("future: reverse-declaration-order destruction (§6.9)", () => {
-  // The spec pins that fields are destroyed in reverse declaration
-  // order. The auto-generated __destroy emits them in declaration
-  // order today. Test would build a struct whose fields print on
-  // destroy and assert the output is in reverse.
-  test("struct with two managed fields destroys them in reverse order", () => {
-    // Marker test.
+describe("reverse-declaration-order destruction (§6.9)", () => {
+  test("auto-__destroy walks struct fields in reverse declaration order", () => {
+    // The spec pins that fields are destroyed in reverse declaration
+    // order. Two string fields `first` then `second` should produce a
+    // KIR auto-destroy that frees `second` BEFORE `first`.
+    const fn = lowerFunctionLocal(
+      `
+      struct Holder {
+        first: string;
+        second: string;
+      }
+      fn main() -> int { return 0; }
+    `,
+      "Holder___destroy"
+    );
+
+    const fieldNames: string[] = [];
+    for (const block of fn.blocks) {
+      for (const inst of block.instructions) {
+        if (inst.kind === "field_ptr") fieldNames.push(inst.field);
+      }
+    }
+    expect(fieldNames).toEqual(["second", "first"]);
   });
 });
 
@@ -598,8 +615,10 @@ describe.skip("future: std `Shared<T>` runs end-to-end", () => {
   // `Shared<T>` defined in std/shared.kei and instantiated in main
   // type-checks cleanly under `Shared<i32>.wrap(n)` etc. Body
   // checks are routed to the defining module's checker, so its
-  // imports (`alloc`, `dealloc`) are visible. What's still loose
-  // before the full runtime path works:
+  // imports (`alloc`, `dealloc`) are visible. The double-emission
+  // of monomorphized lifecycle hooks is also fixed (see
+  // `tests/modules/lowering.test.ts`). What's still loose before
+  // the full runtime path works:
   //
   //  1. mem2reg eliminates the trivial `let s = Shared<T>{}; return s;`
   //     alloca (it's never stored to before the load), leaving
@@ -611,45 +630,58 @@ describe.skip("future: std `Shared<T>` runs end-to-end", () => {
   //     `dealloc(...)`, not the defining module's. Result: the C
   //     output has `dealloc(...)` instead of `mem_dealloc(...)`.
   //
-  //  3. Lifecycle hooks (`__destroy`, `__oncopy`) get emitted twice
-  //     for monomorphized structs — once with the defining module's
-  //     prefix (`shared_Shared_i32___destroy`) and once without
-  //     (`Shared_i32___destroy`). Pick one canonical form (probably
-  //     the prefixed one) and route call sites accordingly.
-  //
-  // Once those three are fixed, this test (and `tests/e2e/shared
+  // Once both are fixed, this test (and `tests/e2e/shared
   // .test.ts` in general) can flip back on.
   test("std `Shared<T>::wrap(item)` runs end-to-end through the C output", () => {
     // Marker test.
   });
 });
 
-describe.skip("future: discarded return value fires __destroy on the temporary", () => {
-  // Confirmed gap as of the ref-redesign rollout: when a function's
-  // return value is dropped at the statement level (no `let`, no
-  // assignment, no further use), the temporary's `__destroy` is NOT
-  // emitted. The bytes leak.
-  //
-  // Repro (run via the CLI):
-  //
-  //   unsafe struct Res {
-  //     id: i32;
-  //     fn __destroy(self: ref Res) { print(self.id); }
-  //     fn __oncopy(self: ref Res) {}
-  //   }
-  //   fn make(id: i32) -> Res { return Res { id: id }; }
-  //   fn main() -> int {
-  //     make(42);   // discarded — `__destroy` should print 42
-  //     print(99);
-  //     return 0;
-  //   }
-  //
-  // Expected stdout: "42\n99\n". Actual: "99\n".
-  //
-  // Fix lives in KIR lowering for ExprStmt where the expression's type
-  // has a non-trivial __destroy: emit a temporary slot, store the call
-  // result, then emit `destroy &temp` before the statement ends.
+describe("discarded return value fires __destroy on the temporary", () => {
   test("discarded `make()` result destroys before the next statement runs", () => {
-    // Marker test.
+    // The expression-statement's call result is owned by nobody. The
+    // KIR must destroy it before moving on; otherwise the `Res`
+    // returned by `make()` leaks. Today's lowering does NOT emit the
+    // destroy — this test pins the corrected behavior.
+    const fn = lowerFunctionLocal(
+      `
+      unsafe struct Res {
+        id: i32;
+        fn __destroy(self: ref Res) {}
+      }
+      fn make(id: i32) -> Res { return Res { id: id }; }
+      fn next() -> int { return 0; }
+      fn main() -> int {
+        make(42);
+        next();
+        return 0;
+      }
+    `,
+      "main"
+    );
+
+    // Walk the entry block; we expect `call make(...)` followed by a
+    // `destroy` (for the discarded `Res`), then `call next(...)`. The
+    // destroy must appear BEFORE the second call.
+    const entry = fn.blocks[0];
+    expect(entry).toBeTruthy();
+    const insts = entry?.instructions ?? [];
+    let firstCallIdx = -1;
+    let nextCallIdx = -1;
+    let destroyIdx = -1;
+    for (let i = 0; i < insts.length; i++) {
+      const inst = insts[i];
+      if (!inst) continue;
+      if (inst.kind === "call" && "func" in inst && inst.func.endsWith("make")) {
+        firstCallIdx = i;
+      } else if (inst.kind === "call" && "func" in inst && inst.func.endsWith("next")) {
+        nextCallIdx = i;
+      } else if (inst.kind === "destroy" && firstCallIdx !== -1 && destroyIdx === -1) {
+        destroyIdx = i;
+      }
+    }
+    expect(firstCallIdx).toBeGreaterThanOrEqual(0);
+    expect(destroyIdx).toBeGreaterThan(firstCallIdx);
+    expect(nextCallIdx).toBeGreaterThan(destroyIdx);
   });
 });

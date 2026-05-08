@@ -91,3 +91,22 @@ describe("Multi-module KIR lowering", () => {
     });
   });
 });
+
+describe("Multi-module monomorphized lifecycle (single emission)", () => {
+  test("user-defined hooks on an imported generic struct are emitted exactly once", () => {
+    // Repro of the third Shared<T> e2e gap: a generic unsafe struct
+    // defined in a dependency module whose `__destroy` / `__oncopy`
+    // are user-defined methods used to be lowered twice — once in
+    // the defining module's lowering pass (with module prefix) and
+    // once in the importing module's pass (without prefix). Pick a
+    // single canonical form and emit it only in the defining module.
+    const kirModule = lowerMultiModule("main_generic_lifecycle.kei");
+    const fnNames = kirModule.functions.map((f) => f.name);
+
+    const destroys = fnNames.filter((n) => n.endsWith("Bag_i32___destroy"));
+    expect(destroys.length).toBe(1);
+
+    const oncopies = fnNames.filter((n) => n.endsWith("Bag_i32___oncopy"));
+    expect(oncopies.length).toBe(1);
+  });
+});

@@ -1,0 +1,6 @@
+import { Bag } from utils_generic;
+
+fn main() -> i32 {
+    let b = Bag<i32>{ value: 7 };
+    return 0;
+}

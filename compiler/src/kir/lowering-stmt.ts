@@ -687,7 +687,45 @@ export function lowerSwitchStmt(ctx: LoweringCtx, stmt: SwitchStmt): void {
 }
 
 export function lowerExprStmt(ctx: LoweringCtx, stmt: ExprStmt): void {
-  lowerExpr(ctx, stmt.expression);
+  const valueId = lowerExpr(ctx, stmt.expression);
+
+  // Spec §3 / lifecycle: when an expression statement produces an owned
+  // value with a non-trivial __destroy or that is a managed string, the
+  // temporary is unowned past the end of the statement and must be torn
+  // down here. Otherwise the bytes leak.
+  //
+  // We only do this for "fresh" rvalues (call results, struct literals,
+  // unsafe blocks, casts, etc.) — bare identifier or member statements
+  // alias an existing slot that already has an owner, so re-destroying
+  // would be a double-free.
+  const exprKind = stmt.expression.kind;
+  const isFreshRValue =
+    exprKind === "CallExpr" ||
+    exprKind === "StructLiteral" ||
+    exprKind === "IfExpr" ||
+    exprKind === "SwitchExpr" ||
+    exprKind === "UnsafeExpr" ||
+    exprKind === "GroupExpr" ||
+    exprKind === "CastExpr";
+  if (!isFreshRValue) return;
+
+  const checkerType = ctx.checkResult.types.typeMap.get(stmt.expression);
+  if (!checkerType) return;
+
+  if (checkerType.kind === "string") {
+    const slot = emitStackAlloc(ctx, { kind: "string" });
+    emit(ctx, { kind: "store", ptr: slot, value: valueId });
+    emit(ctx, { kind: "call_extern_void", func: "kei_string_destroy", args: [slot] });
+    return;
+  }
+
+  const lifecycle = getStructLifecycle(ctx, checkerType);
+  if (!lifecycle?.hasDestroy) return;
+  if (checkerType.kind !== "struct") return;
+
+  const slot = emitStackAlloc(ctx, getExprKirType(ctx, stmt.expression));
+  emit(ctx, { kind: "store", ptr: slot, value: valueId });
+  emit(ctx, { kind: "destroy", value: slot, structName: lifecycle.structName });
 }
 
 export function lowerAssertStmt(ctx: LoweringCtx, stmt: AssertStmt): void {
