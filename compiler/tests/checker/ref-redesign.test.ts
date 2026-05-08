@@ -11,6 +11,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { errorsOf } from "../helpers/pipeline";
+import { lowerFunction as lowerFunctionLocal } from "../kir/helpers";
 import { check, checkError, checkOk } from "./helpers";
 
 // ─── §4.1 — `ref T` is not a return type ─────────────────────────────────────
@@ -523,13 +524,29 @@ describe("`mut` keyword fully removed from the lexer", () => {
   });
 });
 
-describe.skip("future: reverse-declaration-order destruction (§6.9)", () => {
-  // The spec pins that fields are destroyed in reverse declaration
-  // order. The auto-generated __destroy emits them in declaration
-  // order today. Test would build a struct whose fields print on
-  // destroy and assert the output is in reverse.
-  test("struct with two managed fields destroys them in reverse order", () => {
-    // Marker test.
+describe("reverse-declaration-order destruction (§6.9)", () => {
+  test("auto-__destroy walks struct fields in reverse declaration order", () => {
+    // The spec pins that fields are destroyed in reverse declaration
+    // order. Two string fields `first` then `second` should produce a
+    // KIR auto-destroy that frees `second` BEFORE `first`.
+    const fn = lowerFunctionLocal(
+      `
+      struct Holder {
+        first: string;
+        second: string;
+      }
+      fn main() -> int { return 0; }
+    `,
+      "Holder___destroy"
+    );
+
+    const fieldNames: string[] = [];
+    for (const block of fn.blocks) {
+      for (const inst of block.instructions) {
+        if (inst.kind === "field_ptr") fieldNames.push(inst.field);
+      }
+    }
+    expect(fieldNames).toEqual(["second", "first"]);
   });
 });
 

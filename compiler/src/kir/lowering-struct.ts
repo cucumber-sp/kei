@@ -184,7 +184,13 @@ export function lowerAutoDestroy(
 
   const selfVar: VarId = "%self" as VarId;
 
-  for (const [fieldName, fieldType] of structType.fields) {
+  // Spec §6.9: fields are destroyed in reverse declaration order so a
+  // later-declared field that holds a reference into an earlier-declared
+  // one is torn down first. `structType.fields` is a Map preserving
+  // insertion (declaration) order, so reversing the entry list gives the
+  // intended LIFO walk.
+  const fieldsReverse = [...structType.fields].reverse();
+  for (const [fieldName, fieldType] of fieldsReverse) {
     if (fieldType.kind === "string") {
       // Emit: fieldPtr = &self->fieldName; kei_string_destroy(fieldPtr);
       const fieldPtr = freshVar();
