@@ -615,8 +615,10 @@ describe.skip("future: std `Shared<T>` runs end-to-end", () => {
   // `Shared<T>` defined in std/shared.kei and instantiated in main
   // type-checks cleanly under `Shared<i32>.wrap(n)` etc. Body
   // checks are routed to the defining module's checker, so its
-  // imports (`alloc`, `dealloc`) are visible. What's still loose
-  // before the full runtime path works:
+  // imports (`alloc`, `dealloc`) are visible. The double-emission
+  // of monomorphized lifecycle hooks is also fixed (see
+  // `tests/modules/lowering.test.ts`). What's still loose before
+  // the full runtime path works:
   //
   //  1. mem2reg eliminates the trivial `let s = Shared<T>{}; return s;`
   //     alloca (it's never stored to before the load), leaving
@@ -628,13 +630,7 @@ describe.skip("future: std `Shared<T>` runs end-to-end", () => {
   //     `dealloc(...)`, not the defining module's. Result: the C
   //     output has `dealloc(...)` instead of `mem_dealloc(...)`.
   //
-  //  3. Lifecycle hooks (`__destroy`, `__oncopy`) get emitted twice
-  //     for monomorphized structs — once with the defining module's
-  //     prefix (`shared_Shared_i32___destroy`) and once without
-  //     (`Shared_i32___destroy`). Pick one canonical form (probably
-  //     the prefixed one) and route call sites accordingly.
-  //
-  // Once those three are fixed, this test (and `tests/e2e/shared
+  // Once both are fixed, this test (and `tests/e2e/shared
   // .test.ts` in general) can flip back on.
   test("std `Shared<T>::wrap(item)` runs end-to-end through the C output", () => {
     // Marker test.

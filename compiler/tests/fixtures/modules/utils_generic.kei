@@ -1,0 +1,6 @@
+pub unsafe struct Bag<T> {
+    value: T;
+
+    fn __destroy(self: ref Bag<T>) {}
+    fn __oncopy(self: ref Bag<T>) {}
+}
