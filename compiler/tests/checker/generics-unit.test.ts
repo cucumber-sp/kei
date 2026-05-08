@@ -151,28 +151,19 @@ describe("substituteType", () => {
 
 describe("substituteFunctionType", () => {
   test("returns original when typeMap is empty", () => {
-    const fn = functionType(
-      [{ name: "x", type: I32_TYPE, isReadonly: false }],
-      VOID_TYPE
-    );
+    const fn = functionType([{ name: "x", type: I32_TYPE, isReadonly: false }], VOID_TYPE);
     const result = substituteFunctionType(fn, new Map());
     expect(result).toBe(fn);
   });
 
   test("returns original when nothing changes", () => {
-    const fn = functionType(
-      [{ name: "x", type: I32_TYPE, isReadonly: false }],
-      VOID_TYPE
-    );
+    const fn = functionType([{ name: "x", type: I32_TYPE, isReadonly: false }], VOID_TYPE);
     const result = substituteFunctionType(fn, new Map([["T", BOOL_TYPE]]));
     expect(result).toBe(fn);
   });
 
   test("substitutes parameter types", () => {
-    const fn = functionType(
-      [{ name: "x", type: typeParam("T"), isReadonly: false }],
-      VOID_TYPE
-    );
+    const fn = functionType([{ name: "x", type: typeParam("T"), isReadonly: false }], VOID_TYPE);
     const result = substituteFunctionType(fn, new Map([["T", I32_TYPE]]));
     expect(result.params[0]!.type).toEqual(I32_TYPE);
   });

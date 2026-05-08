@@ -243,7 +243,10 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
           // C function (e.g. `Shared_i32_wrap`).
           const baseName = structType.name;
           let mangledStructName = baseName;
-          if (expr.typeArgs.length > 0 && structType.genericParams.length === expr.typeArgs.length) {
+          if (
+            expr.typeArgs.length > 0 &&
+            structType.genericParams.length === expr.typeArgs.length
+          ) {
             const argSuffixes = expr.typeArgs
               .map((t) => checker.resolveType(t))
               .map((t) => {
@@ -254,7 +257,10 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
                 if (t.kind === "string") return "string";
                 return "T";
               });
-            mangledStructName = mangleGenericName(baseName, expr.typeArgs.map((t) => checker.resolveType(t)));
+            mangledStructName = mangleGenericName(
+              baseName,
+              expr.typeArgs.map((t) => checker.resolveType(t))
+            );
             void argSuffixes;
           }
           checker.staticMethodCalls.set(expr, {

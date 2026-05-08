@@ -226,14 +226,8 @@ describe("typesEqual", () => {
 
   describe("function types", () => {
     test("same params and return type are equal", () => {
-      const a = functionType(
-        [{ name: "x", type: I32_TYPE, isReadonly: false }],
-        BOOL_TYPE
-      );
-      const b = functionType(
-        [{ name: "x", type: I32_TYPE, isReadonly: false }],
-        BOOL_TYPE
-      );
+      const a = functionType([{ name: "x", type: I32_TYPE, isReadonly: false }], BOOL_TYPE);
+      const b = functionType([{ name: "x", type: I32_TYPE, isReadonly: false }], BOOL_TYPE);
       expect(typesEqual(a, b)).toBe(true);
     });
 
@@ -244,23 +238,14 @@ describe("typesEqual", () => {
     });
 
     test("different param counts are not equal", () => {
-      const a = functionType(
-        [{ name: "x", type: I32_TYPE, isReadonly: false }],
-        VOID_TYPE
-      );
+      const a = functionType([{ name: "x", type: I32_TYPE, isReadonly: false }], VOID_TYPE);
       const b = functionType([], VOID_TYPE);
       expect(typesEqual(a, b)).toBe(false);
     });
 
     test("different param types are not equal", () => {
-      const a = functionType(
-        [{ name: "x", type: I32_TYPE, isReadonly: false }],
-        VOID_TYPE
-      );
-      const b = functionType(
-        [{ name: "x", type: BOOL_TYPE, isReadonly: false }],
-        VOID_TYPE
-      );
+      const a = functionType([{ name: "x", type: I32_TYPE, isReadonly: false }], VOID_TYPE);
+      const b = functionType([{ name: "x", type: BOOL_TYPE, isReadonly: false }], VOID_TYPE);
       expect(typesEqual(a, b)).toBe(false);
     });
 
@@ -680,10 +665,7 @@ describe("typeToString", () => {
     });
 
     test("single param function", () => {
-      const t = functionType(
-        [{ name: "x", type: I32_TYPE, isReadonly: false }],
-        BOOL_TYPE
-      );
+      const t = functionType([{ name: "x", type: I32_TYPE, isReadonly: false }], BOOL_TYPE);
       expect(typeToString(t)).toBe("fn(x: i32) -> bool");
     });
 

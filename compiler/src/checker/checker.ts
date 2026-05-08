@@ -21,8 +21,8 @@ import { registerBuiltins } from "./builtins";
 import { DeclarationChecker } from "./decl-checker";
 import { ExpressionChecker } from "./expr-checker";
 import type { MonomorphizedFunction, MonomorphizedStruct } from "./generics";
-import { Scope } from "./scope";
 import { validateRefPositions } from "./ref-position-checker";
+import { Scope } from "./scope";
 import { StatementChecker } from "./stmt-checker";
 import type { ScopeSymbol } from "./symbols";
 import { SymbolKind, typeSymbol, variableSymbol } from "./symbols";
@@ -143,8 +143,7 @@ export class Checker {
   > = new Map();
 
   /** Static method calls dispatched as `Type.method` / `Type<TypeArgs>.method` */
-  staticMethodCalls: Map<Expression, { structName: string; mangledStructName: string }> =
-    new Map();
+  staticMethodCalls: Map<Expression, { structName: string; mangledStructName: string }> = new Map();
 
   /** Per-instantiation type map, set during checkMonomorphizedBodies */
   private currentBodyTypeMap: Map<Expression, Type> | null = null;
@@ -477,8 +476,7 @@ export class Checker {
         // concrete struct type was substituted into the method's
         // FunctionType; use it directly. Other params come from the
         // method type, which is already substituted.
-        const paramType =
-          concreteMethod?.params[i]?.type ?? this.resolveType(param.typeAnnotation);
+        const paramType = concreteMethod?.params[i]?.type ?? this.resolveType(param.typeAnnotation);
         this.defineVariable(param.name, paramType, !param.isReadonly, false, param.span);
       }
 

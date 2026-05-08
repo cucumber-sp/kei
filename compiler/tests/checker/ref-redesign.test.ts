@@ -10,8 +10,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { check, checkError, checkOk } from "./helpers";
 import { errorsOf } from "../helpers/pipeline";
+import { check, checkError, checkOk } from "./helpers";
 
 // ─── §4.1 — `ref T` is not a return type ─────────────────────────────────────
 
@@ -359,15 +359,15 @@ describe("`mut` keyword is removed", () => {
   // `mut` is rejected at the parser level — these sources fail to parse,
   // which propagates as an error from `check()` (the helper throws).
   test("`mut x: T` parameter form fails to parse", () => {
-    expect(() => check(`fn f(mut x: int) { } fn main() -> int { return 0; }`)).toThrow();
+    expect(() => check("fn f(mut x: int) { } fn main() -> int { return 0; }")).toThrow();
   });
 
   test("`let mut x` fails to parse", () => {
-    expect(() => check(`fn main() -> int { let mut x = 1; return x; }`)).toThrow();
+    expect(() => check("fn main() -> int { let mut x = 1; return x; }")).toThrow();
   });
 
   test("`ref mut T` fails to parse", () => {
-    expect(() => check(`fn f(x: ref mut int) { } fn main() -> int { return 0; }`)).toThrow();
+    expect(() => check("fn f(x: ref mut int) { } fn main() -> int { return 0; }")).toThrow();
   });
 });
 
@@ -375,9 +375,7 @@ describe("`mut` keyword is removed", () => {
 
 describe("`slice<T>` is removed", () => {
   test("`slice<T>` parameter is a compile error", () => {
-    const errs = errorsOf(
-      check(`fn f(x: slice<i32>) { } fn main() -> int { return 0; }`)
-    );
+    const errs = errorsOf(check("fn f(x: slice<i32>) { } fn main() -> int { return 0; }"));
     expect(errs.length).toBeGreaterThan(0);
     expect(errs[0]?.message).toContain("'slice<T>' was removed");
   });
@@ -655,5 +653,3 @@ describe.skip("future: discarded return value fires __destroy on the temporary",
     // Marker test.
   });
 });
-
-

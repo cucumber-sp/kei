@@ -22,7 +22,6 @@
 import type {
   Declaration,
   EnumDecl,
-  Field,
   FunctionDecl,
   Param,
   Program,
@@ -175,10 +174,7 @@ function visitTypeForNested(node: TypeNode, diags: Diagnostic[]): void {
 /**
  * Walk statements in a function body to find `let x: ref T` and reject.
  */
-function visitStatementForRef(
-  stmt: import("../ast/nodes").Statement,
-  diags: Diagnostic[]
-): void {
+function visitStatementForRef(stmt: import("../ast/nodes").Statement, diags: Diagnostic[]): void {
   switch (stmt.kind) {
     case "LetStmt":
     case "ConstStmt":

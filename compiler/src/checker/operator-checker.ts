@@ -336,10 +336,7 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
       // Integer-literal coercion: `count += 1` where count: i64 — the
       // literal 1 defaults to i32 but fits in i64.
       const litInfo = extractLiteralInfo(expr.value);
-      if (
-        !litInfo ||
-        !isLiteralAssignableTo(litInfo.kind, litInfo.value, effectiveTarget)
-      ) {
+      if (!litInfo || !isLiteralAssignableTo(litInfo.kind, litInfo.value, effectiveTarget)) {
         checker.error(
           `operator '${op}' requires same types, got '${typeToString(effectiveTarget)}' and '${typeToString(effectiveValue)}'`,
           expr.span
@@ -390,10 +387,7 @@ function checkAssignTarget(checker: Checker, target: Expression): void {
       objectType.kind === TypeKind.Struct &&
       objectType.readonlyFields?.has(target.property)
     ) {
-      checker.error(
-        `cannot assign to readonly field '${target.property}'`,
-        target.span
-      );
+      checker.error(`cannot assign to readonly field '${target.property}'`, target.span);
     }
   }
 
@@ -423,10 +417,7 @@ function checkAssignRoot(checker: Checker, target: Expression): void {
       // `readonly ref T` parameter — write-through is forbidden, and
       // field paths rooted at `x` count as writes through the ref.
       if (sym.type.kind === TypeKind.Ptr && sym.type.isRef && sym.type.isReadonly) {
-        checker.error(
-          `cannot write through readonly reference '${target.name}'`,
-          target.span
-        );
+        checker.error(`cannot write through readonly reference '${target.name}'`, target.span);
       }
     }
     return;

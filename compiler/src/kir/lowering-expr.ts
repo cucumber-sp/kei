@@ -177,10 +177,7 @@ export function lowerIdentifier(ctx: LoweringCtx, expr: Identifier): VarId {
  * referring to a struct type in the current scope (rather than a value
  * variable). Used to dispatch static method calls without a self-argument.
  */
-function isTypeQualifiedStaticCall(
-  ctx: LoweringCtx,
-  callee: MemberExpr
-): boolean {
+function isTypeQualifiedStaticCall(ctx: LoweringCtx, callee: MemberExpr): boolean {
   if (callee.object.kind !== "Identifier") return false;
   // The checker records the Identifier's resolved type in typeMap. For a
   // type reference there is no recorded value-type — fall back to a scope
@@ -189,10 +186,7 @@ function isTypeQualifiedStaticCall(
   if (objType) return false; // it's a value (variable) — instance call
   const name = callee.object.name;
   for (const decl of ctx.program.declarations) {
-    if (
-      (decl.kind === "StructDecl" || decl.kind === "UnsafeStructDecl") &&
-      decl.name === name
-    ) {
+    if ((decl.kind === "StructDecl" || decl.kind === "UnsafeStructDecl") && decl.name === name) {
       return true;
     }
   }
@@ -203,10 +197,7 @@ function isTypeQualifiedStaticCall(
  * Resolve the mangled struct name for a `Type<TypeArgs>.method(args)` call.
  * For non-generic `Type.method(args)` returns the bare struct name.
  */
-function resolveStructNameForStaticCall(
-  ctx: LoweringCtx,
-  expr: CallExpr
-): string {
+function resolveStructNameForStaticCall(ctx: LoweringCtx, expr: CallExpr): string {
   const callee = expr.callee as MemberExpr;
   const baseName = (callee.object as { name: string }).name;
   if (expr.typeArgs.length === 0) return baseName;

@@ -210,17 +210,10 @@ export function checkStructLiteral(checker: Checker, expr: StructLiteral): Type 
   // like `Shared<T>` (see `docs/design/ref-redesign.md` §3.1).
   for (const [fieldName, fieldType] of structType.fields) {
     if (providedFields.has(fieldName)) continue;
-    if (
-      structType.isUnsafe &&
-      fieldType.kind === "ptr" &&
-      fieldType.isRef
-    ) {
+    if (structType.isUnsafe && fieldType.kind === "ptr" && fieldType.isRef) {
       continue;
     }
-    checker.error(
-      `missing field '${fieldName}' in struct literal '${structType.name}'`,
-      expr.span
-    );
+    checker.error(`missing field '${fieldName}' in struct literal '${structType.name}'`, expr.span);
   }
 
   return structType;
@@ -323,17 +316,10 @@ function checkGenericStructLiteralInferred(
   // exception as in the explicit-args path above).
   for (const [fieldName, fieldType] of structType.fields) {
     if (providedFields.has(fieldName)) continue;
-    if (
-      structType.isUnsafe &&
-      fieldType.kind === "ptr" &&
-      fieldType.isRef
-    ) {
+    if (structType.isUnsafe && fieldType.kind === "ptr" && fieldType.isRef) {
       continue;
     }
-    checker.error(
-      `missing field '${fieldName}' in struct literal '${structType.name}'`,
-      expr.span
-    );
+    checker.error(`missing field '${fieldName}' in struct literal '${structType.name}'`, expr.span);
   }
 
   // Infer type param substitutions from field types (recursive)

@@ -192,10 +192,7 @@ function tryParseTypeArgs(ctx: ParserContext): TypeNode[] | null {
     // Accept either `>` or `>>` (the latter is split in-place — half is
     // consumed here, the other half stays for the outer generic-args
     // close).
-    if (
-      !ctx.check(TokenKind.Greater) &&
-      !ctx.check(TokenKind.GreaterGreater)
-    ) {
+    if (!ctx.check(TokenKind.Greater) && !ctx.check(TokenKind.GreaterGreater)) {
       ctx.restorePos(saved);
       ctx.restoreDiagnosticsLength(savedDiagLen);
       return null;

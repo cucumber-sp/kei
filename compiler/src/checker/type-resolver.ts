@@ -80,10 +80,7 @@ export class TypeResolver {
   private resolveGenericType(name: string, typeArgs: TypeNode[], span: Span, scope: Scope): Type {
     // Built-in generic types
     if (name === "ptr") {
-      this.addError(
-        "'ptr<T>' was removed; use '*T' for raw pointers (unsafe-only)",
-        span
-      );
+      this.addError("'ptr<T>' was removed; use '*T' for raw pointers (unsafe-only)", span);
       return ERROR_TYPE;
     }
 
