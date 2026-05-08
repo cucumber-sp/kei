@@ -59,6 +59,7 @@ export class StructChecker {
 
     // Now resolve fields
     const fieldNames = new Set<string>();
+    const readonlyFields = new Set<string>();
     for (const field of decl.fields) {
       if (fieldNames.has(field.name)) {
         this.checker.error(`duplicate field '${field.name}' in struct '${decl.name}'`, field.span);
@@ -67,7 +68,9 @@ export class StructChecker {
       fieldNames.add(field.name);
       const fieldType = this.checker.resolveType(field.typeAnnotation);
       structType.fields.set(field.name, fieldType);
+      if (field.isReadonly) readonlyFields.add(field.name);
     }
+    if (readonlyFields.size > 0) structType.readonlyFields = readonlyFields;
 
     // Now resolve methods (self: StructName will now resolve)
     const seenMethods = new Set<string>();

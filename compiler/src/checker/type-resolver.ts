@@ -14,7 +14,7 @@ import {
 import type { Scope } from "./scope";
 import { SymbolKind } from "./symbols";
 import type { FunctionType, Type } from "./types";
-import { arrayType, ERROR_TYPE, isStructType, ptrType, sliceType, TypeKind } from "./types";
+import { arrayType, ERROR_TYPE, isStructType, ptrType, refType, sliceType, TypeKind } from "./types";
 
 interface TypeResolverDiagnostic {
   message: string;
@@ -52,11 +52,7 @@ export class TypeResolver {
       case "NullableType":
         return ptrType(this.resolve(node.inner, scope));
       case "RefType":
-        // `ref T` and `readonly ref T` both lower to the same internal
-        // pointer representation. The readonly bit is enforced at the
-        // checker AST level (write-through validation) and the position
-        // restrictions are also AST-level.
-        return ptrType(this.resolve(node.pointee, scope));
+        return refType(this.resolve(node.pointee, scope), node.readonly);
       case "RawPtrType":
         return ptrType(this.resolve(node.pointee, scope));
     }

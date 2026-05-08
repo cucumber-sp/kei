@@ -44,8 +44,13 @@ export function substituteType(type: Type, typeMap: Map<string, Type>): Type {
       const sub = typeMap.get(type.name);
       return sub ?? type;
     }
-    case TypeKind.Ptr:
-      return ptrType(substituteType(type.pointee, typeMap));
+    case TypeKind.Ptr: {
+      const subbed = ptrType(substituteType(type.pointee, typeMap));
+      // Preserve the source-form bits (`ref T` vs `*T`).
+      if (type.isRef) subbed.isRef = true;
+      if (type.isReadonly) subbed.isReadonly = true;
+      return subbed;
+    }
     case TypeKind.Array:
       return arrayType(substituteType(type.element, typeMap), type.length);
     case TypeKind.Slice:

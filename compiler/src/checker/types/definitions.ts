@@ -40,10 +40,25 @@ export interface CCharType {
   kind: typeof TypeKind.CChar;
 }
 
-/** Pointer type (`ptr<T>`). */
+/**
+ * Pointer type (`*T`, `ref T`, `readonly ref T`, or legacy `ptr<T>`).
+ *
+ * `isRef` and `isReadonly` distinguish the source-level form so the checker
+ * can apply different rules:
+ *   - `ref T` (auto-deref on member/method access; mutable through ref)
+ *   - `readonly ref T` (auto-deref on read; write-through is rejected)
+ *   - `*T` (no auto-deref; explicit deref required)
+ *
+ * At the IR level all of these lower to a plain pointer; the bits only
+ * matter to the checker.
+ */
 export interface PtrType {
   kind: typeof TypeKind.Ptr;
   pointee: Type;
+  /** True when the source-level spelling was `ref T` or `readonly ref T`. */
+  isRef?: boolean;
+  /** True when the source-level spelling was `readonly ref T`. */
+  isReadonly?: boolean;
 }
 
 /** Fixed-length array type (`[T; N]`). Length is optional during inference. */
@@ -70,6 +85,8 @@ export interface StructType {
   kind: typeof TypeKind.Struct;
   name: string;
   fields: Map<string, Type>;
+  /** Set of field names declared with the `readonly` modifier. */
+  readonlyFields?: Set<string>;
   methods: Map<string, FunctionType>;
   isUnsafe: boolean;
   genericParams: string[];

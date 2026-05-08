@@ -172,8 +172,16 @@ export class ExpressionChecker {
   }
 
   private checkMemberExpression(expr: MemberExpr): Type {
-    const objectType = this.checkExpression(expr.object);
+    let objectType = this.checkExpression(expr.object);
     if (isErrorType(objectType)) return ERROR_TYPE;
+
+    // Auto-deref through `ref T` / `readonly ref T`. The IR-level pointer
+    // is transparent to the user — `obj.field` on a `ref T` looks up
+    // `field` on T. Raw pointers (`*T`) do NOT auto-deref; the user must
+    // write `(*p).field` explicitly.
+    if (objectType.kind === TypeKind.Ptr && objectType.isRef) {
+      objectType = objectType.pointee;
+    }
 
     // Module-qualified access: math.add, net.http.Server
     if (objectType.kind === TypeKind.Module) {
