@@ -141,14 +141,14 @@ For uninitialized slots, used during construction. Sequence:
 
 `init` is a keyword. It is only valid inside `unsafe` blocks.
 
-#### `*address(field) = value` — raw bitwise write
+#### `*addr(field) = value` — raw bitwise write
 
 For advanced cases (in-place moves, hand-rolled lifecycle elision). Skips
 **both** halves of lifecycle. The caller is responsible for ensuring the
 source's destroy is suppressed and that the slot's prior state was already
 torn down (or was uninitialized). Only valid inside `unsafe` blocks.
 
-### 2.4 The `address()` operator (Decided)
+### 2.4 The `addr()` operator (Decided)
 
 To work with the raw pointer-value of a `ref T` field inside `unsafe`:
 
@@ -159,18 +159,26 @@ unsafe struct shared<T> {
 }
 
 unsafe {
-    address(s.refcount) = block as *i64;     // sets WHERE refcount points
-    *address(s.refcount) = 1;                // writes the i64 at that address
+    addr(s.refcount) = block as *i64;     // sets WHERE refcount points
+    *addr(s.refcount) = 1;                // writes the i64 at that address
 }
 ```
 
-`address(field)` returns a `*T` — the raw pointer slot underlying the
-`ref T` field. Assigning to `address(field)` sets where the reference
-points; dereferencing it (`*address(field)`) accesses the pointed-to memory
-without firing lifecycle hooks.
+`addr(field)` returns an lvalue of type `*T` aliasing the raw pointer slot
+underlying the `ref T` field. Assigning to `addr(field)` sets where the
+reference points; dereferencing it (`*addr(field)`) accesses the pointed-to
+memory without firing lifecycle hooks.
 
-Outside `unsafe`, `address()` is a compile error. Inside `unsafe`, it is the
+Outside `unsafe`, `addr()` is a compile error. Inside `unsafe`, it is the
 single supported way to manipulate `ref T` fields as pointer-values.
+
+**Why a named operator instead of `&`.** `&` in C/C++ produces an rvalue
+(`&x = y` is illegal). Overloading `&` to produce an lvalue when applied
+to a `ref T` field would mean the same operator has different value
+categories depending on operand type, plus it would interact awkwardly
+with auto-deref (would `&s.value` mean address-of-the-T or address-of-the-
+slot?). A named operator sidesteps both issues: it is lvalue-by-definition,
+and it has no overlap with C's `&` reading.
 
 ### 2.5 `readonly` modifier (Decided)
 
@@ -235,8 +243,8 @@ unsafe struct shared<T> {
         unsafe {
             // ONE allocation: [count: i64 | T payload]
             let block = alloc<u8>(sizeof(i64) + sizeof(T));
-            address(s.refcount) = block as *i64;
-            address(s.value)    = (block + sizeof(i64)) as *T;
+            addr(s.refcount) = block as *i64;
+            addr(s.value)    = (block + sizeof(i64)) as *T;
             s.refcount = 1;
             init s.value = item;             // single oncopy of *item into slot
         }
@@ -244,16 +252,16 @@ unsafe struct shared<T> {
     }
 
     fn __oncopy(self: ref shared<T>) -> shared<T> {
-        unsafe { *address(self.refcount) += 1; }
+        unsafe { *addr(self.refcount) += 1; }
         return *self;
     }
 
     fn __destroy(self: ref shared<T>) {
         unsafe {
-            *address(self.refcount) -= 1;
-            if *address(self.refcount) == 0 {
+            *addr(self.refcount) -= 1;
+            if *addr(self.refcount) == 0 {
                 self.value.__destroy();      // recursive destroy of T
-                free(address(self.refcount));// frees the whole block
+                free(addr(self.refcount));   // frees the whole block
             }
         }
     }
@@ -448,12 +456,12 @@ fn read(p: *i32) -> i32 {
 }
 ```
 
-### 4.4 `address()` is unsafe
+### 4.4 `addr()` is unsafe
 
 ```kei
-// MUST FAIL: `address()` outside unsafe.
+// MUST FAIL: `addr()` outside unsafe.
 fn leak(s: shared<i32>) -> *i64 {
-    return address(s.refcount);
+    return addr(s.refcount);
 }
 ```
 
@@ -504,7 +512,7 @@ unsafe struct Box<T> {
     fn make(item: ref T) -> Box<T> {
         let b = Box<T>{};
         unsafe {
-            address(b.data) = alloc<T>(1);
+            addr(b.data) = alloc<T>(1);
             init b.data = item;          // must not call __destroy on garbage
         }
         return b;
@@ -550,7 +558,7 @@ unsafe struct Container { data: *i32 }
 fn dangle() -> Container {
     let x: i32 = 42;
     let c = Container{};
-    unsafe { address(c.data) = &x; }    // unsafe block — programmer's responsibility
+    unsafe { addr(c.data) = &x; }       // unsafe block — programmer's responsibility
     return c;                            // compiles; UB at runtime
 }
 ```
@@ -693,7 +701,8 @@ Confirmed in this design:
 
 - `ref T` for the safe reference type.
 - `*T` for the raw pointer type.
-- `address()` as the field-pointer accessor (replaces earlier `raw()`).
+- `addr()` as the field-pointer accessor (replaces earlier `raw()` /
+  `address()` spellings considered during design).
 - `init` keyword for initialization-write.
 
 `ptr<T>` is removed entirely. `mut T` is removed entirely.
@@ -737,14 +746,14 @@ After this doc lands (commit 1), the work is:
 ### Commit 2: Spec updates
 
 - `spec/03-types.md` — replace pointer-types section. Document `ref T`,
-  `*T`, `shared<T>`, removed types, `address()`, `init`, `readonly`.
+  `*T`, `shared<T>`, removed types, `addr()`, `init`, `readonly`.
 - `spec/08-memory.md` — rewrite lifecycle section around the three write
   forms. Document the construction protocol. Document `shared<T>` as the
   canonical refcount primitive.
 - `spec/13-grammar.md` — remove `mut T`, `ptr<T>`, `->`. Add `ref T` (with
-  position restrictions), `*T`, `address(...)`, `init <lvalue> = <expr>`.
+  position restrictions), `*T`, `addr(...)`, `init <lvalue> = <expr>`.
 - `SPEC-STATUS.md` — close completed items, file new ones (universal
-  auto-deref, `init`, `address`, `readonly`, `shared<T>` stdlib impl).
+  auto-deref, `init`, `addr`, `readonly`, `shared<T>` stdlib impl).
 
 ### Commit 3: Test fixture updates
 
@@ -757,9 +766,9 @@ update to `ref T`; existing `->` usage updates to `.`.
 Rough order:
 
 1. Grammar: parse `ref T` (with position restrictions), `*T`,
-   `address(...)`, `init`. Remove `mut T`, `ptr<T>`, `->`.
+   `addr(...)`, `init`. Remove `mut T`, `ptr<T>`, `->`.
 2. Checker: position validation for `ref T`. Auto-deref insertion (most
-   complex single piece). `address()` resolution. `init` checking.
+   complex single piece). `addr()` resolution. `init` checking.
 3. KIR lowering: `ref T` becomes a pointer in the IR (no semantic
    distinction from `*T` at the IR level — only the source language
    surface differs). Auto-deref insertion happens before lowering.
