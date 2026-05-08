@@ -539,10 +539,19 @@ describe.skip("future: auto-last-use elision (§3.5)", () => {
   });
 });
 
-describe.skip("future: `copy(x)` builtin (§6.3)", () => {
-  // Optional explicit-copy builtin deferred unless user code asks for
-  // it. Pin a test so the question is rediscoverable.
-  test("`copy(x)` produces a fresh duplicate firing __oncopy", () => {
+describe.skip("future: `copy(x)` builtin (§6.3) — depends on §3.5 first", () => {
+  // `copy(x)` is the de-optimizer for auto-last-use elision (§3.5).
+  // Without elision it's redundant: `let temp = a; takeOwnership(move
+  // temp);` already does an explicit oncopy + move. With elision the
+  // compiler can convert `takeOwnership(a)` into `takeOwnership(move
+  // a)` when `a` isn't used after the call — at which point the user
+  // needs a way to say "no, I want the oncopy, keep `a` alive":
+  //
+  //   takeOwnership(copy(a));  // bumps refcount; `a` survives
+  //
+  // Until §3.5 lands `copy()` is a no-op in user-visible behaviour, so
+  // this stays a skipped marker.
+  test("`copy(x)` keeps the source alive across an otherwise-eliding call", () => {
     // Marker test.
   });
 });
@@ -564,4 +573,35 @@ describe.skip("future: SliceType cleanup", () => {
     // Marker test.
   });
 });
+
+describe.skip("future: discarded return value fires __destroy on the temporary", () => {
+  // Confirmed gap as of the ref-redesign rollout: when a function's
+  // return value is dropped at the statement level (no `let`, no
+  // assignment, no further use), the temporary's `__destroy` is NOT
+  // emitted. The bytes leak.
+  //
+  // Repro (run via the CLI):
+  //
+  //   unsafe struct Res {
+  //     id: i32;
+  //     fn __destroy(self: ref Res) { print(self.id); }
+  //     fn __oncopy(self: ref Res) {}
+  //   }
+  //   fn make(id: i32) -> Res { return Res { id: id }; }
+  //   fn main() -> int {
+  //     make(42);   // discarded — `__destroy` should print 42
+  //     print(99);
+  //     return 0;
+  //   }
+  //
+  // Expected stdout: "42\n99\n". Actual: "99\n".
+  //
+  // Fix lives in KIR lowering for ExprStmt where the expression's type
+  // has a non-trivial __destroy: emit a temporary slot, store the call
+  // result, then emit `destroy &temp` before the statement ends.
+  test("discarded `make()` result destroys before the next statement runs", () => {
+    // Marker test.
+  });
+});
+
 
