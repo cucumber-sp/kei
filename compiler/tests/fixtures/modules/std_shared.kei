@@ -1,0 +1,18 @@
+import { alloc, dealloc } from std_mem;
+
+pub unsafe struct Shared<T> {
+    payload: *T;
+
+    fn wrap(item: T) -> Shared<T> {
+        unsafe {
+            let block = alloc(sizeof(T)) as *T;
+            return Shared<T>{ payload: block };
+        }
+    }
+
+    fn __destroy(self: ref Shared<T>) {
+        unsafe { dealloc(self.payload as *void); }
+    }
+
+    fn __oncopy(self: ref Shared<T>) {}
+}

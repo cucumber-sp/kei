@@ -110,3 +110,45 @@ describe("Multi-module monomorphized lifecycle (single emission)", () => {
     expect(oncopies.length).toBe(1);
   });
 });
+
+describe("Multi-module monomorphized method body resolution", () => {
+  test("monomorphized method body resolves imported names via the defining module", () => {
+    // Repro of Shared<T> e2e gap #2: when `Shared<T>.__destroy` calls
+    // `dealloc(...)` (imported from `std_mem`), the lowered call site
+    // must use the defining module's import scope and emit
+    // `std_mem_dealloc`, not the unqualified `dealloc`. Same story
+    // for `wrap` calling `alloc(...)`.
+    const kirModule = lowerMultiModule("main_uses_shared.kei");
+
+    const wrapFn = kirModule.functions.find((f) => f.name.endsWith("Shared_i32_wrap"));
+    const destroyFn = kirModule.functions.find((f) =>
+      f.name.endsWith("Shared_i32___destroy")
+    );
+    expect(wrapFn).toBeTruthy();
+    expect(destroyFn).toBeTruthy();
+
+    const wrapCalls: string[] = [];
+    for (const block of wrapFn?.blocks ?? []) {
+      for (const inst of block.instructions) {
+        if ((inst.kind === "call" || inst.kind === "call_void") && "func" in inst) {
+          wrapCalls.push(inst.func);
+        }
+      }
+    }
+    const destroyCalls: string[] = [];
+    for (const block of destroyFn?.blocks ?? []) {
+      for (const inst of block.instructions) {
+        if ((inst.kind === "call" || inst.kind === "call_void") && "func" in inst) {
+          destroyCalls.push(inst.func);
+        }
+      }
+    }
+
+    // wrap calls alloc — must resolve to std_mem_alloc.
+    expect(wrapCalls.some((c) => c === "std_mem_alloc")).toBe(true);
+    expect(wrapCalls.some((c) => c === "alloc")).toBe(false);
+    // __destroy calls dealloc — must resolve to std_mem_dealloc.
+    expect(destroyCalls.some((c) => c === "std_mem_dealloc")).toBe(true);
+    expect(destroyCalls.some((c) => c === "dealloc")).toBe(false);
+  });
+});
