@@ -131,6 +131,10 @@ export class ExpressionChecker {
    * `ref T` or `*T`.
    */
   private checkAddrExpression(expr: import("../ast/nodes").AddrExpr): Type {
+    if (!this.checker.currentScope.isInsideUnsafe()) {
+      this.checker.error("'addr(...)' requires unsafe block", expr.span);
+      return ERROR_TYPE;
+    }
     const operandType = this.checkExpression(expr.operand);
     if (isErrorType(operandType)) return ERROR_TYPE;
     return { kind: TypeKind.Ptr, pointee: operandType };

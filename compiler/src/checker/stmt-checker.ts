@@ -91,6 +91,10 @@ export class StatementChecker {
    * type-checks both sides.
    */
   private checkInitStatement(stmt: import("../ast/nodes").InitStmt): boolean {
+    if (!this.checker.currentScope.isInsideUnsafe()) {
+      this.checker.error("'init' requires unsafe block", stmt.span);
+      return false;
+    }
     const targetType = this.checker.checkExpression(stmt.target);
     const valueType = this.checker.checkExpression(stmt.value);
     if (
