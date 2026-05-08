@@ -219,14 +219,36 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
         }
       }
 
-      // Check static method call: Type.method(args)
+      // Check static method call: Type.method(args)  /  Type<TypeArgs>.method(args)
       const typeSym = checker.currentScope.lookupType(memberExpr.object.name);
       if (typeSym && typeSym.kind === SymbolKind.Type && typeSym.type.kind === TypeKind.Struct) {
         const structType = typeSym.type;
         const method = structType.methods.get(memberExpr.property);
         if (method) {
-          // Static method — no self param check
-          return checkFunctionCallArgs(checker, method, expr.args, expr, false);
+          // For `Type<TypeArgs>.method(args)` the parser stashes the
+          // type-args on the outer CallExpr. Bind them to the struct's
+          // generic parameters and substitute through the method's
+          // signature so the body sees concrete types.
+          let resolvedMethod = method;
+          if (expr.typeArgs.length > 0 && structType.genericParams.length > 0) {
+            if (expr.typeArgs.length !== structType.genericParams.length) {
+              checker.error(
+                `type '${structType.name}' expects ${structType.genericParams.length} type argument(s), got ${expr.typeArgs.length}`,
+                expr.span
+              );
+              return ERROR_TYPE;
+            }
+            const subs = new Map<string, Type>();
+            for (let i = 0; i < structType.genericParams.length; i++) {
+              const paramName = structType.genericParams[i];
+              const arg = expr.typeArgs[i];
+              if (paramName && arg) {
+                subs.set(paramName, checker.resolveType(arg));
+              }
+            }
+            resolvedMethod = substituteFunctionType(method, subs);
+          }
+          return checkFunctionCallArgs(checker, resolvedMethod, expr.args, expr, false);
         }
         checker.error(
           `type '${structType.name}' has no method '${memberExpr.property}'`,

@@ -389,7 +389,29 @@ describe("`slice<T>` is removed", () => {
 
 // ─── `Shared<T>` end-to-end (semantics) ──────────────────────────────────────
 
-describe.skip("Shared<T> stdlib semantics", () => {
+describe("Shared<T> stdlib semantics — checker only (KIR/codegen pending)", () => {
+  test("`Shared<T>.wrap(item)` typechecks (parser + static method dispatch)", () => {
+    checkOk(`
+      unsafe struct Shared<T> {
+        refcount: ref i64;
+        value: ref T;
+        fn wrap(item: ref T) -> Shared<T> {
+          let s = Shared<T>{};
+          return s;
+        }
+        fn __oncopy(self: ref Shared<T>) {}
+        fn __destroy(self: ref Shared<T>) {}
+      }
+      fn main() -> int {
+        let n: i32 = 42;
+        let s = Shared<i32>.wrap(n);
+        return 0;
+      }
+    `);
+  });
+});
+
+describe.skip("Shared<T> stdlib semantics — original placeholder (e2e + monomorphization pending)", () => {
   test("Shared<T>::wrap takes `ref T` and returns `Shared<T>`", () => {
     checkOk(`
       unsafe struct Shared<T> {

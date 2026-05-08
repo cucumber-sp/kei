@@ -48,8 +48,9 @@ export function parsePostfixExpression(ctx: ParserContext, left: Expression): Ex
       continue;
     }
 
-    // Generic type args: foo<i32, string>( or Pair<i32, bool>{
-    // Use speculative parsing since < is also comparison operator
+    // Generic type args: foo<i32, string>(...)  /  Pair<i32, bool>{...}
+    //                    /  Shared<i32>.wrap(n)  (static method call)
+    // Use speculative parsing since < is also a comparison operator.
     if (ctx.check(TokenKind.Less) && (left.kind === "Identifier" || left.kind === "MemberExpr")) {
       const typeArgsResult = tryParseTypeArgs(ctx);
       if (typeArgsResult !== null) {
@@ -82,8 +83,46 @@ export function parsePostfixExpression(ctx: ParserContext, left: Expression): Ex
           }
         }
 
-        // Type args parsed but not followed by ( or { — this shouldn't
-        // happen with correct speculative parsing, but treat as error
+        // Static method call on a generic type: `Shared<i32>.wrap(n)`.
+        // The type-args bind to the call we're about to parse, with the
+        // callee being a MemberExpr rooted at the type name.
+        if (ctx.check(TokenKind.Dot)) {
+          ctx.advance();
+          const prop = ctx.expectIdentifier();
+          const memberExpr: Expression = {
+            kind: "MemberExpr",
+            object: left,
+            property: prop.lexeme,
+            span: { start: left.span.start, end: prop.span.end },
+          };
+          // Optional `(args)` — required for a method call but kept
+          // optional here so a future `.field` access on a type-qualified
+          // expression still has a sensible AST.
+          if (ctx.check(TokenKind.LeftParen)) {
+            ctx.advance();
+            const args: Expression[] = [];
+            if (!ctx.check(TokenKind.RightParen)) {
+              args.push(parseExpression(ctx));
+              while (ctx.match(TokenKind.Comma)) {
+                args.push(parseExpression(ctx));
+              }
+            }
+            const end = ctx.expect(TokenKind.RightParen);
+            left = {
+              kind: "CallExpr",
+              callee: memberExpr,
+              typeArgs: typeArgsResult,
+              args,
+              span: { start: left.span.start, end: end.span.end },
+            };
+          } else {
+            left = memberExpr;
+          }
+          continue;
+        }
+
+        // Type args parsed but not followed by ( or { or . — this
+        // shouldn't happen given the speculative-parse commit rules.
       }
     }
 
@@ -157,8 +196,13 @@ function tryParseTypeArgs(ctx: ParserContext): TypeNode[] | null {
     }
     ctx.advance(); // consume >
 
-    // Only commit if followed by ( or {
-    if (ctx.check(TokenKind.LeftParen) || ctx.check(TokenKind.LeftBrace)) {
+    // Only commit if followed by ( or { or . — the latter for static
+    // method calls on generic types like `Shared<i32>.wrap(n)`.
+    if (
+      ctx.check(TokenKind.LeftParen) ||
+      ctx.check(TokenKind.LeftBrace) ||
+      ctx.check(TokenKind.Dot)
+    ) {
       return typeArgs;
     }
 

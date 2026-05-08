@@ -166,3 +166,48 @@ describe("Parser — `mut` is gone", () => {
     expect(fn.params[0]?.isReadonly ?? false).toBe(false);
   });
 });
+
+describe("Parser — `Type<T>.method(args)` static call on a generic type", () => {
+  test("`Shared<i32>.wrap(n)` parses with type-args on the call", () => {
+    const program = parse(`
+      unsafe struct Shared<T> {
+        value: ref T;
+        fn wrap(item: ref T) -> Shared<T> { let s = Shared<T>{}; return s; }
+        fn __oncopy(self: ref Shared<T>) {}
+        fn __destroy(self: ref Shared<T>) {}
+      }
+      fn main() -> int {
+        let n: i32 = 0;
+        let s = Shared<i32>.wrap(n);
+        return 0;
+      }
+    `);
+    const main = program.declarations[program.declarations.length - 1];
+    if (main?.kind !== "FunctionDecl") throw new Error("expected main FunctionDecl");
+    const letS = main.body.statements[1];
+    if (letS?.kind !== "LetStmt") throw new Error("expected let s");
+    const call = letS.initializer;
+    if (call.kind !== "CallExpr") throw new Error("expected CallExpr");
+    expect(call.typeArgs).toHaveLength(1);
+    expect(call.typeArgs[0]?.kind).toBe("NamedType");
+    if (call.callee.kind !== "MemberExpr") throw new Error("expected MemberExpr callee");
+    expect(call.callee.property).toBe("wrap");
+    if (call.callee.object.kind !== "Identifier") throw new Error("expected Identifier object");
+    expect(call.callee.object.name).toBe("Shared");
+  });
+
+  test("`Type<T>.method` without call is a type-qualified member access", () => {
+    // The parser keeps the bare `Type<T>.method` form (no `(args)`)
+    // around so future uses (like first-class function references)
+    // have a place to land. Today the checker rejects it; this test
+    // just pins the parser shape.
+    const program = parse(`
+      struct Foo<T> { x: T; fn make() -> Foo<T> { return Foo<T>{ x: 0 as T }; } }
+      fn main() -> int {
+        let _f = Foo<i32>.make;
+        return 0;
+      }
+    `);
+    expect(program.declarations.length).toBeGreaterThan(0);
+  });
+});

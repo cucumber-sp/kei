@@ -170,6 +170,54 @@ export function lowerIdentifier(ctx: LoweringCtx, expr: Identifier): VarId {
   return varId;
 }
 
+/**
+ * True iff `callee` is a `Type.method` access where `Type` is an Identifier
+ * referring to a struct type in the current scope (rather than a value
+ * variable). Used to dispatch static method calls without a self-argument.
+ */
+function isTypeQualifiedStaticCall(
+  ctx: LoweringCtx,
+  callee: MemberExpr
+): boolean {
+  if (callee.object.kind !== "Identifier") return false;
+  // The checker records the Identifier's resolved type in typeMap. For a
+  // type reference there is no recorded value-type — fall back to a scope
+  // lookup against the program's struct/unsafe-struct decls.
+  const objType = ctx.checkResult.types.typeMap.get(callee.object);
+  if (objType) return false; // it's a value (variable) — instance call
+  const name = callee.object.name;
+  for (const decl of ctx.program.declarations) {
+    if (
+      (decl.kind === "StructDecl" || decl.kind === "UnsafeStructDecl") &&
+      decl.name === name
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Resolve the mangled struct name for a `Type<TypeArgs>.method(args)` call.
+ * For non-generic `Type.method(args)` returns the bare struct name.
+ */
+function resolveStructNameForStaticCall(
+  ctx: LoweringCtx,
+  expr: CallExpr
+): string {
+  const callee = expr.callee as MemberExpr;
+  const baseName = (callee.object as { name: string }).name;
+  if (expr.typeArgs.length === 0) return baseName;
+  // Mangle using the type-args' suffix forms — matches how generic struct
+  // monomorphization names instances in lowering-types.ts.
+  const argSuffixes = expr.typeArgs.map((t) => {
+    if (t.kind === "NamedType") return t.name;
+    if (t.kind === "RawPtrType" || t.kind === "RefType") return "ptr";
+    return "T";
+  });
+  return `${baseName}_${argSuffixes.join("_")}`;
+}
+
 export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
   // Enum variant construction: Shape.Circle(3.14) → stack_alloc + tag + data fields
   const enumResult = lowerEnumVariantConstruction(ctx, expr);
@@ -254,6 +302,12 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
       } else {
         funcName = baseMangledName;
       }
+    } else if (isTypeQualifiedStaticCall(ctx, expr.callee)) {
+      // Static method call: `Type.method(args)` or `Type<TypeArgs>.method(args)`.
+      // No self-arg; resolve the struct type (with type-arg substitution if
+      // present) so the mangled name matches the monomorphized struct.
+      const structName = resolveStructNameForStaticCall(ctx, expr);
+      funcName = `${structName}_${expr.callee.property}`;
     } else {
       // Instance method call: obj.method(args) → StructName_method(obj, args)
       // Methods expect self as a pointer, so use lowerExprAsPtr for struct objects
