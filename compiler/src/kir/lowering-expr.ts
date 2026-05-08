@@ -113,6 +113,8 @@ export function lowerExpr(ctx: LoweringCtx, expr: Expression): VarId {
       return lowerArrayLiteral(ctx, expr);
     case "SwitchExpr":
       return lowerSwitchExpr(ctx, expr);
+    case "AddrExpr":
+      return lowerAddrExpr(ctx, expr);
     default:
       // Unhandled expression types return a placeholder
       return emitConstInt(ctx, 0);
@@ -758,6 +760,47 @@ export function lowerMoveExpr(ctx: LoweringCtx, expr: MoveExpr): VarId {
   }
 
   return dest;
+}
+
+/**
+ * Lower `addr(field)` — alias the raw pointer slot underlying a `ref T`
+ * field. Returns a `*T` that points at the same slot (ignoring the
+ * source-level `ref` indirection): writing through `addr(field) = ptr`
+ * sets where the reference points; reading `*addr(field)` accesses the
+ * pointed-to memory without firing lifecycle hooks. The checker
+ * guarantees we're inside an `unsafe` block.
+ *
+ * For an operand of the form `obj.field` where `field: ref T`, the IR
+ * already emits a `field_ptr` to the slot — we just return that
+ * pointer, since the slot's storage type is `*T` (the C-level ref bits).
+ */
+function lowerAddrExpr(ctx: LoweringCtx, expr: import("../ast/nodes").AddrExpr): VarId {
+  const operand = expr.operand;
+  if (operand.kind === "MemberExpr") {
+    const objectType = ctx.checkResult.types.typeMap.get(operand.object);
+    let baseId: VarId;
+    if (operand.object.kind === "Identifier" && objectType?.kind === "struct") {
+      baseId = lowerExprAsPtr(ctx, operand.object);
+    } else if (operand.object.kind === "Identifier") {
+      baseId = lowerExprAsPtr(ctx, operand.object);
+    } else {
+      baseId = lowerExpr(ctx, operand.object);
+    }
+    // The field's KIR type is the slot's type (a `ptr<T>` for `ref T`
+    // fields). field_ptr returns a pointer to that slot.
+    const fieldType = getExprKirType(ctx, operand);
+    const dest = freshVar(ctx);
+    emit(ctx, {
+      kind: "field_ptr",
+      dest,
+      base: baseId,
+      field: operand.property,
+      type: fieldType,
+    });
+    return dest;
+  }
+  // Fallback: lower the operand as a pointer (best-effort).
+  return lowerExprAsPtr(ctx, operand);
 }
 
 export function lowerCastExpr(ctx: LoweringCtx, expr: CastExpr): VarId {

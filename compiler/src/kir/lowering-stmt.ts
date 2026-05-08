@@ -129,6 +129,68 @@ export function lowerStatement(ctx: LoweringCtx, stmt: Statement): void {
     case "UnsafeBlock":
       lowerScopedBlock(ctx, stmt.body);
       break;
+    case "InitStmt":
+      lowerInitStmt(ctx, stmt);
+      break;
+  }
+}
+
+/**
+ * `init lvalue = expr;` — initialization-write into an uninitialized slot.
+ *
+ * Lowers as a plain store + oncopy on the value. No destroy is emitted
+ * (that's the whole point of init: the slot is uninitialized so running
+ * destroy on it would touch garbage). The checker guarantees we're in
+ * an unsafe block. Currently supports two operand shapes:
+ *   - `init s.field = v` — store into the field slot.
+ *   - `init *p = v`      — store through a raw pointer.
+ */
+function lowerInitStmt(ctx: LoweringCtx, stmt: import("../ast/nodes").InitStmt): void {
+  const valueId = lowerExpr(ctx, stmt.value);
+  const target = stmt.target;
+  if (target.kind === "MemberExpr") {
+    const objectType = ctx.checkResult.types.typeMap.get(target.object);
+    let baseId: VarId;
+    if (target.object.kind === "DerefExpr") {
+      baseId = lowerExpr(ctx, target.object.operand);
+    } else if (target.object.kind === "Identifier" && objectType?.kind === "struct") {
+      baseId = lowerExprAsPtr(ctx, target.object);
+    } else {
+      baseId = lowerExpr(ctx, target.object);
+    }
+    const fieldType = getExprKirType(ctx, target);
+    const ptrDest = freshVar(ctx);
+    emit(ctx, {
+      kind: "field_ptr",
+      dest: ptrDest,
+      base: baseId,
+      field: target.property,
+      type: fieldType,
+    });
+    // For `ref T` field: ptrDest is `**T`, we want to write into the
+    // T-storing slot — load through the inner pointer first.
+    const checkerType = ctx.checkResult.types.typeMap.get(target);
+    const isRefField =
+      checkerType?.kind === "ptr" && (checkerType as { isRef?: boolean }).isRef === true;
+    if (isRefField && fieldType.kind === "ptr") {
+      const innerPtr = freshVar(ctx);
+      emit(ctx, { kind: "load", dest: innerPtr, ptr: ptrDest, type: fieldType });
+      emit(ctx, { kind: "store", ptr: innerPtr, value: valueId });
+    } else {
+      emit(ctx, { kind: "store", ptr: ptrDest, value: valueId });
+    }
+    // Fire __oncopy on the new value (init = bitwise write + oncopy,
+    // skipping the destroy that managed-assignment fires).
+    const lifecycle = getStructLifecycle(ctx, checkerType);
+    if (lifecycle?.hasOncopy && stmt.value.kind !== "MoveExpr") {
+      emit(ctx, { kind: "oncopy", value: valueId, structName: lifecycle.structName });
+    }
+    return;
+  }
+  if (target.kind === "DerefExpr") {
+    const ptrId = lowerExpr(ctx, target.operand);
+    emit(ctx, { kind: "store", ptr: ptrId, value: valueId });
+    return;
   }
 }
 
