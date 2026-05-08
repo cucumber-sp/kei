@@ -142,13 +142,15 @@ bounds checks, full control flow, `defer` (LIFO scope-exit), `move` (with
 destroy elision), modules with cyclic-import detection, `unsafe` blocks,
 manual `alloc` / `free`, auto-generated `__destroy` / `__oncopy`, the `io`,
 `mem`, and `arena` stdlib modules, C FFI via `extern fn`, nullable pointers
-(`T?` lowered to `ptr<T>`).
+(`T?` lowered to a nullable raw pointer).
 
-**Spec'd, not yet implemented:** `ref T` / `ref mut T`, primitive `T?` with
-tag-byte representation, traits, function-pointer type syntax, variadic
-extern, optimisation passes beyond mem2reg, debug-mode division-by-zero /
-overflow / null-deref checks. The tracking table lives in
-[SPEC-STATUS.md](./SPEC-STATUS.md).
+**Spec'd, not yet implemented:** `ref T` / `readonly ref T`, `addr()` /
+`init` / `readonly` field-and-param modifiers, the `*T` raw-pointer
+spelling that replaces `ptr<T>`, the `__oncopy(self: ref T)` lifecycle
+ABI, primitive `T?` with tag-byte representation, traits, function-
+pointer type syntax, variadic extern, optimisation passes beyond
+mem2reg, debug-mode division-by-zero / overflow / null-deref checks.
+The tracking table lives in [SPEC-STATUS.md](./SPEC-STATUS.md).
 
 **Not in Kei:** closures, nested functions, borrow checker, GC, green threads.
 

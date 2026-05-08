@@ -212,7 +212,7 @@ bun run src/cli.ts myfile.kei --run
 You're calling a C function (declared with `extern fn`) without wrapping the call in `unsafe {}`. Either use the standard library wrappers (like `io.print` instead of raw `puts`) or add an unsafe block:
 
 ```kei
-extern fn puts(s: ptr<c_char>) -> int;
+extern fn puts(s: *c_char) -> int;
 
 fn main() -> int {
     // Wrong: puts("hello");
