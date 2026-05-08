@@ -1,7 +1,7 @@
 import { describe, test } from "bun:test";
 import { checkError, checkOk } from "./helpers";
 
-describe.skip("Checker: Generics", () => {
+describe("Checker: Generics", () => {
   // ─── Generic Structs with Explicit Type Args ──────────────────────────
 
   describe("generic struct instantiation", () => {

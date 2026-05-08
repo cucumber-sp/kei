@@ -1,7 +1,7 @@
 import { describe, test } from "bun:test";
 import { checkError, checkOk } from "./helpers";
 
-describe.skip("Checker — Type Edge Cases", () => {
+describe("Checker — Type Edge Cases", () => {
   describe("const assignment errors", () => {
     test("assign to const variable → error", () => {
       checkError(

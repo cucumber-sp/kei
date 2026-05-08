@@ -88,7 +88,7 @@ function identifier(name: string): Expression {
 
 // ─── typesEqual ───────────────────────────────────────────────────────────────
 
-describe.skip("typesEqual", () => {
+describe("typesEqual", () => {
   describe("same-kind reflexivity", () => {
     test("Bool equals Bool", () => {
       expect(typesEqual(BOOL_TYPE, BOOL_TYPE)).toBe(true);
@@ -337,7 +337,7 @@ describe.skip("typesEqual", () => {
 
 // ─── isAssignableTo ───────────────────────────────────────────────────────────
 
-describe.skip("isAssignableTo", () => {
+describe("isAssignableTo", () => {
   describe("exact match", () => {
     test("identical types are assignable", () => {
       expect(isAssignableTo(I32_TYPE, I32_TYPE)).toBe(true);
@@ -505,7 +505,7 @@ describe.skip("isAssignableTo", () => {
 
 // ─── isLiteralAssignableTo ────────────────────────────────────────────────────
 
-describe.skip("isLiteralAssignableTo", () => {
+describe("isLiteralAssignableTo", () => {
   describe("int literal to signed integer types", () => {
     test("i8: values in [-128, 127] fit", () => {
       expect(isLiteralAssignableTo("IntLiteral", 0, I8_TYPE)).toBe(true);
@@ -610,7 +610,7 @@ describe.skip("isLiteralAssignableTo", () => {
 
 // ─── typeToString ─────────────────────────────────────────────────────────────
 
-describe.skip("typeToString", () => {
+describe("typeToString", () => {
   describe("integer types", () => {
     test("signed integer names", () => {
       expect(typeToString(I8_TYPE)).toBe("i8");
@@ -751,7 +751,7 @@ describe.skip("typeToString", () => {
 
 // ─── extractLiteralInfo ───────────────────────────────────────────────────────
 
-describe.skip("extractLiteralInfo", () => {
+describe("extractLiteralInfo", () => {
   describe("plain literals (no suffix)", () => {
     test("IntLiteral without suffix returns IntLiteral info", () => {
       expect(extractLiteralInfo(intLiteral(42))).toEqual({ kind: "IntLiteral", value: 42 });
@@ -842,7 +842,7 @@ describe.skip("extractLiteralInfo", () => {
 
 // ─── Type guards ──────────────────────────────────────────────────────────────
 
-describe.skip("type guards", () => {
+describe("type guards", () => {
   describe("isErrorType", () => {
     test("returns true for ERROR_TYPE", () => {
       expect(isErrorType(ERROR_TYPE)).toBe(true);

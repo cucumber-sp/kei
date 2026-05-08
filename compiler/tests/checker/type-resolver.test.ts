@@ -52,7 +52,7 @@ function makeStructType(
   };
 }
 
-describe.skip("TypeResolver", () => {
+describe("TypeResolver", () => {
   describe("resolve primitive types", () => {
     test("resolves basic integer types", () => {
       const resolver = new TypeResolver();

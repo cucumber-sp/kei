@@ -45,7 +45,7 @@ function makeStructType(
   };
 }
 
-describe.skip("substituteType", () => {
+describe("substituteType", () => {
   test("returns original type when typeMap is empty", () => {
     const t = I32_TYPE;
     const result = substituteType(t, new Map());
@@ -156,7 +156,7 @@ describe.skip("substituteType", () => {
   });
 });
 
-describe.skip("substituteFunctionType", () => {
+describe("substituteFunctionType", () => {
   test("returns original when typeMap is empty", () => {
     const fn = functionType(
       [{ name: "x", type: I32_TYPE, isReadonly: false }],
@@ -224,7 +224,7 @@ describe.skip("substituteFunctionType", () => {
   });
 });
 
-describe.skip("mangleGenericName", () => {
+describe("mangleGenericName", () => {
   test("mangles with integer types", () => {
     expect(mangleGenericName("Box", [I32_TYPE])).toBe("Box_i32");
     expect(mangleGenericName("Pair", [I32_TYPE, I64_TYPE])).toBe("Pair_i32_i64");

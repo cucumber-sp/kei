@@ -6,7 +6,7 @@ const MEM_STUBS = `
   fn free(p: ptr<u8>) {}
 `;
 
-describe.skip("Checker — Unsafe Edge Cases", () => {
+describe("Checker — Unsafe Edge Cases", () => {
   describe("pointer dereference", () => {
     test("deref inside unsafe block → ok", () => {
       checkOk(`
@@ -53,7 +53,7 @@ describe.skip("Checker — Unsafe Edge Cases", () => {
           let p = Point{ x: 1.0, y: 2.0 };
           unsafe {
             let pp = &p;
-            let val = pp->x;
+            let val = (*pp).x;
           }
           return 0;
         }
@@ -81,7 +81,7 @@ describe.skip("Checker — Unsafe Edge Cases", () => {
         struct Point { x: f64; y: f64; }
         fn main() -> int {
           let p = Point{ x: 1.0, y: 2.0 };
-          unsafe { let addr = &p; }
+          unsafe { let address = &p; }
           return 0;
         }
       `);
@@ -136,7 +136,7 @@ describe.skip("Checker — Unsafe Edge Cases", () => {
       checkOk(`
         fn main() -> int {
           let x = 42;
-          let addr = unsafe { &x };
+          let address = unsafe { &x };
           return 0;
         }
       `);
@@ -183,8 +183,8 @@ describe.skip("Checker — Unsafe Edge Cases", () => {
       checkError(
         `fn main() -> int {
           let x = 42;
-          let addr = unsafe { &x };
-          let addr2 = &x;
+          let address = unsafe { &x };
+          let address2 = &x;
           return 0;
         }`,
         "requires unsafe block"
@@ -345,13 +345,13 @@ describe.skip("Checker — Unsafe Edge Cases", () => {
     });
   });
 
-  describe("method with ptr<T> self", () => {
-    test("method with ptr<T> self parameter → ok", () => {
+  describe("method with ref T self", () => {
+    test("method with ref T self parameter → ok", () => {
       checkOk(`
         struct Counter {
           value: int;
-          fn increment(self: ptr<Counter>) {
-            unsafe { self->value = self->value + 1; }
+          fn increment(self: ref Counter) {
+            self.value = self.value + 1;
           }
         }
         fn main() -> int { return 0; }
