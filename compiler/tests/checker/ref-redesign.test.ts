@@ -524,6 +524,54 @@ describe("`mut` keyword fully removed from the lexer", () => {
   });
 });
 
+describe("`addr(field) = expr` lowers to a store through the field pointer", () => {
+  test("addr-lvalue assignment emits a field_ptr + store pair", () => {
+    // Repro of the Shared<T> e2e gap that looked like "mem2reg eats
+    // an unstored alloca". The real cause: `lowerAssignExpr` had no
+    // case for `AddrExpr` LHS, so `addr(s.field) = expr` produced
+    // zero KIR — no field_ptr, no store. mem2reg then saw the alloca
+    // with no defs and rightly folded the load to undef.
+    //
+    // After the fix, the assignment must produce a field_ptr to the
+    // `payload` slot followed by a store of the rhs through that
+    // pointer.
+    const fn = lowerFunctionLocal(
+      `
+      unsafe struct Bag {
+        payload: ref i32;
+        fn __destroy(self: ref Bag) {}
+        fn __oncopy(self: ref Bag) {}
+      }
+      fn caller() -> i32 {
+        let b = Bag{};
+        unsafe { addr(b.payload) = (0 as *i32); }
+        return 0;
+      }
+    `,
+      "caller"
+    );
+
+    let payloadFieldPtrIdx = -1;
+    let storeAfterIdx = -1;
+    const insts = fn.blocks[0]?.instructions ?? [];
+    for (let i = 0; i < insts.length; i++) {
+      const inst = insts[i];
+      if (!inst) continue;
+      if (
+        inst.kind === "field_ptr" &&
+        "field" in inst &&
+        inst.field === "payload"
+      ) {
+        payloadFieldPtrIdx = i;
+      } else if (inst.kind === "store" && payloadFieldPtrIdx >= 0 && storeAfterIdx === -1) {
+        storeAfterIdx = i;
+      }
+    }
+    expect(payloadFieldPtrIdx).toBeGreaterThanOrEqual(0);
+    expect(storeAfterIdx).toBeGreaterThan(payloadFieldPtrIdx);
+  });
+});
+
 describe("reverse-declaration-order destruction (§6.9)", () => {
   test("auto-__destroy walks struct fields in reverse declaration order", () => {
     // The spec pins that fields are destroyed in reverse declaration
@@ -611,27 +659,25 @@ describe("SliceType cleanup", () => {
 });
 
 describe.skip("future: std `Shared<T>` runs end-to-end", () => {
-  // The cross-module monomorphization scaffolding landed: a
-  // `Shared<T>` defined in std/shared.kei and instantiated in main
-  // type-checks cleanly under `Shared<i32>.wrap(n)` etc. Body
-  // checks are routed to the defining module's checker, so its
-  // imports (`alloc`, `dealloc`) are visible. The double-emission
-  // of monomorphized lifecycle hooks is also fixed (see
-  // `tests/modules/lowering.test.ts`). What's still loose before
-  // the full runtime path works:
+  // The cross-module monomorphization scaffolding landed plus the
+  // KIR-level Shared<T> path is now sound:
   //
-  //  1. mem2reg eliminates the trivial `let s = Shared<T>{}; return s;`
-  //     alloca (it's never stored to before the load), leaving
-  //     `ret %1` with %1 undef. The fix is either to keep unstored
-  //     allocas or to materialise a zero-init for the return slot.
+  //  - Body checks are routed to the defining module's checker so
+  //    `alloc`, `dealloc` resolve correctly (see PR #20).
+  //  - Monomorphized lifecycle hooks are emitted once per
+  //    instantiation in the defining module (see PR #20 and
+  //    `tests/modules/lowering.test.ts`).
+  //  - `addr(field) = expr` lowers to a real `field_ptr + store`
+  //    pair, so the alloca is correctly address-taken and mem2reg
+  //    bails on it (see PR #21).
+  //  - Generic-method bodies resolve free identifiers via the
+  //    defining module's import scope (verified in
+  //    `tests/modules/lowering.test.ts`).
   //
-  //  2. KIR lowering of generic-struct method bodies uses MAIN's
-  //     `ctx.importedNames` to resolve free identifiers like
-  //     `dealloc(...)`, not the defining module's. Result: the C
-  //     output has `dealloc(...)` instead of `mem_dealloc(...)`.
-  //
-  // Once both are fixed, this test (and `tests/e2e/shared
-  // .test.ts` in general) can flip back on.
+  // The remaining blocker before this test (and `tests/e2e/shared
+  // .test.ts`) flip back on is a C-emitter integration bug —
+  // `let b = Struct.make()` lowers correctly but the scope-end
+  // destroy references an undeclared `_v1`. Filed as #21.
   test("std `Shared<T>::wrap(item)` runs end-to-end through the C output", () => {
     // Marker test.
   });
