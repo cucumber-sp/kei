@@ -514,14 +514,14 @@ describe("`dynarray<T>` source form is rejected", () => {
   });
 });
 
-describe.skip("future: `mut` keyword fully removed from the lexer", () => {
-  // `mut` is rejected at the parser level (parseParam doesn't accept
-  // it, parseLetStatement doesn't accept it, parseType doesn't accept
-  // `ref mut T`) — the existing `mut keyword is removed` cases pass.
-  // Cosmetic follow-up: also drop `mut` from the active KEYWORD_MAP so
-  // `mut` becomes a regular identifier. This test pins that future state.
+describe("`mut` keyword fully removed from the lexer", () => {
   test("`mut` is a regular identifier (no keyword diagnostic)", () => {
-    // Marker test.
+    checkOk(`
+      fn main() -> int {
+        let mut = 7;
+        return mut;
+      }
+    `);
   });
 });
 
