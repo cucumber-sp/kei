@@ -121,9 +121,7 @@ describe("Multi-module monomorphized method body resolution", () => {
     const kirModule = lowerMultiModule("main_uses_shared.kei");
 
     const wrapFn = kirModule.functions.find((f) => f.name.endsWith("Shared_i32_wrap"));
-    const destroyFn = kirModule.functions.find((f) =>
-      f.name.endsWith("Shared_i32___destroy")
-    );
+    const destroyFn = kirModule.functions.find((f) => f.name.endsWith("Shared_i32___destroy"));
     expect(wrapFn).toBeTruthy();
     expect(destroyFn).toBeTruthy();
 

@@ -557,11 +557,7 @@ describe("`addr(field) = expr` lowers to a store through the field pointer", () 
     for (let i = 0; i < insts.length; i++) {
       const inst = insts[i];
       if (!inst) continue;
-      if (
-        inst.kind === "field_ptr" &&
-        "field" in inst &&
-        inst.field === "payload"
-      ) {
+      if (inst.kind === "field_ptr" && "field" in inst && inst.field === "payload") {
         payloadFieldPtrIdx = i;
       } else if (inst.kind === "store" && payloadFieldPtrIdx >= 0 && storeAfterIdx === -1) {
         storeAfterIdx = i;
