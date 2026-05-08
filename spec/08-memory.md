@@ -53,7 +53,30 @@ fn example() {
 - When a field is overwritten by assignment.
 - When the old value is replaced in an array element.
 
-Field destruction order inside a struct is **reverse declaration order**.
+Field destruction order inside a struct is **reverse declaration
+order** — the last field declared is destroyed first. The same rule
+applies to scope-end destruction of locals: `let a = ...; let b =
+...;` ends with `__destroy(b)` followed by `__destroy(a)`.
+
+This matches the C++ / Rust rule and is the only safe default when
+later-declared fields can hold references into earlier-declared ones.
+Given
+
+```kei
+struct Window {
+    display: Display;
+    surface: Surface;   // built from display
+    context: Context;   // built from surface
+}
+```
+
+destruction is `context → surface → display`. Forward order would free
+`display` while `context` and `surface` still reference it through
+their fields, dangling those references.
+
+The compiler must not reorder destruction across either the struct-field
+dimension or the scope-locals dimension; reverse-declaration order is
+the contract.
 
 ### `__oncopy` — Called when a value is copied
 

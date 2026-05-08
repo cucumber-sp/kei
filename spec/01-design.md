@@ -105,9 +105,7 @@ unsafe struct RawBuffer {
 
     fn __destroy(self: ref RawBuffer) {
         unsafe {
-            if self.data != null {
-                free(self.data);
-            }
+            free(self.data);
         }
     }
 
@@ -166,12 +164,15 @@ extern fn sqlite3Open(filename: *c_char, db: **Sqlite3) -> int;
 // Kei wrapper for safe usage
 fn openDatabase(path: string) -> Database throws DatabaseError {
     unsafe {
-        let db: *Sqlite3 = null;
-        let result = sqlite3Open(path.toCString(), &db);
+        let db: Optional<*Sqlite3> = None;
+        let result = sqlite3Open(path.toCString(), addr(db));
         if result != SQLITE_OK {
             throw DatabaseError{ message: "Failed to open database" };
         }
-        return Database{ handle: db };
+        match db {
+            Some(handle) => return Database{ handle: handle },
+            None         => throw DatabaseError{ message: "C call returned null" },
+        }
     }
 }
 ```

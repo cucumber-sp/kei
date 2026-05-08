@@ -292,7 +292,7 @@ Validates invariants during development. Compiled out in release builds:
 
 ```kei
 assert(index < len);
-assert(ptr != null, "pointer must not be null");
+assert(count > 0, "queue must not be empty");
 ```
 
 - **Debug build:** Panics with message and source location if condition is false
