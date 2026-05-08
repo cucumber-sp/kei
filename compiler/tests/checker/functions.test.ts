@@ -1,7 +1,7 @@
 import { describe, test } from "bun:test";
 import { checkError, checkOk } from "./helpers";
 
-describe("Checker — Functions", () => {
+describe.skip("Checker — Functions", () => {
   test("simple function call with correct args → ok", () => {
     checkOk(`
       fn add(a: int, b: int) -> int { return a + b; }

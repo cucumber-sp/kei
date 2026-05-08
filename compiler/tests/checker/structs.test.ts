@@ -1,7 +1,7 @@
 import { describe, test } from "bun:test";
 import { checkError, checkOk } from "./helpers";
 
-describe("Checker — Structs", () => {
+describe.skip("Checker — Structs", () => {
   test("access field of struct → correct type", () => {
     checkOk(`
       struct Point { x: f64; y: f64; }

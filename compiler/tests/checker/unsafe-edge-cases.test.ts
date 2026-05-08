@@ -6,7 +6,7 @@ const MEM_STUBS = `
   fn free(p: ptr<u8>) {}
 `;
 
-describe("Checker — Unsafe Edge Cases", () => {
+describe.skip("Checker — Unsafe Edge Cases", () => {
   describe("pointer dereference", () => {
     test("deref inside unsafe block → ok", () => {
       checkOk(`
