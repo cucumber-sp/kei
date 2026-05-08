@@ -34,9 +34,9 @@ let p = Point{ x: 1.0, y: 2.0 };
 
 // Heap allocation - explicit via unsafe struct with lifecycle hooks
 unsafe struct Database {
-    handle: ptr<void>;
+    handle: *void;
 
-    fn __destroy(self: Database) {
+    fn __destroy(self: ref Database) {
         // cleanup resources
     }
 }
@@ -53,7 +53,7 @@ fn parseJson(input: string) -> Data throws ParseError {
 }
 
 // External C function - requires unsafe to call
-extern fn sqlite3_open(filename: ptr<c_char>, db: ptr<ptr<void>>) -> int;
+extern fn sqlite3Open(filename: *c_char, db: **void) -> int;
 ```
 
 ## Two worlds of data
@@ -64,7 +64,7 @@ All data in Kei falls into one of two categories, each with distinct semantics:
 - **Location:** Stack
 - **Semantics:** Copied on assignment (calls `__oncopy` on fields recursively)
 - **Cleanup:** Automatic via compiler-generated `__destroy` (calls `__destroy` on fields recursively)
-- **Raw pointers:** Cannot contain `ptr<T>`
+- **Raw pointers:** Cannot contain `*T` or `ref T` fields
 
 ```kei
 struct Vec3 {
@@ -94,30 +94,37 @@ let u2 = u1;  // compiler calls u1.name.__oncopy() automatically
 
 ### Unsafe types (`unsafe struct`)
 - **Location:** Stack
-- **Semantics:** May contain raw pointers, user-defined lifecycle hooks
-- **Cleanup:** User-defined `__destroy` method (compile error if missing when `ptr<T>` fields present)
+- **Semantics:** May contain raw pointers (`*T`) and `ref T` fields; user-defined lifecycle hooks
+- **Cleanup:** User-defined `__destroy` method (compile error if missing when `*T` fields present)
 - **Raw pointers:** Allowed
 
 ```kei
 unsafe struct RawBuffer {
-    data: ptr<u8>;
+    data: *u8;
     size: usize;
 
-    fn __destroy(self: RawBuffer) {
-        if (self.data != null) {
-            free(self.data);
+    fn __destroy(self: ref RawBuffer) {
+        unsafe {
+            if self.data != null {
+                free(self.data);
+            }
         }
     }
 
-    fn __oncopy(self: RawBuffer) -> RawBuffer {
-        let new_data = alloc<u8>(self.size);
-        memcpy(new_data, self.data, self.size);
-        return RawBuffer{ data: new_data, size: self.size };
+    fn __oncopy(self: ref RawBuffer) {
+        unsafe {
+            let newData = alloc<u8>(self.size);
+            memcpy(newData, self.data, self.size);
+            self.data = newData;
+        }
     }
 }
 ```
 
-`unsafe struct` is used to build managed abstractions like `string`, `Shared<T>`, `array<T>` in the standard library. If lifecycle hooks are implemented incorrectly, memory corruption or leaks may occur — hence the `unsafe` keyword.
+`unsafe struct` is used to build managed abstractions like `String`,
+`Shared<T>`, `Array<T>` in the standard library. If lifecycle hooks are
+implemented incorrectly, memory corruption or leaks may occur — hence the
+`unsafe` keyword.
 
 ## Zero-cost defaults
 
@@ -154,16 +161,18 @@ External C libraries are accessed through `extern fn` declarations plus Kei wrap
 
 ```kei
 // External C function declaration
-extern fn sqlite3_open(filename: ptr<c_char>, db: ptr<ptr<sqlite3>>) -> int;
+extern fn sqlite3Open(filename: *c_char, db: **Sqlite3) -> int;
 
 // Kei wrapper for safe usage
 fn openDatabase(path: string) -> Database throws DatabaseError {
-    let db: ptr<sqlite3> = null;
-    let result = sqlite3_open(path.c_str(), &db);
-    if (result != SQLITE_OK) {
-        throw DatabaseError("Failed to open database");
+    unsafe {
+        let db: *Sqlite3 = null;
+        let result = sqlite3Open(path.toCString(), &db);
+        if result != SQLITE_OK {
+            throw DatabaseError{ message: "Failed to open database" };
+        }
+        return Database{ handle: db };
     }
-    return Database{ handle: db };
 }
 ```
 

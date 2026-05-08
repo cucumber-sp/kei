@@ -5,52 +5,52 @@ Kei has a structured type system organized into primitive types, compound types,
 ## Language types vs stdlib types
 
 A few types are **compiler-known** — the parser has dedicated syntax for them
-and the checker reasons about them directly. Everything else — `array<T>`
+and the checker reasons about them directly. Everything else — `Array<T>`
 (heap), `List<T>`, `Shared<T>` — is an **`unsafe struct` written in Kei
 itself** and lives (or will live) in the standard library. Having a small
 language core and a larger library is deliberate: it keeps the compiler tight
 and lets the stdlib evolve without breaking the frontend.
 
-| Type                | Defined in | Notes                                      |
-|---------------------|------------|--------------------------------------------|
-| primitives (`i32`, `f64`, `bool`, …) | compiler | builtin                          |
-| `ptr<T>`            | compiler   | raw pointer, non-null                      |
-| `T?` (nullable)     | compiler   | see **Nullability**                        |
-| `inline<T, N>`      | compiler   | fixed-size value-type bag of N elements    |
-| `slice<T>`          | compiler   | non-owning view                            |
-| `string`            | compiler today / stdlib goal | CoW refcounted byte string. Today the runtime is in C (`runtime.h`); the planned move is an `unsafe struct` in stdlib. |
-| `array<T>`          | stdlib (planned) | heap array, CoW                       |
-| `List<T>`           | stdlib (planned) | growable, deep-copy                   |
-| `Shared<T>`         | stdlib (planned) | refcounted handle                     |
+| Type                                 | Defined in       | Notes                                                           |
+|--------------------------------------|------------------|-----------------------------------------------------------------|
+| primitives (`i32`, `f64`, `bool`, …) | compiler         | builtin                                                         |
+| `ref T` / `readonly ref T`           | compiler         | safe reference — params and `unsafe struct` fields only         |
+| `*T`                                 | compiler         | raw pointer (unsafe-only)                                       |
+| `T?` (nullable)                      | compiler         | see **Nullability**                                             |
+| `inline<T, N>`                       | compiler         | fixed-size value-type bag of N elements                         |
+| `string`                             | compiler today / stdlib goal | CoW refcounted byte string. Lowercase keyword alias for stdlib `String`. Today the runtime is in C (`runtime.h`); port deferred. |
+| `Array<T>` / `array<T>` alias        | stdlib (planned) | heap array, CoW. `array<T>` is the lowercase keyword alias.     |
+| `List<T>`                            | stdlib (planned) | growable, deep-copy                                             |
+| `Shared<T>`                          | stdlib (planned) | refcounted handle                                               |
+
+Naming conventions for stdlib types and member identifiers are pinned in
+[`docs/design/naming-conventions.md`](../docs/design/naming-conventions.md);
+the language reference for the pointer/reference model is in
+[`docs/design/ref-redesign.md`](../docs/design/ref-redesign.md).
 
 ## View vs owned
 
-For every type that owns heap memory, there is a **view** counterpart — `slice<T>`
-for arrays, `ref T` for single values (see **Safe references** below). Views never
-destroy, never copy.
+The "view counterpart" model is `ref T` only. There is **no** `slice<T>`
+type: refcounted owning types (`String`, `Array<T>`) return *the same type*
+on subranges (cheap because the buffer is shared via refcount with offset/
+len adjusted), and `ref T` covers the "non-owning reference into a stack-
+bound source" case.
 
-**View safety rule (enforced without a borrow checker):** a view can only be
-constructed from a source whose lifetime the compiler can trivially see — stack
-values, string literals / `.rodata`, or another view. Sources whose backing buffer
-outlives their struct (the CoW heap types — `string`, `array<T>`, `List<T>`,
-`Shared<T>`) **do not produce views**; they produce a fresh owned handle with a
-bumped refcount.
+| Source                           | Sub-range / borrow produces | Why                                       |
+|----------------------------------|-----------------------------|-------------------------------------------|
+| Inline array `inline<T, N>`      | indexed access; `ref T`-typed param to take a borrow | source lifetime = scope |
+| String literal, `.rodata`        | `string` (zero-copy)        | `.rodata` is permanent                    |
+| Stack value                      | `ref T` (param-only)        | source lifetime = scope                   |
+| **`String` (stdlib, CoW)**       | **`String`**                | bumps refcount; shares buffer             |
+| **`Array<T>` (stdlib, CoW)**     | **`Array<T>`**              | same story                                |
+| **`List<T>` (stdlib, owned)**    | copy or arena-slice         | no free lunch — explicit                  |
 
-| Source                           | Sub-range / borrow produces | Why |
-|----------------------------------|-----------------------------|-----|
-| Inline array `inline<T, N>`      | `slice<T>`                  | source lifetime = scope, trivially checked |
-| String literal, `.rodata`        | `string` (or `slice<u8>`)   | `.rodata` is permanent                     |
-| Another `slice<T>`               | `slice<T>`                  | inherits source's scope bound              |
-| Stack value                      | `ref T`                     | source lifetime = scope                    |
-| **`string` (stdlib, CoW)**       | **`string`**                | must bump refcount; shares buffer, no UAF  |
-| **`array<T>` (stdlib, CoW)**     | **`array<T>`**              | same story                                 |
-| **`List<T>` (stdlib, owned)**    | copy or arena-slice         | no free lunch — explicit                   |
-
-Concretely: `let sub = s[6..]` where `s: string` returns a **`string`**, not a
-`slice<u8>`. The intended representation of `string` is `{ptr, offset, len,
-cap, count}`, so the substring is zero-copy — offset/len adjustment plus a
-refcount bump. The current runtime layout is simpler (`{data, len, cap, ref}`)
-and substring deep-copies; the user-facing type rule still holds.
+Concretely: `let sub = s[6..]` where `s: string` returns a **`string`**,
+not a separate view type. The intended representation of `String` is
+`{buffer: Shared<U8Buffer>, offset: usize, len: usize}`, so the substring
+is zero-copy — offset/len adjustment plus a `Shared<U8Buffer>` refcount bump.
+The current C runtime layout is simpler (`{data, len, cap, ref}`) and
+substring deep-copies; the user-facing type rule still holds.
 
 ## Primitive types
 
@@ -112,116 +112,175 @@ let d = 2.5f32; // f32 (explicit suffix)
 
 ## Pointer and reference types
 
-Kei has **three** pointer-like types, each with a clear purpose:
+Kei has a small set of pointer-like types modelled on C# `ref` / `in`
+parameters:
 
-| Type          | Safe? | Mutable? | Non-null? | Scope-bound? | Use for                          |
-|---------------|-------|----------|-----------|--------------|----------------------------------|
-| `ref T`       | yes   | no       | yes       | yes          | read-only borrow, param types    |
-| `ref mut T`   | yes   | yes      | yes       | yes          | mutable borrow, mutating methods |
-| `ptr<T>`      | no    | yes      | yes       | no           | FFI, `unsafe struct` internals   |
+| Type             | Safe? | Mutable through? | Auto-deref | Where it appears                                                          |
+|------------------|-------|------------------|------------|---------------------------------------------------------------------------|
+| `ref T`          | yes   | yes              | yes        | function/method parameter types; `unsafe struct` field types              |
+| `readonly ref T` | yes   | no               | yes (read) | function/method parameter types; `unsafe struct` field types              |
+| `*T`             | no    | yes              | no         | `unsafe struct` field types; locals inside `unsafe`; `extern fn` signatures |
 
-Picking the right one is almost mechanical: prefer `ref T`, reach for `ref mut T`
-when the receiver must mutate, and `ptr<T>` only in `unsafe` code.
+Picking the right one is mechanical: prefer `ref T` for params that mutate,
+`readonly ref T` for read-only params (≈ C# `in`), and `*T` only in unsafe
+code (FFI, raw pointer arithmetic, internal layout of stdlib `unsafe struct`s).
 
-### `ptr<T>` — Raw pointer (unsafe, non-null)
+### `ref T` — Safe mutable reference (≈ C# `ref`)
 
-Unmanaged pointer that does not own memory. Only usable in `unsafe struct`
-fields and `unsafe` blocks. No automatic cleanup, no bounds checking, no
-lifetime validation — this is a direct C pointer.
-
-`ptr<T>` is **non-null at the type level**. To express a pointer that may be
-absent, use the nullable suffix: `ptr<T>?` (see **Nullability** below); its
-representation is still a plain C pointer (null = absent).
-
-```kei
-// Only in unsafe structs
-unsafe struct RawBuffer {
-    data: ptr<u8>;      // must always be valid
-    size: usize;
-}
-```
-
-### `ref T` — Safe immutable reference
-
-Non-null, read-only, scope-bound reference to a value. Usable in **safe code**,
-no `unsafe` block needed to read. The compiler rejects writes through a `ref T`
-and rejects constructing a `ref T` from something whose lifetime isn't visible
-(i.e. not a value in the current or an enclosing scope).
+Non-null, scope-bound reference to a value. The compiler treats it as the
+underlying T at every use site (auto-deref on read; auto-deref on write,
+which fires the destroy-then-write-then-oncopy lifecycle protocol on the
+pointee). Adding `ref` to a parameter or field doesn't change how callers
+or method bodies read or write it; it changes how the compiler lowers it
+(slot becomes a pointer) and what positions it's legal in.
 
 ```kei
-fn handleRoot(app: ref App, req: Request) -> Response {
-    let user = app.db.lookup(req.userId);   // read: OK
-    // app.db = other;                       // ERROR: no writes through `ref App`
-    return Response{ body: user.name };
+struct Item { value: i32 }
+
+fn read(x: ref Item) -> i32 {
+    return x.value;             // x.value reads from *x, returns i32 (auto-deref)
 }
 
-let app = App.new();
-let r = handleRoot(&app, req);              // &app in safe code = ref App
-```
-
-`ref T` compiles to `const T*` — same C-level representation as `ptr<T>`, but
-with compile-time read-only + scope rules layered on top.
-
-### `ref mut T` — Safe mutable reference
-
-Same as `ref T` but writes through it are permitted. Mostly used for methods
-that mutate their receiver:
-
-```kei
 struct Counter {
     value: int;
 
-    fn increment(self: ref mut Counter) {
-        self.value += 1;        // no unsafe block needed
+    fn increment(self: ref Counter) {
+        self.value += 1;        // auto-deref + lifecycle on the pointee
     }
 }
 
-let mut c = Counter{ value: 0 };
-c.increment();                  // compiler inserts &mut c
+let c = Counter{ value: 0 };
+c.increment();                  // compiler inserts &c at the call site
 ```
 
-### Initial restrictions on `ref`
+`ref T` compiles to `T*` at the C level. Auto-deref insertion is a
+front-end transform; nothing about the call ABI changes.
 
-`ref T` and `ref mut T` are **parameter types and local bindings only**.
-They may NOT appear as:
-- struct fields (would require real lifetime tracking),
-- return types (same reason),
-- array or collection element types.
+### `readonly ref T` — Safe immutable reference (≈ C# `in`)
 
-These restrictions let the "scope-bound" rule be a trivial syntactic check
-instead of a full borrow analysis. They may be relaxed later once a concrete
-lifetime story is in place.
+Same as `ref T` but writes through the reference are rejected:
 
-### When to use `ptr<T>` vs `ref T`
+```kei
+fn show(x: readonly ref Item) -> i32 {
+    return x.value;             // OK: reads auto-deref
+    // x = Item{...};             // ERROR: readonly ref forbids write-through
+}
+```
 
-- **`ref T`** is the default for safe code: methods, handler parameters,
-  anywhere a borrow is appropriate.
-- **`ptr<T>`** is for the cases safe references can't cover: FFI boundaries
-  (`extern fn` signatures) and internal pointers inside `unsafe struct`
-  implementations (`Shared<T>` etc.).
-- Ordinary `fn` signatures should not take `ptr<T>` once `ref T` is available.
-  Until then, `self: ptr<T>` is the only mutable-method-receiver form (see
-  [SPEC-STATUS.md](../SPEC-STATUS.md)).
+The `readonly` prefix on a `ref T` parameter or `unsafe struct` field
+exists purely to communicate (and enforce) "this code does not mutate
+through the ref." It compiles to `const T*` in C.
 
-### Taking references: `&expr` and `&mut expr`
+### `*T` — Raw pointer (unsafe-only)
 
-- `&expr` in safe code produces `ref T`.
-- `&mut expr` in safe code produces `ref mut T`.
-- `&expr` inside an `unsafe` block produces `ptr<T>` (raw address-of).
+Unmanaged pointer that does not own memory. Usable only inside `unsafe`
+blocks, in `unsafe struct` field types, in locals inside `unsafe`, and in
+`extern fn` signatures. No automatic cleanup, no bounds checking, no
+lifetime validation, no auto-deref — this is a direct C pointer.
 
-At method call sites, `&` is inserted implicitly when the method declares
-`self: ref Self` or `self: ref mut Self` — users write `counter.increment()`,
-not `(&mut counter).increment()`.
+`*T` is **non-null at the type level**. To express a pointer that may be
+absent, use the nullable suffix: `*T?` (see **Nullability** below); the
+representation is still a plain C pointer (null = absent).
+
+```kei
+unsafe struct RawBuffer {
+    data: *u8;          // must always be valid
+    size: usize;
+}
+
+unsafe {
+    let p: *i32 = &x;   // raw address-of (unsafe-only)
+    let n = *p;         // explicit dereference; no auto-deref on `*T`
+}
+```
+
+For accessing a field through a raw pointer, write `(*p).field` — the
+arrow operator (`->`) is removed.
+
+### Position restrictions on `ref T` / `readonly ref T`
+
+`ref T` (and the `readonly ref T` form) are **parameter types and `unsafe
+struct` field types only**. They may NOT appear as:
+
+- function/method return types,
+- safe `struct` field types,
+- local variable bindings (`let r: ref T = …` is rejected),
+- generic argument positions (e.g. `List<ref T>` is invalid),
+- array or other collection element types,
+- `static` global types.
+
+Because `ref T` cannot appear in any position that could outlive its source,
+it cannot be made to dangle. This is enforced syntactically — no analysis
+pass needed.
+
+### When to use `*T` vs `ref T`
+
+- **`ref T`** / **`readonly ref T`** are the default for safe code:
+  methods, handler parameters, `unsafe struct` slots that point into
+  managed memory.
+- **`*T`** is for the cases safe references can't cover: FFI boundaries
+  (`extern fn` signatures), internal pointers inside `unsafe struct`
+  implementations that need pointer arithmetic or null sentinels.
+
+### Taking pointer values
+
+- `&x` is **unsafe-only** and produces `*T`. `&` does not exist in safe code.
+- `*p` is **unsafe-only** and dereferences a `*T` to T. There is no safe-
+  code dereference operator (auto-deref on `ref T` is the safe alternative).
+
+At method call sites taking `self: ref T`, the address is taken implicitly:
+users write `counter.increment()`, not `(&counter).increment()`.
+
+### `addr(field)` — slot lvalue for a `ref T` field (unsafe-only)
+
+To manipulate the underlying pointer of a `ref T` field of an `unsafe
+struct` (e.g. when constructing a `Shared<T>` and pointing its `value`
+slot at heap memory), use `addr(field)`:
+
+```kei
+unsafe struct Shared<T> {
+    refcount: ref i64;
+    value: ref T;
+
+    fn wrap(item: ref T) -> Shared<T> {
+        let s = Shared<T>{};
+        unsafe {
+            let block = alloc<u8>(sizeof(i64) + sizeof(T));
+            addr(s.refcount) = block as *i64;       // sets WHERE refcount points
+            addr(s.value)    = (block + sizeof(i64)) as *T;
+            s.refcount = 1;                         // writes through (auto-deref)
+            init s.value = item;                    // initialization-write
+        }
+        return s;
+    }
+}
+```
+
+`addr(field)` returns an lvalue of type `*T` aliasing the raw pointer slot
+underlying the `ref T` field. Assigning to `addr(field)` sets where the
+reference points; dereferencing it (`*addr(field)`) accesses the pointed-to
+memory without firing lifecycle hooks. Outside `unsafe`, `addr(...)` is a
+compile error.
+
+### `init field = value` — initialization-write (unsafe-only)
+
+For uninitialized slots during construction. Skips the destroy step
+(otherwise lifecycle would run on garbage), bitwise-writes the new T into
+the slot, then runs `__oncopy` on the new T. Only valid inside `unsafe`
+blocks. Inside `struct` literals, the compiler emits init semantics
+implicitly for every field.
 
 ## Nullability
 
 `T?` is the suffix form of "optional / may be absent." Reading is natural —
-`string?` is "a string, or nothing"; `ptr<User>?` is "a pointer to a User, or
-nothing."
+`string?` is "a string, or nothing"; `*Node?` is "a raw pointer to a Node,
+or nothing" (unsafe-only).
 
 ```kei
 let name: string? = maybeLookup(id);    // may be absent
-let node: ptr<Node>? = findChild(tree); // may be absent
+unsafe {
+    let node: *Node? = findChild(tree); // may be absent
+}
 
 // Must check before use — compiler enforces
 if name != null {
@@ -234,25 +293,25 @@ if name != null {
 `T?` is laid out to cost nothing when `T` has an unused bit-pattern ("niche")
 that can stand in for the absent state; otherwise a one-byte tag is added.
 
-| Type     | `T?` representation                              |
-|----------|--------------------------------------------------|
-| `ptr<T>?`| plain C pointer; null pointer = absent           |
-| `string?`| inherits string layout; `len = usize::MAX` = absent |
-| `slice<T>?` | slice layout; null pointer = absent           |
-| `i32?`, `bool?`, other primitives | `{ tag: u8, value: T }` |
-| user struct with no niche | `{ tag: u8, value: T }`               |
+| Type     | `T?` representation                                  |
+|----------|------------------------------------------------------|
+| `*T?`    | plain C pointer; null pointer = absent               |
+| `string?`| inherits string layout; `len = usize::MAX` = absent  |
+| `i32?`, `bool?`, other primitives | `{ tag: u8, value: T }`     |
+| user struct with no niche         | `{ tag: u8, value: T }`     |
 
-Niches let you promise "zero cost when there's room" while keeping the type rule
-uniform — the user writes `?`, the compiler picks the cheapest legal layout.
+Niches let you promise "zero cost when there's room" while keeping the
+type rule uniform — the user writes `?`, the compiler picks the cheapest
+legal layout.
 
 ### The rules
 
-- Bare `ptr<T>`, `string`, `slice<T>`, `List<T>`, user structs etc. are **never
-  null / never absent**. `null` is not a value of those types.
-- `T?` is the only way to express absence. `null` is the literal for the absent
-  state of any `T?`.
-- Accessing a `T?` as if it were `T` is a type error. Narrow with `if x != null { … }`
-  or pattern-match.
+- Bare `*T`, `string`, `List<T>`, `Array<T>`, user structs etc. are
+  **never null / never absent**. `null` is not a value of those types.
+- `T?` is the only way to express absence. `null` is the literal for the
+  absent state of any `T?`.
+- Accessing a `T?` as if it were `T` is a type error. Narrow with
+  `if x != null { … }` or pattern-match.
 
 ## Generics
 
@@ -284,24 +343,28 @@ let p = Pair<int, string>{ first: 42, second: "hello" };
 
 ```kei
 unsafe struct Shared<T> {
-    ptr: ptr<T>;
-    count: ptr<u32>;
+    refcount: ref i64;
+    value: ref T;
 
-    fn __oncopy(self: Shared<T>) -> Shared<T> {
-        self.count.increment();
-        return self;
+    fn __oncopy(self: ref Shared<T>) {
+        self.refcount += 1;
     }
 
-    fn __destroy(self: Shared<T>) {
-        self.count.decrement();
-        if (self.count.value == 0) {
-            self.ptr.destroy();
-            free(self.ptr);
-            free(self.count);
+    fn __destroy(self: ref Shared<T>) {
+        self.refcount -= 1;
+        if self.refcount == 0 {
+            self.value.__destroy();
+            unsafe { free(addr(self.refcount)); }
         }
     }
 }
 ```
+
+Lifecycle hooks take `self: ref Self` and return void; they mutate the
+slot in place rather than returning a new value. See
+[`spec/07-structures.md`](./07-structures.md) for the full ABI and
+[`docs/design/ref-redesign.md`](../docs/design/ref-redesign.md) §3.1 for
+the worked example.
 
 ### Monomorphization
 
@@ -338,17 +401,18 @@ let n = a.len;          // compile-time constant (3)
 - **Performance:** Zero overhead, compiles to a C fixed-size array `T[N]`
 - **Common use:** Buffers, matrices, small fixed-shape collections inside structs
 
-### `array<T>` — Heap-allocated array (planned stdlib)
+### `Array<T>` / `array<T>` — Heap-allocated array (planned stdlib)
 
 Heap-allocated array with runtime-determined size, CoW semantics. Not
-resizable — use `List<T>` for growable collections. Designed as an `unsafe
-struct` in stdlib; the `array<T>` spelling is not yet a working type
-constructor (see [SPEC-STATUS.md](../SPEC-STATUS.md)). See
+resizable — use `List<T>` for growable collections. Designed as an
+`unsafe struct` in stdlib; the `array<T>` spelling is the lowercase
+keyword alias for the canonical `Array<T>` (see
+[SPEC-STATUS.md](../SPEC-STATUS.md)). See
 [`spec/08-memory.md`](./08-memory.md) for the planned internal layout and
 lifecycle contract.
 
 ```kei
-let nums: array<int> = array.of(1, 2, 3);
+let nums: array<int> = Array.of(1, 2, 3);
 let len = nums.len;
 let x = nums[0];
 let copy = nums;                // refcount++ (CoW, no data copy)
@@ -356,66 +420,61 @@ let copy = nums;                // refcount++ (CoW, no data copy)
 
 ### `List<T>` — Growable collection (planned stdlib)
 
-Resizable list for when elements need to be added or removed. Designed as an
-`unsafe struct` in stdlib; not yet implemented. See
+Resizable list for when elements need to be added or removed. Designed as
+an `unsafe struct` in stdlib; not yet implemented. See
 [`spec/08-memory.md`](./08-memory.md) for layout.
 
 ```kei
 let items = List.of<int>();
-items.push(1);
-items.push(2);
-items.pop();
+items.pushBack(1);
+items.pushBack(2);
+items.popBack();
 ```
 
-### `slice<T>` — Non-owning view
+### Sub-ranges and views
 
-A view into contiguous memory that does not own the data:
+There is no `slice<T>` view type. Sub-range semantics:
 
-```kei
-let arr = [1, 2, 3, 4, 5];
-let s: slice<int> = arr[1..4];   // view of elements 1, 2, 3
-let len = s.len;
-```
-
-- **Memory:** Does not own memory
-- **Read-only:** Elements cannot be modified through a slice
-- **Internal structure:** `{ ptr: ptr<T>, len: usize }`
-- **Restrictions:**
-  - Cannot outlive source data
-  - Cannot be returned from functions
-  - Cannot be stored in struct fields
+- **CoW types** (`String`, `Array<T>`): `s[start..end]` returns the same
+  type with refcount bump and offset/len adjustment — buffer is shared.
+- **`inline<T, N>`**: pass `ref inline<T, N>` to a helper or operate
+  in-place with index arithmetic; the source's stack lifetime makes a
+  borrow trivially safe.
+- **C interop**: pass `*T` and `usize` separately in `extern fn`
+  signatures. `unsafe`-only.
 
 ## String type
 
-### `string` — CoW byte string
+### `string` / `String` — CoW byte string
 
-Kei has one user-facing string type. The runtime today is C code in
-`runtime.h`; the goal is an `unsafe struct` in stdlib using CoW refcount
-semantics. Either way, the user-facing semantics are identical:
+Kei has one user-facing string type, spelled `string` (lowercase keyword
+alias) or `String` (canonical stdlib name). The runtime today is C code
+in `runtime.h`; the target shape is a Kei `struct` in stdlib using a
+`Shared<U8Buffer>` field for the heap bytes. Either way, the user-facing
+semantics are identical:
 
 ```kei
-let s = "hello";              // string literal -> string value (rodata-backed)
-let sub = s[6..];             // substring is a `string`, sharing the buffer via refcount
-let copy = s;                 // __oncopy: refcount++, no data copy
+let s = "hello";              // string literal -> String value (rodata-backed)
+let sub = s[6..];              // substring is a String, sharing the buffer
+let copy = s;                  // __oncopy: refcount++, no data copy
 ```
 
-**Contract (users can rely on these):** strings are immutable from the outside —
-`s[i] = x` is not a valid operation. Building strings uses `StringBuilder` (or
-`List<u8>`); the result is converted to `string` once. See
-[`spec/08-memory.md`](./08-memory.md) for internal layout and the CoW
-invariants the implementation is required to uphold.
+**Contract (users can rely on these):** strings are immutable from the
+outside — `s[i] = x` is not a valid operation. Building strings uses
+`StringBuilder` (or `List<u8>`); the result is converted to `string`
+once. See [`spec/08-memory.md`](./08-memory.md) for internal layout and
+the CoW invariants the implementation is required to uphold.
 
 ## Type comparison
 
-| Category | Location | Owns Memory | Lifecycle Hooks | Can Contain `ptr<T>` |
-|----------|----------|-------------|-----------------|---------------------|
-| `struct` | Stack | N/A | Auto-generated | No |
-| `unsafe struct` | Stack | Manual | User-defined (required with `ptr<T>`) | Yes |
-| `inline<T,N>` | Inline (stack or in-struct) | N/A | Per-element | No |
-| `slice<T>` | Stack (view) | No | None | No |
-| `string` | Stack + Heap | Yes (CoW) | Built-in | No |
-| `array<T>` (planned stdlib) | Stack + Heap | Yes (CoW) | User-defined | No |
-| `List<T>` (planned stdlib)  | Stack + Heap | Yes        | User-defined | No |
+| Category                    | Location                    | Owns Memory | Lifecycle Hooks                    | Can contain `*T` |
+|-----------------------------|-----------------------------|-------------|------------------------------------|------------------|
+| `struct`                    | Stack                       | N/A         | Auto-generated                     | No               |
+| `unsafe struct`             | Stack                       | Manual      | User-defined (required with `*T`)  | Yes              |
+| `inline<T,N>`               | Inline (stack or in-struct) | N/A         | Per-element                        | No               |
+| `string`                    | Stack + Heap                | Yes (CoW)   | Built-in                           | No               |
+| `Array<T>` (planned stdlib) | Stack + Heap                | Yes (CoW)   | User-defined                       | No               |
+| `List<T>` (planned stdlib)  | Stack + Heap                | Yes         | User-defined                       | No               |
 
 ## Special types
 
@@ -435,32 +494,35 @@ fn explicit() -> void {     // equivalent
 
 ### `null`
 
-`null` is the literal for the absent state of any nullable type `T?`. It is
-**not** a value of non-nullable types — `ptr<int> = null` is a type error; use
-`ptr<int>? = null`.
+`null` is the literal for the absent state of any nullable type `T?`. It
+is **not** a value of non-nullable types — `*int = null` is a type error;
+use `*int? = null`.
 
 ```kei
-let p: ptr<int>? = null;    // nullable pointer, absent
-if p != null {
-    *p = 42;                // narrowed to ptr<int>, safe to deref
+unsafe {
+    let p: *int? = null;    // nullable raw pointer, absent
+    if p != null {
+        *p = 42;            // narrowed to *int, safe to deref
+    }
 }
 ```
 
-> Today the parser/checker accept `T?` and lower it to `ptr<T>`, including for
-> primitives — `i32?` becomes `ptr<i32>`. The tag-byte representation for
-> non-pointer types is on the roadmap; see [SPEC-STATUS.md](../SPEC-STATUS.md).
+> Today the parser/checker accept `T?` and lower it to a nullable raw
+> pointer for everything, including primitives. The tag-byte representation
+> for non-pointer types is on the roadmap; see
+> [SPEC-STATUS.md](../SPEC-STATUS.md).
 
 ## Type aliases
 
 Create alternative names for existing types:
 
 ```kei
-type Bytes = slice<u8>;
+type Bytes = Array<u8>;
 type UserId = int;       // transparent, fully interchangeable
 
 fn processUser(id: UserId) { /* ... */ }
-let user_id: UserId = 42;
-let regular_int: int = user_id;  // allowed - same underlying type
+let userId: UserId = 42;
+let regularInt: int = userId;  // allowed - same underlying type
 ```
 
 Type aliases are completely transparent — they create no new type, just an alternative name.
@@ -468,15 +530,17 @@ Type aliases are completely transparent — they create no new type, just an alt
 ## Type conversion
 
 ### Implicit conversions
-- Integer types promote to larger sizes when safe
-- Arrays convert to slices automatically
+- Integer types promote to larger sizes when safe.
+- Stack values implicitly take their address when passed to a `ref T` /
+  `readonly ref T` parameter (no `&` needed at the call site).
 
 ```kei
 let small: i32 = 42;
 let large: i64 = small;     // implicit widening
 
-let arr = [1, 2, 3];
-let slice: slice<int> = arr; // automatic conversion
+fn read(x: ref Item) -> i32 { return x.value; }
+let it = Item{ value: 7 };
+let v = read(it);            // implicit &it at the call site
 ```
 
 ### Explicit conversions

@@ -164,7 +164,7 @@ Extern calls are separate instructions so optimization passes can distinguish sa
 #### Memory (heap)
 | Instruction | Description |
 |---|---|
-| `heap_alloc dest, type, count` | Allocate `count * sizeof(type)` bytes, return `ptr<type>` |
+| `heap_alloc dest, type, count` | Allocate `count * sizeof(type)` bytes, return `*type` |
 | `heap_free ptr` | Free heap memory at `ptr` |
 
 Both are unsafe — only emitted inside `unsafe` blocks. Compile to `malloc`/`free` in C backend.
@@ -293,7 +293,7 @@ fn getUser(id: int) -> User throws NotFound, DbError { ... }
 Lowered to:
 
 ```
-fn getUser(id: i32, __out: ptr<User>, __err: ptr<ErrorUnion>): i32 {
+fn getUser(id: i32, __out: *User, __err: *ErrorUnion): i32 {
   // returns 0 = success, 1 = NotFound, 2 = DbError
   // on success: value written to __out
   // on error: error payload written to __err
@@ -436,7 +436,7 @@ type User = struct {
 
 extern fn print(s: string): void
 
-fn createUser(n: string, a: i32, __out: ptr<User>): void {
+fn createUser(n: string, a: i32, __out: *User): void {
 entry:
   %0 = field_ptr __out, "name"
   oncopy n

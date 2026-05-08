@@ -129,40 +129,54 @@ Strings are enclosed in double quotes and support escape sequences:
 
 ## Keywords
 
-Active keywords — recognised by the parser today:
+Active keywords — recognised by the parser:
 
 ```
-as          assert      bool        break       byte
-case        catch       const       continue    default
-defer       double      else        enum        extern
-false       float       fn          for         if
-import      in          inline      int         let
-long        move        mut         null        panic
-ptr         pub         require     return      self
-short       slice       static      string      struct
-switch      throw       throws      true        type
-uint        unsafe      void        while
+addr        as          assert      bool        break
+byte        case        catch       const       continue
+default     defer       double      else        enum
+extern      false       float       fn          for
+if          import      in          init        inline
+int         let         long        move        null
+panic       pub         readonly    ref         require
+return      self        short       static      string
+struct      switch      throw       throws      true
+type        uint        unsafe      void        while
 
 i8  i16  i32  i64  u8  u16  u32  u64  f32  f64  isize  usize
 ```
 
-`array` is also a keyword; today it parses the same as `inline` shorthand for
-fixed-size value arrays (`array<T>` parses but the heap CoW `array<T>` stdlib
-type is not yet implemented — see [SPEC-STATUS.md](../SPEC-STATUS.md)).
+`array` is also a keyword: it is the lowercase alias for the stdlib type
+`Array<T>` (planned). `string` is the lowercase alias for the stdlib type
+`String` (target shape; runtime currently in C — see
+[SPEC-STATUS.md](../SPEC-STATUS.md)). `inline<T, N>` is a compiler intrinsic
+for fixed-size value-type arrays — not a stdlib alias.
 
-Reserved keywords — recognised by the lexer but rejected as identifiers; not
-yet usable as syntax:
+Naming-shape rules for identifiers (PascalCase types, camelCase methods/
+fields/locals/functions, SCREAMING_SNAKE statics) live in
+[`docs/design/naming-conventions.md`](../docs/design/naming-conventions.md).
+
+Reserved keywords — recognised by the lexer but rejected as identifiers;
+not yet usable as syntax:
 
 ```
 async       await       impl        macro       match
-ref         shared      super       trait       where
-yield
+super       trait       where       yield
 ```
 
-`ref` is reserved for safe reference types (`ref T` / `ref mut T`); `match`
-is reserved for full pattern-matching with destructuring beyond what `switch`
-covers today. Both are spec'd; see [`03-types.md`](./03-types.md) and
-[`05-control.md`](./05-control.md).
+`match` is reserved for full pattern-matching with destructuring beyond
+what `switch` covers today.
+
+Removed since the previous spec (no longer recognised at all):
+
+- `mut` — replaced by `readonly` for binding/write-through immutability
+  (see [`07-structures.md`](./07-structures.md)).
+- `ptr` — replaced by `ref T` / `readonly ref T` (safe) and `*T` (unsafe).
+- `slice` — `slice<T>` removed entirely; use `Array<T>` for refcounted
+  views, `ref inline<T, N>` for stack views, raw `*T` + `usize` at C
+  boundaries.
+- `shared` — un-reserved; the stdlib type is `Shared<T>` (no lowercase
+  alias).
 
 ## Operators
 
@@ -200,30 +214,29 @@ Postfix `++` / `--` are **not** part of Kei. Use `x += 1` / `x -= 1` — one ext
 
 ### Other operators
 ```kei
-.                   // Member access
-->                  // Pointer dereference and member access (unsafe ptr<T> only)
-&                   // Address-of: `&x` -> ref T (safe), ptr<T> (inside unsafe)
-&mut                // Mutable address-of: `&mut x` -> ref mut T
-*                   // Dereference (prefix) / multiplication (infix)
+.                   // Member access (auto-derefs through `ref T`)
+&                   // Raw address-of (unsafe-only): `&x` -> *T
+*                   // Raw dereference (prefix, unsafe-only) / multiplication (infix)
+addr(...)           // Slot lvalue for a `ref T` field (unsafe-only); see spec/03-types.md
 as                  // Explicit type cast:  let x = a as i32;
-?                   // Nullable type suffix: string?, ptr<T>?  (see spec/03-types.md)
+?                   // Nullable type suffix: string?, *T?  (see spec/03-types.md)
 ```
 
 **`?` is a type-position suffix only.** Kei does not have a ternary operator —
-`if` as an expression covers that case. The parser only recognises `?` after a
-type (e.g. `string?`, `ptr<T>?`, after `->` or `:` in type position).
+`if` as an expression covers that case. The parser only recognises `?` after
+a type (e.g. `string?`, `*T?`, after `->` or `:` in type position).
 
 ## Separators and punctuation
 
 ```kei
 {  }                // Braces - block delimiters
 (  )                // Parentheses - grouping, function calls
-[  ]                // Brackets - array indexing (future)
+[  ]                // Brackets - array indexing
 ;                   // Semicolon - statement terminator
 :                   // Colon - type annotations
 ,                   // Comma - separators
 .                   // Dot - member access
-->                  // Arrow - function return type, pointer member access
+->                  // Arrow - function return type only (no longer a member-access operator)
 =>                  // Fat arrow - match arms (future)
 ```
 

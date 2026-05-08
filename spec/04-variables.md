@@ -34,13 +34,15 @@ const y: int = getValue();   // runtime initialization is ok
 
 ### `static` — compile-time constant
 
-Static declarations create compile-time constants that are inlined at usage:
+Static declarations create compile-time constants that are inlined at
+usage. Static names follow `SCREAMING_SNAKE_CASE` per the naming
+conventions:
 
 ```kei
 static PAGE_SIZE = 4096;
 static PI = 3.14159;
 
-fn allocatePage() -> ptr<u8> {
+fn allocatePage() -> *u8 {
     return unsafe { alloc<u8>(PAGE_SIZE) };  // inlined as alloc<u8>(4096)
 }
 ```
@@ -147,24 +149,26 @@ x <<= 2;              // equivalent to x = x << 2
 
 ### Memory and access operators
 ```kei
-&                     // Address-of
-*                     // Dereference (prefix)
-->                    // Dereference + member access
+&                     // Raw address-of (unsafe-only) — produces *T
+*                     // Raw dereference (prefix, unsafe-only)
+addr(...)             // Slot lvalue for a `ref T` field (unsafe-only)
 []                    // Index access
-.                     // Member access
+.                     // Member access (auto-derefs through `ref T`)
 ```
 
 ```kei
 let x = 42;
-let p = &x;           // address-of
-let val = *p;         // dereference
+unsafe {
+    let p: *int = &x; // raw address-of (unsafe-only)
+    let val = *p;     // explicit deref of *T
+}
 
 let arr = [1, 2, 3];
 let first = arr[0];   // index access
 
 struct Point { x: f64; y: f64; }
 let pt = Point{ x: 1.0, y: 2.0 };
-let x_val = pt.x;     // member access
+let xVal = pt.x;      // member access
 ```
 
 ### Range operators
@@ -182,7 +186,7 @@ let slice2 = arr[1..=4];  // elements 1, 2, 3, 4
 
 From highest to lowest precedence:
 
-1. `.` `->` `[]` `()` (postfix operators)
+1. `.` `[]` `()` (postfix operators)
 2. `*` `!` `~` `-` `&` (unary prefix operators)
 3. `*` `/` `%` (multiplicative)
 4. `+` `-` (additive)
@@ -203,9 +207,9 @@ From highest to lowest precedence:
 ### Precedence examples
 ```kei
 a + b * c          // a + (b * c)
-a < b && c > d     // (a < b) && (c > d)  
+a < b && c > d     // (a < b) && (c > d)
 a = b += c         // a = (b += c)
-p->field           // (*p).field
+(*p).field         // explicit raw-pointer field access (unsafe)
 arr[i + 1]         // arr[(i + 1)]
 !flag && condition // (!flag) && condition
 ```

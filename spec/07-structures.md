@@ -4,34 +4,37 @@ Structures are Kei's primary mechanism for organizing related data. They impleme
 
 ## Structure types overview
 
-| Type | Location | Assignment | Lifecycle Hooks | Raw Pointers |
-|------|----------|-----------|-----------------|--------------|
-| `struct` | Stack | Copy (auto `__oncopy`) | Auto-generated | No |
-| `unsafe struct` | Stack | Custom (`__oncopy`) | User-defined | Yes |
+| Type            | Location | Assignment              | Lifecycle Hooks | Raw Pointers (`*T`) | `ref T` fields |
+|-----------------|----------|-------------------------|-----------------|---------------------|----------------|
+| `struct`        | Stack    | Copy (auto `__oncopy`)  | Auto-generated  | No                  | No             |
+| `unsafe struct` | Stack    | Custom (`__oncopy`)     | User-defined    | Yes                 | Yes            |
 
-Both types live on the stack. The key difference is that `unsafe struct` can contain raw pointers and requires user-defined lifecycle management.
+Both types live on the stack. The key difference is that `unsafe struct`
+can contain raw pointers (`*T`) and `ref T` / `readonly ref T` fields, and
+requires user-defined lifecycle management.
 
 ---
 
 ## `struct` — Value types
 
-Value types are stack-allocated and copied on assignment. The compiler auto-generates lifecycle hooks.
+Value types are stack-allocated and copied on assignment. The compiler
+auto-generates lifecycle hooks.
 
 ```kei
 struct Point {
     x: f64;
     y: f64;
 
-    fn length(self: ref Point) -> f64 {
+    fn length(self: readonly ref Point) -> f64 {
         return sqrt(self.x * self.x + self.y * self.y);
     }
 
-    fn translate(self: ref mut Point, dx: f64, dy: f64) {
+    fn translate(self: ref Point, dx: f64, dy: f64) {
         self.x += dx;
         self.y += dy;
     }
 
-    fn Point(x: f64, y: f64) -> Point {
+    fn make(x: f64, y: f64) -> Point {
         return Point{ x: x, y: y };
     }
 }
@@ -41,27 +44,24 @@ struct Point {
 
 Three forms, in preference order:
 
-| Receiver form     | Meaning                                    | Call site compiler does |
-|-------------------|--------------------------------------------|-------------------------|
-| `self: ref T`     | Read-only borrow (default for reads)       | implicit `&p`           |
-| `self: ref mut T` | Mutable borrow (default for mutations)     | implicit `&mut p`       |
-| `self: T`         | By-value (copy, or consume if `move` at call) | copy / move          |
+| Receiver form              | Meaning                                       | Call site compiler does |
+|----------------------------|-----------------------------------------------|-------------------------|
+| `self: readonly ref T`     | Read-only borrow (default for reads, ≈ C# `in`)  | implicit `&p`        |
+| `self: ref T`              | Mutable borrow (default for mutations, ≈ C# `ref`)| implicit `&p`        |
+| `self: T`                  | By-value (copy, or consume if `move` at call) | copy / move             |
 
 ```kei
-let mut point = Point{ x: 1.0, y: 2.0 };
-let len = point.length();     // implicit &point (ref Point)
-point.translate(5.0, 3.0);    // implicit &mut point (ref mut Point)
+let point = Point{ x: 1.0, y: 2.0 };
+let len = point.length();     // implicit &point; readonly ref forbids writes
+point.translate(5.0, 3.0);    // implicit &point; ref permits writes
 ```
-
-> `ref T` / `ref mut T` are spec'd but not yet implemented. Until they land,
-> `self: ptr<Self>` is the only mutable-receiver form; the call site auto-takes
-> the address (`p.method()` becomes `(&p).method()`), and the body uses
-> `unsafe { self->x = … }` for field writes. Once `ref mut T` is in, that
-> pattern will be replaced by safe `self: ref mut Self`.
 
 ### Auto-generated lifecycle hooks
 
-The compiler generates `__destroy` and `__oncopy` for every `struct`. For structs with only primitive fields, these are no-ops (optimized away). For structs containing fields with hooks, the compiler generates recursive calls:
+The compiler generates `__destroy` and `__oncopy` for every `struct`. For
+structs with only primitive fields, these are no-ops (optimized away).
+For structs containing fields with hooks, the compiler generates
+recursive calls:
 
 ```kei
 struct User {
@@ -70,16 +70,22 @@ struct User {
 }
 
 // Compiler auto-generates:
-// fn __oncopy(self: User) -> User {
+// fn __oncopy(self: ref User) {
 //     self.name.__oncopy();  // increment string refcount
-//     return self;           // age is just copied
+//     // age is just copied
 // }
 //
-// fn __destroy(self: User) {
+// fn __destroy(self: ref User) {
 //     self.name.__destroy(); // decrement string refcount
 //     // age — nothing to do
 // }
 ```
+
+Lifecycle hooks take `self: ref Self` and return void. They mutate the
+slot in place; the compiler emits `__oncopy(&dest)` immediately after
+the bitwise copy of a value into `dest`, and `__destroy(&slot)` at scope
+exit or before assignment overwrites the slot. Field destruction order
+is **reverse of declaration order**.
 
 ### Assignment semantics
 
@@ -108,58 +114,95 @@ let p = Pair<int, string>{ first: 42, second: "hello" };
 
 ---
 
+### `readonly` field modifier
+
+A struct field can be marked `readonly`. Two meanings depending on type:
+
+- `readonly name: T` — the slot cannot be reassigned post-construction.
+- `readonly name: ref T` — write-through is forbidden (≈ C# `in`); reads
+  still auto-deref normally.
+
+```kei
+struct AppConfig {
+    readonly dbUrl: string;            // string itself is fixed
+    readonly online: Shared<bool>;     // handle fixed
+}
+
+cfg.dbUrl = "other";                   // ERROR: readonly
+cfg.online = Shared<bool>::wrap(false); // ERROR: readonly (replaces handle)
+cfg.online.value = false;              // OK: writes through .value (different field)
+```
+
+`readonly` says nothing about transitive contents reachable through other
+fields — it constrains only the slot it's attached to.
+
+---
+
 ## `unsafe struct` — Managed resource types
 
-Unsafe structs provide manual lifecycle management and can contain raw pointers. They are used to build managed abstractions like `string`, `Shared<T>`, `array<T>`.
+Unsafe structs provide manual lifecycle management and can contain raw
+pointers (`*T`) and `ref T` / `readonly ref T` fields. They are used to
+build managed abstractions like `String`, `Shared<T>`, `Array<T>`.
 
 ```kei
 unsafe struct FileHandle {
     fd: int;
-    buffer: ptr<u8>;
-    buf_size: usize;
+    buffer: *u8;
+    bufSize: usize;
 
-    fn __destroy(self: FileHandle) {
-        if (self.buffer != null) {
-            free(self.buffer);
-        }
-        if (self.fd >= 0) {
-            close_fd(self.fd);
+    fn __destroy(self: ref FileHandle) {
+        unsafe {
+            if self.buffer != null {
+                free(self.buffer);
+            }
+            if self.fd >= 0 {
+                closeFd(self.fd);
+            }
         }
     }
 
-    fn __oncopy(self: FileHandle) -> FileHandle {
-        let new_buf = alloc<u8>(self.buf_size);
-        memcpy(new_buf, self.buffer, self.buf_size);
-        return FileHandle{
-            fd: dup(self.fd),
-            buffer: new_buf,
-            buf_size: self.buf_size
-        };
+    fn __oncopy(self: ref FileHandle) {
+        unsafe {
+            let newBuf = alloc<u8>(self.bufSize);
+            memcpy(newBuf, self.buffer, self.bufSize);
+            self.fd = dup(self.fd);
+            self.buffer = newBuf;
+        }
     }
 }
 ```
 
 ### Lifecycle hooks
 
-`unsafe struct` supports two lifecycle hooks:
+`unsafe struct` supports two lifecycle hooks. The ABI:
 
 | Hook | Signature | Called when |
 |------|-----------|------------|
-| `__destroy` | `fn __destroy(self: T)` | Value goes out of scope or is overwritten |
-| `__oncopy` | `fn __oncopy(self: T) -> T` | Value is copied (assignment, parameter passing) |
+| `__destroy` | `fn __destroy(self: ref T)` | Value goes out of scope or is overwritten |
+| `__oncopy` | `fn __oncopy(self: ref T)` | Value is copied (assignment, parameter passing) |
+
+Both hooks take `self: ref T` and return void. The compiler emits
+`__oncopy(&dest)` immediately after the bitwise copy of a value into
+`dest`, and `__destroy(&slot)` before the slot is reused or its scope
+exits. Hooks mutate through the ref in place rather than returning a
+new value.
 
 **Rules:**
-- `__destroy` is **required** when the struct contains `ptr<T>` fields (compile error if missing)
-- `__oncopy` is **required** when the struct contains `ptr<T>` fields (compile error if missing — bitwise copy of pointers leads to double-free)
-- For `unsafe struct` without `ptr<T>` fields, both hooks are optional (bitwise copy is safe)
+- `__destroy` is **required** when the struct contains `*T` fields
+  (compile error if missing)
+- `__oncopy` is **required** when the struct contains `*T` fields
+  (compile error if missing — bitwise copy of pointers leads to
+  double-free)
+- For `unsafe struct` without `*T` fields, both hooks are optional
+  (bitwise copy is safe)
 - Hooks cannot throw errors
 
 ### When hooks are called
 
 ```kei
-let a = FileHandle{ fd: 5, buffer: alloc<u8>(1024), buf_size: 1024 };
-let b = a;              // __oncopy called
-b = other_handle;       // __destroy on old b, __oncopy on new value
+let a = FileHandle{ fd: 5, buffer: unsafe { alloc<u8>(1024) }, bufSize: 1024 };
+let b = a;              // __oncopy(&b) called after the bitwise copy
+b = otherHandle;        // __destroy(&b), bitwise overwrite, __oncopy(&b)
 ```
 
 At scope exit:
@@ -167,23 +210,40 @@ At scope exit:
 fn example() {
     let handle = FileHandle{ ... };
     // ...
-} // __destroy called on handle
+} // __destroy(&handle) called here
 ```
 
 On field reassignment:
 ```kei
 user.name = "new name";
-// 1. __destroy on old user.name
-// 2. assign new value
-// 3. __oncopy on new user.name
+// 1. __destroy(&user.name) on old value
+// 2. bitwise write of new value into the slot
+// 3. __oncopy(&user.name) on the new value
 ```
+
+### `init` — initialization-write inside `unsafe`
+
+For uninitialized slots during construction (so `__destroy` doesn't run
+on garbage), use `init`:
+
+```kei
+unsafe {
+    let block = alloc<u8>(sizeof(T));
+    addr(s.value) = block as *T;
+    init s.value = item;     // skips destroy of garbage; bitwise write + __oncopy
+}
+```
+
+`init` is unsafe-only at the field level. Inside a `struct` literal
+(`Foo{ x: ..., y: ... }`), the compiler emits init semantics implicitly
+because every field's slot is demonstrably uninitialized.
 
 ### Move semantics (opt-in)
 
-Use the `move` keyword to transfer ownership without calling `__oncopy`:
+Use the `move` expression to transfer ownership without calling `__oncopy`:
 
 ```kei
-let a = FileHandle{ fd: 5, buffer: alloc<u8>(1024), buf_size: 1024 };
+let a = FileHandle{ fd: 5, buffer: unsafe { alloc<u8>(1024) }, bufSize: 1024 };
 let b = move a;     // no __oncopy, a becomes invalid
 // a.fd              // ERROR - a was moved
 ```
@@ -192,27 +252,25 @@ let b = move a;     // no __oncopy, a becomes invalid
 
 ```kei
 unsafe struct Shared<T> {
-    ptr: ptr<T>;
-    count: ptr<u32>;
+    refcount: ref i64;
+    value: ref T;
 
-    fn __oncopy(self: Shared<T>) -> Shared<T> {
-        self.count.increment();
-        return self;
+    fn __oncopy(self: ref Shared<T>) {
+        self.refcount += 1;
     }
 
-    fn __destroy(self: Shared<T>) {
-        self.count.decrement();
-        if (self.count.value == 0) {
-            self.ptr.destroy();
-            free(self.ptr);
-            free(self.count);
+    fn __destroy(self: ref Shared<T>) {
+        self.refcount -= 1;
+        if self.refcount == 0 {
+            self.value.__destroy();
+            unsafe { free(addr(self.refcount)); }
         }
     }
 }
 
 // Usage
-let a = Shared<User>.create(User{ name: "Alice", age: 25 });
-let b = a;           // __oncopy → count++
+let a = Shared<User>::wrap(User{ name: "Alice", age: 25 });
+let b = a;           // __oncopy → refcount++
 // both a and b point to same User
 ```
 
@@ -221,8 +279,8 @@ let b = a;           // __oncopy → count++
 The compiler enforces safety rules:
 
 ```kei
-struct BadValue { data: ptr<u8>; }               // ERROR: ptr<T> requires unsafe struct
-unsafe struct BadUnsafe { data: ptr<u8>; }       // ERROR: must define __destroy and __oncopy
+struct BadValue { data: *u8; }                   // ERROR: *T requires unsafe struct
+unsafe struct BadUnsafe { data: *u8; }           // ERROR: must define __destroy and __oncopy
 ```
 
 ---
@@ -237,7 +295,7 @@ struct Point {
     x: f64;
     y: f64;
 
-    fn Point(x: f64, y: f64) -> Point {
+    fn make(x: f64, y: f64) -> Point {
         return Point{ x: x, y: y };
     }
 
@@ -246,7 +304,7 @@ struct Point {
     }
 }
 
-let p1 = Point.Point(1.0, 2.0);    // constructor
+let p1 = Point.make(1.0, 2.0);     // constructor
 let p2 = Point.origin();           // static method
 ```
 
@@ -255,18 +313,18 @@ let p2 = Point.origin();           // static method
 struct Counter {
     value: int;
 
-    fn increment(self: ref mut Counter) {
+    fn increment(self: ref Counter) {
         self.value += 1;
     }
 
-    fn get(self: ref Counter) -> int {
+    fn get(self: readonly ref Counter) -> int {
         return self.value;
     }
 }
 
-let mut counter = Counter{ value: 0 };
-counter.increment();              // implicit &mut counter; mutates in place
-let val = counter.get();          // implicit &counter; read-only borrow
+let counter = Counter{ value: 0 };
+counter.increment();              // implicit &counter; ref permits write-through
+let val = counter.get();          // implicit &counter; readonly ref forbids writes
 ```
 
 ## Structure literals
@@ -284,11 +342,11 @@ let user = User{
 };
 
 // Unsafe struct
-let handle = FileHandle{
-    fd: open_file("data.txt"),
+let handle = unsafe { FileHandle{
+    fd: openFile("data.txt"),
     buffer: alloc<u8>(4096),
-    buf_size: 4096
-};
+    bufSize: 4096
+}};
 ```
 
 ## Performance characteristics
