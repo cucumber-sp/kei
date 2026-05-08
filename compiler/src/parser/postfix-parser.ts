@@ -29,22 +29,10 @@ export function parsePostfixExpression(ctx: ParserContext, left: Expression): Ex
       continue;
     }
 
-    // Arrow access: ptr->field (sugar for (*ptr).field)
-    if (ctx.check(TokenKind.Arrow)) {
-      ctx.advance();
-      const prop = ctx.expectIdentifier();
-      left = {
-        kind: "MemberExpr",
-        object: {
-          kind: "DerefExpr",
-          operand: left,
-          span: { start: left.span.start, end: prop.span.end },
-        } as Expression,
-        property: prop.lexeme,
-        span: { start: left.span.start, end: prop.span.end },
-      };
-      continue;
-    }
+    // Note: the `->` member-access form is removed under the ref-redesign.
+    // For raw pointers (`*T`) write `(*p).field`; for `ref T` values the
+    // `.` operator auto-derefs. The Arrow token is now only used as the
+    // function-return-type arrow.
 
     // Index: [expr]
     if (ctx.check(TokenKind.LeftBracket)) {

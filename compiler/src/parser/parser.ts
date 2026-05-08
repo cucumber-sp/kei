@@ -19,7 +19,7 @@ import { Severity } from "../errors/diagnostic";
 import type { Token } from "../lexer/token";
 import { TokenKind } from "../lexer/token";
 import { parseDeclaration } from "./decl-parser";
-import { parseExpression } from "./expr-parser";
+import { parseExpression, parseExpressionNoAssign } from "./expr-parser";
 import {
   parseAssertStatement,
   parseBreakStatement,
@@ -29,6 +29,7 @@ import {
   parseExpressionStatement,
   parseForStatement,
   parseIfStatement,
+  parseInitStatement,
   parseLetStatement,
   parseRequireStatement,
   parseReturnStatement,
@@ -113,6 +114,7 @@ export interface ParserContext {
 
   // Cross-module callbacks
   parseExpression(): Expression;
+  parseExpressionNoAssign(): Expression;
   parseType(): TypeNode;
   parseStatement(): Statement;
   parseBlockStatement(): BlockStmt;
@@ -407,6 +409,7 @@ export class Parser implements ParserContext {
     if (this.check(TokenKind.Assert)) return parseAssertStatement(this);
     if (this.check(TokenKind.Require)) return parseRequireStatement(this);
     if (this.check(TokenKind.Unsafe)) return parseUnsafeBlockStatement(this);
+    if (this.check(TokenKind.Init)) return parseInitStatement(this);
     if (this.check(TokenKind.LeftBrace)) return this.parseBlockStatement();
 
     return parseExpressionStatement(this);
@@ -434,6 +437,10 @@ export class Parser implements ParserContext {
 
   parseExpression(): Expression {
     return parseExpression(this);
+  }
+
+  parseExpressionNoAssign(): Expression {
+    return parseExpressionNoAssign(this);
   }
 }
 
