@@ -437,7 +437,7 @@ describe("Checker — Type Edge Cases", () => {
     });
 
     test("null assignable to ptr → ok", () => {
-      checkOk("fn main() -> int { let p: ptr<int> = null; return 0; }");
+      checkOk("fn main() -> int { let p: *int = null; return 0; }");
     });
 
     test("null assignable to non-ptr → error", () => {

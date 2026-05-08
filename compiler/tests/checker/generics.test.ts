@@ -369,14 +369,14 @@ describe("Checker: Generics", () => {
       );
     });
 
-    test("generic struct with ptr<T> field", () => {
+    test("generic struct with *T field", () => {
       checkOk(`
         struct PtrBox<T> {
-          value: ptr<T>;
+          value: *T;
         }
         fn main() -> int {
           let x: i32 = 42;
-          let p: ptr<i32> = unsafe { &x };
+          let p: *i32 = unsafe { &x };
           let b = PtrBox<i32>{ value: p };
           return 0;
         }
@@ -385,12 +385,12 @@ describe("Checker: Generics", () => {
 
     test("generic function with ptr param", () => {
       checkOk(`
-        fn deref<T>(p: ptr<T>) -> T {
+        fn deref<T>(p: *T) -> T {
           return unsafe { *p };
         }
         fn main() -> i32 {
           let x: i32 = 42;
-          let p: ptr<i32> = unsafe { &x };
+          let p: *i32 = unsafe { &x };
           return deref<i32>(p);
         }
       `);

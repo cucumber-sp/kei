@@ -2,19 +2,19 @@ import { describe, test } from "bun:test";
 import { checkError, checkOk } from "./helpers";
 
 const MEM_STUBS = `
-  fn alloc(count: usize) -> ptr<u8> { return null; }
-  fn free(p: ptr<u8>) {}
+  fn alloc(count: usize) -> *u8 { return null; }
+  fn free(p: *u8) {}
 `;
 
 describe("Checker — Lifecycle Hooks (comprehensive)", () => {
   // ── Struct with __destroy ──────────────────────────────────────────────
 
   describe("struct with __destroy", () => {
-    test("unsafe struct with ptr<T> and __destroy only → missing __oncopy error", () => {
+    test("unsafe struct with *T and __destroy only → missing __oncopy error", () => {
       checkError(
         `
           unsafe struct Buf {
-            data: ptr<u8>;
+            data: *u8;
             fn __destroy(self: Buf) { }
           }
           fn main() -> int { return 0; }
@@ -26,7 +26,7 @@ describe("Checker — Lifecycle Hooks (comprehensive)", () => {
     test("__destroy has correct self parameter → ok", () => {
       checkOk(`${MEM_STUBS}
         unsafe struct Res {
-          data: ptr<u8>;
+          data: *u8;
           fn __destroy(self: Res) {
             unsafe { free(self.data); }
           }
@@ -42,11 +42,11 @@ describe("Checker — Lifecycle Hooks (comprehensive)", () => {
   // ── Struct with __oncopy ───────────────────────────────────────────────
 
   describe("struct with __oncopy", () => {
-    test("unsafe struct with ptr<T> and __oncopy only → missing __destroy error", () => {
+    test("unsafe struct with *T and __oncopy only → missing __destroy error", () => {
       checkError(
         `
           unsafe struct Buf {
-            data: ptr<u8>;
+            data: *u8;
             fn __oncopy(self: Buf) -> Buf {
               return Buf{ data: self.data };
             }
@@ -60,7 +60,7 @@ describe("Checker — Lifecycle Hooks (comprehensive)", () => {
     test("__oncopy returns the struct type → ok", () => {
       checkOk(`${MEM_STUBS}
         unsafe struct Data {
-          ptr_field: ptr<u8>;
+          ptr_field: *u8;
           size: usize;
           fn __destroy(self: Data) {
             unsafe { free(self.ptr_field); }
@@ -80,10 +80,10 @@ describe("Checker — Lifecycle Hooks (comprehensive)", () => {
   // ── Struct with both __destroy and __oncopy ────────────────────────────
 
   describe("struct with both __destroy and __oncopy", () => {
-    test("both hooks defined with ptr<T> field → ok", () => {
+    test("both hooks defined with *T field → ok", () => {
       checkOk(`${MEM_STUBS}
         unsafe struct Buffer {
-          data: ptr<u8>;
+          data: *u8;
           size: usize;
           fn __destroy(self: Buffer) {
             unsafe { free(self.data); }
@@ -102,7 +102,7 @@ describe("Checker — Lifecycle Hooks (comprehensive)", () => {
     test("both hooks with additional methods → ok", () => {
       checkOk(`${MEM_STUBS}
         unsafe struct SmartPtr {
-          data: ptr<u8>;
+          data: *u8;
           len: usize;
           fn __destroy(self: SmartPtr) {
             unsafe { free(self.data); }
@@ -267,10 +267,10 @@ describe("Checker — Lifecycle Hooks (comprehensive)", () => {
   // ── Edge: ptr field requirements ───────────────────────────────────────
 
   describe("ptr field requirements", () => {
-    test("unsafe struct with ptr<T> but no hooks → error for __destroy", () => {
+    test("unsafe struct with *T but no hooks → error for __destroy", () => {
       checkError(
         `
-          unsafe struct Bad { data: ptr<u8>; }
+          unsafe struct Bad { data: *u8; }
           fn main() -> int { return 0; }
         `,
         "must define '__destroy'"
@@ -280,7 +280,7 @@ describe("Checker — Lifecycle Hooks (comprehensive)", () => {
     test("unsafe struct with multiple ptr fields needs hooks → error if missing", () => {
       checkError(
         `
-          unsafe struct TwoPtr { a: ptr<u8>; b: ptr<i32>; }
+          unsafe struct TwoPtr { a: *u8; b: *i32; }
           fn main() -> int { return 0; }
         `,
         "must define '__destroy'"
@@ -290,8 +290,8 @@ describe("Checker — Lifecycle Hooks (comprehensive)", () => {
     test("unsafe struct with multiple ptr fields and both hooks → ok", () => {
       checkOk(`${MEM_STUBS}
         unsafe struct TwoPtr {
-          a: ptr<u8>;
-          b: ptr<i32>;
+          a: *u8;
+          b: *i32;
           fn __destroy(self: TwoPtr) {
             unsafe {
               free(self.a);

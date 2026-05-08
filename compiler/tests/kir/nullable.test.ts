@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { lowerAndPrint, lowerFunction } from "./helpers";
 
 describe("KIR: nullable type (T?)", () => {
-  test("T? param lowers to ptr<T>", () => {
+  test("T? param lowers to *T", () => {
     const fn = lowerFunction(
       `
       struct Node { val: i32; }
@@ -17,7 +17,7 @@ describe("KIR: nullable type (T?)", () => {
     expect(pointee.name).toBe("Node");
   });
 
-  test("T? return type lowers to ptr<T>", () => {
+  test("T? return type lowers to *T", () => {
     const fn = lowerFunction(
       `
       struct Node { val: i32; }
@@ -43,7 +43,7 @@ describe("KIR: nullable type (T?)", () => {
     expect(kir).toContain("const_null");
   });
 
-  test("primitive T? lowers to ptr<T>", () => {
+  test("primitive T? lowers to *T", () => {
     const fn = lowerFunction(
       `
       fn foo(x: i32?) -> i32 { return 0; }
@@ -70,10 +70,10 @@ describe("KIR: nullable type (T?)", () => {
     expect(kir).toContain("ptr");
   });
 
-  test("ptr<T>? lowers to ptr<ptr<T>>", () => {
+  test("*T? lowers to **T", () => {
     const fn = lowerFunction(
       `
-      fn foo(p: ptr<i32>?) -> i32 { return 0; }
+      fn foo(p: *i32?) -> i32 { return 0; }
     `,
       "foo"
     );

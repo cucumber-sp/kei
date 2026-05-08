@@ -7,7 +7,7 @@ describe("KIR: lifecycle — destroy", () => {
     const fn = lowerFunction(
       `
       unsafe struct Res {
-        data: ptr<u8>;
+        data: *u8;
         fn __destroy(self: Res) { }
         fn __oncopy(self: Res) -> Res { return Res{ data: self.data }; }
       }
@@ -32,7 +32,7 @@ describe("KIR: lifecycle — destroy", () => {
     const fn = lowerFunction(
       `
       unsafe struct Res {
-        data: ptr<u8>;
+        data: *u8;
         fn __destroy(self: Res) { }
         fn __oncopy(self: Res) -> Res { return Res{ data: self.data }; }
       }
@@ -52,7 +52,7 @@ describe("KIR: lifecycle — destroy", () => {
     const fn = lowerFunction(
       `
       unsafe struct Res {
-        data: ptr<u8>;
+        data: *u8;
         fn __destroy(self: Res) { }
         fn __oncopy(self: Res) -> Res { return Res{ data: self.data }; }
       }
@@ -72,7 +72,7 @@ describe("KIR: lifecycle — destroy", () => {
     const fn = lowerFunction(
       `
       unsafe struct Res {
-        data: ptr<u8>;
+        data: *u8;
         fn __destroy(self: Res) { }
         fn __oncopy(self: Res) -> Res { return Res{ data: self.data }; }
       }
@@ -95,7 +95,7 @@ describe("KIR: lifecycle — oncopy", () => {
     const fn = lowerFunction(
       `
       unsafe struct Res {
-        data: ptr<u8>;
+        data: *u8;
         fn __destroy(self: Res) { }
         fn __oncopy(self: Res) -> Res { return Res{ data: self.data }; }
       }
@@ -118,7 +118,7 @@ describe("KIR: lifecycle — move", () => {
     const fn = lowerFunction(
       `
       unsafe struct Res {
-        data: ptr<u8>;
+        data: *u8;
         fn __destroy(self: Res) { }
         fn __oncopy(self: Res) -> Res { return Res{ data: self.data }; }
       }
@@ -159,7 +159,7 @@ describe("KIR: lifecycle — move", () => {
     const fn = lowerFunction(
       `
       unsafe struct Res {
-        data: ptr<u8>;
+        data: *u8;
         fn __destroy(self: Res) { }
         fn __oncopy(self: Res) -> Res { return Res{ data: self.data }; }
       }
@@ -305,7 +305,7 @@ describe("KIR: lifecycle — printer", () => {
   test("destroy/oncopy/move appear in printed KIR", () => {
     const printed = lowerAndPrint(`
       unsafe struct Res {
-        data: ptr<u8>;
+        data: *u8;
         fn __destroy(self: Res) { }
         fn __oncopy(self: Res) -> Res { return Res{ data: self.data }; }
       }

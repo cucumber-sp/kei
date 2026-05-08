@@ -14,7 +14,6 @@ import {
   functionType,
   I32_TYPE,
   I64_TYPE,
-  ptrType,
   STRING_TYPE,
   sliceType,
   TypeKind,
@@ -178,24 +177,13 @@ describe("TypeResolver", () => {
   });
 
   describe("resolve generic built-in types", () => {
-    test("resolves ptr<T>", () => {
+    test("ptr<T> is rejected (removed under ref-redesign)", () => {
       const resolver = new TypeResolver();
       const scope = new Scope();
 
       const result = resolver.resolve(genericType("ptr", [namedType("i32")]), scope);
-      expect(result).toEqual(ptrType(I32_TYPE));
-    });
-
-    test("ptr with wrong arity produces error", () => {
-      const resolver = new TypeResolver();
-      const scope = new Scope();
-
-      const result = resolver.resolve(
-        genericType("ptr", [namedType("i32"), namedType("bool")]),
-        scope
-      );
       expect(result).toEqual(ERROR_TYPE);
-      expect(resolver.getDiagnostics()[0]!.message).toContain("expects exactly 1 type argument");
+      expect(resolver.getDiagnostics()[0]!.message).toContain("'ptr<T>' was removed");
     });
 
     test("resolves array<T>", () => {
@@ -215,13 +203,13 @@ describe("TypeResolver", () => {
       expect(resolver.getDiagnostics()[0]!.message).toContain("'slice<T>' was removed");
     });
 
-    test("nested generic: ptr<ptr<i32>>", () => {
+    test("dynarray<T> is rejected (removed under ref-redesign)", () => {
       const resolver = new TypeResolver();
       const scope = new Scope();
 
-      const inner = genericType("ptr", [namedType("i32")]);
-      const result = resolver.resolve(genericType("ptr", [inner]), scope);
-      expect(result).toEqual(ptrType(ptrType(I32_TYPE)));
+      const result = resolver.resolve(genericType("dynarray", [namedType("i32")]), scope);
+      expect(result).toEqual(ERROR_TYPE);
+      expect(resolver.getDiagnostics()[0]!.message).toContain("'dynarray<T>' was removed");
     });
   });
 

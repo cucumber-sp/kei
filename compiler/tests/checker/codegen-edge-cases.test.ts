@@ -494,13 +494,13 @@ describe("Checker — Codegen Edge Cases", () => {
   // ── Cast between pointer types in unsafe ─────────────────────────────
 
   describe("cast between pointer types in unsafe", () => {
-    test("ptr<i32> → ptr<u8> in unsafe → ok", () => {
+    test("*i32 → *u8 in unsafe → ok", () => {
       checkOk(`
         fn main() -> int {
           let x: i32 = 42;
           unsafe {
             let p = &x;
-            let q = p as ptr<u8>;
+            let q = p as *u8;
           }
           return 0;
         }
@@ -510,10 +510,10 @@ describe("Checker — Codegen Edge Cases", () => {
     test("ptr cast outside unsafe → error", () => {
       checkError(
         `
-          extern fn get_ptr() -> ptr<i32>;
+          extern fn get_ptr() -> *i32;
           fn main() -> int {
             let p = unsafe { get_ptr() };
-            let q = p as ptr<u8>;
+            let q = p as *u8;
             return 0;
           }
         `,

@@ -80,14 +80,11 @@ export class TypeResolver {
   private resolveGenericType(name: string, typeArgs: TypeNode[], span: Span, scope: Scope): Type {
     // Built-in generic types
     if (name === "ptr") {
-      if (typeArgs.length !== 1) {
-        this.addError("'ptr' expects exactly 1 type argument", span);
-        return ERROR_TYPE;
-      }
-      const ptrArg = typeArgs[0];
-      if (!ptrArg) return ERROR_TYPE;
-      const pointee = this.resolve(ptrArg, scope);
-      return ptrType(pointee);
+      this.addError(
+        "'ptr<T>' was removed; use '*T' for raw pointers (unsafe-only)",
+        span
+      );
+      return ERROR_TYPE;
     }
 
     if (name === "inline") {
@@ -114,7 +111,15 @@ export class TypeResolver {
       return arrayType(element, length);
     }
 
-    if (name === "array" || name === "dynarray") {
+    if (name === "dynarray") {
+      this.addError(
+        "'dynarray<T>' was removed; use 'Array<T>' (refcounted) or 'inline<T, N>' (stack)",
+        span
+      );
+      return ERROR_TYPE;
+    }
+
+    if (name === "array") {
       if (typeArgs.length < 1) {
         this.addError(`'${name}' expects at least 1 type argument`, span);
         return ERROR_TYPE;

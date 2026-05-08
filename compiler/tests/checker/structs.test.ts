@@ -236,7 +236,7 @@ describe("Checker — Structs", () => {
 
   test("generic struct with nested type param in ptr → infers ok", () => {
     checkOk(`
-      struct PtrHolder<T> { data: ptr<T>; }
+      struct PtrHolder<T> { data: *T; }
       fn main() -> int {
         let x = 42;
         unsafe {

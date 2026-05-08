@@ -2,8 +2,8 @@ import { describe, test } from "bun:test";
 import { checkError, checkOk } from "./helpers";
 
 const MEM_STUBS = `
-  fn alloc(count: usize) -> ptr<u8> { return null; }
-  fn free(p: ptr<u8>) {}
+  fn alloc(count: usize) -> *u8 { return null; }
+  fn free(p: *u8) {}
 `;
 
 describe("Checker — Unsafe Edge Cases", () => {
@@ -11,7 +11,7 @@ describe("Checker — Unsafe Edge Cases", () => {
     test("deref inside unsafe block → ok", () => {
       checkOk(`
         fn main() -> int {
-          let p: ptr<int> = null;
+          let p: *int = null;
           unsafe { let x = *p; }
           return 0;
         }
@@ -20,7 +20,7 @@ describe("Checker — Unsafe Edge Cases", () => {
 
     test("deref outside unsafe → error", () => {
       checkError(
-        "fn main() -> int { let p: ptr<int> = null; let x = *p; return 0; }",
+        "fn main() -> int { let p: *int = null; let x = *p; return 0; }",
         "requires unsafe block"
       );
     });
@@ -32,7 +32,7 @@ describe("Checker — Unsafe Edge Cases", () => {
       );
     });
 
-    test("deref chain: ptr<ptr<int>> → ok (nested unsafe)", () => {
+    test("deref chain: **int → ok (nested unsafe)", () => {
       checkOk(`
         fn main() -> int {
           let x = 42;
@@ -91,7 +91,7 @@ describe("Checker — Unsafe Edge Cases", () => {
   describe("extern function calls", () => {
     test("extern fn call inside unsafe → ok", () => {
       checkOk(`
-        extern fn puts(s: ptr<c_char>) -> int;
+        extern fn puts(s: *c_char) -> int;
         fn main() -> int { unsafe { puts(null); } return 0; }
       `);
     });
@@ -99,7 +99,7 @@ describe("Checker — Unsafe Edge Cases", () => {
     test("extern fn call outside unsafe → error", () => {
       checkError(
         `
-          extern fn puts(s: ptr<c_char>) -> int;
+          extern fn puts(s: *c_char) -> int;
           fn main() -> int { puts(null); return 0; }
         `,
         "cannot call extern function outside unsafe block"
@@ -108,7 +108,7 @@ describe("Checker — Unsafe Edge Cases", () => {
 
     test("extern fn with multiple params → ok", () => {
       checkOk(`
-        extern fn memcpy(dest: ptr<u8>, src: ptr<u8>, n: usize) -> ptr<u8>;
+        extern fn memcpy(dest: *u8, src: *u8, n: usize) -> *u8;
         fn main() -> int {
           unsafe { memcpy(null, null, 0); }
           return 0;
@@ -118,8 +118,8 @@ describe("Checker — Unsafe Edge Cases", () => {
 
     test("multiple extern fn calls in same unsafe block → ok", () => {
       checkOk(`
-        extern fn puts(s: ptr<c_char>) -> int;
-        extern fn strlen(s: ptr<c_char>) -> usize;
+        extern fn puts(s: *c_char) -> int;
+        extern fn strlen(s: *c_char) -> usize;
         fn main() -> int {
           unsafe {
             puts(null);
@@ -263,7 +263,7 @@ describe("Checker — Unsafe Edge Cases", () => {
     test("free outside unsafe → error", () => {
       checkError(
         `${MEM_STUBS}
-        fn main() -> int { let p: ptr<int> = null; free(p); return 0; }`,
+        fn main() -> int { let p: *int = null; free(p); return 0; }`,
         "cannot call 'free' outside unsafe block"
       );
     });
@@ -289,7 +289,7 @@ describe("Checker — Unsafe Edge Cases", () => {
     test("unsafe struct with ptr and no __destroy → error", () => {
       checkError(
         `
-          unsafe struct Bad { data: ptr<u8>; }
+          unsafe struct Bad { data: *u8; }
           fn main() -> int { return 0; }
         `,
         "must define '__destroy'"
@@ -300,7 +300,7 @@ describe("Checker — Unsafe Edge Cases", () => {
       checkError(
         `
           unsafe struct Bad {
-            data: ptr<u8>;
+            data: *u8;
             fn __destroy(self: Bad) { }
           }
           fn main() -> int { return 0; }
@@ -312,7 +312,7 @@ describe("Checker — Unsafe Edge Cases", () => {
     test("unsafe struct with both lifecycle hooks → ok", () => {
       checkOk(`${MEM_STUBS}
         unsafe struct Buffer {
-          data: ptr<u8>;
+          data: *u8;
           size: usize;
           fn __destroy(self: Buffer) {
             unsafe { free(self.data); }
@@ -328,7 +328,7 @@ describe("Checker — Unsafe Edge Cases", () => {
       `);
     });
 
-    test("unsafe struct without ptr<T> fields — hooks optional → ok", () => {
+    test("unsafe struct without *T fields — hooks optional → ok", () => {
       checkOk(`
         unsafe struct Simple { value: int; }
         fn main() -> int { return 0; }

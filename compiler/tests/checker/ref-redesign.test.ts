@@ -483,23 +483,34 @@ describe.skip("future: parser supports `Type<T>.method(args)` on generic types",
   });
 });
 
-describe.skip("future: `ptr<T>` source form is rejected", () => {
-  // The type-resolver still accepts `ptr<T>` as a back-compat path so
-  // older fixtures continue working through the rollout. Per the
-  // redesign the canonical raw-pointer spelling is `*T` and `ptr<T>`
-  // should be rejected with a hint to migrate.
+describe("`ptr<T>` source form is rejected", () => {
   test("`ptr<T>` parameter is a compile error pointing at `*T`", () => {
-    // Marker test.
+    checkError(
+      `
+        fn read(p: ptr<i32>) -> i32 { return 0; }
+      `,
+      "'ptr<T>' was removed"
+    );
+  });
+
+  test("`ptr<T>` field is a compile error", () => {
+    checkError(
+      `
+        unsafe struct Box { data: ptr<u8>; }
+      `,
+      "'ptr<T>' was removed"
+    );
   });
 });
 
-describe.skip("future: `dynarray<T>` source form is rejected", () => {
-  // Same back-compat story as `ptr<T>` — the keyword is still active
-  // and the type-resolver routes it through the array path. Per the
-  // redesign neither `dynarray` nor `slice` exist; only `Array<T>` and
-  // `inline<T, N>` survive at the source level.
+describe("`dynarray<T>` source form is rejected", () => {
   test("`dynarray<T>` parameter is a compile error", () => {
-    // Marker test.
+    checkError(
+      `
+        fn first(xs: dynarray<i32>) -> i32 { return 0; }
+      `,
+      "'dynarray<T>' was removed"
+    );
   });
 });
 

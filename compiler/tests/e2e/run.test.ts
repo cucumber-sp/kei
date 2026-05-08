@@ -2666,7 +2666,7 @@ describe("e2e: unsafe pointer lowering", () => {
       `
       fn main() -> int {
         let x: i32 = 42;
-        let p: ptr<i32> = unsafe { &x };
+        let p: *i32 = unsafe { &x };
         let v: i32 = unsafe { *p };
         return v;
       }
@@ -2681,7 +2681,7 @@ describe("e2e: unsafe pointer lowering", () => {
     const r = run(
       "unsafe_ptr_helper_read",
       `
-      fn read_twice(p: ptr<i32>) -> i32 {
+      fn read_twice(p: *i32) -> i32 {
         let a: i32 = unsafe { *p };
         let b: i32 = unsafe { *p };
         return a + b;
@@ -2689,7 +2689,7 @@ describe("e2e: unsafe pointer lowering", () => {
 
       fn main() -> int {
         let x: i32 = 21;
-        let p: ptr<i32> = unsafe { &x };
+        let p: *i32 = unsafe { &x };
         return read_twice(p);
       }
     `
@@ -2727,11 +2727,11 @@ describe("e2e: unsafe pointer lowering", () => {
       import { alloc, dealloc } from mem;
       fn main() -> int {
         unsafe {
-          let buf: ptr<u8> = alloc(16);
+          let buf: *u8 = alloc(16);
           let offset: usize = 4;
-          let shifted: ptr<u8> = ((buf as usize) + offset) as ptr<u8>;
+          let shifted: *u8 = ((buf as usize) + offset) as *u8;
           let diff: usize = (shifted as usize) - (buf as usize);
-          dealloc(buf as ptr<void>);
+          dealloc(buf as *void);
           return diff as i32;
         }
       }
