@@ -1,7 +1,7 @@
 import { describe, test } from "bun:test";
 import { checkError, checkOk } from "./helpers";
 
-describe.skip("Checker — Functions", () => {
+describe("Checker — Functions", () => {
   test("simple function call with correct args → ok", () => {
     checkOk(`
       fn add(a: int, b: int) -> int { return a + b; }
@@ -74,18 +74,18 @@ describe.skip("Checker — Functions", () => {
     );
   });
 
-  test("mut param is mutable inside function", () => {
+  test("default param is mutable inside function (no opt-in needed)", () => {
     checkOk(`
-      fn increment(mut x: int) -> int {
+      fn increment(x: int) -> int {
         x += 1;
         return x;
       }
     `);
   });
 
-  test("non-mut param is immutable", () => {
+  test("readonly param is immutable", () => {
     checkError(
-      "fn increment(x: int) -> int { x += 1; return x; }",
+      "fn increment(readonly x: int) -> int { x += 1; return x; }",
       "cannot assign to immutable variable 'x'"
     );
   });
@@ -101,7 +101,7 @@ describe.skip("Checker — Functions", () => {
 
   test("extern fn registered correctly", () => {
     checkOk(`
-      extern fn strlen(s: ptr<c_char>) -> usize;
+      extern fn strlen(s: *c_char) -> usize;
       fn main() -> int { return 0; }
     `);
   });
@@ -109,7 +109,7 @@ describe.skip("Checker — Functions", () => {
   test("extern fn call outside unsafe → error", () => {
     checkError(
       `
-        extern fn strlen(s: ptr<c_char>) -> usize;
+        extern fn strlen(s: *c_char) -> usize;
         fn main() -> int { let n = strlen(null); return 0; }
       `,
       "cannot call extern function outside unsafe block"
@@ -118,7 +118,7 @@ describe.skip("Checker — Functions", () => {
 
   test("extern fn call inside unsafe → ok", () => {
     checkOk(`
-      extern fn puts(s: ptr<c_char>) -> int;
+      extern fn puts(s: *c_char) -> int;
       fn main() -> int {
         unsafe { puts(null); }
         return 0;

@@ -1,7 +1,7 @@
 import { describe, test } from "bun:test";
 import { checkError, checkOk } from "./helpers";
 
-describe.skip("Checker — Structs", () => {
+describe("Checker — Structs", () => {
   test("access field of struct → correct type", () => {
     checkOk(`
       struct Point { x: f64; y: f64; }
@@ -44,12 +44,12 @@ describe.skip("Checker — Structs", () => {
     `);
   });
 
-  test("method call with self: ptr<T> → ok", () => {
+  test("method call with self: ref T → ok", () => {
     checkOk(`
       struct Counter {
         value: int;
-        fn increment(self: ptr<Counter>) {
-          unsafe { self->value = self->value + 1; }
+        fn increment(self: ref Counter) {
+          self.value = self.value + 1;
         }
       }
       fn main() -> int { return 0; }

@@ -21,7 +21,7 @@ function typeOfLet(source: string, varName: string): Type {
   throw new Error(`Let binding '${varName}' not found`);
 }
 
-describe.skip("Checker — inline<T, N> resolution", () => {
+describe("Checker — inline<T, N> resolution", () => {
   test("`inline<int, 5>` resolves to array kind with length 5", () => {
     const src = "fn main() -> int { let a: inline<int, 5> = [1, 2, 3, 4, 5]; return 0; }";
     const t = typeOfLet(src, "a");
@@ -82,7 +82,7 @@ describe.skip("Checker — inline<T, N> resolution", () => {
   });
 });
 
-describe.skip("Checker — inline<T, N> errors", () => {
+describe("Checker — inline<T, N> errors", () => {
   test("missing length is rejected", () => {
     checkError(
       "fn main() -> int { let a: inline<int> = [1, 2, 3]; return 0; }",
@@ -112,7 +112,7 @@ describe.skip("Checker — inline<T, N> errors", () => {
   });
 });
 
-describe.skip("Checker — inline<T, N> indexing and assignment", () => {
+describe("Checker — inline<T, N> indexing and assignment", () => {
   test("indexing returns the element type", () => {
     const src = "fn main() -> int { let a: inline<int, 3> = [1, 2, 3]; let x = a[0]; return 0; }";
     const t = typeOfLet(src, "x");
