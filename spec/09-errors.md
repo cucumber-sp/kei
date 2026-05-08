@@ -74,7 +74,7 @@ Handle multiple error types with a default clause:
 
 ```kei
 let user = getUser(10) catch {
-    NotFound: return null;
+    NotFound: return Optional<User>.None;
     default e: panic("Unexpected error: " + e.toString());
 };
 ```
@@ -388,7 +388,7 @@ switch (result.tag) {
 ## Best practices
 
 1. **Use throws for expected failures** — file I/O, network operations, user input validation
-2. **Use panic for programming errors** — null pointer dereference, array bounds, assertions
+2. **Use panic for programming errors** — bounds violations, assertion failures, "this can't happen" branches
 3. **Be specific with error types** — avoid generic "Error" types, use descriptive names
 4. **Handle errors at the right level** — don't propagate every error to main()
 5. **Provide context in error messages** — include relevant data for debugging

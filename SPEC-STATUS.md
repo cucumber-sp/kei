@@ -17,9 +17,9 @@ and covered by tests.
 
 | Item                                                          | Status   | Notes                                              |
 |---------------------------------------------------------------|----------|----------------------------------------------------|
-| `T?` niche layout for raw pointers                            | WIP      | Parser/checker accept `T?`; lowers to a nullable raw pointer. Niche representation matches naturally. |
-| `T?` tag-byte fallback for primitives                         | PLANNED  | Today `i32?` etc. also lower to a nullable raw pointer (heap-allocated). Native `{tag, value}` representation is the goal. |
-| Tighten `null` assignability                                  | PLANNED  | Today `null` is assignable to any raw pointer; once `T?` is the canonical absence story, `null` will be rejected on bare `*T` and only allowed on `T?`. |
+| `Optional<T>` replaces `T?` and the `null` literal             | PLANNED  | Spec target: drop the `?` suffix and the `null` keyword; absence is the regular generic enum `Optional<T>`. Today the parser/checker still accept `T?` and `null`; both are deprecated until the migration lands. |
+| `Optional<T>` niche layout for pointer-shaped types           | PLANNED  | One-word representation when `T` is `*T`, `Shared<T>`, `Weak<T>`, or other pointer-niched types; `None` reuses the zero/null bit pattern. |
+| `Optional<T>` tag-byte fallback for non-niched primitives     | PLANNED  | `Optional<i32>`, `Optional<struct>` etc. carry an explicit tag byte. |
 | `ref T` / `readonly ref T` (safe references)                  | PLANNED  | `ref` reserved in lexer; no parser/checker work yet. Will compile to `T*` / `const T*`. |
 | Auto-deref insertion for `ref T` values                       | PLANNED  | Type-directed: applies only to values of type `ref T` (param or unsafe-struct field), not to `Shared<T>` or other wrapper types. |
 | `addr(field)` operator                                        | PLANNED  | Slot lvalue for a `ref T` field; unsafe-only. |
@@ -74,4 +74,4 @@ and covered by tests.
 | v1 single-threaded baseline                       | current  | Stdlib refcounts are non-atomic; no threading API. |
 | v2 `spawn` + `Mutex<T>` / `Atomic<T>` / `AtomicShared<T>` | PLANNED  | Post-v1.                                  |
 | v3 compile-time thread-safety check               | PLANNED  | Post-v2. Transitive type property (single bit), not a borrow check. |
-| Async via compiler state machines                 | PLANNED  | Deferred until `T?`, `move` elision, and traits land. |
+| Async via compiler state machines                 | PLANNED  | Deferred until `Optional<T>`, `move` elision, and traits land. |

@@ -754,10 +754,27 @@ form (`let b = move a`) for explicit consumption before last use. The
 parameter form (`fn f(move x: T)`) is dropped — redundant with auto-last-
 use detection.
 
-### 6.3 `copy()` builtin — deferred
+### 6.3 `copy()` builtin — removed
 
-Not strictly needed for stdlib (everything's a ref or auto-handled). Add
-if user code asks for it.
+Originally proposed as a way to force `__oncopy` to fire at a position
+the compiler would otherwise treat as last-use. Decision: not needed.
+The semantics already cover every practical case:
+
+- *N reads of `x`, last one elided* — `N − 1` copies, then a move at the
+  last read.
+- *Want to use `x` after passing it to `f`* — `f(x)` is not last-use, so
+  `__oncopy` fires automatically; the original is still alive.
+- *Want shared state across multiple consumers* — that's `Shared<T>`,
+  not a copy.
+
+The only thing `copy(x)` would do that the language doesn't is fire
+`__oncopy` at a position with no remaining consumer — i.e. side effects
+with no observable destination. That's contrived, and the same effect
+is reachable today by reading `x` once more after the assignment.
+
+The `copy()` builtin is therefore dropped from the roadmap. The
+auto-last-use elision in §3.5 is the only piece needed for correct
+move/copy semantics.
 
 ### 6.4 Mutation visibility through aliased `Shared<T>` — alias-visible (explicit)
 
@@ -809,16 +826,149 @@ follow those conventions.
 syntax stays. There is no `let mut`, no `let readonly`. The `readonly`
 modifier is for fields and parameters only.
 
-### 6.8 `weak<T>` for cycles — separate roadmap item
+### 6.8 `Weak<T>` for cycles — separate roadmap item
 
-Reference counting cannot reclaim cycles. `weak<T>` (non-owning, non-
+Reference counting cannot reclaim cycles. `Weak<T>` (non-owning, non-
 cycle-prolonging) is filed as a follow-up after `Shared<T>` lands. Out of
-scope for this redesign.
+scope for this redesign, but the shape is pinned here so the runtime
+layout is settled in advance.
+
+**Layout — split control block.** A `Shared<T>` is a pointer to a
+control block laid out as `{ strong: u64, weak: u64, payload: T }`.
+Both `Shared<T>` and `Weak<T>` hold a pointer to the same control
+block; only `Shared<T>` keeps the payload alive.
+
+```
+ControlBlock {
+    strong: u64,    // # of live Shared<T>s
+    weak:   u64,    // # of live Weak<T>s, +1 if strong > 0
+    payload: T,     // destroyed when strong hits 0
+}
+```
+
+The "+1 to `weak` while any `Shared` exists" trick keeps the control
+block alive for the strongs as a single weak ref, so the block is freed
+exactly once when the last `Weak` drops.
+
+**Lifecycle.**
+
+| Event                | Effect                                                          |
+|----------------------|-----------------------------------------------------------------|
+| `Shared<T>::wrap(v)` | alloc block + payload; `strong = 1`, `weak = 1`                 |
+| `Shared` clone       | `strong++`                                                      |
+| `Shared` destroy     | `strong--`; if `0`, run `__destroy(payload)` then `weak--`      |
+| `Weak<T>` clone      | `weak++`                                                        |
+| `Weak<T>` destroy    | `weak--`; if `0`, free the control block                        |
+
+**API.**
+
+```kei
+struct User {
+    name: string;
+    parent: Weak<User>;     // non-owning back-edge
+}
+
+fn talk(child: ref User) {
+    if child.parent.exists() {
+        match child.parent.value() {
+            Some(p) => print("hello " + p.name),
+            None    => {}    // raced with destruction
+        }
+    }
+}
+```
+
+- `Weak<T>::downgrade(s: ref Shared<T>) -> Weak<T>` — create from a strong.
+- `weakRef.exists() -> bool` — strong-count probe (cheap).
+- `weakRef.value() -> Optional<Shared<T>>` — atomic upgrade attempt; returns
+  `Some(s)` if the payload is still alive, `None` if it's been destroyed.
+
+`exists()` is purely informational — by the time you act on the answer
+the count may have changed, so multi-threaded code uses `value()` and
+matches on the result. Single-threaded code can rely on `exists()` for
+short-lived checks.
+
+`weakRef.value()` is the only way to recover a usable `Shared<T>` from a
+`Weak<T>`. There's deliberately no throwing variant: a dead handle is a
+*normal* outcome of `Weak<T>` (that's the whole point of the type), not
+an error condition.
 
 ### 6.9 Default destruction order — reverse declaration order
 
-Fields are destroyed in reverse declaration order (matches C++). To be
-formalized in `spec/08-memory.md` while the spec is being rewritten.
+Composite values are torn down in the reverse of their construction
+order. This is the C++ / Rust rule and is the only safe default when
+later-declared fields can hold references into earlier-declared ones.
+
+**Two cases, same rule.**
+
+- *Struct fields.* The auto-generated `__destroy` walks fields in
+  reverse declaration order. Given
+  ```kei
+  struct Window {
+      display: Display;
+      surface: Surface;   // built from display
+      context: Context;   // built from surface
+  }
+  ```
+  destruction is `context → surface → display`. Forward-order would
+  free `display` while `context` still references it through `surface`.
+
+- *Locals in a scope.* On scope exit, locals are destroyed in reverse
+  declaration order. `let a = ...; let b = makeFrom(ref a);` gets
+  `__destroy(b)` first, then `__destroy(a)`.
+
+This rule is the contract; the compiler must not reorder destruction
+across either dimension. Formalized in `spec/08-memory.md`.
+
+### 6.11 `Optional<T>` replaces `T?` — removed nullable suffix
+
+The `T?` suffix and the language-level `null` literal are removed.
+`Optional<T>` is a regular generic enum:
+
+```kei
+enum Optional<T> {
+    Some(value: T);
+    None;
+}
+```
+
+Used wherever absence is a possible outcome — `map.get(k)`, `parse(s)`,
+`weakRef.value()`. There is no special compiler "nullable" type kind, no
+`?` suffix, no `null` literal in source. Pattern matching is the only
+way to extract the inner value:
+
+```kei
+match maybeName {
+    Some(name) => print("hi " + name),
+    None       => print("anonymous"),
+}
+```
+
+**Layout — niche optimization where available.** `Optional<T>` is *one
+word* whenever `T` has an unused bit pattern that can stand in for
+`None`. In practice that's every pointer-shaped type:
+
+| Type               | `Optional<T>` representation                      |
+|--------------------|---------------------------------------------------|
+| `Optional<*T>`     | plain C pointer; null = `None` *(unsafe-only)*    |
+| `Optional<Shared<T>>` | pointer to control block; null = `None`        |
+| `Optional<Weak<T>>` | pointer to control block; null = `None`          |
+| `Optional<bool>`   | one byte; non-`{0,1}` pattern = `None`            |
+| `Optional<i32>` etc. | tag byte + `T` (no niche available)             |
+
+The user spelling is uniform; the compiler picks the cheapest legal
+layout per instantiation. This is the "niche" optimization Rust ships
+for `Option<&T>`, `Option<Box<T>>`, etc.
+
+**No `null` literal at the source level.** Constructing absence is
+`Optional<T>.None` (or just `None` when the type is inferred). At the C
+ABI boundary an `Optional<*T>` value with `None` is a zero pointer;
+`extern fn` signatures that interop with C take `Optional<*T>` for
+nullable pointers and bare `*T` for non-null.
+
+The KIR retains `const_null` and `null_check` instructions — those
+operate at lowering level on the byte representation. Source-level Kei
+sees only `Optional<T>`.
 
 ### 6.10 `shared` keyword — un-reserved
 

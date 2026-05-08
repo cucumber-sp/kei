@@ -137,11 +137,11 @@ byte        case        catch       const       continue
 default     defer       double      else        enum
 extern      false       float       fn          for
 if          import      in          init        inline
-int         let         long        move        null
-panic       pub         readonly    ref         require
-return      self        short       static      string
-struct      switch      throw       throws      true
-type        uint        unsafe      void        while
+int         let         long        move        panic
+pub         readonly    ref         require     return
+self        short       static      string      struct
+switch      throw       throws      true        type
+uint        unsafe      void        while
 
 i8  i16  i32  i64  u8  u16  u32  u64  f32  f64  isize  usize
 ```

@@ -152,9 +152,7 @@ unsafe struct FileHandle {
 
     fn __destroy(self: ref FileHandle) {
         unsafe {
-            if self.buffer != null {
-                free(self.buffer);
-            }
+            free(self.buffer);
             if self.fd >= 0 {
                 closeFd(self.fd);
             }

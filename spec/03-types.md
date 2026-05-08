@@ -16,7 +16,7 @@ and lets the stdlib evolve without breaking the frontend.
 | primitives (`i32`, `f64`, `bool`, …) | compiler         | builtin                                                         |
 | `ref T` / `readonly ref T`           | compiler         | safe reference — params and `unsafe struct` fields only         |
 | `*T`                                 | compiler         | raw pointer (unsafe-only)                                       |
-| `T?` (nullable)                      | compiler         | see **Nullability**                                             |
+| `Optional<T>`                        | compiler intrinsic / stdlib | regular generic enum; replaces the old `T?` syntax. See **Optional and the absence of nulls**. |
 | `inline<T, N>`                       | compiler         | fixed-size value-type bag of N elements                         |
 | `string`                             | compiler today / stdlib goal | CoW refcounted byte string. Lowercase keyword alias for stdlib `String`. Today the runtime is in C (`runtime.h`); port deferred. |
 | `Array<T>` / `array<T>` alias        | stdlib (planned) | heap array, CoW. `array<T>` is the lowercase keyword alias.     |
@@ -178,9 +178,10 @@ blocks, in `unsafe struct` field types, in locals inside `unsafe`, and in
 `extern fn` signatures. No automatic cleanup, no bounds checking, no
 lifetime validation, no auto-deref — this is a direct C pointer.
 
-`*T` is **non-null at the type level**. To express a pointer that may be
-absent, use the nullable suffix: `*T?` (see **Nullability** below); the
-representation is still a plain C pointer (null = absent).
+`*T` is **non-null at the type level**. To express a pointer that may
+be absent, use `Optional<*T>` (see **Optional and the absence of nulls**
+below). The runtime layout is still a plain C pointer — the compiler
+picks `null` as the `None` representation via the niche optimization.
 
 ```kei
 unsafe struct RawBuffer {
@@ -270,48 +271,68 @@ the slot, then runs `__oncopy` on the new T. Only valid inside `unsafe`
 blocks. Inside `struct` literals, the compiler emits init semantics
 implicitly for every field.
 
-## Nullability
+## Optional and the absence of nulls
 
-`T?` is the suffix form of "optional / may be absent." Reading is natural —
-`string?` is "a string, or nothing"; `*Node?` is "a raw pointer to a Node,
-or nothing" (unsafe-only).
+Kei has no `null` literal at the source level and no nullable type
+suffix. Absence is expressed through the regular enum `Optional<T>`:
 
 ```kei
-let name: string? = maybeLookup(id);    // may be absent
-unsafe {
-    let node: *Node? = findChild(tree); // may be absent
-}
-
-// Must check before use — compiler enforces
-if name != null {
-    print(name);     // narrowed to `string` here
+enum Optional<T> {
+    Some(value: T);
+    None;
 }
 ```
 
+Used wherever a value may be absent — failed lookups, parse failures,
+`Weak<T>::value()`, fields that are populated lazily:
+
+```kei
+let name: Optional<string> = maybeLookup(id);
+
+match name {
+    Some(s) => print("hi " + s),
+    None    => print("anonymous"),
+}
+```
+
+There is no shortcut to "just get the inner value" — every absent path
+is something the type system makes you handle. Bare `*T`, `string`,
+`List<T>`, `Array<T>`, user structs and so on are **never absent**;
+their values always carry meaningful payload. To express "may be
+absent", wrap in `Optional<…>`.
+
 ### Representation and niche optimization
 
-`T?` is laid out to cost nothing when `T` has an unused bit-pattern ("niche")
-that can stand in for the absent state; otherwise a one-byte tag is added.
+`Optional<T>` is *one word* (zero overhead) whenever `T` has an unused
+bit pattern that can stand in for `None`. Otherwise it carries a tag
+byte:
 
-| Type     | `T?` representation                                  |
-|----------|------------------------------------------------------|
-| `*T?`    | plain C pointer; null pointer = absent               |
-| `string?`| inherits string layout; `len = usize::MAX` = absent  |
-| `i32?`, `bool?`, other primitives | `{ tag: u8, value: T }`     |
-| user struct with no niche         | `{ tag: u8, value: T }`     |
+| Type                  | `Optional<T>` representation                     |
+|-----------------------|--------------------------------------------------|
+| `Optional<*T>`        | plain C pointer; null pointer = `None` *(unsafe-only)* |
+| `Optional<Shared<T>>` | pointer to control block; null = `None`         |
+| `Optional<Weak<T>>`   | pointer to control block; null = `None`         |
+| `Optional<string>`    | inherits string layout; `len = usize::MAX` = `None` |
+| `Optional<bool>`      | one byte; non-`{0,1}` pattern = `None`          |
+| `Optional<i32>` and other primitives without niches | `{ tag: u8, value: T }` |
+| user struct with no niche | `{ tag: u8, value: T }`                     |
 
-Niches let you promise "zero cost when there's room" while keeping the
-type rule uniform — the user writes `?`, the compiler picks the cheapest
-legal layout.
+The user spelling is uniform; the compiler picks the cheapest legal
+layout per instantiation. This matches Rust's "niche" optimization for
+`Option<&T>`, `Option<Box<T>>`, etc.
 
 ### The rules
 
-- Bare `*T`, `string`, `List<T>`, `Array<T>`, user structs etc. are
-  **never null / never absent**. `null` is not a value of those types.
-- `T?` is the only way to express absence. `null` is the literal for the
-  absent state of any `T?`.
-- Accessing a `T?` as if it were `T` is a type error. Narrow with
-  `if x != null { … }` or pattern-match.
+- `Optional<T>` is the only way to express absence at the source level.
+- Bare types are never absent — the type system enforces that you can't
+  read a "missing" `string` or `i32`.
+- Accessing the inner value of an `Optional<T>` requires `match`/`if let`
+  destructuring. There is no implicit unwrap.
+- `Optional<*T>` and `Optional<Shared<T>>` are zero-overhead at runtime
+  thanks to niche layout; you pay for absence only when there's no niche
+  to claim.
+- The KIR retains `const_null` / `null_check` ops because they operate
+  on lowered byte representations. Source code never spells "null".
 
 ## Generics
 
@@ -492,24 +513,34 @@ fn explicit() -> void {     // equivalent
 }
 ```
 
-### `null`
+### Absence (no `null` literal)
 
-`null` is the literal for the absent state of any nullable type `T?`. It
-is **not** a value of non-nullable types — `*int = null` is a type error;
-use `*int? = null`.
+There is no `null` keyword in Kei source. Absence is constructed with
+`Optional<T>.None`:
 
 ```kei
 unsafe {
-    let p: *int? = null;    // nullable raw pointer, absent
-    if p != null {
-        *p = 42;            // narrowed to *int, safe to deref
+    let p: Optional<*int> = Optional<*int>.None;
+    match p {
+        Some(raw) => *raw = 42,    // raw is *int, safe to deref
+        None      => {}
     }
 }
 ```
 
-> Today the parser/checker accept `T?` and lower it to a nullable raw
-> pointer for everything, including primitives. The tag-byte representation
-> for non-pointer types is on the roadmap; see
+When the target type is unambiguous, the unqualified form is enough:
+
+```kei
+let p: Optional<*int> = None;
+```
+
+At the C ABI boundary `Optional<*T>` and `*T` are layout-compatible: the
+`None` value is the zero pointer. `extern fn` signatures use
+`Optional<*T>` for nullable C pointers and bare `*T` for non-null.
+
+> Today the parser/checker still accept `T?` and the `null` literal,
+> lowering them to nullable raw pointers. Both are deprecated and the
+> rollout to `Optional<T>` is tracked in
 > [SPEC-STATUS.md](../SPEC-STATUS.md).
 
 ## Type aliases

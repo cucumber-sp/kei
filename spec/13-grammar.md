@@ -36,7 +36,7 @@ variant          = IDENT [ "(" field_list ")" ]
                  | IDENT [ "=" INTEGER ] ;
 
 (* Types *)
-type             = ref_type | raw_ptr_type | nullable_type ;
+type             = ref_type | raw_ptr_type | base_type ;
 
 ref_type         = ["readonly"] "ref" base_type ;
    (* `ref T` and `readonly ref T` are valid only in:
@@ -51,7 +51,8 @@ raw_ptr_type     = "*" base_type ;
    (* `*T` is unsafe-only: `unsafe struct` fields, locals inside `unsafe`
       blocks, and `extern fn` signatures. *)
 
-nullable_type    = base_type [ "?" ] ;
+   (* No nullable-suffix syntax. Absence is expressed via the regular
+      generic enum `Optional<T>` (see spec/03-types.md). *)
 
 base_type        = primitive_type | IDENT [generic_args]
                  | "inline" "<" type "," INTEGER ">"
@@ -134,11 +135,11 @@ byte        case        catch       const       continue
 default     defer       double      else        enum
 extern      false       float       fn          for
 if          import      in          init        inline
-int         let         long        move        null
-panic       pub         readonly    ref         require
-return      self        short       static      string
-struct      switch      throw       throws      true
-type        uint        unsafe      void        while
+int         let         long        move        panic
+pub         readonly    ref         require     return
+self        short       static      string      struct
+switch      throw       throws      true        type
+uint        unsafe      void        while
 
 i8  i16  i32  i64  u8  u16  u32  u64  f32  f64  isize  usize
 ```

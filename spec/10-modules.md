@@ -191,23 +191,24 @@ unsafe struct Database {
     handle: *void;
 
     fn open(path: string) -> Database throws DbError {
-        let db = Database{ handle: null };
-
         unsafe {
             let cPath = path.toCString();
-            let rc = sqlite3Open(cPath, &db.handle);
+            let raw: Optional<*void> = None;
+            let rc = sqlite3Open(cPath, addr(raw));
             if rc != 0 {
                 throw DbError{ code: rc, message: "Failed to open database" };
             }
+            match raw {
+                Some(handle) => return Database{ handle: handle },
+                None         => throw DbError{ code: -1, message: "C call returned null" },
+            }
         }
-
-        return db;
     }
 
     fn exec(self: ref Database, sql: string) -> bool throws DbError {
         unsafe {
             let cSql = sql.toCString();
-            let rc = sqlite3Exec(self.handle, cSql, null, null, null);
+            let rc = sqlite3Exec(self.handle, cSql, None, None, None);
             if rc != 0 {
                 throw DbError{ code: rc, message: "Query failed" };
             }
@@ -217,9 +218,7 @@ unsafe struct Database {
 
     fn __destroy(self: ref Database) {
         unsafe {
-            if self.handle != null {
-                sqlite3Close(self.handle);
-            }
+            sqlite3Close(self.handle);
         }
     }
 }
@@ -303,9 +302,9 @@ fn printString(message: string) {
 - Use Kei's `alloc`/`free` for Kei-managed heap memory
 
 ```kei
-extern fn fopen(filename: *c_char, mode: *c_char) -> *void;
+extern fn fopen(filename: *c_char, mode: *c_char) -> Optional<*void>;
 extern fn fclose(file: *void) -> int;
-extern fn fread(buffer: *void, size: usize, count: usize, file: *void) -> usize;
+extern fn fread(buffer: *u8, size: usize, count: usize, file: *void) -> usize;
 
 unsafe struct File {
     handle: *void;
@@ -314,11 +313,10 @@ unsafe struct File {
         unsafe {
             let cPath = path.toCString();
             let cMode = mode.toCString();
-            let handle = fopen(cPath, cMode);
-            if handle == null {
-                throw IoError{ message: "Failed to open file" };
+            match fopen(cPath, cMode) {
+                Some(handle) => return File{ handle: handle },
+                None         => throw IoError{ message: "Failed to open file" },
             }
-            return File{ handle: handle };
         }
     }
 
@@ -330,9 +328,7 @@ unsafe struct File {
 
     fn __destroy(self: ref File) {
         unsafe {
-            if self.handle != null {
-                fclose(self.handle);
-            }
+            fclose(self.handle);
         }
     }
 }
