@@ -582,6 +582,26 @@ describe.skip("future: SliceType cleanup", () => {
   });
 });
 
+describe.skip("future: cross-module generic struct method monomorphization", () => {
+  // Single-module case works: a generic `unsafe struct Foo<T>` defined
+  // and called in the same module monomorphizes correctly via the
+  // checker's `methodBodyTypeMaps` and the KIR `lowerMonomorphizedMethod`
+  // path. Cross-module is the gap: when `Foo<T>` lives in module A and
+  // the call `Foo<i32>.method(x)` lives in module B, B's checker
+  // registers the monomorphization and tries to re-check `method`'s body
+  // — but it does so with B's scope, so any imports A relies on
+  // (`alloc`, `dealloc`, etc.) appear undeclared. Real `std/shared.kei`
+  // hits this on `import { alloc, dealloc } from mem;`.
+  //
+  // Fix: schedule per-instantiation body checks in the DEFINING module's
+  // scope (track {module → pending monomorphizations} during the
+  // multi-module check, run a final per-module pass that drains its
+  // pending list under its own scope).
+  test("std `Shared<T>::wrap(item)` runs end-to-end through the C output", () => {
+    // Marker test.
+  });
+});
+
 describe.skip("future: discarded return value fires __destroy on the temporary", () => {
   // Confirmed gap as of the ref-redesign rollout: when a function's
   // return value is dropped at the statement level (no `let`, no

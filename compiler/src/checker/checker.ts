@@ -41,6 +41,14 @@ export interface CheckTypes {
     SwitchCase,
     { variantName: string; fieldNames: string[]; fieldTypes: Type[] }
   >;
+  /**
+   * Calls dispatched as `Type.method(args)` or `Type<TypeArgs>.method(args)`
+   * — i.e., static method calls on a type identifier rather than instance
+   * method calls. KIR lowering reads this to skip the synthetic self-arg
+   * and emit the StructName_method(args) form, optionally with type-arg
+   * mangling for monomorphized generics.
+   */
+  staticMethodCalls: Map<Expression, { structName: string; mangledStructName: string }>;
 }
 
 /** Generic monomorphization output. */
@@ -123,6 +131,10 @@ export class Checker {
     SwitchCase,
     { variantName: string; fieldNames: string[]; fieldTypes: Type[] }
   > = new Map();
+
+  /** Static method calls dispatched as `Type.method` / `Type<TypeArgs>.method` */
+  staticMethodCalls: Map<Expression, { structName: string; mangledStructName: string }> =
+    new Map();
 
   /** Per-instantiation type map, set during checkMonomorphizedBodies */
   private currentBodyTypeMap: Map<Expression, Type> | null = null;
@@ -279,6 +291,7 @@ export class Checker {
         typeMap: this.typeMap,
         operatorMethods: this.operatorMethods,
         switchCaseBindings: this.switchCaseBindings,
+        staticMethodCalls: this.staticMethodCalls,
       },
       generics: {
         monomorphizedStructs: this.monomorphizedStructs,
@@ -458,6 +471,7 @@ export class Checker {
       typeMap: new Map(),
       operatorMethods: new Map(),
       switchCaseBindings: new Map(),
+      staticMethodCalls: new Map(),
     };
     const generics: CheckGenerics = {
       monomorphizedStructs: new Map(),
@@ -487,6 +501,9 @@ export class Checker {
       }
       for (const [sc, info] of result.types.switchCaseBindings) {
         types.switchCaseBindings.set(sc, info);
+      }
+      for (const [expr, info] of result.types.staticMethodCalls) {
+        types.staticMethodCalls.set(expr, info);
       }
       for (const [name, mono] of result.generics.monomorphizedStructs) {
         generics.monomorphizedStructs.set(name, mono);

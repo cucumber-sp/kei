@@ -66,10 +66,16 @@ export const BINARY_OP_METHODS: Record<string, string> = {
 };
 
 export function checkBinaryExpression(checker: Checker, expr: BinaryExpr): Type {
-  const left = checker.checkExpression(expr.left);
-  const right = checker.checkExpression(expr.right);
+  let left = checker.checkExpression(expr.left);
+  let right = checker.checkExpression(expr.right);
 
   if (isErrorType(left) || isErrorType(right)) return ERROR_TYPE;
+
+  // Auto-deref `ref T` operands so binary ops see the underlying T.
+  // `self.refcount == 0` where `refcount: ref i64` should compare i64s,
+  // not `ref i64` against `i32`.
+  if (left.kind === TypeKind.Ptr && left.isRef) left = left.pointee;
+  if (right.kind === TypeKind.Ptr && right.isRef) right = right.pointee;
 
   const op = expr.operator;
 
@@ -299,17 +305,28 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
     return targetType;
   }
 
-  // Compound assignment
+  // Compound assignment. The target may be a `ref T` lvalue (e.g.
+  // `self.refcount += 1` where `refcount: ref i64`) — auto-deref so
+  // the numeric check sees the underlying T.
   if (COMPOUND_ASSIGN_OPS.has(op)) {
-    if (!isNumericType(targetType)) {
+    let effectiveTarget = targetType;
+    if (effectiveTarget.kind === TypeKind.Ptr && effectiveTarget.isRef) {
+      effectiveTarget = effectiveTarget.pointee;
+    }
+    let effectiveValue = valueType;
+    if (effectiveValue.kind === TypeKind.Ptr && effectiveValue.isRef) {
+      effectiveValue = effectiveValue.pointee;
+    }
+    if (!isNumericType(effectiveTarget)) {
       checker.error(
         `operator '${op}' requires numeric type, got '${typeToString(targetType)}'`,
         expr.span
       );
       return ERROR_TYPE;
     }
-    if (!requireSameTypes(checker, op, targetType, valueType, expr.span)) return ERROR_TYPE;
-    return targetType;
+    if (!requireSameTypes(checker, op, effectiveTarget, effectiveValue, expr.span))
+      return ERROR_TYPE;
+    return effectiveTarget;
   }
 
   if (COMPOUND_BITWISE_OPS.has(op)) {

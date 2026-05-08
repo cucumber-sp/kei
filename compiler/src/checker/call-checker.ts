@@ -229,6 +229,30 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
         const structType = typeSym.type;
         const method = structType.methods.get(memberExpr.property);
         if (method) {
+          // Mark this call so KIR lowering dispatches it without a self-arg.
+          // The mangled struct name reflects the type-args (if any) so
+          // calls into monomorphized generic structs land on the right
+          // C function (e.g. `Shared_i32_wrap`).
+          const baseName = structType.name;
+          let mangledStructName = baseName;
+          if (expr.typeArgs.length > 0 && structType.genericParams.length === expr.typeArgs.length) {
+            const argSuffixes = expr.typeArgs
+              .map((t) => checker.resolveType(t))
+              .map((t) => {
+                if (t.kind === "struct") return t.name;
+                if (t.kind === "int") return `${t.signed ? "i" : "u"}${t.bits}`;
+                if (t.kind === "float") return `f${t.bits}`;
+                if (t.kind === "bool") return "bool";
+                if (t.kind === "string") return "string";
+                return "T";
+              });
+            mangledStructName = mangleGenericName(baseName, expr.typeArgs.map((t) => checker.resolveType(t)));
+            void argSuffixes;
+          }
+          checker.staticMethodCalls.set(expr, {
+            structName: baseName,
+            mangledStructName,
+          });
           // For `Type<TypeArgs>.method(args)` the parser stashes the
           // type-args on the outer CallExpr. Bind them to the struct's
           // generic parameters, substitute through the method's
@@ -256,7 +280,18 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
               }
             }
             resolvedMethod = substituteFunctionType(method, subs);
-            registerStaticCallMonomorphization(checker, structType, resolvedArgs, subs);
+            const originalDecl =
+              typeSym.declaration?.kind === "StructDecl" ||
+              typeSym.declaration?.kind === "UnsafeStructDecl"
+                ? typeSym.declaration
+                : undefined;
+            registerStaticCallMonomorphization(
+              checker,
+              structType,
+              resolvedArgs,
+              subs,
+              originalDecl
+            );
           }
           // Stash the resolved (substituted) FunctionType on the callee
           // MemberExpr so KIR lowering can match args against param types
@@ -649,7 +684,8 @@ function registerStaticCallMonomorphization(
   checker: Checker,
   baseStruct: import("./types").StructType,
   resolvedTypeArgs: Type[],
-  subs: Map<string, Type>
+  subs: Map<string, Type>,
+  originalDecl?: import("../ast/nodes").StructDecl | import("../ast/nodes").UnsafeStructDecl
 ): void {
   const mangledName = mangleGenericName(baseStruct.name, resolvedTypeArgs);
   if (checker.getMonomorphizedStruct(mangledName)) return;
@@ -678,5 +714,6 @@ function registerStaticCallMonomorphization(
     original: baseStruct,
     typeArgs: resolvedTypeArgs,
     concrete,
+    originalDecl,
   });
 }

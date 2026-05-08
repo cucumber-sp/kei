@@ -316,11 +316,17 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
       } else {
         funcName = baseMangledName;
       }
-    } else if (isTypeQualifiedStaticCall(ctx, expr.callee)) {
+    } else if (
+      ctx.checkResult.types.staticMethodCalls.has(expr) ||
+      isTypeQualifiedStaticCall(ctx, expr.callee)
+    ) {
       // Static method call: `Type.method(args)` or `Type<TypeArgs>.method(args)`.
       // No self-arg; resolve the struct type (with type-arg substitution if
       // present) so the mangled name matches the monomorphized struct.
-      const structName = resolveStructNameForStaticCall(ctx, expr);
+      const recorded = ctx.checkResult.types.staticMethodCalls.get(expr);
+      const structName = recorded
+        ? recorded.mangledStructName
+        : resolveStructNameForStaticCall(ctx, expr);
       funcName = `${structName}_${expr.callee.property}`;
     } else {
       // Instance method call: obj.method(args) → StructName_method(obj, args)
