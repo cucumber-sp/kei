@@ -582,21 +582,32 @@ describe.skip("future: SliceType cleanup", () => {
   });
 });
 
-describe.skip("future: cross-module generic struct method monomorphization", () => {
-  // Single-module case works: a generic `unsafe struct Foo<T>` defined
-  // and called in the same module monomorphizes correctly via the
-  // checker's `methodBodyTypeMaps` and the KIR `lowerMonomorphizedMethod`
-  // path. Cross-module is the gap: when `Foo<T>` lives in module A and
-  // the call `Foo<i32>.method(x)` lives in module B, B's checker
-  // registers the monomorphization and tries to re-check `method`'s body
-  // — but it does so with B's scope, so any imports A relies on
-  // (`alloc`, `dealloc`, etc.) appear undeclared. Real `std/shared.kei`
-  // hits this on `import { alloc, dealloc } from mem;`.
+describe.skip("future: std `Shared<T>` runs end-to-end", () => {
+  // The cross-module monomorphization scaffolding landed: a
+  // `Shared<T>` defined in std/shared.kei and instantiated in main
+  // type-checks cleanly under `Shared<i32>.wrap(n)` etc. Body
+  // checks are routed to the defining module's checker, so its
+  // imports (`alloc`, `dealloc`) are visible. What's still loose
+  // before the full runtime path works:
   //
-  // Fix: schedule per-instantiation body checks in the DEFINING module's
-  // scope (track {module → pending monomorphizations} during the
-  // multi-module check, run a final per-module pass that drains its
-  // pending list under its own scope).
+  //  1. mem2reg eliminates the trivial `let s = Shared<T>{}; return s;`
+  //     alloca (it's never stored to before the load), leaving
+  //     `ret %1` with %1 undef. The fix is either to keep unstored
+  //     allocas or to materialise a zero-init for the return slot.
+  //
+  //  2. KIR lowering of generic-struct method bodies uses MAIN's
+  //     `ctx.importedNames` to resolve free identifiers like
+  //     `dealloc(...)`, not the defining module's. Result: the C
+  //     output has `dealloc(...)` instead of `mem_dealloc(...)`.
+  //
+  //  3. Lifecycle hooks (`__destroy`, `__oncopy`) get emitted twice
+  //     for monomorphized structs — once with the defining module's
+  //     prefix (`shared_Shared_i32___destroy`) and once without
+  //     (`Shared_i32___destroy`). Pick one canonical form (probably
+  //     the prefixed one) and route call sites accordingly.
+  //
+  // Once those three are fixed, this test (and `tests/e2e/shared
+  // .test.ts` in general) can flip back on.
   test("std `Shared<T>::wrap(item)` runs end-to-end through the C output", () => {
     // Marker test.
   });
