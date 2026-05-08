@@ -48,7 +48,7 @@ Two threads converge on the same simplification:
    distinctions collapse to "can this pointer escape its source's scope?"
    That is one bit, not three types.
 
-The redesign collapses the surface, makes `shared<T>` self-hostable in
+The redesign collapses the surface, makes `Shared<T>` self-hostable in
 stdlib, and unlocks the lifecycle-elision optimizations that motivated the
 investigation. It is a strictly larger change than expected, but it pays
 off in both axes simultaneously.
@@ -67,7 +67,7 @@ The full set of pointer-like types user code can write:
 | `ref T`             | function/method parameter types; `unsafe struct` field types                        | yes        | safe mutable reference (≈ C# `ref`)            |
 | `readonly ref T`    | function/method parameter types; `unsafe struct` field types                        | yes (read) | safe immutable reference (≈ C# `in`)           |
 | `*T`                | `unsafe struct` field types; locals inside `unsafe` blocks; `extern fn` signatures  | no         | raw pointer for unsafe code                    |
-| `shared<T>`         | anywhere                                                                            | **no**     | refcounted shared owner (regular unsafe struct) |
+| `Shared<T>`         | anywhere                                                                            | **no**     | refcounted shared owner (regular unsafe struct) |
 
 Removed (vs current spec): `mut T`, `ptr<T>`, `ref mut T`, the `mut` keyword
 in all positions (no `let mut`, no `mut` parameter form). Mutability of
@@ -76,10 +76,10 @@ references is handled by `ref T` (mutable through the ref by default) vs
 fields/params is handled by absence/presence of the `readonly` modifier
 (see §2.5).
 
-`shared<T>` does **not** auto-deref. To touch the inner value you write
-`s.value` explicitly; that field access auto-derefs because `shared<T>`
+`Shared<T>` does **not** auto-deref. To touch the inner value you write
+`s.value` explicitly; that field access auto-derefs because `Shared<T>`
 internally declares `value: ref T`. Auto-deref is a property of the `ref T`
-type, not of `shared<T>` (see §2.2).
+type, not of `Shared<T>` (see §2.2).
 
 `ref T` is **never** legal in:
 
@@ -87,7 +87,7 @@ type, not of `shared<T>` (see §2.2).
 - Local variable bindings (`let x: ref T = …` is rejected).
 - Safe `struct` field types.
 - Generic argument positions in safe code (i.e. `List<ref T>` is invalid).
-- Array or slice element types.
+- Array or other collection element types.
 - `static` global types.
 
 This is enforced at the grammar / parser level. The restriction is
@@ -99,7 +99,7 @@ made to dangle.
 
 Any access to a `ref T`-typed value automatically dereferences to T. This
 applies to **values of type `ref T`** — i.e. to `ref T` parameters and to
-`ref T` fields of `unsafe struct`s. It does **not** apply to `shared<T>`,
+`ref T` fields of `unsafe struct`s. It does **not** apply to `Shared<T>`,
 `*T`, or any other type. Auto-deref is a property of `ref T`, not a
 general "wrapper" rule.
 
@@ -123,16 +123,16 @@ fn forward(x: ref Item) {
 }
 ```
 
-For `shared<T>` and other regular types, **there is no auto-deref**. The
+For `Shared<T>` and other regular types, **there is no auto-deref**. The
 inner value is reached by going through the type's API surface — for
-`shared<T>` that means `s.value` (which then auto-derefs because the
+`Shared<T>` that means `s.value` (which then auto-derefs because the
 internal `value: ref T` field is itself `ref`):
 
 ```kei
-let s: shared<i32> = ...;
+let s: Shared<i32> = ...;
 let n: i32 = s.value;           // .value access triggers ref-field auto-deref
-let v: i32 = s.value.value;     // for shared<shared<i32>>, peel by hand
-// `let n: i32 = s` is REJECTED — shared<T> does not auto-deref to T.
+let v: i32 = s.value.value;     // for Shared<Shared<i32>>, peel by hand
+// `let n: i32 = s` is REJECTED — Shared<T> does not auto-deref to T.
 ```
 
 There is **no operation in safe code that yields the pointer-value of a
@@ -196,7 +196,7 @@ torn down (or was uninitialized). Only valid inside `unsafe` blocks.
 To work with the raw pointer-value of a `ref T` field inside `unsafe`:
 
 ```kei
-unsafe struct shared<T> {
+unsafe struct Shared<T> {
     refcount: ref i64;
     value: ref T;
 }
@@ -245,18 +245,18 @@ mutated through this name":
 | `readonly name: ref T` | writing through the ref (`name = …` is rejected; reads still auto-deref)    | `in` parameter         |
 
 `readonly` says nothing about *transitive* contents reachable through other
-fields. Replacing a `shared<T>` handle is blocked when the field is
+fields. Replacing a `Shared<T>` handle is blocked when the field is
 `readonly`; mutating the inner value through `.value` is not, because
 that goes through a separate (non-`readonly`) field of the inner type:
 
 ```kei
 struct AppConfig {
-    readonly db_url: string;                // the string itself is fixed
-    readonly online: shared<bool>;          // the shared handle is fixed
+    readonly dbUrl: string;                // the string itself is fixed
+    readonly online: Shared<bool>;          // the shared handle is fixed
 }
 
-cfg.db_url = "other";                       // ERROR: readonly
-cfg.online = shared<bool>::wrap(false);     // ERROR: readonly (replaces handle)
+cfg.dbUrl = "other";                       // ERROR: readonly
+cfg.online = Shared<bool>::wrap(false);     // ERROR: readonly (replaces handle)
 cfg.online.value = false;                   // OK: writes through .value
 ```
 
@@ -295,17 +295,17 @@ the only ways pointer values flow.
 
 ## 3. Worked examples
 
-### 3.1 `shared<T>` in stdlib
+### 3.1 `Shared<T>` in stdlib
 
 Single-allocation layout, layout invariant entirely contained in stdlib:
 
 ```kei
-unsafe struct shared<T> {
+unsafe struct Shared<T> {
     refcount: ref i64;
     value: ref T;
 
-    fn wrap(item: ref T) -> shared<T> {
-        let s = shared<T>{};
+    fn wrap(item: ref T) -> Shared<T> {
+        let s = Shared<T>{};
         unsafe {
             // ONE allocation: [count: i64 | T payload]
             let block = alloc<u8>(sizeof(i64) + sizeof(T));
@@ -317,11 +317,11 @@ unsafe struct shared<T> {
         return s;
     }
 
-    fn __oncopy(self: ref shared<T>) {
+    fn __oncopy(self: ref Shared<T>) {
         self.refcount += 1;                  // auto-deref through ref i64 field
     }
 
-    fn __destroy(self: ref shared<T>) {
+    fn __destroy(self: ref Shared<T>) {
         self.refcount -= 1;
         if self.refcount == 0 {
             self.value.__destroy();          // recursive destroy of T
@@ -335,7 +335,7 @@ Notes:
 
 - `wrap` takes `ref T` (not `T`) — avoids one round-trip oncopy/destroy.
   See §3.4 for the trace.
-- `__oncopy` / `__destroy` take `self: ref shared<T>` — observing the handle
+- `__oncopy` / `__destroy` take `self: ref Shared<T>` — observing the handle
   without bumping its own count. Both return void; lifecycle hooks mutate
   through the ref in place rather than returning a new value (see §2.5
   ABI note).
@@ -350,23 +350,24 @@ Notes:
 ### 3.2 String, post-redesign
 
 ```kei
-struct string {
-    buffer: shared<u8_buffer>;
+struct String {
+    buffer: Shared<U8Buffer>;
     offset: usize;
     len: usize;
 }
 
-unsafe struct u8_buffer {
+unsafe struct U8Buffer {
     data: *u8;
-    fn __destroy(self: ref u8_buffer) {
+    fn __destroy(self: ref U8Buffer) {
         unsafe { free(self.data); }
     }
 }
 ```
 
-`string` is a plain `struct` (not `unsafe`). Auto-derived lifecycle: copying
-a string recurses into the `shared<u8_buffer>` field, which bumps the
-buffer's refcount; destroying recurses, drops the count, frees on zero.
+`String` is a plain `struct` (not `unsafe`); `string` (lowercase) is the
+keyword alias for `String` per the conventions doc. Auto-derived lifecycle:
+copying a `String` recurses into the `Shared<U8Buffer>` field, which bumps
+the buffer's refcount; destroying recurses, drops the count, frees on zero.
 `offset` and `len` are POD per-handle metadata — different substring views
 of the same buffer get different offset/len, sharing the backing bytes.
 
@@ -375,39 +376,39 @@ of the same buffer get different offset/len, sharing the backing bytes.
 
 This shape is the **target** for the stdlib migration. The current C
 runtime (`runtime.h`) stays in place during the initial spec/checker/codegen
-work; the actual port from `kei_string` to the Kei `struct string` form is
+work; the actual port from `kei_string` to the Kei `struct String` form is
 deferred to a follow-up phase (see §7).
 
 ### 3.3 Request handler
 
-End-to-end example exercising `ref` parameters, auto-deref through
-`shared<T>`, `readonly` fields, and lifecycle:
+End-to-end example exercising `ref` parameters, explicit `.value` access
+on `Shared<T>`, `readonly` fields, and lifecycle:
 
 ```kei
 struct AppConfig {
-    readonly db_url: string;
-    readonly max_connections: shared<i32>;
-    readonly online: shared<bool>;
+    readonly dbUrl: string;
+    readonly maxConnections: Shared<i32>;
+    readonly online: Shared<bool>;
 }
 
 struct Session {
-    user_id: i32;
+    userId: i32;
     token: string;
-    created_at: i64;
+    createdAt: i64;
 }
 
 struct SessionCache {
     entries: List<Session>;
 }
 
-fn create(cache: ref SessionCache, cfg: ref AppConfig, user_id: i32, token: ref string) {
-    if cache.entries.len >= cfg.max_connections.value {  // explicit .value (no auto-deref of shared<T>)
+fn create(cache: ref SessionCache, cfg: ref AppConfig, userId: i32, token: ref string) {
+    if cache.entries.len >= cfg.maxConnections.value {  // explicit .value (no auto-deref of Shared<T>)
         return;
     }
     cache.entries.push(Session{
-        user_id,
+        userId,
         token,                                            // ref string -> string at struct field: auto-deref
-        created_at: now(),
+        createdAt: now(),
     });
 }
 
@@ -421,9 +422,9 @@ fn handle(cfg: ref AppConfig, cache: ref SessionCache, body: ref string) -> stri
 
 fn main() -> i32 {
     let cfg = AppConfig{
-        db_url: "postgres://localhost",
-        max_connections: shared<i32>::wrap(100),
-        online: shared<bool>::wrap(true),
+        dbUrl: "postgres://localhost",
+        maxConnections: Shared<i32>::wrap(100),
+        online: Shared<bool>::wrap(true),
     };
     let cache = SessionCache{ entries: List::empty() };
 
@@ -434,13 +435,13 @@ fn main() -> i32 {
 }
 ```
 
-### 3.4 Lifecycle trace: `shared<T>::wrap(ref T) vs (T)`
+### 3.4 Lifecycle trace: `Shared<T>::wrap(ref T) vs (T)`
 
 Why the constructor takes `ref T`, with refcount accounting:
 
 ```kei
 const s: Item = getItem()                  // s.string refcount = 1
-const sharedS = shared<Item>::wrap(s)
+const sharedS = Shared<Item>::wrap(s)
 // ... use s and sharedS ...
 return s
 ```
@@ -471,7 +472,7 @@ When the caller does not use a value after passing it:
 
 ```kei
 const s = getItem()
-const sharedS = shared<Item>::wrap(s)
+const sharedS = Shared<Item>::wrap(s)
 // s never used again
 ```
 
@@ -501,7 +502,7 @@ fn first(items: ref List<Item>) -> ref Item {
 ```
 
 Expected error: *"`ref T` is not allowed as a return type. Return `T` (which
-copies) or `shared<T>` (which shares ownership)."*
+copies) or `Shared<T>` (which shares ownership)."*
 
 ### 4.2 `ref T` is not a struct field (in safe structs)
 
@@ -534,7 +535,7 @@ fn read(p: *i32) -> i32 {
 
 ```kei
 // MUST FAIL: `addr()` outside unsafe.
-fn leak(s: shared<i32>) -> *i64 {
+fn leak(s: Shared<i32>) -> *i64 {
     return addr(s.refcount);
 }
 ```
@@ -550,21 +551,21 @@ fn read(x: ref Item) -> i32 {
 }
 ```
 
-### 4.6 Type mismatch on shared<T> field assignment
+### 4.6 Type mismatch on Shared<T> field assignment
 
 ```kei
-struct Cfg { online: shared<bool> }
+struct Cfg { online: Shared<bool> }
 
 fn turn_off(c: ref Cfg) {
-    c.online = false;         // MUST FAIL: type mismatch (bool vs shared<bool>)
+    c.online = false;         // MUST FAIL: type mismatch (bool vs Shared<bool>)
 }
 ```
 
-Expected error: *"Cannot assign `bool` to field of type `shared<bool>`. Use
+Expected error: *"Cannot assign `bool` to field of type `Shared<bool>`. Use
 `c.online.value = false` to write through (alias-visible), or
-`c.online = shared<bool>::wrap(false)` to replace the handle."*
+`c.online = Shared<bool>::wrap(false)` to replace the handle."*
 
-Note: there is no auto-deref of `shared<T>` to `T`. The two forms above are
+Note: there is no auto-deref of `Shared<T>` to `T`. The two forms above are
 the only ways to mutate.
 
 ### 4.7 `init` only valid in `unsafe`
@@ -603,27 +604,27 @@ The trace from §3.4 must hold: a managed value passed into a `ref T`
 constructor that stores it must end up with one extra reference (the heap
 slot's). Caller and heap slot can independently outlive each other.
 
-### 4.10 Nested `shared<T>` requires explicit unwrapping
+### 4.10 Nested `Shared<T>` requires explicit unwrapping
 
 ```kei
-// MUST FAIL: shared<T> does not auto-deref to T.
-let s: shared<shared<i32>> = ...;
-let v: i32 = s;                 // ERROR: cannot assign shared<shared<i32>> to i32
+// MUST FAIL: Shared<T> does not auto-deref to T.
+let s: Shared<Shared<i32>> = ...;
+let v: i32 = s;                 // ERROR: cannot assign Shared<Shared<i32>> to i32
 ```
 
 ```kei
 // MUST COMPILE: explicit .value chain peels one ref-field auto-deref per hop.
-let s: shared<shared<i32>> = ...;
-let v: i32 = s.value.value;     // s.value : shared<i32> ; .value : i32
+let s: Shared<Shared<i32>> = ...;
+let v: i32 = s.value.value;     // s.value : Shared<i32> ; .value : i32
 ```
 
 ### 4.11 `readonly` blocks reassignment but not write-through
 
 ```kei
-struct Cfg { readonly online: shared<bool> }
+struct Cfg { readonly online: Shared<bool> }
 
 fn f(c: ref Cfg) {
-    c.online = shared<bool>::wrap(false); // MUST FAIL: readonly field (replaces handle)
+    c.online = Shared<bool>::wrap(false); // MUST FAIL: readonly field (replaces handle)
     c.online.value = false;               // MUST COMPILE: writes through .value
 }
 ```
@@ -694,20 +695,20 @@ What changes for existing programs after the redesign lands.
 - Code that explicitly takes raw addresses with `&x` outside unsafe — must
   move into an `unsafe` block, or be refactored to pass `ref T`.
 - Code that returns `ptr<T>` from safe functions — must return `T` or
-  `shared<T>` instead. Lookup-by-reference patterns are the most common
+  `Shared<T>` instead. Lookup-by-reference patterns are the most common
   example; they become copy-out (cheap for refcounted T) or shared-element
-  (`List<shared<Item>>`).
+  (`List<Shared<Item>>`).
 - Hand-rolled `__oncopy` / `__destroy` for refcounted types — replaced by
-  composing `shared<T>` as a field.
+  composing `Shared<T>` as a field.
 
 ### 5.4 Programs that become hard errors
 
 - `ref T` (or `mut T` / `ptr<T>`) in return position, struct field outside
   `unsafe struct`, array element type, generic argument, static type. (See
   §4.1, §4.2.)
-- `field = value` where the field is `shared<U>` and `value` is `U` (not
-  `shared<U>`). Must use explicit `field.value = value` or
-  `field = shared<U>::wrap(value)`. (No auto-deref of `shared<T>`.)
+- `field = value` where the field is `Shared<U>` and `value` is `U` (not
+  `Shared<U>`). Must use explicit `field.value = value` or
+  `field = Shared<U>::wrap(value)`. (No auto-deref of `Shared<T>`.)
 - `&` or `*` outside `unsafe`.
 - `mut` keyword anywhere — completely removed. `mut` parameter form, `let
   mut`, `&mut`, and `ref mut T` all gone. Replaced by `ref T` (mutable
@@ -719,12 +720,14 @@ What changes for existing programs after the redesign lands.
 ### 5.5 Stdlib changes
 
 - `kei_string` runtime (currently in `runtime.h`) reimplemented as a Kei
-  `struct string { buffer: shared<u8_buffer>; offset: usize; len: usize; }`.
+  `struct String { buffer: Shared<U8Buffer>; offset: usize; len: usize; }`
+  (with `string` kept as the lowercase keyword alias for `String`; see
+  `docs/design/naming-conventions.md`).
   The C runtime functions become unsafe-struct method bodies.
-- `Shared<T>` (planned) becomes `shared<T>` as a stdlib unsafe struct.
+- `Shared<T>` (planned) becomes `Shared<T>` as a stdlib unsafe struct.
 - `array<T>` (planned) and `List<T>` (planned) follow the same pattern:
   unsafe struct holding a `*T` field, manual `__destroy`, no `__oncopy`
-  hand-written (recurse via auto-derive on a `shared<T>`-backed buffer).
+  hand-written (recurse via auto-derive on a `Shared<T>`-backed buffer).
 
 ---
 
@@ -736,11 +739,11 @@ with these decisions.
 
 ### 6.1 Auto-deref in unconstrained contexts — moot
 
-The original question was whether `let max = cfg.max_connections` (where
-`max_connections: shared<i32>`) should auto-deref to `i32` or preserve
-`shared<i32>`. **Closed:** there is no auto-deref of `shared<T>` at all
-(see §2.1, §2.2). Users write `let max = cfg.max_connections.value` to
-get the `i32`, or `let max = cfg.max_connections` to get the `shared<i32>`
+The original question was whether `let max = cfg.maxConnections` (where
+`maxConnections: Shared<i32>`) should auto-deref to `i32` or preserve
+`Shared<i32>`. **Closed:** there is no auto-deref of `Shared<T>` at all
+(see §2.1, §2.2). Users write `let max = cfg.maxConnections.value` to
+get the `i32`, or `let max = cfg.maxConnections` to get the `Shared<i32>`
 handle. Type-directed auto-deref applies only to `ref T` values, where
 the source type's deref target is unambiguous.
 
@@ -756,16 +759,16 @@ use detection.
 Not strictly needed for stdlib (everything's a ref or auto-handled). Add
 if user code asks for it.
 
-### 6.4 Mutation visibility through aliased `shared<T>` — alias-visible (explicit)
+### 6.4 Mutation visibility through aliased `Shared<T>` — alias-visible (explicit)
 
-Mutation through `shared<T>` is **alias-visible**: every alias sees writes.
+Mutation through `Shared<T>` is **alias-visible**: every alias sees writes.
 But there is no auto-deref shortcut — users must spell the operation out:
 
 - `s.value = newT` → write-through. Fires `__destroy` on the old inner T,
   bitwise write of the new T into the slot, `__oncopy` on the new T.
   Refcount unchanged. All aliases see the new value.
-- `s = shared<T>::wrap(newT)` → handle replacement. Fires `__destroy` on
-  the old `shared<T>` (which decrements refcount, recursively destroys the
+- `s = Shared<T>::wrap(newT)` → handle replacement. Fires `__destroy` on
+  the old `Shared<T>` (which decrements refcount, recursively destroys the
   inner T if last reference), bitwise write of the new handle, `__oncopy`
   on the new handle. The local `s` is rebound; other aliases keep the old
   payload until their refcount drops to zero.
@@ -775,13 +778,13 @@ semantics without the CoW machinery. CoW remains a possible future
 optimization that the compiler can perform invisibly when last-use
 analysis proves uniqueness.
 
-### 6.5 Equality semantics for `shared<T>` — by-value
+### 6.5 Equality semantics for `Shared<T>` — by-value
 
-`==` on `shared<T>` does a recursive field compare (same as plain
-structs). `same_handle(a, b)` is the identity primitive (pointer compare
+`==` on `Shared<T>` does a recursive field compare (same as plain
+structs). `sameHandle(a, b)` is the identity primitive (pointer compare
 on the underlying allocation).
 
-### 6.6 Naming
+### 6.6 Naming — language constructs
 
 - `ref T` — safe mutable reference (≈ C# `ref`).
 - `readonly ref T` — safe immutable reference (≈ C# `in`).
@@ -792,7 +795,13 @@ on the underlying allocation).
 - `readonly` — field/param modifier.
 
 Removed: `ptr<T>`, `mut T`, `ref mut T`, the `mut` keyword anywhere,
-`&mut`, `->`.
+`&mut`, `->`, `slice<T>`.
+
+Identifier-shape conventions (PascalCase types, camelCase methods/
+fields/locals/functions, SCREAMING_SNAKE statics, lowercase keyword
+aliases for `string`/`array<T>` only) live in
+`docs/design/naming-conventions.md`. The examples in §3 of this doc
+follow those conventions.
 
 ### 6.7 Local binding mutability — unchanged
 
@@ -803,7 +812,7 @@ modifier is for fields and parameters only.
 ### 6.8 `weak<T>` for cycles — separate roadmap item
 
 Reference counting cannot reclaim cycles. `weak<T>` (non-owning, non-
-cycle-prolonging) is filed as a follow-up after `shared<T>` lands. Out of
+cycle-prolonging) is filed as a follow-up after `Shared<T>` lands. Out of
 scope for this redesign.
 
 ### 6.9 Default destruction order — reverse declaration order
@@ -814,7 +823,7 @@ formalized in `spec/08-memory.md` while the spec is being rewritten.
 ### 6.10 `shared` keyword — un-reserved
 
 Today's lexer reserves `shared` as a future-use keyword. Under this
-redesign `shared<T>` is a normal stdlib `unsafe struct` — `shared` becomes
+redesign `Shared<T>` is a normal stdlib `unsafe struct` — `shared` becomes
 a regular identifier. The reserved-word entry is dropped; the lexer change
 ships with the parser/checker work.
 
@@ -822,25 +831,41 @@ ships with the parser/checker work.
 
 ## 7. Implementation sequencing
 
-After this doc lands (commit 1), the work is:
+This doc and the companion `docs/design/naming-conventions.md` together
+define the target. The downstream sequence is:
 
-### Commit 2: Spec updates
+### Commit: Spec updates
 
 - `spec/03-types.md` — replace pointer-types section. Document `ref T`,
-  `*T`, `shared<T>`, removed types, `addr()`, `init`, `readonly`.
+  `readonly ref T`, `*T`, `Shared<T>`, removed types (`ptr<T>`, `mut T`,
+  `ref mut T`, `slice<T>`), `addr()`, `init`, `readonly`.
 - `spec/08-memory.md` — rewrite lifecycle section around the three write
-  forms. Document the construction protocol. Document `shared<T>` as the
-  canonical refcount primitive.
-- `spec/13-grammar.md` — remove `mut T`, `ptr<T>`, `->`. Add `ref T` (with
-  position restrictions), `*T`, `addr(...)`, `init <lvalue> = <expr>`.
-- `SPEC-STATUS.md` — close completed items, file new ones (universal
-  auto-deref, `init`, `addr`, `readonly`, `shared<T>` stdlib impl).
+  forms. Document the construction protocol. Document `Shared<T>` as the
+  canonical refcount primitive. Pin reverse-declaration-order destruction.
+- `spec/13-grammar.md` — remove `mut`, `ptr<T>`, `->`, `slice<T>`. Add
+  `ref T` and `readonly ref T` (with position restrictions), `*T`,
+  `addr(...)`, `init <lvalue> = <expr>`, `readonly` modifier.
+- `spec/04-variables.md` — confirm `let` mutable / `const` immutable;
+  drop `mut` references.
+- `spec/06-functions.md` — drop `mut` parameter form; document `ref T` /
+  `readonly ref T` parameters.
+- `spec/07-structures.md` — `ref T` / `readonly ref T` field/param rules
+  for `unsafe struct`s; new `__oncopy(self: ref T)` ABI.
+- `spec/02-lexical.md` — keyword list edits (un-reserve `shared`,
+  reserve `init` / `addr`, drop `slice` / `mut` / `ref mut`).
+- `SPEC-STATUS.md` — close completed items, file new ones.
+- All examples adopt the naming-conventions doc (PascalCase types,
+  camelCase methods/fields/locals).
 
-### Commit 3: Test fixture updates
+### Commit: Test fixture updates
 
 Each invariant in §4 becomes a test fixture under `compiler/tests/`. Both
 positive and negative cases. Existing fixtures using `ptr<T>` parameters
-update to `ref T`; existing `->` usage updates to `.`.
+update to `ref T`; existing `->` usage updates to `.` (or `(*p).` for
+raw pointers); snake_case methods/fields rename to camelCase per the
+conventions doc; `slice<T>` references removed. New tests cover `init`,
+`addr`, `readonly` (both senses), `Shared<T>` end-to-end, auto-deref
+through `ref T` only, and the position-restriction errors for `ref T`.
 
 ### Compiler work (multiple commits)
 
@@ -862,13 +887,13 @@ Rough order:
    `__destroy` lowered with `self: ref T` and void return (in-place
    mutation), replacing today's `__oncopy(self: T) -> T`. Auto-deref
    insertion happens before lowering.
-5. Stdlib: implement `shared<T>` as `unsafe struct` in stdlib.
+5. Stdlib: implement `Shared<T>` as `unsafe struct` in stdlib.
 6. Optimization passes that the redesign enables: lifecycle elision via
    peephole on `__oncopy` / `__destroy` of inlined refcount primitives.
 7. **(Deferred to a follow-up phase)** Rewrite `kei_string` runtime as a
-   Kei `struct` using `shared<u8_buffer>`. The C runtime stays in place
+   Kei `struct` using `Shared<U8Buffer>`. The C runtime stays in place
    during the initial compiler work to keep the migration scope bounded;
-   string layout is a separate, sequenced project once `shared<T>` is
+   string layout is a separate, sequenced project once `Shared<T>` is
    real and the lifecycle-elision pass is in.
 
 The compiler work is comfortably multi-week and likely 5–10 PRs. The doc /
