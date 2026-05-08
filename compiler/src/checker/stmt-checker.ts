@@ -276,7 +276,7 @@ export class StatementChecker {
     if (!isErrorType(iterableType)) {
       let elementType: Type = ERROR_TYPE;
 
-      if (iterableType.kind === TypeKind.Array || iterableType.kind === TypeKind.Slice) {
+      if (iterableType.kind === TypeKind.Array) {
         elementType = iterableType.element;
       } else if (iterableType.kind === TypeKind.Range) {
         elementType = iterableType.element;

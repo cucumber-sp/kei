@@ -16,7 +16,7 @@ import { I32_MAX, I32_MIN } from "../utils/constants";
 import type { Checker } from "./checker";
 import { mangleGenericName, substituteFunctionType, substituteType } from "./generics";
 import { SymbolKind } from "./symbols";
-import type { ArrayType, PtrType, RangeType, SliceType, StructType, Type } from "./types";
+import type { ArrayType, PtrType, RangeType, StructType, Type } from "./types";
 import {
   arrayType,
   BOOL_TYPE,
@@ -437,9 +437,6 @@ export function extractTypeParamSubs(
       break;
     case TypeKind.Array:
       extractTypeParamSubs(declared.element, (concrete as ArrayType).element, subs);
-      break;
-    case TypeKind.Slice:
-      extractTypeParamSubs(declared.element, (concrete as SliceType).element, subs);
       break;
     case TypeKind.Range:
       extractTypeParamSubs(declared.element, (concrete as RangeType).element, subs);

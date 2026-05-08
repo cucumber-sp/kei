@@ -230,13 +230,9 @@ export class ExpressionChecker {
       return ERROR_TYPE;
     }
 
-    // Check for .len on array/slice/string
+    // Check for .len on array/string
     if (expr.property === "len") {
-      if (
-        objectType.kind === TypeKind.Array ||
-        objectType.kind === TypeKind.Slice ||
-        objectType.kind === TypeKind.String
-      ) {
+      if (objectType.kind === TypeKind.Array || objectType.kind === TypeKind.String) {
         return USIZE_TYPE;
       }
     }
@@ -280,11 +276,7 @@ export class ExpressionChecker {
       }
     }
 
-    if (
-      objectType.kind !== TypeKind.Array &&
-      objectType.kind !== TypeKind.Slice &&
-      objectType.kind !== TypeKind.String
-    ) {
+    if (objectType.kind !== TypeKind.Array && objectType.kind !== TypeKind.String) {
       this.checker.error(`cannot index type '${typeToString(objectType)}'`, expr.span);
       return ERROR_TYPE;
     }

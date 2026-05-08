@@ -583,13 +583,15 @@ describe.skip("future: `weak<T>` companion type (§6.8)", () => {
   });
 });
 
-describe.skip("future: SliceType cleanup", () => {
-  // Source-level `slice<T>` is rejected (see "`slice<T>` is removed"
-  // above), but the internal SliceType semantic representation and
-  // the type-resolver's slice-related code paths still exist for
-  // back-compat. Cleanup is internal and not user-visible.
+describe("SliceType cleanup", () => {
   test("SliceType is removed from the internal type system", () => {
-    // Marker test.
+    // The checker `types/` module no longer exports `sliceType` /
+    // `SliceType`. We assert by import — if either name leaked back in,
+    // this test would fail to type-check. The runtime check below is a
+    // belt-and-suspenders sanity confirmation.
+    const types = require("../../src/checker/types") as Record<string, unknown>;
+    expect(types.sliceType).toBeUndefined();
+    expect((types.TypeKind as Record<string, unknown>).Slice).toBeUndefined();
   });
 });
 

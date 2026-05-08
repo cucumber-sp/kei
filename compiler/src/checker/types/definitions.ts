@@ -68,12 +68,6 @@ export interface ArrayType {
   length?: number;
 }
 
-/** Dynamically-sized slice type (`slice<T>`). */
-export interface SliceType {
-  kind: typeof TypeKind.Slice;
-  element: Type;
-}
-
 /** Named field within a struct. */
 export interface StructFieldInfo {
   name: string;
@@ -181,7 +175,6 @@ export type Type =
   | CCharType
   | PtrType
   | ArrayType
-  | SliceType
   | StructType
   | EnumType
   | FunctionType

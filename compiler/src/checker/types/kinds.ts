@@ -8,7 +8,6 @@ export const TypeKind = {
   String: "string",
   Ptr: "ptr",
   Array: "array",
-  Slice: "slice",
   Struct: "struct",
   Enum: "enum",
   Function: "function",

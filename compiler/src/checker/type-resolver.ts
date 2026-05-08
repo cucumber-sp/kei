@@ -14,7 +14,7 @@ import {
 import type { Scope } from "./scope";
 import { SymbolKind } from "./symbols";
 import type { FunctionType, Type } from "./types";
-import { arrayType, ERROR_TYPE, isStructType, ptrType, refType, sliceType, TypeKind } from "./types";
+import { arrayType, ERROR_TYPE, isStructType, ptrType, refType, TypeKind } from "./types";
 
 interface TypeResolverDiagnostic {
   message: string;

@@ -18,7 +18,6 @@ import {
   ptrType,
   rangeType,
   STRING_TYPE,
-  sliceType,
   TypeKind,
   U8_TYPE,
   U64_TYPE,
@@ -79,12 +78,6 @@ describe("substituteType", () => {
     const t = arrayType(typeParam("T"));
     const result = substituteType(t, new Map([["T", I64_TYPE]]));
     expect(result).toEqual(arrayType(I64_TYPE));
-  });
-
-  test("substitutes Slice element", () => {
-    const t = sliceType(typeParam("T"));
-    const result = substituteType(t, new Map([["T", STRING_TYPE]]));
-    expect(result).toEqual(sliceType(STRING_TYPE));
   });
 
   test("substitutes Range element", () => {
@@ -253,10 +246,6 @@ describe("mangleGenericName", () => {
 
   test("mangles with array types", () => {
     expect(mangleGenericName("Wrap", [arrayType(BOOL_TYPE)])).toBe("Wrap_array_bool");
-  });
-
-  test("mangles with slice types", () => {
-    expect(mangleGenericName("Wrap", [sliceType(I32_TYPE)])).toBe("Wrap_slice_i32");
   });
 
   test("mangles with struct types", () => {

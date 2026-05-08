@@ -79,15 +79,6 @@ export function lowerCheckerType(ctx: LoweringCtx, t: Type): KirType {
       return { kind: "ptr", pointee: { kind: "void" } };
     case "c_char":
       return { kind: "int", bits: 8, signed: true };
-    case "slice":
-      return {
-        kind: "struct",
-        name: "slice",
-        fields: [
-          { name: "ptr", type: { kind: "ptr", pointee: lowerCheckerType(ctx, t.element) } },
-          { name: "len", type: { kind: "int", bits: 64, signed: false } },
-        ],
-      };
     case "range":
       return {
         kind: "struct",

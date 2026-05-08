@@ -18,7 +18,6 @@ export type {
   ParamInfo,
   PtrType,
   RangeType,
-  SliceType,
   StringType,
   StructFieldInfo,
   StructType,

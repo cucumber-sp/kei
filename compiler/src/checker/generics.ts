@@ -18,7 +18,6 @@ import {
   functionType,
   ptrType,
   rangeType,
-  sliceType,
   TypeKind,
   typeToString,
 } from "./types";
@@ -53,8 +52,6 @@ export function substituteType(type: Type, typeMap: Map<string, Type>): Type {
     }
     case TypeKind.Array:
       return arrayType(substituteType(type.element, typeMap), type.length);
-    case TypeKind.Slice:
-      return sliceType(substituteType(type.element, typeMap));
     case TypeKind.Range:
       return rangeType(substituteType(type.element, typeMap));
     case TypeKind.Struct: {
@@ -175,8 +172,6 @@ function mangleTypeName(t: Type): string {
       return `ptr_${mangleTypeName(t.pointee)}`;
     case TypeKind.Array:
       return `array_${mangleTypeName(t.element)}`;
-    case TypeKind.Slice:
-      return `slice_${mangleTypeName(t.element)}`;
     case TypeKind.Struct:
       return t.name;
     case TypeKind.Enum:

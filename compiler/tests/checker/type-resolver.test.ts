@@ -15,7 +15,6 @@ import {
   I32_TYPE,
   I64_TYPE,
   STRING_TYPE,
-  sliceType,
   TypeKind,
   U8_TYPE,
   U32_TYPE,
