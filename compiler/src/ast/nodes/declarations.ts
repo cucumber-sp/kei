@@ -14,20 +14,32 @@ export enum DeclKind {
   Static = "StaticDecl",
 }
 
-/** Function parameter with optional `mut` and `move` modifiers. */
+/**
+ * Function parameter.
+ *
+ * Bindings are mutable by default; `readonly` opts out (blocks
+ * reassignment for plain types, blocks write-through for `ref T`).
+ * The previous `mut`/`move` parameter forms are removed; use
+ * `move` as an expression at the call site for ownership transfer.
+ */
 export interface Param extends BaseNode {
   kind: "Param";
   name: string;
   typeAnnotation: TypeNode;
-  isMut: boolean;
-  isMove: boolean;
+  isReadonly: boolean;
 }
 
-/** Struct field declaration. */
+/**
+ * Struct field declaration.
+ *
+ * `readonly` is the same modifier the parser accepts on params: it
+ * blocks reassignment (and, for `ref T` fields, write-through).
+ */
 export interface Field extends BaseNode {
   kind: "Field";
   name: string;
   typeAnnotation: TypeNode;
+  isReadonly: boolean;
 }
 
 /** Named function declaration, possibly generic and/or throwing. */

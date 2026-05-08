@@ -28,6 +28,17 @@ export function parseExpression(ctx: ParserContext): Expression {
   return parsePrattExpression(ctx, Precedence.None);
 }
 
+/**
+ * Parse an expression up to (but not including) an assignment operator.
+ *
+ * Used by statement forms whose grammar has its own `=` (e.g. `init x = v;`)
+ * — the LHS is a postfix-shape lvalue and we don't want the Pratt parser to
+ * eagerly consume the `=` into an AssignExpr.
+ */
+export function parseExpressionNoAssign(ctx: ParserContext): Expression {
+  return parsePrattExpression(ctx, Precedence.Assignment);
+}
+
 function parsePrattExpression(ctx: ParserContext, minPrecedence: Precedence): Expression {
   let left = parsePrefixExpression(ctx);
 
@@ -130,6 +141,22 @@ function parsePrefixExpression(ctx: ParserContext): Expression {
       kind: "MoveExpr",
       operand,
       span: { start: token.span.start, end: operand.span.end },
+    };
+  }
+
+  // addr(expr) — slot lvalue for a `ref T` field; unsafe-only at the
+  // checker level. The parser treats it as a single-arg pseudo-call so
+  // the surface form looks like a function call but the AST captures
+  // it as AddrExpr.
+  if (token.kind === TokenKind.Addr) {
+    ctx.advance();
+    ctx.expect(TokenKind.LeftParen);
+    const operand = ctx.parseExpression();
+    const end = ctx.expect(TokenKind.RightParen);
+    return {
+      kind: "AddrExpr",
+      operand,
+      span: { start: token.span.start, end: end.span.end },
     };
   }
 

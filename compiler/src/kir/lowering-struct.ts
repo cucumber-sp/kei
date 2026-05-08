@@ -71,9 +71,14 @@ export function lowerMethod(
 
   const params: KirParam[] = decl.params.map((p) => {
     const type = resolveParamType(ctx, decl, p.name);
-    // The self parameter is passed as a pointer to the struct
+    // The self parameter is passed as a pointer to the struct — except
+    // when the user already declared it as `ref T` or `*T` (which already
+    // lowers to ptr at this layer). Same for any param of struct type.
+    const alreadyPointer = type.kind === "ptr";
     const paramType: KirType =
-      p.name === "self" || type.kind === "struct" ? { kind: "ptr", pointee: type } : type;
+      !alreadyPointer && (p.name === "self" || type.kind === "struct")
+        ? { kind: "ptr", pointee: type }
+        : type;
     const varId: VarId = `%${p.name}`;
     ctx.varMap.set(p.name, varId);
     return { name: p.name, type: paramType };

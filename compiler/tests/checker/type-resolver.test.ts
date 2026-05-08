@@ -52,7 +52,7 @@ function makeStructType(
   };
 }
 
-describe.skip("TypeResolver", () => {
+describe("TypeResolver", () => {
   describe("resolve primitive types", () => {
     test("resolves basic integer types", () => {
       const resolver = new TypeResolver();
@@ -206,24 +206,13 @@ describe.skip("TypeResolver", () => {
       expect(result).toEqual(arrayType(BOOL_TYPE));
     });
 
-    test("resolves slice<T>", () => {
+    test("slice<T> is rejected (removed under ref-redesign)", () => {
       const resolver = new TypeResolver();
       const scope = new Scope();
 
       const result = resolver.resolve(genericType("slice", [namedType("f64")]), scope);
-      expect(result).toEqual(sliceType(F64_TYPE));
-    });
-
-    test("slice with wrong arity produces error", () => {
-      const resolver = new TypeResolver();
-      const scope = new Scope();
-
-      const result = resolver.resolve(
-        genericType("slice", [namedType("i32"), namedType("i64")]),
-        scope
-      );
       expect(result).toEqual(ERROR_TYPE);
-      expect(resolver.getDiagnostics()[0]!.message).toContain("expects exactly 1 type argument");
+      expect(resolver.getDiagnostics()[0]!.message).toContain("'slice<T>' was removed");
     });
 
     test("nested generic: ptr<ptr<i32>>", () => {
@@ -300,7 +289,7 @@ describe.skip("TypeResolver", () => {
       const scope = new Scope();
       const tParam = { kind: TypeKind.TypeParam, name: "T" } as const;
       const getMethod = functionType(
-        [{ name: "self", type: tParam, isMut: false, isMove: false }],
+        [{ name: "self", type: tParam, isReadonly: false }],
         tParam
       );
       const containerStruct = makeStructType("Container", [["value", tParam]], {

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { TypeKind } from "../../src/checker/types";
 import { checkError, checkOk, typeOf } from "./helpers";
 
-describe.skip("Checker — as cast", () => {
+describe("Checker — as cast", () => {
   // ── Valid numeric casts ────────────────────────────────────────────────
 
   test("i32 → f64", () => {
@@ -110,7 +110,7 @@ describe.skip("Checker — as cast", () => {
         let x: i32 = 42;
         unsafe {
           let p = &x;
-          let q = p as ptr<u8>;
+          let q = p as *u8;
         }
         return 0;
       }
@@ -120,10 +120,10 @@ describe.skip("Checker — as cast", () => {
   test("ptr cast outside unsafe (error)", () => {
     checkError(
       `
-      extern fn get_ptr() -> ptr<i32>;
+      extern fn get_ptr() -> *i32;
       fn main() -> int {
         let p = unsafe { get_ptr() };
-        let q = p as ptr<u8>;
+        let q = p as *u8;
         return 0;
       }
       `,
@@ -149,7 +149,7 @@ describe.skip("Checker — as cast", () => {
       fn main() -> int {
         unsafe {
           let a: usize = 0;
-          let p = a as ptr<u8>;
+          let p = a as *u8;
         }
         return 0;
       }
@@ -159,7 +159,7 @@ describe.skip("Checker — as cast", () => {
   test("ptr → usize outside unsafe (error)", () => {
     checkError(
       `
-      extern fn get_ptr() -> ptr<i32>;
+      extern fn get_ptr() -> *i32;
       fn main() -> int {
         let p = unsafe { get_ptr() };
         let a = p as usize;
@@ -175,7 +175,7 @@ describe.skip("Checker — as cast", () => {
       `
       fn main() -> int {
         let a: usize = 0;
-        let p = a as ptr<u8>;
+        let p = a as *u8;
         return 0;
       }
       `,

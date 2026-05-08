@@ -14,7 +14,7 @@ import {
 import type { Scope } from "./scope";
 import { SymbolKind } from "./symbols";
 import type { FunctionType, Type } from "./types";
-import { arrayType, ERROR_TYPE, isStructType, ptrType, sliceType, TypeKind } from "./types";
+import { arrayType, ERROR_TYPE, isStructType, ptrType, refType, sliceType, TypeKind } from "./types";
 
 interface TypeResolverDiagnostic {
   message: string;
@@ -51,6 +51,10 @@ export class TypeResolver {
         return this.resolveGenericType(node.name, node.typeArgs, node.span, scope);
       case "NullableType":
         return ptrType(this.resolve(node.inner, scope));
+      case "RefType":
+        return refType(this.resolve(node.pointee, scope), node.readonly);
+      case "RawPtrType":
+        return ptrType(this.resolve(node.pointee, scope));
     }
   }
 
@@ -122,14 +126,14 @@ export class TypeResolver {
     }
 
     if (name === "slice") {
-      if (typeArgs.length !== 1) {
-        this.addError("'slice' expects exactly 1 type argument", span);
-        return ERROR_TYPE;
-      }
-      const sliceArg = typeArgs[0];
-      if (!sliceArg) return ERROR_TYPE;
-      const element = this.resolve(sliceArg, scope);
-      return sliceType(element);
+      // `slice<T>` was removed under the ref-redesign — use Array<T> for
+      // refcounted views, `ref inline<T, N>` for stack views, or raw
+      // `*T` + `usize` at C boundaries.
+      this.addError(
+        "'slice<T>' was removed; use 'Array<T>' (refcounted views), 'ref inline<T, N>' (stack views), or '*T' + usize (unsafe)",
+        span
+      );
+      return ERROR_TYPE;
     }
 
     // User-defined generic types (e.g., Pair<int, string>)

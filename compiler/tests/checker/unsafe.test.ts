@@ -3,11 +3,11 @@ import { checkError, checkOk } from "./helpers";
 
 // Stub declarations for alloc/free (normally imported from mem module)
 const MEM_STUBS = `
-  fn alloc(count: usize) -> ptr<u8> { return null; }
-  fn free(p: ptr<u8>) {}
+  fn alloc(count: usize) -> *u8 { return null; }
+  fn free(p: *u8) {}
 `;
 
-describe.skip("Checker — Unsafe", () => {
+describe("Checker — Unsafe", () => {
   test("unsafe block enters unsafe scope", () => {
     checkOk("fn main() -> int { unsafe { let x = 1; } return 0; }");
   });
@@ -40,14 +40,14 @@ describe.skip("Checker — Unsafe", () => {
   test("free outside unsafe → error", () => {
     checkError(
       `${MEM_STUBS}
-      fn main() -> int { let p: ptr<int> = null; free(p); return 0; }`,
+      fn main() -> int { let p: *int = null; free(p); return 0; }`,
       "cannot call 'free' outside unsafe block"
     );
   });
 
   test("extern fn call inside unsafe → ok", () => {
     checkOk(`
-      extern fn puts(s: ptr<c_char>) -> int;
+      extern fn puts(s: *c_char) -> int;
       fn main() -> int { unsafe { puts(null); } return 0; }
     `);
   });
@@ -55,7 +55,7 @@ describe.skip("Checker — Unsafe", () => {
   test("extern fn call outside unsafe → error", () => {
     checkError(
       `
-        extern fn puts(s: ptr<c_char>) -> int;
+        extern fn puts(s: *c_char) -> int;
         fn main() -> int { puts(null); return 0; }
       `,
       "cannot call extern function outside unsafe block"
@@ -65,7 +65,7 @@ describe.skip("Checker — Unsafe", () => {
   test("ptr dereference inside unsafe → ok", () => {
     checkOk(`
       fn main() -> int {
-        let p: ptr<int> = null;
+        let p: *int = null;
         unsafe { let x = *p; }
         return 0;
       }
@@ -74,12 +74,12 @@ describe.skip("Checker — Unsafe", () => {
 
   test("ptr dereference outside unsafe → error", () => {
     checkError(
-      "fn main() -> int { let p: ptr<int> = null; let x = *p; return 0; }",
+      "fn main() -> int { let p: *int = null; let x = *p; return 0; }",
       "pointer dereference requires unsafe block"
     );
   });
 
-  test("address-of inside unsafe → ok, returns ptr<T>", () => {
+  test("address-of inside unsafe → ok, returns *T", () => {
     checkOk(`
       fn main() -> int {
         let x = 42;
@@ -107,22 +107,22 @@ describe.skip("Checker — Unsafe", () => {
     `);
   });
 
-  test("unsafe struct without __destroy when has ptr<T> → error", () => {
+  test("unsafe struct without __destroy when has *T → error", () => {
     checkError(
       `
-        unsafe struct Bad { data: ptr<u8>; }
+        unsafe struct Bad { data: *u8; }
         fn main() -> int { return 0; }
       `,
       "must define '__destroy'"
     );
   });
 
-  test("unsafe struct without __oncopy when has ptr<T> → error", () => {
+  test("unsafe struct without __oncopy when has *T → error", () => {
     checkError(
       `
         unsafe struct Bad {
-          data: ptr<u8>;
-          fn __destroy(self: Bad) { }
+          data: *u8;
+          fn __destroy(self: ref Bad) { }
         }
         fn main() -> int { return 0; }
       `,
@@ -130,18 +130,18 @@ describe.skip("Checker — Unsafe", () => {
     );
   });
 
-  test("unsafe struct with both hooks and ptr<T> → ok", () => {
+  test("unsafe struct with both hooks and *T → ok", () => {
     checkOk(`${MEM_STUBS}
       unsafe struct Buffer {
-        data: ptr<u8>;
+        data: *u8;
         size: usize;
-        fn __destroy(self: Buffer) {
+        fn __destroy(self: ref Buffer) {
           unsafe { free(self.data); }
         }
-        fn __oncopy(self: Buffer) -> Buffer {
+        fn __oncopy(self: ref Buffer) {
           unsafe {
-            let new_data = alloc(self.size);
-            return Buffer{ data: new_data, size: self.size };
+            let newData = alloc(self.size);
+            self.data = newData;
           }
         }
       }
@@ -149,7 +149,7 @@ describe.skip("Checker — Unsafe", () => {
     `);
   });
 
-  test("unsafe struct without ptr<T> — hooks optional → ok", () => {
+  test("unsafe struct without *T — hooks optional → ok", () => {
     checkOk(`
       unsafe struct Simple { value: int; }
       fn main() -> int { return 0; }
@@ -157,7 +157,6 @@ describe.skip("Checker — Unsafe", () => {
   });
 
   test("sizeof is safe (no unsafe needed)", () => {
-    // sizeof takes a type identifier; 'int' is a keyword so use a struct name
     checkOk(`
       struct Point { x: f64; y: f64; }
       fn main() -> int { let s = sizeof(Point); return 0; }
@@ -207,7 +206,7 @@ describe.skip("Checker — Unsafe", () => {
     checkOk(`
       fn main() -> int {
         let x = 42;
-        let addr = unsafe { &x };
+        let address = unsafe { &x };
         return 0;
       }
     `);
@@ -217,18 +216,18 @@ describe.skip("Checker — Unsafe", () => {
     checkError(
       `fn main() -> int {
         let x = 42;
-        let addr = unsafe { &x };
-        let addr2 = &x;
+        let address = unsafe { &x };
+        let address2 = &x;
         return 0;
       }`,
       "requires unsafe block"
     );
   });
 
-  test("regular struct with ptr<T> field → error", () => {
+  test("regular struct with *T field → error", () => {
     checkError(
       `
-        struct Bad { data: ptr<u8>; }
+        struct Bad { data: *u8; }
         fn main() -> int { return 0; }
       `,
       "use 'unsafe struct' for pointer fields"
@@ -242,20 +241,20 @@ describe.skip("Checker — Unsafe", () => {
     `);
   });
 
-  test("alloc<T>(count) returns ptr<T>", () => {
+  test("alloc<T>(count) returns *T", () => {
     checkOk(`${MEM_STUBS}
-      fn takes_ptr_i32(p: ptr<i32>) {}
+      fn takesPtrI32(p: *i32) {}
       fn main() -> int {
         unsafe {
           let p = alloc<i32>(10);
-          takes_ptr_i32(p);
+          takesPtrI32(p);
         }
         return 0;
       }
     `);
   });
 
-  test("alloc without type arg returns ptr<void>", () => {
+  test("alloc without type arg returns *void", () => {
     checkOk(`${MEM_STUBS}
       fn main() -> int {
         unsafe { let p = alloc(10); free(p); }

@@ -67,7 +67,7 @@ const KEYWORD_MAP: [string, TokenKind][] = [
   ["f64", TokenKind.F64],
 ];
 
-describe.skip("keywords", () => {
+describe("keywords", () => {
   for (const [keyword, expectedKind] of KEYWORD_MAP) {
     test(`keyword '${keyword}'`, () => {
       const { tokens } = lex(keyword);
@@ -106,7 +106,7 @@ const RESERVED_KEYWORDS = [
   "yield",
 ];
 
-describe.skip("reserved keywords", () => {
+describe("reserved keywords", () => {
   for (const keyword of RESERVED_KEYWORDS) {
     test(`reserved keyword '${keyword}' produces diagnostic`, () => {
       const { diagnostics } = lex(keyword);

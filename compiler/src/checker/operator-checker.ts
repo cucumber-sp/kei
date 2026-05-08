@@ -329,23 +329,63 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
 }
 
 function checkAssignTarget(checker: Checker, target: Expression): void {
+  // Step 1: check the assigned-to slot itself (only the OUTERMOST node).
+  // Intermediate field accesses on the path don't matter — we're not
+  // writing to them, just reading them to find the leaf slot.
+  if (target.kind === "MemberExpr") {
+    let objectType = checker.getExprType(target.object);
+    if (objectType && objectType.kind === TypeKind.Ptr && objectType.isRef) {
+      objectType = objectType.pointee;
+    }
+    if (
+      objectType &&
+      objectType.kind === TypeKind.Struct &&
+      objectType.readonlyFields?.has(target.property)
+    ) {
+      checker.error(
+        `cannot assign to readonly field '${target.property}'`,
+        target.span
+      );
+    }
+  }
+
+  // Step 2: walk to the root binding and check it's mutable.
+  checkAssignRoot(checker, target);
+}
+
+/**
+ * Walk down `target` to the root identifier and check its binding mutability.
+ * Does NOT re-check field-level readonly along the way — that's only the
+ * outermost field's concern.
+ */
+function checkAssignRoot(checker: Checker, target: Expression): void {
   if (target.kind === "Identifier") {
     const sym = checker.currentScope.lookup(target.name);
     if (sym && sym.kind === SymbolKind.Variable) {
       if (!sym.isMutable) {
         checker.error(`cannot assign to immutable variable '${target.name}'`, target.span);
       }
+      // `readonly ref T` parameter — write-through is forbidden (the
+      // surface form is `x = v;` since auto-deref makes the param look
+      // like T at the use site).
+      if (sym.type.kind === TypeKind.Ptr && sym.type.isRef && sym.type.isReadonly) {
+        checker.error(
+          `cannot write through readonly reference '${target.name}'`,
+          target.span
+        );
+      }
     }
+    return;
   }
-  // MemberExpr and IndexExpr and DerefExpr — check the root object is mutable
-  if (target.kind === "MemberExpr") {
-    checkAssignTarget(checker, target.object);
+  if (target.kind === "MemberExpr" || target.kind === "IndexExpr") {
+    checkAssignRoot(checker, target.object);
+    return;
   }
   if (target.kind === "DerefExpr") {
-    // Deref assignment is allowed in unsafe
     if (!checker.currentScope.isInsideUnsafe()) {
       checker.error("pointer dereference assignment requires unsafe block", target.span);
     }
+    return;
   }
 }
 

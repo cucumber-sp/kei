@@ -8,7 +8,7 @@
 import { describe, test } from "bun:test";
 import { checkError, checkOk } from "./helpers";
 
-describe.skip("Checker — Duplicate Methods", () => {
+describe("Checker — Duplicate Methods", () => {
   test("duplicate method name in struct → error", () => {
     checkError(
       `
@@ -49,7 +49,7 @@ describe.skip("Checker — Duplicate Methods", () => {
   });
 });
 
-describe.skip("Checker — Duplicate Enum Variants", () => {
+describe("Checker — Duplicate Enum Variants", () => {
   test("duplicate variant name in enum → error", () => {
     checkError(
       `
@@ -68,13 +68,13 @@ describe.skip("Checker — Duplicate Enum Variants", () => {
   });
 });
 
-describe.skip("Checker — Lifecycle Hook Signatures", () => {
+describe("Checker — Lifecycle Hook Signatures", () => {
   test("__destroy with correct signature → ok", () => {
     checkOk(`
-      extern fn malloc(size: int) -> ptr<void>;
-      extern fn c_free(p: ptr<void>);
+      extern fn malloc(size: int) -> *void;
+      extern fn c_free(p: *void);
       unsafe struct Buffer {
-        data: ptr<void>;
+        data: *void;
         fn __destroy(self: Buffer) {
           unsafe { c_free(self.data); }
         }
@@ -92,9 +92,9 @@ describe.skip("Checker — Lifecycle Hook Signatures", () => {
   test("__destroy with extra params → error", () => {
     checkError(
       `
-        extern fn c_free(p: ptr<void>);
+        extern fn c_free(p: *void);
         unsafe struct Buffer {
-          data: ptr<void>;
+          data: *void;
           fn __destroy(self: Buffer, extra: int) {
             unsafe { c_free(self.data); }
           }
@@ -112,7 +112,7 @@ describe.skip("Checker — Lifecycle Hook Signatures", () => {
     checkError(
       `
         unsafe struct Buffer {
-          data: ptr<void>;
+          data: *void;
           fn __destroy() {
           }
           fn __oncopy(self: Buffer) -> Buffer {
@@ -128,9 +128,9 @@ describe.skip("Checker — Lifecycle Hook Signatures", () => {
   test("__oncopy with wrong first param name → error", () => {
     checkError(
       `
-        extern fn c_free(p: ptr<void>);
+        extern fn c_free(p: *void);
         unsafe struct Buffer {
-          data: ptr<void>;
+          data: *void;
           fn __destroy(self: Buffer) {
             unsafe { c_free(self.data); }
           }
@@ -147,9 +147,9 @@ describe.skip("Checker — Lifecycle Hook Signatures", () => {
   test("__destroy with non-void return type → error", () => {
     checkError(
       `
-        extern fn c_free(p: ptr<void>);
+        extern fn c_free(p: *void);
         unsafe struct Buffer {
-          data: ptr<void>;
+          data: *void;
           fn __destroy(self: Buffer) -> int {
             unsafe { c_free(self.data); }
             return 0;

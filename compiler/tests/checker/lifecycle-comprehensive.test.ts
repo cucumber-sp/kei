@@ -6,7 +6,7 @@ const MEM_STUBS = `
   fn free(p: ptr<u8>) {}
 `;
 
-describe.skip("Checker — Lifecycle Hooks (comprehensive)", () => {
+describe("Checker — Lifecycle Hooks (comprehensive)", () => {
   // ── Struct with __destroy ──────────────────────────────────────────────
 
   describe("struct with __destroy", () => {
@@ -215,7 +215,7 @@ describe.skip("Checker — Lifecycle Hooks (comprehensive)", () => {
     test("move as function argument", () => {
       checkOk(`
         struct Data { value: int; }
-        fn consume(move d: Data) -> int {
+        fn consume(d: Data) -> int {
           return d.value;
         }
         fn main() -> int {
@@ -229,7 +229,7 @@ describe.skip("Checker — Lifecycle Hooks (comprehensive)", () => {
       checkError(
         `
           struct Data { value: int; }
-          fn consume(move d: Data) -> int {
+          fn consume(d: Data) -> int {
             return d.value;
           }
           fn main() -> int {

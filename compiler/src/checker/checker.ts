@@ -22,6 +22,7 @@ import { DeclarationChecker } from "./decl-checker";
 import { ExpressionChecker } from "./expr-checker";
 import type { MonomorphizedFunction, MonomorphizedStruct } from "./generics";
 import { Scope } from "./scope";
+import { validateRefPositions } from "./ref-position-checker";
 import { StatementChecker } from "./stmt-checker";
 import type { ScopeSymbol } from "./symbols";
 import { SymbolKind, typeSymbol, variableSymbol } from "./symbols";
@@ -219,6 +220,14 @@ export class Checker {
 
   /** Main entry point — check entire program. */
   check(): CheckResult {
+    // Pass 0: Surface-level position validation for `ref T` annotations.
+    // These are syntactic restrictions (return types, safe-struct fields,
+    // local bindings, etc.) — running them up front gives clean errors
+    // before later passes get confused by an out-of-position RefType.
+    for (const d of validateRefPositions(this.program)) {
+      this.diagnostics.push(d);
+    }
+
     // Pass 1: Register all top-level declarations
     for (const decl of this.program.declarations) {
       this.declChecker.registerDeclaration(decl);
@@ -332,7 +341,7 @@ export class Checker {
         // biome-ignore lint/style/noNonNullAssertion: index is bounded by decl.params.length
         const param = decl.params[i]!;
         const paramType = concreteType.params[i]?.type ?? ({ kind: TypeKind.Void } as Type);
-        this.defineVariable(param.name, paramType, param.isMut, false, param.span);
+        this.defineVariable(param.name, paramType, !param.isReadonly, false, param.span);
       }
 
       // Check body statements — this populates typeMap for all expressions

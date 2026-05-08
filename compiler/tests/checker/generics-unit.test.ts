@@ -45,7 +45,7 @@ function makeStructType(
   };
 }
 
-describe.skip("substituteType", () => {
+describe("substituteType", () => {
   test("returns original type when typeMap is empty", () => {
     const t = I32_TYPE;
     const result = substituteType(t, new Map());
@@ -113,7 +113,7 @@ describe.skip("substituteType", () => {
 
   test("substitutes Struct method types", () => {
     const method = functionType(
-      [{ name: "self", type: typeParam("T"), isMut: false, isMove: false }],
+      [{ name: "self", type: typeParam("T"), isReadonly: false }],
       typeParam("T")
     );
     const s = makeStructType("Container", [["val", typeParam("T")]], [["get", method]]);
@@ -128,7 +128,7 @@ describe.skip("substituteType", () => {
 
   test("substitutes Function type via delegation", () => {
     const fn = functionType(
-      [{ name: "x", type: typeParam("T"), isMut: false, isMove: false }],
+      [{ name: "x", type: typeParam("T"), isReadonly: false }],
       typeParam("T")
     );
     const result = substituteType(fn, new Map([["T", BOOL_TYPE]]));
@@ -156,10 +156,10 @@ describe.skip("substituteType", () => {
   });
 });
 
-describe.skip("substituteFunctionType", () => {
+describe("substituteFunctionType", () => {
   test("returns original when typeMap is empty", () => {
     const fn = functionType(
-      [{ name: "x", type: I32_TYPE, isMut: false, isMove: false }],
+      [{ name: "x", type: I32_TYPE, isReadonly: false }],
       VOID_TYPE
     );
     const result = substituteFunctionType(fn, new Map());
@@ -168,7 +168,7 @@ describe.skip("substituteFunctionType", () => {
 
   test("returns original when nothing changes", () => {
     const fn = functionType(
-      [{ name: "x", type: I32_TYPE, isMut: false, isMove: false }],
+      [{ name: "x", type: I32_TYPE, isReadonly: false }],
       VOID_TYPE
     );
     const result = substituteFunctionType(fn, new Map([["T", BOOL_TYPE]]));
@@ -177,7 +177,7 @@ describe.skip("substituteFunctionType", () => {
 
   test("substitutes parameter types", () => {
     const fn = functionType(
-      [{ name: "x", type: typeParam("T"), isMut: false, isMove: false }],
+      [{ name: "x", type: typeParam("T"), isReadonly: false }],
       VOID_TYPE
     );
     const result = substituteFunctionType(fn, new Map([["T", I32_TYPE]]));
@@ -202,7 +202,7 @@ describe.skip("substituteFunctionType", () => {
 
   test("preserves isExtern flag", () => {
     const fn = functionType(
-      [{ name: "x", type: typeParam("T"), isMut: false, isMove: false }],
+      [{ name: "x", type: typeParam("T"), isReadonly: false }],
       VOID_TYPE,
       [],
       [],
@@ -214,7 +214,7 @@ describe.skip("substituteFunctionType", () => {
 
   test("clears genericParams in result", () => {
     const fn = functionType(
-      [{ name: "x", type: typeParam("T"), isMut: false, isMove: false }],
+      [{ name: "x", type: typeParam("T"), isReadonly: false }],
       typeParam("T"),
       [],
       ["T"]
@@ -224,7 +224,7 @@ describe.skip("substituteFunctionType", () => {
   });
 });
 
-describe.skip("mangleGenericName", () => {
+describe("mangleGenericName", () => {
   test("mangles with integer types", () => {
     expect(mangleGenericName("Box", [I32_TYPE])).toBe("Box_i32");
     expect(mangleGenericName("Pair", [I32_TYPE, I64_TYPE])).toBe("Pair_i32_i64");

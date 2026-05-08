@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { lowerAndPrint, lowerFunction } from "./helpers";
 
-describe.skip("KIR: nullable type (T?)", () => {
+describe("KIR: nullable type (T?)", () => {
   test("T? param lowers to ptr<T>", () => {
     const fn = lowerFunction(
       `
@@ -84,7 +84,7 @@ describe.skip("KIR: nullable type (T?)", () => {
   });
 });
 
-describe.skip("parser: nullable type syntax", () => {
+describe("parser: nullable type syntax", () => {
   test("T? parses as NullableType", () => {
     // If it parses without error, we're good
     expect(() =>

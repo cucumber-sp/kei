@@ -19,7 +19,7 @@ import { Severity } from "../errors/diagnostic";
 import type { Token } from "../lexer/token";
 import { TokenKind } from "../lexer/token";
 import { parseDeclaration } from "./decl-parser";
-import { parseExpression } from "./expr-parser";
+import { parseExpression, parseExpressionNoAssign } from "./expr-parser";
 import {
   parseAssertStatement,
   parseBreakStatement,
@@ -29,6 +29,7 @@ import {
   parseExpressionStatement,
   parseForStatement,
   parseIfStatement,
+  parseInitStatement,
   parseLetStatement,
   parseRequireStatement,
   parseReturnStatement,
@@ -113,6 +114,7 @@ export interface ParserContext {
 
   // Cross-module callbacks
   parseExpression(): Expression;
+  parseExpressionNoAssign(): Expression;
   parseType(): TypeNode;
   parseStatement(): Statement;
   parseBlockStatement(): BlockStmt;
@@ -263,7 +265,7 @@ export class Parser implements ParserContext {
   // ─── Types ──────────────────────────────────────────────────────────
 
   parseType(): TypeNode {
-    let node = this.parseBaseType();
+    let node = this.parseTypeWithoutNullable();
     while (this.match(TokenKind.Question)) {
       const qSpan = this.previous().span;
       node = {
@@ -275,10 +277,57 @@ export class Parser implements ParserContext {
     return node;
   }
 
+  /** Type without trailing `?` — handles `ref T`, `readonly ref T`, `*T`, base types. */
+  private parseTypeWithoutNullable(): TypeNode {
+    // `readonly ref T` and `ref T` — safe-reference forms. The pointee is
+    // itself a full `parseType()` so `ref T?` parses as `ref (T?)`.
+    if (this.check(TokenKind.Readonly) && this.peekNext()?.kind === TokenKind.Ref) {
+      const start = this.advance().span; // readonly
+      this.advance(); // ref
+      const pointee = this.parseType();
+      return {
+        kind: "RefType",
+        pointee,
+        readonly: true,
+        span: { start: start.start, end: pointee.span.end },
+      };
+    }
+    if (this.check(TokenKind.Ref)) {
+      const start = this.advance().span;
+      const pointee = this.parseType();
+      return {
+        kind: "RefType",
+        pointee,
+        readonly: false,
+        span: { start: start.start, end: pointee.span.end },
+      };
+    }
+
+    // `*T` — raw pointer. The pointee is `parseTypeWithoutNullable()` so
+    // a trailing `?` after `*T` binds at the outer level (`*T?` → `(*T)?`).
+    if (this.check(TokenKind.Star)) {
+      const start = this.advance().span;
+      const pointee = this.parseTypeWithoutNullable();
+      return {
+        kind: "RawPtrType",
+        pointee,
+        span: { start: start.start, end: pointee.span.end },
+      };
+    }
+
+    return this.parseBaseType();
+  }
+
   private parseBaseType(): TypeNode {
     const token = this.current();
 
-    // Handle generic type keywords: ptr<T>, inline<T, N>, array<T>, slice<T>, dynarray<T>
+    // `ptr<T>` / `slice<T>` / `dynarray<T>` are removed under the ref-redesign.
+    // Until the rest of the codebase migrates we still parse them as a
+    // generic-named type so we can emit a checker-level diagnostic, but the
+    // recommended forms are `*T` (unsafe), `ref T` (safe), `Array<T>`.
+    //
+    // `array<T>` (lowercase keyword alias for stdlib `Array<T>`) and
+    // `inline<T, N>` (compiler-intrinsic fixed-size array) parse here.
     if (
       token.kind === TokenKind.Ptr ||
       token.kind === TokenKind.Array ||
@@ -291,7 +340,6 @@ export class Parser implements ParserContext {
         this.advance();
         const typeArgs: TypeNode[] = [this.parseType()];
         while (this.match(TokenKind.Comma)) {
-          // For inline<T, N>, second arg is a number — treat as named type
           if (this.check(TokenKind.IntLiteral)) {
             const numToken = this.advance();
             typeArgs.push({
@@ -361,6 +409,7 @@ export class Parser implements ParserContext {
     if (this.check(TokenKind.Assert)) return parseAssertStatement(this);
     if (this.check(TokenKind.Require)) return parseRequireStatement(this);
     if (this.check(TokenKind.Unsafe)) return parseUnsafeBlockStatement(this);
+    if (this.check(TokenKind.Init)) return parseInitStatement(this);
     if (this.check(TokenKind.LeftBrace)) return this.parseBlockStatement();
 
     return parseExpressionStatement(this);
@@ -388,6 +437,10 @@ export class Parser implements ParserContext {
 
   parseExpression(): Expression {
     return parseExpression(this);
+  }
+
+  parseExpressionNoAssign(): Expression {
+    return parseExpressionNoAssign(this);
   }
 }
 

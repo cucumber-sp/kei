@@ -56,7 +56,7 @@ describe("Parser — Generic Type Args", () => {
   });
 
   test("generic call with no args", () => {
-    const expr = parseExpr("init<bool>()");
+    const expr = parseExpr("make<bool>()");
     expect(expr.kind).toBe("CallExpr");
     if (expr.kind !== "CallExpr") return;
     expect(expr.typeArgs).toHaveLength(1);

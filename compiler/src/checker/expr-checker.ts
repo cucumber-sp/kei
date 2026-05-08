@@ -116,7 +116,35 @@ export class ExpressionChecker {
         return checkArrayLiteral(this.checker, expr);
       case "SwitchExpr":
         return this.checkSwitchExpression(expr);
+      case "AddrExpr":
+        return this.checkAddrExpression(expr);
     }
+  }
+
+  /**
+   * `addr(field)` — slot lvalue for a `ref T` field.
+   *
+   * Position rules (unsafe-only, operand must reference a `ref T` field of
+   * an `unsafe struct`) are enforced elsewhere in the checker. The type
+   * machinery here just returns `*T` derived from the operand's type — it
+   * already lowers to the same internal `PtrType` whether the source spelt
+   * `ref T` or `*T`.
+   */
+  private checkAddrExpression(expr: import("../ast/nodes").AddrExpr): Type {
+    if (!this.checker.currentScope.isInsideUnsafe()) {
+      this.checker.error("'addr(...)' requires unsafe block", expr.span);
+      return ERROR_TYPE;
+    }
+    const operandType = this.checkExpression(expr.operand);
+    if (isErrorType(operandType)) return ERROR_TYPE;
+    // `addr(field)` aliases the raw pointer slot underlying a `ref T` field
+    // (or any other slot). Per the redesign, when the field is declared
+    // `ref T`, the slot itself stores a plain `*T` — addr() yields `*T`,
+    // not `**T`. For non-`ref` operands, return `*operand`.
+    if (operandType.kind === TypeKind.Ptr && operandType.isRef) {
+      return { kind: TypeKind.Ptr, pointee: operandType.pointee };
+    }
+    return { kind: TypeKind.Ptr, pointee: operandType };
   }
 
   private checkIdentifier(expr: Identifier): Type {
@@ -151,8 +179,16 @@ export class ExpressionChecker {
   }
 
   private checkMemberExpression(expr: MemberExpr): Type {
-    const objectType = this.checkExpression(expr.object);
+    let objectType = this.checkExpression(expr.object);
     if (isErrorType(objectType)) return ERROR_TYPE;
+
+    // Auto-deref through `ref T` / `readonly ref T`. The IR-level pointer
+    // is transparent to the user — `obj.field` on a `ref T` looks up
+    // `field` on T. Raw pointers (`*T`) do NOT auto-deref; the user must
+    // write `(*p).field` explicitly.
+    if (objectType.kind === TypeKind.Ptr && objectType.isRef) {
+      objectType = objectType.pointee;
+    }
 
     // Module-qualified access: math.add, net.http.Server
     if (objectType.kind === TypeKind.Module) {

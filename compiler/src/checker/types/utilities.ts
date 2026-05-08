@@ -82,6 +82,19 @@ export function isAssignableTo(source: Type, target: Type): boolean {
     if (source.pointee.kind === TypeKind.Void) return true;
   }
 
+  // `ref T` auto-derefs to T at use sites: a value of `ref T` is
+  // assignable wherever T is expected. This makes `return x.value;`
+  // work when `x: ref Item`, and lets `ref T` flow into a `T` parameter.
+  if (source.kind === TypeKind.Ptr && source.isRef) {
+    if (isAssignableTo(source.pointee, target)) return true;
+  }
+
+  // The reverse — auto-reference: a value of T is assignable where
+  // `ref T` is expected (the call site implicitly takes the address).
+  if (target.kind === TypeKind.Ptr && target.isRef) {
+    if (isAssignableTo(source, target.pointee)) return true;
+  }
+
   // Integer widening: smaller signed → larger signed, smaller unsigned → larger unsigned
   if (source.kind === TypeKind.Int && target.kind === TypeKind.Int) {
     if (source.signed === target.signed && source.bits < target.bits) return true;

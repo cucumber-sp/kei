@@ -137,8 +137,7 @@ export class DeclarationChecker {
     const params: ParamInfo[] = decl.params.map((p) => ({
       name: p.name,
       type: this.checker.resolveType(p.typeAnnotation),
-      isMut: p.isMut,
-      isMove: p.isMove,
+      isReadonly: p.isReadonly,
     }));
 
     const returnType = decl.returnType ? this.checker.resolveType(decl.returnType) : VOID_TYPE;
@@ -262,10 +261,10 @@ export class DeclarationChecker {
     // Create function scope
     this.checker.pushScope({ functionContext: funcType });
 
-    // Add params to scope
+    // Add params to scope. Params bind mutably by default; `readonly` opts out.
     for (const param of decl.params) {
       const paramType = this.checker.resolveType(param.typeAnnotation);
-      this.checker.defineVariable(param.name, paramType, param.isMut, false, param.span);
+      this.checker.defineVariable(param.name, paramType, !param.isReadonly, false, param.span);
     }
 
     // Check body
@@ -321,8 +320,7 @@ export class DeclarationChecker {
     const params: ParamInfo[] = decl.params.map((p) => ({
       name: p.name,
       type: this.checker.resolveType(p.typeAnnotation),
-      isMut: p.isMut,
-      isMove: p.isMove,
+      isReadonly: p.isReadonly,
     }));
 
     const returnType = decl.returnType ? this.checker.resolveType(decl.returnType) : VOID_TYPE;

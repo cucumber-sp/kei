@@ -38,6 +38,11 @@ export function ptrType(pointee: Type): PtrType {
   return { kind: TypeKind.Ptr, pointee };
 }
 
+/** Construct a `ref T` pointer (auto-deref on member access; mutable). */
+export function refType(pointee: Type, readonly = false): PtrType {
+  return { kind: TypeKind.Ptr, pointee, isRef: true, isReadonly: readonly };
+}
+
 export function arrayType(element: Type, length?: number): ArrayType {
   return { kind: TypeKind.Array, element, length };
 }

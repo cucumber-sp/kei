@@ -27,6 +27,7 @@ export enum ExprKind {
   Cast = "CastExpr",
   ArrayLiteral = "ArrayLiteral",
   SwitchExpr = "SwitchExpr",
+  Addr = "AddrExpr",
 }
 
 /** Binary operation (`a + b`, `x == y`, `p && q`). */
@@ -218,6 +219,20 @@ export interface SwitchExpr extends BaseNode {
   cases: SwitchCase[];
 }
 
+/**
+ * `addr(field)` — slot lvalue for a `ref T` field of an unsafe struct.
+ *
+ * Returns a `*T` aliasing the raw pointer slot underlying the `ref T`
+ * field. Assigning to it sets where the reference points; dereferencing
+ * (`*addr(field)`) accesses the pointed-to memory without firing
+ * lifecycle hooks. Unsafe-only; the checker rejects it outside an
+ * `unsafe` block.
+ */
+export interface AddrExpr extends BaseNode {
+  kind: "AddrExpr";
+  operand: Expression;
+}
+
 /** Union of all expression nodes. */
 export type Expression =
   | BinaryExpr
@@ -243,4 +258,5 @@ export type Expression =
   | UnsafeExpr
   | CastExpr
   | ArrayLiteral
-  | SwitchExpr;
+  | SwitchExpr
+  | AddrExpr;

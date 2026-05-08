@@ -1,0 +1,45 @@
+// std/shared.kei — Reference-counted shared owner.
+//
+// Canonical pattern from `docs/design/ref-redesign.md` §3.1: a small
+// `unsafe struct` with two `ref` fields (refcount + value) that point
+// into a single heap allocation `[count: i64 | T payload]`.
+//
+// Mutation is alias-visible and explicit:
+//   `s.value = newT`        — write-through (destroy old + oncopy new)
+//   `s = Shared<T>.wrap(t)` — handle replacement (full destroy/oncopy)
+//
+// Copying a Shared<T> bumps the refcount; destroying drops it and frees
+// the block when the count reaches zero. v1 is single-threaded — the
+// counter is non-atomic. An atomic sibling (`AtomicShared<T>`) is
+// planned for v2.
+
+import { alloc, dealloc } from mem;
+
+pub unsafe struct Shared<T> {
+    refcount: ref i64;
+    value: ref T;
+
+    fn wrap(item: ref T) -> Shared<T> {
+        let s = Shared<T>{};
+        unsafe {
+            // ONE allocation: [count: i64 | T payload]
+            let block = alloc(sizeof(i64) + sizeof(T));
+            addr(s.refcount) = block as *i64;
+            addr(s.value)    = ((block as usize) + sizeof(i64)) as *T;
+            s.refcount = 1;                  // auto-deref through ref i64 field
+            init s.value = item;             // single oncopy of *item into slot
+        }
+        return s;
+    }
+
+    fn __oncopy(self: ref Shared<T>) {
+        self.refcount += 1;                  // auto-deref through ref i64 field
+    }
+
+    fn __destroy(self: ref Shared<T>) {
+        self.refcount -= 1;
+        if self.refcount == 0 {
+            unsafe { dealloc(addr(self.refcount) as *void); }
+        }
+    }
+}

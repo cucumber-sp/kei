@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { TypeKind } from "../../src/checker/types";
 import { checkError, checkOk, typeOf } from "./helpers";
 
-describe.skip("Checker — Types", () => {
+describe("Checker — Types", () => {
   test("integer literal has type i32", () => {
     const t = typeOf("42");
     expect(t.kind).toBe(TypeKind.Int);
@@ -71,8 +71,8 @@ describe.skip("Checker — Types", () => {
     checkError("fn main() -> int { let x: string = 42; return 0; }", "type mismatch");
   });
 
-  test("null type: let p: ptr<int> = null → ok", () => {
-    checkOk("fn main() -> int { let p: ptr<int> = null; return 0; }");
+  test("null type: let p: *int = null → ok", () => {
+    checkOk("fn main() -> int { let p: *int = null; return 0; }");
   });
 
   test("null to non-ptr: let x: int = null → error", () => {
@@ -142,7 +142,7 @@ describe.skip("Checker — Types", () => {
 
   test("deref outside unsafe → error", () => {
     checkError(
-      "fn main() -> int { let p: ptr<int> = null; let x = *p; return 0; }",
+      "fn main() -> int { let p: *int = null; let x = *p; return 0; }",
       "requires unsafe block"
     );
   });
@@ -296,7 +296,7 @@ describe.skip("Checker — Types", () => {
   test("ptr equality with null → ok", () => {
     checkOk(`
       fn main() -> int {
-        let p: ptr<int> = null;
+        let p: *int = null;
         let x = p != null;
         return 0;
       }

@@ -366,14 +366,17 @@ function resolveOverloadedCall(
   return ERROR_TYPE;
 }
 
-/** Mark move parameters as moved after a successful overload resolution. */
-function applyMoveParams(checker: Checker, expr: CallExpr, funcType: FunctionType): void {
-  for (let i = 0; i < expr.args.length; i++) {
-    const arg = expr.args[i];
-    if (funcType.params[i]?.isMove && arg?.kind === "MoveExpr") {
-      if (arg.operand.kind === "Identifier") {
-        checker.markVariableMoved(arg.operand.name);
-      }
+/**
+ * Mark moved arguments as moved after a successful overload resolution.
+ *
+ * The `move` parameter form is gone — `move` only exists as a call-site
+ * expression. Whenever a caller passes `move x`, the source identifier
+ * is marked moved regardless of the parameter's modifiers.
+ */
+function applyMoveParams(checker: Checker, expr: CallExpr, _funcType: FunctionType): void {
+  for (const arg of expr.args) {
+    if (arg?.kind === "MoveExpr" && arg.operand.kind === "Identifier") {
+      checker.markVariableMoved(arg.operand.name);
     }
   }
 }
@@ -418,12 +421,10 @@ function checkFunctionCallArgs(
       }
     }
 
-    // Handle move params
-    if (param.isMove && currentArg.kind === "MoveExpr") {
-      const moveExpr = currentArg;
-      if (moveExpr.operand.kind === "Identifier") {
-        checker.markVariableMoved(moveExpr.operand.name);
-      }
+    // Handle `move x` at the call site — applies to any parameter regardless
+    // of modifiers (the move-parameter form is gone; move is a call-site op).
+    if (currentArg.kind === "MoveExpr" && currentArg.operand.kind === "Identifier") {
+      checker.markVariableMoved(currentArg.operand.name);
     }
   }
 

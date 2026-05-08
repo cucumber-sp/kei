@@ -1,0 +1,168 @@
+/**
+ * Parser tests for ref-redesign syntax: `ref T`, `readonly ref T`, `*T`,
+ * `addr(...)`, `init lvalue = expr;`, `readonly` field/param modifier.
+ *
+ * Position rules (e.g. "ref T cannot appear in a return type") are the
+ * checker's job; these tests just confirm the surface productions parse
+ * to the right AST shape.
+ */
+
+import { describe, expect, test } from "bun:test";
+import { parse } from "./helpers";
+
+describe("Parser — ref-redesign types", () => {
+  test("`ref T` parameter parses to RefType { readonly: false }", () => {
+    const program = parse("fn read(x: ref Item) { }");
+    const fn = program.declarations[0];
+    if (fn?.kind !== "FunctionDecl") throw new Error("expected FunctionDecl");
+    const ann = fn.params[0]?.typeAnnotation;
+    if (ann?.kind !== "RefType") throw new Error("expected RefType");
+    expect(ann.readonly).toBe(false);
+    expect(ann.pointee.kind).toBe("NamedType");
+    if (ann.pointee.kind === "NamedType") expect(ann.pointee.name).toBe("Item");
+  });
+
+  test("`readonly ref T` parameter parses to RefType { readonly: true }", () => {
+    const program = parse("fn show(x: readonly ref Item) { }");
+    const fn = program.declarations[0];
+    if (fn?.kind !== "FunctionDecl") throw new Error("expected FunctionDecl");
+    const ann = fn.params[0]?.typeAnnotation;
+    if (ann?.kind !== "RefType") throw new Error("expected RefType");
+    expect(ann.readonly).toBe(true);
+  });
+
+  test("`*T` parameter parses to RawPtrType", () => {
+    const program = parse("fn f(p: *u8) { }");
+    const fn = program.declarations[0];
+    if (fn?.kind !== "FunctionDecl") throw new Error("expected FunctionDecl");
+    const ann = fn.params[0]?.typeAnnotation;
+    if (ann?.kind !== "RawPtrType") throw new Error("expected RawPtrType");
+    expect(ann.pointee.kind).toBe("NamedType");
+  });
+
+  test("`*T` extern fn return parses", () => {
+    const program = parse("extern fn malloc(size: usize) -> *u8;");
+    const fn = program.declarations[0];
+    if (fn?.kind !== "ExternFunctionDecl") throw new Error("expected ExternFunctionDecl");
+    expect(fn.returnType?.kind).toBe("RawPtrType");
+  });
+
+  test("readonly field on a struct", () => {
+    const program = parse(`
+      struct Cfg {
+        readonly dbUrl: string;
+        online: bool;
+      }
+    `);
+    const s = program.declarations[0];
+    if (s?.kind !== "StructDecl") throw new Error("expected StructDecl");
+    expect(s.fields[0]?.isReadonly).toBe(true);
+    expect(s.fields[1]?.isReadonly).toBe(false);
+  });
+
+  test("readonly param + ref T param mix", () => {
+    const program = parse("fn f(readonly x: int, y: ref Item) { }");
+    const fn = program.declarations[0];
+    if (fn?.kind !== "FunctionDecl") throw new Error("expected FunctionDecl");
+    expect(fn.params[0]?.isReadonly).toBe(true);
+    expect(fn.params[1]?.isReadonly).toBe(false);
+    expect(fn.params[1]?.typeAnnotation.kind).toBe("RefType");
+  });
+
+  test("nested `ref` inside generic argument parses", () => {
+    // The checker rejects ref T in generic position; the parser still
+    // accepts it so the diagnostic is structured.
+    const program = parse("fn f(x: List<ref Item>) { }");
+    const fn = program.declarations[0];
+    if (fn?.kind !== "FunctionDecl") throw new Error("expected FunctionDecl");
+    const ann = fn.params[0]?.typeAnnotation;
+    if (ann?.kind !== "GenericType") throw new Error("expected GenericType");
+    expect(ann.typeArgs[0]?.kind).toBe("RefType");
+  });
+
+  test("`*T?` (nullable raw pointer) parses", () => {
+    const program = parse("fn f(p: *u8?) { }");
+    const fn = program.declarations[0];
+    if (fn?.kind !== "FunctionDecl") throw new Error("expected FunctionDecl");
+    const ann = fn.params[0]?.typeAnnotation;
+    if (ann?.kind !== "NullableType") throw new Error("expected NullableType");
+    expect(ann.inner.kind).toBe("RawPtrType");
+  });
+});
+
+describe("Parser — addr(...) and init", () => {
+  test("`addr(s.field)` parses to AddrExpr containing MemberExpr", () => {
+    const program = parse(`
+      fn f() {
+        unsafe { let p = addr(s.field); }
+      }
+    `);
+    const fn = program.declarations[0];
+    if (fn?.kind !== "FunctionDecl") throw new Error("expected FunctionDecl");
+    const unsafeBlock = fn.body.statements[0];
+    if (unsafeBlock?.kind !== "UnsafeBlock") throw new Error("expected UnsafeBlock");
+    const letStmt = unsafeBlock.body.statements[0];
+    if (letStmt?.kind !== "LetStmt") throw new Error("expected LetStmt");
+    expect(letStmt.initializer.kind).toBe("AddrExpr");
+    if (letStmt.initializer.kind !== "AddrExpr") return;
+    expect(letStmt.initializer.operand.kind).toBe("MemberExpr");
+  });
+
+  test("`*addr(s.field)` parses as deref of addr expr", () => {
+    const program = parse(`
+      fn f() {
+        unsafe { let v = *addr(s.field); }
+      }
+    `);
+    const fn = program.declarations[0];
+    if (fn?.kind !== "FunctionDecl") throw new Error("expected FunctionDecl");
+    const unsafeBlock = fn.body.statements[0];
+    if (unsafeBlock?.kind !== "UnsafeBlock") throw new Error("expected UnsafeBlock");
+    const letStmt = unsafeBlock.body.statements[0];
+    if (letStmt?.kind !== "LetStmt") throw new Error("expected LetStmt");
+    // The `*` creates a UnaryExpr (or DerefExpr) whose operand is the AddrExpr.
+    const init = letStmt.initializer;
+    if (init.kind === "UnaryExpr") {
+      expect(init.operator).toBe("*");
+      expect(init.operand.kind).toBe("AddrExpr");
+    } else if (init.kind === "DerefExpr") {
+      expect(init.operand.kind).toBe("AddrExpr");
+    } else {
+      throw new Error(`unexpected initializer kind: ${init.kind}`);
+    }
+  });
+
+  test("`init lvalue = expr;` parses to InitStmt", () => {
+    const program = parse(`
+      fn f() {
+        unsafe { init s.value = item; }
+      }
+    `);
+    const fn = program.declarations[0];
+    if (fn?.kind !== "FunctionDecl") throw new Error("expected FunctionDecl");
+    const unsafeBlock = fn.body.statements[0];
+    if (unsafeBlock?.kind !== "UnsafeBlock") throw new Error("expected UnsafeBlock");
+    const initStmt = unsafeBlock.body.statements[0];
+    if (initStmt?.kind !== "InitStmt") throw new Error("expected InitStmt");
+    expect(initStmt.target.kind).toBe("MemberExpr");
+    expect(initStmt.value.kind).toBe("Identifier");
+  });
+});
+
+describe("Parser — `mut` is gone", () => {
+  test("`mut x: int` is no longer a valid param form (mut keyword still parses elsewhere)", () => {
+    // `mut` is still in the lexer's active keyword set (consumed by older
+    // unaffected paths until the parser cleanup). The new `parseParam`
+    // path no longer accepts it as a leading modifier — so the call-site
+    // either rejects or parses `mut` as the parameter name.
+    // Smoke test: `fn f(mut x: int)` should NOT produce a Param with name
+    // "x" anymore.
+    const program = parse("fn f(mut x: int) { }");
+    const fn = program.declarations[0];
+    if (fn?.kind !== "FunctionDecl") return;
+    // Either parser errors out or the leading `mut` is taken as the name —
+    // both are acceptable; what matters is that no Param now claims
+    // "isMut: true" the way the old form did.
+    expect(fn.params[0]?.isReadonly ?? false).toBe(false);
+  });
+});

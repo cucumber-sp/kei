@@ -51,7 +51,7 @@ describe("Parser — as cast", () => {
     }
   });
 
-  test.skip("cast with raw pointer type: p as *u8", () => {
+  test("cast with raw pointer type: p as *u8", () => {
     const expr = parseExpr("p as *u8");
     expect(expr.kind).toBe("CastExpr");
     if (expr.kind !== "CastExpr") return;

@@ -2659,7 +2659,7 @@ describe("e2e: generic struct + function combo", () => {
   });
 });
 
-describe.skip("e2e: unsafe pointer lowering", () => {
+describe("e2e: unsafe pointer lowering", () => {
   test("unsafe address-of plus unsafe deref returns the pointed value", () => {
     const r = run(
       "unsafe_ptr_roundtrip",
@@ -2699,18 +2699,18 @@ describe.skip("e2e: unsafe pointer lowering", () => {
     expect(r.stdout).toBe("");
   });
 
-  test("ptr->field read and write mutate the pointee", () => {
+  test("ref T method receiver mutates through the reference", () => {
     const r = run(
-      "unsafe_ptr_field_write",
+      "ref_field_write",
       `
       struct Counter { value: i32; }
-      fn bump(c: ptr<Counter>) {
-        unsafe { c->value = c->value + 1; }
+      fn bump(c: ref Counter) {
+        c.value = c.value + 1;
       }
       fn main() -> int {
         let c = Counter { value: 40 };
-        let p = unsafe { &c };
-        unsafe { bump(p); bump(p); }
+        bump(c);
+        bump(c);
         return c.value;
       }
     `
@@ -2751,17 +2751,17 @@ describe.skip("e2e: unsafe pointer lowering", () => {
     const r = run(
       "stdlib_arena_consumer",
       `
-      import { arena_make, arena_alloc, arena_reset } from arena;
+      import { arenaMake, arenaAlloc, arenaReset } from arena;
 
       fn main() -> int {
-        let a = arena_make(64);
+        let a = arenaMake(64);
         unsafe {
-          let p1: ptr<i32> = arena_alloc(&a, 4) as ptr<i32>;
-          let p2: ptr<i32> = arena_alloc(&a, 4) as ptr<i32>;
+          let p1: *i32 = arenaAlloc(a, 4) as *i32;
+          let p2: *i32 = arenaAlloc(a, 4) as *i32;
           *p1 = 10;
           *p2 = 32;
           let sum: i32 = *p1 + *p2;
-          arena_reset(&a);
+          arenaReset(a);
           return sum;
         }
       }
@@ -2779,45 +2779,47 @@ describe.skip("e2e: unsafe pointer lowering", () => {
       import { alloc, dealloc } from mem;
 
       unsafe struct Arena {
-        buf: ptr<u8>;
+        buf: *u8;
         pos: usize;
         cap: usize;
 
-        fn __destroy(self: Arena) {
-          unsafe { dealloc(self.buf as ptr<void>); }
+        fn __destroy(self: ref Arena) {
+          unsafe { dealloc(self.buf as *void); }
         }
 
-        fn __oncopy(self: Arena) -> Arena {
-          return Arena { buf: null, pos: 0, cap: 0 };
+        fn __oncopy(self: ref Arena) {
+          self.buf = null;
+          self.pos = 0;
+          self.cap = 0;
         }
       }
 
-      fn arena_make(cap: usize) -> Arena {
+      fn arenaMake(cap: usize) -> Arena {
         unsafe { return Arena { buf: alloc(cap), pos: 0, cap: cap }; }
       }
 
-      fn arena_alloc(a: ptr<Arena>, size: usize) -> ptr<u8> {
+      fn arenaAlloc(a: ref Arena, size: usize) -> *u8 {
         unsafe {
-          if a->pos + size > a->cap { return null; }
-          let result: ptr<u8> = ((a->buf as usize) + a->pos) as ptr<u8>;
-          a->pos = a->pos + size;
+          if a.pos + size > a.cap { return null; }
+          let result: *u8 = ((a.buf as usize) + a.pos) as *u8;
+          a.pos = a.pos + size;
           return result;
         }
       }
 
-      fn arena_reset(a: ptr<Arena>) {
-        unsafe { a->pos = 0; }
+      fn arenaReset(a: ref Arena) {
+        a.pos = 0;
       }
 
       fn main() -> int {
-        let a = arena_make(64);
+        let a = arenaMake(64);
         unsafe {
-          let p1: ptr<i32> = arena_alloc(&a, 4) as ptr<i32>;
-          let p2: ptr<i32> = arena_alloc(&a, 4) as ptr<i32>;
+          let p1: *i32 = arenaAlloc(a, 4) as *i32;
+          let p2: *i32 = arenaAlloc(a, 4) as *i32;
           *p1 = 10;
           *p2 = 32;
           let sum: i32 = *p1 + *p2;
-          arena_reset(&a);
+          arenaReset(a);
           return sum;
         }
       }

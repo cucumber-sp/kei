@@ -1,7 +1,7 @@
 import { describe, test } from "bun:test";
 import { checkOk } from "./helpers";
 
-describe.skip("Checker — Integration", () => {
+describe("Checker — Integration", () => {
   test("complete program: main function returns int", () => {
     checkOk(`
       fn main() -> int {
@@ -129,7 +129,7 @@ describe.skip("Checker — Integration", () => {
     checkOk(`
       struct Data { value: int; }
 
-      fn consume(move d: Data) -> int {
+      fn consume(d: Data) -> int {
         return d.value;
       }
 
@@ -258,11 +258,11 @@ describe.skip("Checker — Integration", () => {
         y -= 1;
 
         unsafe {
-          let addr = &x;
+          let address = &x;
         }
         let bits = ~x;
         let neg = -x;
-        let not_flag = !flag;
+        let notFlag = !flag;
 
         x += 10;
         x -= 5;

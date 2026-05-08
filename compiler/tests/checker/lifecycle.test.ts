@@ -1,7 +1,7 @@
 import { describe, test } from "bun:test";
 import { checkError, checkOk } from "./helpers";
 
-describe.skip("Checker — Lifecycle", () => {
+describe("Checker — Lifecycle", () => {
   test("move x marks x as moved", () => {
     checkOk(`
       struct Data { value: int; }
@@ -29,7 +29,6 @@ describe.skip("Checker — Lifecycle", () => {
   });
 
   test("move in one branch: conservative treatment", () => {
-    // After move in one branch, variable is considered moved
     checkError(
       `
         struct Data { value: int; }
@@ -53,22 +52,22 @@ describe.skip("Checker — Lifecycle", () => {
     );
   });
 
-  test("struct with ptr<T> requires __destroy — error if missing", () => {
+  test("unsafe struct with *T requires __destroy — error if missing", () => {
     checkError(
       `
-        unsafe struct Bad { data: ptr<u8>; }
+        unsafe struct Bad { data: *u8; }
         fn main() -> int { return 0; }
       `,
       "must define '__destroy'"
     );
   });
 
-  test("struct with ptr<T> requires __oncopy — error if missing", () => {
+  test("unsafe struct with *T requires __oncopy — error if missing", () => {
     checkError(
       `
         unsafe struct Bad {
-          data: ptr<u8>;
-          fn __destroy(self: Bad) { }
+          data: *u8;
+          fn __destroy(self: ref Bad) { }
         }
         fn main() -> int { return 0; }
       `,
@@ -76,21 +75,19 @@ describe.skip("Checker — Lifecycle", () => {
     );
   });
 
-  test("regular struct (no ptr) — no hooks needed", () => {
+  test("regular struct (no *T) — no hooks needed", () => {
     checkOk(`
       struct Point { x: f64; y: f64; }
       fn main() -> int { return 0; }
     `);
   });
 
-  test("unsafe struct with both hooks → ok", () => {
+  test("unsafe struct with both hooks (new ref ABI) → ok", () => {
     checkOk(`
       unsafe struct Buffer {
-        data: ptr<u8>;
-        fn __destroy(self: Buffer) { }
-        fn __oncopy(self: Buffer) -> Buffer {
-          return Buffer{ data: self.data };
-        }
+        data: *u8;
+        fn __destroy(self: ref Buffer) { }
+        fn __oncopy(self: ref Buffer) { }
       }
       fn main() -> int { return 0; }
     `);
@@ -133,10 +130,10 @@ describe.skip("Checker — Lifecycle", () => {
     );
   });
 
-  test("move param at call site", () => {
+  test("move at call site (parameter form is removed; only the call-site form remains)", () => {
     checkOk(`
       struct Data { value: int; }
-      fn consume(move d: Data) -> int {
+      fn consume(d: Data) -> int {
         return d.value;
       }
       fn main() -> int {
@@ -160,7 +157,7 @@ describe.skip("Checker — Lifecycle", () => {
     );
   });
 
-  test("unsafe struct without ptr fields — hooks optional", () => {
+  test("unsafe struct without *T fields — hooks optional", () => {
     checkOk(`
       unsafe struct Flags { bits: u32; }
       fn main() -> int { return 0; }

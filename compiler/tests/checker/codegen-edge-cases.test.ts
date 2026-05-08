@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { TypeKind } from "../../src/checker/types";
 import { checkError, checkOk, typeOf } from "./helpers";
 
-describe.skip("Checker — Codegen Edge Cases", () => {
+describe("Checker — Codegen Edge Cases", () => {
   // ── Empty struct ─────────────────────────────────────────────────────
 
   describe("empty struct", () => {
