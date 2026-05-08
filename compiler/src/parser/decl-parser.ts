@@ -170,6 +170,8 @@ function parseMethodDeclaration(ctx: ParserContext): FunctionDecl {
 }
 
 function parseFieldDeclaration(ctx: ParserContext): Field {
+  const startToken = ctx.current();
+  const isReadonly = ctx.match(TokenKind.Readonly);
   const nameToken = ctx.expectIdentifier();
   ctx.expect(TokenKind.Colon);
   const typeAnnotation = ctx.parseType();
@@ -179,7 +181,8 @@ function parseFieldDeclaration(ctx: ParserContext): Field {
     kind: "Field",
     name: nameToken.lexeme,
     typeAnnotation,
-    span: { start: nameToken.span.start, end: end.span.end },
+    isReadonly,
+    span: { start: startToken.span.start, end: end.span.end },
   };
 }
 
@@ -235,6 +238,7 @@ function parseEnumVariant(ctx: ParserContext): EnumVariant {
         kind: "Field",
         name: fieldName.lexeme,
         typeAnnotation: fieldType,
+        isReadonly: false,
         span: { start: fieldName.span.start, end: fieldType.span.end },
       });
       if (!ctx.check(TokenKind.RightParen)) {
@@ -400,8 +404,7 @@ function parseParamList(ctx: ParserContext): Param[] {
 
 function parseParam(ctx: ParserContext): Param {
   const startToken = ctx.current();
-  const isMut = ctx.match(TokenKind.Mut);
-  const isMove = ctx.match(TokenKind.Move);
+  const isReadonly = ctx.match(TokenKind.Readonly);
   const name = ctx.expectIdentifier().lexeme;
   ctx.expect(TokenKind.Colon);
   const typeAnnotation = ctx.parseType();
@@ -410,8 +413,7 @@ function parseParam(ctx: ParserContext): Param {
     kind: "Param",
     name,
     typeAnnotation,
-    isMut,
-    isMove,
+    isReadonly,
     span: { start: startToken.span.start, end: typeAnnotation.span.end },
   };
 }

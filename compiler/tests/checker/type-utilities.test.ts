@@ -238,11 +238,11 @@ describe.skip("typesEqual", () => {
   describe("function types", () => {
     test("same params and return type are equal", () => {
       const a = functionType(
-        [{ name: "x", type: I32_TYPE, isMut: false, isMove: false }],
+        [{ name: "x", type: I32_TYPE, isReadonly: false }],
         BOOL_TYPE
       );
       const b = functionType(
-        [{ name: "x", type: I32_TYPE, isMut: false, isMove: false }],
+        [{ name: "x", type: I32_TYPE, isReadonly: false }],
         BOOL_TYPE
       );
       expect(typesEqual(a, b)).toBe(true);
@@ -256,7 +256,7 @@ describe.skip("typesEqual", () => {
 
     test("different param counts are not equal", () => {
       const a = functionType(
-        [{ name: "x", type: I32_TYPE, isMut: false, isMove: false }],
+        [{ name: "x", type: I32_TYPE, isReadonly: false }],
         VOID_TYPE
       );
       const b = functionType([], VOID_TYPE);
@@ -265,11 +265,11 @@ describe.skip("typesEqual", () => {
 
     test("different param types are not equal", () => {
       const a = functionType(
-        [{ name: "x", type: I32_TYPE, isMut: false, isMove: false }],
+        [{ name: "x", type: I32_TYPE, isReadonly: false }],
         VOID_TYPE
       );
       const b = functionType(
-        [{ name: "x", type: BOOL_TYPE, isMut: false, isMove: false }],
+        [{ name: "x", type: BOOL_TYPE, isReadonly: false }],
         VOID_TYPE
       );
       expect(typesEqual(a, b)).toBe(false);
@@ -718,7 +718,7 @@ describe.skip("typeToString", () => {
 
     test("single param function", () => {
       const t = functionType(
-        [{ name: "x", type: I32_TYPE, isMut: false, isMove: false }],
+        [{ name: "x", type: I32_TYPE, isReadonly: false }],
         BOOL_TYPE
       );
       expect(typeToString(t)).toBe("fn(x: i32) -> bool");
@@ -727,8 +727,8 @@ describe.skip("typeToString", () => {
     test("multi-param function", () => {
       const t = functionType(
         [
-          { name: "a", type: I32_TYPE, isMut: false, isMove: false },
-          { name: "b", type: F64_TYPE, isMut: false, isMove: false },
+          { name: "a", type: I32_TYPE, isReadonly: false },
+          { name: "b", type: F64_TYPE, isReadonly: false },
         ],
         STRING_TYPE
       );

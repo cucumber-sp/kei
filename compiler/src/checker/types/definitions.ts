@@ -110,8 +110,7 @@ export interface EnumType {
 export interface ParamInfo {
   name: string;
   type: Type;
-  isMut: boolean;
-  isMove: boolean;
+  isReadonly: boolean;
 }
 
 /** Function type — parameters, return type, throws clause, generics, extern flag. */

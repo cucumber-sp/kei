@@ -124,7 +124,7 @@ export class StructChecker {
         if (this.hasManagedFields(structType)) {
           // Synthesize a __destroy method type: fn __destroy(self: StructName) -> void
           const destroyType = functionType(
-            [{ name: "self", type: structType, isMut: false, isMove: false }],
+            [{ name: "self", type: structType, isReadonly: false }],
             VOID_TYPE,
             [],
             [],
@@ -165,7 +165,7 @@ export class StructChecker {
         if (this.hasCopyableFields(structType)) {
           // Synthesize __oncopy: fn __oncopy(self: StructName) -> StructName
           const oncopyType = functionType(
-            [{ name: "self", type: structType, isMut: false, isMove: false }],
+            [{ name: "self", type: structType, isReadonly: false }],
             structType,
             [],
             [],
@@ -279,7 +279,7 @@ export class StructChecker {
     // Add params to scope
     for (const param of method.params) {
       const paramType = this.checker.resolveType(param.typeAnnotation);
-      this.checker.defineVariable(param.name, paramType, param.isMut, false, param.span);
+      this.checker.defineVariable(param.name, paramType, !param.isReadonly, false, param.span);
     }
 
     // Check body

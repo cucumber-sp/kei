@@ -51,6 +51,14 @@ export class TypeResolver {
         return this.resolveGenericType(node.name, node.typeArgs, node.span, scope);
       case "NullableType":
         return ptrType(this.resolve(node.inner, scope));
+      case "RefType":
+        // `ref T` and `readonly ref T` both lower to the same internal
+        // pointer representation. The readonly bit is enforced at the
+        // checker AST level (write-through validation) and the position
+        // restrictions are also AST-level.
+        return ptrType(this.resolve(node.pointee, scope));
+      case "RawPtrType":
+        return ptrType(this.resolve(node.pointee, scope));
     }
   }
 

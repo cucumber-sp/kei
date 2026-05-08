@@ -77,7 +77,33 @@ export class StatementChecker {
         return this.checkRequireStatement(stmt);
       case "UnsafeBlock":
         return this.checkUnsafeBlock(stmt);
+      case "InitStmt":
+        return this.checkInitStatement(stmt);
     }
+  }
+
+  /**
+   * `init lvalue = expr` — initialization-write into an uninitialized slot.
+   *
+   * Skips the destroy step (so lifecycle won't run on garbage), bitwise-
+   * writes the value, then runs `__oncopy` on the destination. The full
+   * lifecycle treatment is handled by KIR lowering; this method just
+   * type-checks both sides.
+   */
+  private checkInitStatement(stmt: import("../ast/nodes").InitStmt): boolean {
+    const targetType = this.checker.checkExpression(stmt.target);
+    const valueType = this.checker.checkExpression(stmt.value);
+    if (
+      !isErrorType(targetType) &&
+      !isErrorType(valueType) &&
+      !isAssignableTo(valueType, targetType)
+    ) {
+      this.checker.error(
+        `cannot init slot of type '${typeToString(targetType)}' with value of type '${typeToString(valueType)}'`,
+        stmt.span
+      );
+    }
+    return false;
   }
 
   checkBlockStatement(stmt: BlockStmt): boolean {

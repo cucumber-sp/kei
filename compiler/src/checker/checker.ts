@@ -332,7 +332,7 @@ export class Checker {
         // biome-ignore lint/style/noNonNullAssertion: index is bounded by decl.params.length
         const param = decl.params[i]!;
         const paramType = concreteType.params[i]?.type ?? ({ kind: TypeKind.Void } as Type);
-        this.defineVariable(param.name, paramType, param.isMut, false, param.span);
+        this.defineVariable(param.name, paramType, !param.isReadonly, false, param.span);
       }
 
       // Check body statements — this populates typeMap for all expressions

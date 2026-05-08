@@ -9,9 +9,11 @@ import type { KirType } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
 import { lowerEnumDecl } from "./lowering-enum-decl";
 
-/** Extract the base name from a TypeNode — for NullableType returns "ptr". */
+/** Extract the base name from a TypeNode — for NullableType / RefType / RawPtrType returns "ptr". */
 function typeNodeName(node: TypeNode): string {
   if (node.kind === "NullableType") return "ptr";
+  if (node.kind === "RefType") return "ptr";
+  if (node.kind === "RawPtrType") return "ptr";
   return node.name;
 }
 
@@ -104,6 +106,12 @@ export function lowerTypeNode(ctx: LoweringCtx, typeNode: TypeNode): KirType {
   // NullableType (T?) → ptr<T>
   if (typeNode.kind === "NullableType") {
     return { kind: "ptr", pointee: lowerTypeNode(ctx, typeNode.inner) };
+  }
+  // RefType (`ref T` / `readonly ref T`) and RawPtrType (`*T`) both lower
+  // to a plain pointer in IR — the source distinction is enforced by the
+  // checker, not by the IR.
+  if (typeNode.kind === "RefType" || typeNode.kind === "RawPtrType") {
+    return { kind: "ptr", pointee: lowerTypeNode(ctx, typeNode.pointee) };
   }
   // GenericType with known built-ins
   if (typeNode.kind === "GenericType") {
@@ -212,6 +220,12 @@ export function getFunctionReturnType(ctx: LoweringCtx, decl: FunctionDecl): Typ
       return {
         kind: "ptr",
         pointee: getFunctionReturnType(ctx, { ...decl, returnType: decl.returnType.inner }),
+      };
+    }
+    if (decl.returnType.kind === "RefType" || decl.returnType.kind === "RawPtrType") {
+      return {
+        kind: "ptr",
+        pointee: getFunctionReturnType(ctx, { ...decl, returnType: decl.returnType.pointee }),
       };
     }
     if (decl.returnType.kind === "GenericType" && decl.returnType.name === "ptr") {

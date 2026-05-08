@@ -49,7 +49,7 @@ describe("Parser — Declarations", () => {
     expect(fn.params[0]?.typeAnnotation.kind).toBe("NamedType");
   });
 
-  test.skip("extern function with raw pointer return", () => {
+  test("extern function with raw pointer return", () => {
     const program = parse("extern fn malloc(size: usize) -> *u8;");
     const fn = program.declarations[0]!;
     expect(fn.kind).toBe("ExternFunctionDecl");
@@ -81,7 +81,7 @@ describe("Parser — Declarations", () => {
     expect(s.fields[0]?.name).toBe("x");
   });
 
-  test.skip("unsafe struct with lifecycle hooks", () => {
+  test("unsafe struct with lifecycle hooks", () => {
     const program = parse(`
       unsafe struct Buffer {
         data: *u8;
@@ -190,7 +190,7 @@ describe("Parser — Declarations", () => {
     expect(s.isPublic).toBe(true);
   });
 
-  test.skip("function with readonly param", () => {
+  test("function with readonly param", () => {
     const program = parse("fn show(readonly x: int, y: string) { }");
     const fn = program.declarations[0]!;
     if (fn.kind !== "FunctionDecl") return;

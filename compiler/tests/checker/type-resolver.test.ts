@@ -300,7 +300,7 @@ describe.skip("TypeResolver", () => {
       const scope = new Scope();
       const tParam = { kind: TypeKind.TypeParam, name: "T" } as const;
       const getMethod = functionType(
-        [{ name: "self", type: tParam, isMut: false, isMove: false }],
+        [{ name: "self", type: tParam, isReadonly: false }],
         tParam
       );
       const containerStruct = makeStructType("Container", [["value", tParam]], {

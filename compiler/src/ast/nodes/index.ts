@@ -15,6 +15,7 @@ export type {
 } from "./declarations";
 export { DeclKind } from "./declarations";
 export type {
+  AddrExpr,
   ArrayLiteral,
   AssignExpr,
   BinaryExpr,
@@ -56,6 +57,7 @@ export type {
   ExprStmt,
   ForStmt,
   IfStmt,
+  InitStmt,
   LetStmt,
   RequireStmt,
   ReturnStmt,
@@ -66,5 +68,12 @@ export type {
   WhileStmt,
 } from "./statements";
 export { StmtKind } from "./statements";
-export type { GenericType, NamedType, NullableType, TypeNode } from "./types";
+export type {
+  GenericType,
+  NamedType,
+  NullableType,
+  RawPtrType,
+  RefType,
+  TypeNode,
+} from "./types";
 export { TypeNodeKind } from "./types";

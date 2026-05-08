@@ -76,7 +76,7 @@ export function registerBuiltins(scope: Scope): void {
     functionSymbol(
       "sizeof",
       functionType(
-        [{ name: "T", type: VOID_TYPE, isMut: false, isMove: false }],
+        [{ name: "T", type: VOID_TYPE, isReadonly: false }],
         USIZE_TYPE,
         [],
         [],
@@ -91,7 +91,7 @@ export function registerBuiltins(scope: Scope): void {
     functionSymbol(
       "panic",
       functionType(
-        [{ name: "message", type: STRING_TYPE, isMut: false, isMove: false }],
+        [{ name: "message", type: STRING_TYPE, isReadonly: false }],
         VOID_TYPE,
         [],
         [],

@@ -9,7 +9,7 @@ function makeFnType(
   ret: import("../../src/checker/types").Type
 ): FunctionType {
   return functionType(
-    paramTypes.map((t, i) => ({ name: `p${i}`, type: t, isMut: false, isMove: false })),
+    paramTypes.map((t, i) => ({ name: `p${i}`, type: t, isReadonly: false })),
     ret
   );
 }
