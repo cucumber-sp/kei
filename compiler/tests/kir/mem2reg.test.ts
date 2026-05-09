@@ -466,6 +466,45 @@ describe("mem2reg: preserves non-promotable allocas", () => {
     const allocs = getInstructions(fn, "stack_alloc");
     expect(allocs.length).toBeGreaterThanOrEqual(1);
   });
+
+  test("destroy instruction marks its target alloca as address-taken", () => {
+    // Repro of #21: an alloca that holds a managed struct value (e.g.
+    // from `let b = Bag.make()`) is consumed by a `destroy` instruction
+    // at scope end. mem2reg used to ignore destroy as a use, promote the
+    // alloca away, and leave a dangling `destroy %varid` referencing a
+    // VarId that no longer existed. The C emitter then printed
+    // `Bag___destroy(_v1);` with `_v1` undeclared.
+    const fn = lowerOptFunction(
+      `
+      unsafe struct Bag {
+        n: i32;
+        fn make() -> Bag { return Bag{ n: 1 }; }
+        fn __destroy(self: ref Bag) {}
+        fn __oncopy(self: ref Bag) {}
+      }
+      fn main() -> i32 {
+        let b = Bag.make();
+        return 0;
+      }
+    `,
+      "main"
+    );
+
+    // The alloca for `b` must survive — destroy uses it.
+    const allocs = getInstructions(fn, "stack_alloc");
+    expect(allocs.length).toBeGreaterThanOrEqual(1);
+
+    // The destroy instruction's `value` must reference an alloca's
+    // dest VarId (i.e. one that still exists in the function).
+    const destroyInst = getInstructions(fn, "destroy")[0] as
+      | { kind: "destroy"; value: string }
+      | undefined;
+    expect(destroyInst).toBeTruthy();
+    const allocaVarIds = new Set(
+      (allocs as { dest: string }[]).map((a) => a.dest)
+    );
+    expect(allocaVarIds.has(destroyInst!.value)).toBe(true);
+  });
 });
 
 describe("mem2reg: idempotency", () => {
