@@ -237,10 +237,7 @@ export function checkStructLiteral(checker: Checker, expr: StructLiteral): Type 
   // same reason that safe structs do.
   for (const [fieldName, _fieldType] of structType.fields) {
     if (providedFields.has(fieldName)) continue;
-    checker.error(
-      `missing field '${fieldName}' in struct literal '${structType.name}'`,
-      expr.span
-    );
+    checker.error(`missing field '${fieldName}' in struct literal '${structType.name}'`, expr.span);
   }
 
   return structType;
@@ -343,10 +340,7 @@ function checkGenericStructLiteralInferred(
   // explicit-args path above; the `ref T` exception is gone).
   for (const [fieldName, _fieldType] of structType.fields) {
     if (providedFields.has(fieldName)) continue;
-    checker.error(
-      `missing field '${fieldName}' in struct literal '${structType.name}'`,
-      expr.span
-    );
+    checker.error(`missing field '${fieldName}' in struct literal '${structType.name}'`, expr.span);
   }
 
   // Infer type param substitutions from field types (recursive)
