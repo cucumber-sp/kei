@@ -159,6 +159,15 @@ export function lowerUnaryExpr(ctx: LoweringCtx, expr: UnaryExpr): VarId {
 }
 
 function lowerAddressOfExpr(ctx: LoweringCtx, expr: Expression): VarId {
+  // Stage 5 sugar: `&x` for an operand of type `ref T` is the bound
+  // pointer (the slot's contents), not the slot's address. The
+  // parameter / field already holds a `*T` at the byte level, so we
+  // return it directly — no extra alloc + store.
+  const operandCheckerType = ctx.checkResult.types.typeMap.get(expr);
+  const isRefOperand =
+    operandCheckerType?.kind === "ptr" &&
+    (operandCheckerType as { isRef?: boolean }).isRef === true;
+
   switch (expr.kind) {
     case "Identifier": {
       const varId = ctx.varMap.get(expr.name);
@@ -166,6 +175,13 @@ function lowerAddressOfExpr(ctx: LoweringCtx, expr: Expression): VarId {
         return lowerExpr(ctx, expr);
       }
       if (isStackAllocVar(ctx, varId)) {
+        // Stack-alloca'd ref-typed locals don't really exist (ref T is
+        // a parameter / field type), so this branch fires for plain
+        // values and returns the alloca pointer as before.
+        return varId;
+      }
+      if (isRefOperand) {
+        // `item: ref T` parameter — the var already IS the *T.
         return varId;
       }
 
@@ -179,6 +195,14 @@ function lowerAddressOfExpr(ctx: LoweringCtx, expr: Expression): VarId {
       const type = getExprKirType(ctx, expr);
       const dest = freshVar(ctx);
       emit(ctx, { kind: "field_ptr", dest, base, field: expr.property, type });
+      if (isRefOperand) {
+        // `&self.field` for a `ref T` field — field_ptr gives the
+        // slot's address (`**T`); load through it once to get the
+        // bound `*T`.
+        const loaded = freshVar(ctx);
+        emit(ctx, { kind: "load", dest: loaded, ptr: dest, type });
+        return loaded;
+      }
       return dest;
     }
     case "IndexExpr": {

@@ -238,6 +238,15 @@ export function checkUnaryExpression(checker: Checker, expr: UnaryExpr): Type {
         checker.error("address-of operator '&' requires unsafe block", expr.span);
         return ERROR_TYPE;
       }
+      // Stage 5 sugar: `&item` for an operand of type `ref T` is the
+      // address of the auto-deref'd T, which is the slot's bound
+      // pointer (a `*T`). Without this, `&item` would yield `*ref T`
+      // (i.e. `**T` after unwrapping the ref bit), which is the
+      // C-style "address of the parameter slot" — surprising in user
+      // code where `item` already reads as a T.
+      if (operand.kind === TypeKind.Ptr && operand.isRef) {
+        return { kind: TypeKind.Ptr, pointee: operand.pointee };
+      }
       return ptrType(operand);
 
     default:
