@@ -5,7 +5,7 @@
 
 import type { Expression, FunctionDecl, TypeNode } from "../ast/nodes";
 import type { FunctionType, Type } from "../checker/types";
-import type { KirType } from "./kir-types";
+import type { KirIntType, KirType, KirVariant } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
 import { lowerEnumDecl } from "./lowering-enum-decl";
 
@@ -176,9 +176,7 @@ export function lowerTypeNode(ctx: LoweringCtx, typeNode: TypeNode): KirType {
       // emit the mangled name. The full type declaration is emitted by
       // the monomorphization pass in `runLowering`.
       if (typeNode.kind === "GenericType") {
-        const argSuffix = typeNode.typeArgs
-          .map((a) => checkerTypeSuffix(ctx, lowerTypeNode(ctx, a)))
-          .join("_");
+        const argSuffix = typeNode.typeArgs.map((a) => kirTypeNodeSuffix(ctx, a)).join("_");
         const mangled = `${name}_${argSuffix}`;
         for (const decl of ctx.program.declarations) {
           if (decl.kind === "EnumDecl" && decl.name === name) {
@@ -190,11 +188,12 @@ export function lowerTypeNode(ctx: LoweringCtx, typeNode: TypeNode): KirType {
             // reference site only needs the right C-level form (`struct`
             // typedef vs `enum`) to render `enum Optional_i32` vs
             // `Optional_i32`.
-            const variants = decl.variants.map((v, i) => ({
+            const placeholder: KirIntType = { kind: "int", bits: 32, signed: true };
+            const variants: KirVariant[] = decl.variants.map((v, i) => ({
               name: v.name,
               fields: v.fields.map((f) => ({
                 name: f.name,
-                type: { kind: "int" as const, bits: 32, signed: true },
+                type: placeholder,
               })),
               value: i,
             }));
@@ -469,6 +468,42 @@ export function typeNameSuffix(_ctx: LoweringCtx, name: string): string {
       return "void";
     default:
       return name;
+  }
+}
+
+/**
+ * Mangle suffix for a TypeNode (used when the kir lowering encounters
+ * a `GenericType` reference at type-position before the checker has a
+ * resolved type for the node). Matches `mangleGenericName` on the
+ * checker side so the kir-emitted name lines up with the checker's
+ * monomorphized type entry.
+ */
+function kirTypeNodeSuffix(ctx: LoweringCtx, node: TypeNode): string {
+  return kirTypeSuffix(lowerTypeNode(ctx, node));
+}
+
+/** Mangle suffix for a KirType. Mirrors `mangleTypeName` in checker/generics.ts. */
+function kirTypeSuffix(t: KirType): string {
+  switch (t.kind) {
+    case "int":
+      return `${t.signed ? "i" : "u"}${t.bits}`;
+    case "float":
+      return `f${t.bits}`;
+    case "bool":
+      return "bool";
+    case "string":
+      return "string";
+    case "void":
+      return "void";
+    case "ptr":
+      return `ptr_${kirTypeSuffix(t.pointee)}`;
+    case "array":
+      return `array_${kirTypeSuffix(t.element)}`;
+    case "struct":
+    case "enum":
+      return t.name;
+    default:
+      return t.kind;
   }
 }
 
