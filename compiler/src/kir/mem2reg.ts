@@ -106,6 +106,15 @@ function findPromotableAllocas(fn: KirFunction): Map<VarId, AllocaInfo> {
         for (const arg of inst.args) {
           if (allocas.has(arg)) addressTaken.add(arg);
         }
+      } else if (inst.kind === "destroy" || inst.kind === "oncopy") {
+        // `destroy %a` calls the struct's `__destroy(self: ref T)` with
+        // %a as the slot pointer; the user-defined hook can mutate the
+        // bytes through that ref. Same for `oncopy`. Both make the
+        // alloca address-taken — promoting it away would leave the
+        // instruction referencing a VarId that no longer exists, which
+        // shows up downstream as `Bag___destroy(_v1)` with `_v1` never
+        // declared in the emitted C.
+        if (allocas.has(inst.value)) addressTaken.add(inst.value);
       }
     }
   }
