@@ -30,18 +30,29 @@ import type {
   TypeNode,
   UnsafeStructDecl,
 } from "../ast/nodes";
-import type { Diagnostic } from "../errors/diagnostic";
-import { Severity } from "../errors/diagnostic";
+import type { Span } from "../lexer/token";
 
-export function validateRefPositions(program: Program): Diagnostic[] {
-  const diags: Diagnostic[] = [];
+/**
+ * Raw `(message, span)` pair. Returned to the `Checker` so it can route
+ * each through the diagnostics module (which knows how to convert the
+ * lexer `Span` into a `SourceLocation` via the source file). Avoids the
+ * historical fake `{file: "", line: 1, column: 1}` placeholder this
+ * pass used to fabricate.
+ */
+export interface RefPositionError {
+  message: string;
+  span: Span;
+}
+
+export function validateRefPositions(program: Program): RefPositionError[] {
+  const diags: RefPositionError[] = [];
   for (const decl of program.declarations) {
     visitDeclaration(decl, diags);
   }
   return diags;
 }
 
-function visitDeclaration(decl: Declaration, diags: Diagnostic[]): void {
+function visitDeclaration(decl: Declaration, diags: RefPositionError[]): void {
   switch (decl.kind) {
     case "FunctionDecl":
       visitFunction(decl, diags);
@@ -74,7 +85,7 @@ function visitDeclaration(decl: Declaration, diags: Diagnostic[]): void {
   }
 }
 
-function visitFunction(decl: FunctionDecl, diags: Diagnostic[]): void {
+function visitFunction(decl: FunctionDecl, diags: RefPositionError[]): void {
   for (const p of decl.params) visitParam(p, diags);
   if (decl.returnType) rejectRef(decl.returnType, "function return type", diags);
   for (const t of decl.throwsTypes) rejectRef(t, "throws clause", diags);
@@ -85,14 +96,14 @@ function visitFunction(decl: FunctionDecl, diags: Diagnostic[]): void {
   for (const stmt of decl.body.statements) visitStatementForRef(stmt, diags);
 }
 
-function visitParam(param: Param, diags: Diagnostic[]): void {
+function visitParam(param: Param, diags: RefPositionError[]): void {
   // Top-level `ref T` is legal here. Only reject ref T NESTED inside a
   // generic argument or pointer pointee (where it would escape the param
   // position).
   visitTypeForNested(param.typeAnnotation, diags);
 }
 
-function visitStruct(decl: StructDecl, diags: Diagnostic[]): void {
+function visitStruct(decl: StructDecl, diags: RefPositionError[]): void {
   for (const f of decl.fields) {
     rejectRef(f.typeAnnotation, "safe struct field", diags);
     visitTypeForNested(f.typeAnnotation, diags);
@@ -100,7 +111,7 @@ function visitStruct(decl: StructDecl, diags: Diagnostic[]): void {
   for (const m of decl.methods) visitFunction(m, diags);
 }
 
-function visitUnsafeStruct(decl: UnsafeStructDecl, diags: Diagnostic[]): void {
+function visitUnsafeStruct(decl: UnsafeStructDecl, diags: RefPositionError[]): void {
   for (const f of decl.fields) {
     // Top-level `ref T` is legal; reject nested-only.
     visitTypeForNested(f.typeAnnotation, diags);
@@ -108,7 +119,7 @@ function visitUnsafeStruct(decl: UnsafeStructDecl, diags: Diagnostic[]): void {
   for (const m of decl.methods) visitFunction(m, diags);
 }
 
-function visitEnum(decl: EnumDecl, diags: Diagnostic[]): void {
+function visitEnum(decl: EnumDecl, diags: RefPositionError[]): void {
   for (const v of decl.variants) {
     for (const f of v.fields) {
       rejectRef(f.typeAnnotation, "enum variant field", diags);
@@ -117,7 +128,7 @@ function visitEnum(decl: EnumDecl, diags: Diagnostic[]): void {
   }
 }
 
-function visitStatic(decl: StaticDecl, diags: Diagnostic[]): void {
+function visitStatic(decl: StaticDecl, diags: RefPositionError[]): void {
   if (decl.typeAnnotation) {
     rejectRef(decl.typeAnnotation, "static global type", diags);
   }
@@ -127,7 +138,7 @@ function visitStatic(decl: StaticDecl, diags: Diagnostic[]): void {
  * Reject `ref T` at the top of the given type annotation. Used at every
  * position that forbids `ref T` outright.
  */
-function rejectRef(node: TypeNode, position: string, diags: Diagnostic[]): void {
+function rejectRef(node: TypeNode, position: string, diags: RefPositionError[]): void {
   if (node.kind === "RefType") {
     pushError(`'ref T' is not allowed in ${position}`, node, diags);
   }
@@ -139,7 +150,7 @@ function rejectRef(node: TypeNode, position: string, diags: Diagnostic[]): void 
  * pointee, or inside a nullable. The top-level annotation is the caller's
  * responsibility.
  */
-function visitTypeForNested(node: TypeNode, diags: Diagnostic[]): void {
+function visitTypeForNested(node: TypeNode, diags: RefPositionError[]): void {
   switch (node.kind) {
     case "NamedType":
       return;
@@ -168,7 +179,10 @@ function visitTypeForNested(node: TypeNode, diags: Diagnostic[]): void {
 /**
  * Walk statements in a function body to find `let x: ref T` and reject.
  */
-function visitStatementForRef(stmt: import("../ast/nodes").Statement, diags: Diagnostic[]): void {
+function visitStatementForRef(
+  stmt: import("../ast/nodes").Statement,
+  diags: RefPositionError[]
+): void {
   switch (stmt.kind) {
     case "LetStmt":
     case "ConstStmt":
@@ -214,14 +228,6 @@ function visitStatementForRef(stmt: import("../ast/nodes").Statement, diags: Dia
   }
 }
 
-function pushError(
-  message: string,
-  node: { span: { start: number; end: number } },
-  diags: Diagnostic[]
-): void {
-  diags.push({
-    severity: Severity.Error,
-    message,
-    location: { file: "", line: 1, column: 1, offset: node.span.start },
-  });
+function pushError(message: string, node: { span: Span }, diags: RefPositionError[]): void {
+  diags.push({ message, span: node.span });
 }

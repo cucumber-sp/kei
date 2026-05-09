@@ -13,6 +13,8 @@ import type {
   SwitchCase,
   TypeNode,
 } from "../ast/nodes";
+import type { Diagnostics } from "../diagnostics";
+import { createDiagnostics } from "../diagnostics";
 import type { Diagnostic, SourceLocation } from "../errors/diagnostic";
 import { Severity } from "../errors/diagnostic";
 import type { Span } from "../lexer/token";
@@ -105,7 +107,14 @@ export interface MultiModuleCheckResult {
 export class Checker {
   private program: Program;
   private source: SourceFile;
-  private diagnostics: Diagnostic[] = [];
+  /**
+   * Diagnostics accumulator. Internally constructed for now; PR 3
+   * externalises it (passed in via the `Checker` constructor so the
+   * CLI driver owns the collector). The `error / warning` helpers
+   * route here via `diag.untriaged({...})`. See
+   * `docs/design/diagnostics-module.md` §5, §9 PR 2/3.
+   */
+  private diag: Diagnostics = createDiagnostics({});
   private typeMap: Map<Expression, Type> = new Map();
   private scopeStack: Scope[] = [];
   private typeResolver: TypeResolver;
@@ -256,7 +265,7 @@ export class Checker {
     // local bindings, etc.) — running them up front gives clean errors
     // before later passes get confused by an out-of-position RefType.
     for (const d of validateRefPositions(this.program)) {
-      this.diagnostics.push(d);
+      this.error(d.message, d.span);
     }
 
     // Pass 1: Register all top-level declarations
@@ -314,7 +323,7 @@ export class Checker {
     }
 
     return {
-      diagnostics: this.diagnostics,
+      diagnostics: this.collectDiagnostics(),
       types: {
         typeMap: this.typeMap,
         operatorMethods: this.operatorMethods,
@@ -685,12 +694,7 @@ export class Checker {
     const type = this.typeResolver.resolve(node, this.currentScope);
     // Collect resolver diagnostics
     for (const diag of this.typeResolver.getDiagnostics()) {
-      const loc = this.spanToLocation(diag.span);
-      this.diagnostics.push({
-        severity: Severity.Error,
-        message: diag.message,
-        location: loc,
-      });
+      this.error(diag.message, diag.span);
     }
     this.typeResolver.clearDiagnostics();
     return type;
@@ -868,18 +872,18 @@ export class Checker {
   // ─── Diagnostics ──────────────────────────────────────────────────────
 
   error(message: string, span: Span): void {
-    this.diagnostics.push({
-      severity: Severity.Error,
+    this.diag.untriaged({
+      severity: "error",
+      span: this.spanToLocation(span),
       message,
-      location: this.spanToLocation(span),
     });
   }
 
   warning(message: string, span: Span): void {
-    this.diagnostics.push({
-      severity: Severity.Warning,
+    this.diag.untriaged({
+      severity: "warning",
+      span: this.spanToLocation(span),
       message,
-      location: this.spanToLocation(span),
     });
   }
 
@@ -891,5 +895,21 @@ export class Checker {
       column: lc.column,
       offset: span.start,
     };
+  }
+
+  /**
+   * Snapshot the current diagnostics as the legacy
+   * `{ severity, message, location }` shape that `CheckResult` and the
+   * rest of the pipeline still consume. PR 4+ migrates consumers onto
+   * the new union shape; until then we adapt at the boundary. The
+   * `untriaged` variant is the only kind emitted in PR 2, so the adapter
+   * is one branch wide.
+   */
+  private collectDiagnostics(): Diagnostic[] {
+    return this.diag.diagnostics().map((d) => ({
+      severity: d.severity === "warning" ? Severity.Warning : Severity.Error,
+      message: d.message,
+      location: d.span,
+    }));
   }
 }
