@@ -190,7 +190,6 @@ describe("§4.6 — Shared<T> field assignment is explicit", () => {
   });
 });
 
-
 // ─── §4.10 — Nested `Shared<T>` requires explicit unwrapping ─────────────────
 
 describe("§4.10 — `Shared<T>` does not auto-deref recursively", () => {
