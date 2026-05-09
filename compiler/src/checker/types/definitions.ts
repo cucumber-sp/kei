@@ -115,6 +115,18 @@ export interface EnumType {
   /** Underlying integer type, or null for default. */
   baseType: Type | null;
   variants: EnumVariantInfo[];
+  /** Generic type parameters (`enum Optional<T>` → `["T"]`). Empty for non-generic. */
+  genericParams: string[];
+  /**
+   * Mangled module prefix of the module that *defined* this enum (mirrors
+   * `StructType.modulePrefix`). Used by monomorphization to keep
+   * cross-module instantiations distinct.
+   */
+  modulePrefix?: string;
+  /** Original base name for generic instantiations (e.g. "Optional" for "Optional_i32"). */
+  genericBaseName?: string;
+  /** Original type args for generic instantiations. */
+  genericTypeArgs?: Type[];
 }
 
 /** Metadata for a function parameter. */

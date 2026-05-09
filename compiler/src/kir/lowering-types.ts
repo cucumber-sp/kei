@@ -242,6 +242,7 @@ export function getFunctionReturnType(ctx: LoweringCtx, decl: FunctionDecl): Typ
               fields: [],
               value: v.value?.kind === "IntLiteral" ? v.value.value : i,
             })),
+            genericParams: d.genericParams,
           };
         }
       }

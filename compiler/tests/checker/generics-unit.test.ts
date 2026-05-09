@@ -259,6 +259,7 @@ describe("mangleGenericName", () => {
       name: "Color",
       baseType: null,
       variants: [],
+      genericParams: [],
     };
     expect(mangleGenericName("X", [enumType])).toBe("X_Color");
   });

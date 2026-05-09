@@ -98,6 +98,8 @@ export interface EnumDecl extends BaseNode {
   kind: "EnumDecl";
   name: string;
   isPublic: boolean;
+  /** Generic type parameters (e.g. `<T>`, `<A, B>`); empty for non-generic. */
+  genericParams: string[];
   /** Underlying integer type (e.g. `i32`), null for default. */
   baseType: TypeNode | null;
   variants: EnumVariant[];

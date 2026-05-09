@@ -20,6 +20,7 @@ import type { SourceFile } from "../utils/source";
 import { registerBuiltins } from "./builtins";
 import { DeclarationChecker } from "./decl-checker";
 import { ExpressionChecker } from "./expr-checker";
+import { mangleGenericName, substituteType } from "./generics";
 import type { MonomorphizedFunction, MonomorphizedStruct } from "./generics";
 import { validateRefPositions } from "./ref-position-checker";
 import { Scope } from "./scope";
@@ -27,8 +28,8 @@ import { StatementChecker } from "./stmt-checker";
 import type { ScopeSymbol } from "./symbols";
 import { SymbolKind, typeSymbol, variableSymbol } from "./symbols";
 import { TypeResolver } from "./type-resolver";
-import type { FunctionType, StructType, Type } from "./types";
-import { TypeKind, typeToString } from "./types";
+import type { EnumType, FunctionType, StructType, Type } from "./types";
+import { ERROR_TYPE, TypeKind, typeToString } from "./types";
 
 /** Per-expression resolution metadata produced by the checker. */
 export interface CheckTypes {
@@ -116,6 +117,9 @@ export class Checker {
 
   /** Cache of monomorphized struct types, keyed by mangled name */
   private monomorphizedStructs: Map<string, MonomorphizedStruct> = new Map();
+
+  /** Cache of monomorphized enum types, keyed by mangled name. */
+  private monomorphizedEnums: Map<string, EnumType> = new Map();
 
   /** Cache of monomorphized function types, keyed by mangled name */
   private monomorphizedFunctions: Map<string, MonomorphizedFunction> = new Map();
@@ -763,6 +767,54 @@ export class Checker {
     // Also register the concrete struct as a type in the current scope so KIR can find it
     const sym = typeSymbol(mangledName, info.concrete);
     this.currentScope.define(sym);
+  }
+
+  /**
+   * Instantiate a generic enum with concrete type arguments. Returns the
+   * monomorphized EnumType (cached by mangled name). Called by
+   * `checkCallExpression` for `Optional<i32>.Some(...)` and by
+   * `resolveType` for type references like `Optional<i32>` in fn params.
+   */
+  instantiateGenericEnum(base: EnumType, typeArgNodes: import("../ast/nodes").TypeNode[]): Type {
+    if (typeArgNodes.length !== base.genericParams.length) {
+      return ERROR_TYPE;
+    }
+    const typeArgs: Type[] = [];
+    const subs = new Map<string, Type>();
+    for (let i = 0; i < typeArgNodes.length; i++) {
+      // biome-ignore lint/style/noNonNullAssertion: typeArgNodes.length checked above
+      const node = typeArgNodes[i]!;
+      const t = this.resolveType(node);
+      if (t.kind === TypeKind.Error) return ERROR_TYPE;
+      typeArgs.push(t);
+      // biome-ignore lint/style/noNonNullAssertion: same length as typeArgNodes
+      subs.set(base.genericParams[i]!, t);
+    }
+    const mangledName = mangleGenericName(base.name, typeArgs);
+    const cached = this.monomorphizedEnums.get(mangledName);
+    if (cached) return cached;
+    const concrete: EnumType = {
+      kind: TypeKind.Enum,
+      name: mangledName,
+      baseType: base.baseType,
+      variants: base.variants.map((v) => ({
+        name: v.name,
+        fields: v.fields.map((f) => ({ name: f.name, type: substituteType(f.type, subs) })),
+        value: v.value,
+      })),
+      genericParams: [],
+      modulePrefix: base.modulePrefix,
+      genericBaseName: base.name,
+      genericTypeArgs: typeArgs,
+    };
+    this.monomorphizedEnums.set(mangledName, concrete);
+    // Register so subsequent type references resolve to the same type.
+    this.currentScope.define(typeSymbol(mangledName, concrete));
+    return concrete;
+  }
+
+  getMonomorphizedEnum(mangledName: string): EnumType | undefined {
+    return this.monomorphizedEnums.get(mangledName);
   }
 
   getMonomorphizedFunction(mangledName: string): MonomorphizedFunction | undefined {

@@ -189,6 +189,7 @@ function parseFieldDeclaration(ctx: ParserContext): Field {
 function parseEnumDeclaration(ctx: ParserContext, isPublic: boolean, startToken: Token): EnumDecl {
   ctx.expect(TokenKind.Enum);
   const name = ctx.expectIdentifier().lexeme;
+  const genericParams = parseOptionalGenericParams(ctx);
 
   let baseType: TypeNode | null = null;
   if (ctx.match(TokenKind.Colon)) {
@@ -217,6 +218,7 @@ function parseEnumDeclaration(ctx: ParserContext, isPublic: boolean, startToken:
     kind: "EnumDecl",
     name,
     isPublic,
+    genericParams,
     baseType,
     variants,
     span: { start: startToken.span.start, end: end.span.end },
