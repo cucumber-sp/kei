@@ -10,6 +10,76 @@ unsafe struct Bag {
 }
 `;
 
+describe("`*T → ref T` coercion in unsafe-struct literals", () => {
+  test("literal accepts *T for a ref T field inside unsafe", () => {
+    checkOk(`
+      unsafe struct Bag {
+        payload: ref i32;
+        fn __destroy(self: ref Bag) {}
+        fn __oncopy(self: ref Bag) {}
+      }
+      fn build(p: *i32) -> Bag {
+        unsafe {
+          return Bag{ payload: p };
+        }
+      }
+      fn main() -> i32 { return 0; }
+    `);
+  });
+
+  test("literal accepts *T for a ref T field on a generic unsafe struct", () => {
+    checkOk(`
+      unsafe struct Holder<T> {
+        value: ref T;
+        fn __destroy(self: ref Holder<T>) {}
+        fn __oncopy(self: ref Holder<T>) {}
+      }
+      fn build(p: *i32) -> Holder<i32> {
+        unsafe {
+          return Holder<i32>{ value: p };
+        }
+      }
+      fn main() -> i32 { return 0; }
+    `);
+  });
+
+  test("`*T` in a `ref T` slot is rejected outside unsafe", () => {
+    checkError(
+      `
+      unsafe struct Bag {
+        payload: ref i32;
+        fn __destroy(self: ref Bag) {}
+        fn __oncopy(self: ref Bag) {}
+      }
+      fn build(p: *i32) -> Bag {
+        return Bag{ payload: p };
+      }
+      fn main() -> i32 { return 0; }
+      `,
+      "expected 'ref i32', got '*i32'"
+    );
+  });
+
+  test("`*U` (mismatched pointee) in a `ref T` slot is rejected even inside unsafe", () => {
+    checkError(
+      `
+      unsafe struct Bag {
+        payload: ref i32;
+        fn __destroy(self: ref Bag) {}
+        fn __oncopy(self: ref Bag) {}
+      }
+      fn build(p: *bool) -> Bag {
+        unsafe {
+          return Bag{ payload: p };
+        }
+      }
+      fn main() -> i32 { return 0; }
+      `,
+      "expected 'ref i32', got '*bool'"
+    );
+  });
+});
+
 describe("onCopy / onDestroy compiler builtins", () => {
   test("`onCopy(ptr)` type-checks when ptr is *T and T has __oncopy", () => {
     checkOk(`${STRUCT_DEFS}
