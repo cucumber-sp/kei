@@ -12,9 +12,9 @@ import type {
   StringLiteral,
   StructLiteral,
 } from "../ast/nodes";
+import { mangleGenericName, substituteFunctionType, substituteType } from "../monomorphization";
 import { I32_MAX, I32_MIN } from "../utils/constants";
 import type { Checker } from "./checker";
-import { mangleGenericName, substituteFunctionType, substituteType } from "./generics";
 import { SymbolKind } from "./symbols";
 import type { ArrayType, PtrType, RangeType, StructType, Type } from "./types";
 import {

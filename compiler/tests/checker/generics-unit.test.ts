@@ -1,9 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import {
-  mangleGenericName,
-  substituteFunctionType,
-  substituteType,
-} from "../../src/checker/generics";
 import type { FunctionType, StructType, Type } from "../../src/checker/types";
 import {
   arrayType,
@@ -23,6 +18,11 @@ import {
   U64_TYPE,
   VOID_TYPE,
 } from "../../src/checker/types";
+import {
+  mangleGenericName,
+  substituteFunctionType,
+  substituteType,
+} from "../../src/monomorphization";
 
 function typeParam(name: string): Type {
   return { kind: TypeKind.TypeParam, name } as Type;
