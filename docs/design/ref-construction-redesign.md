@@ -1,8 +1,13 @@
 # Ref-construction redesign — drop `addr()` and `init`
 
-**Status.** Draft. Amends `docs/design/ref-redesign.md` §2.3 and §6;
-supersedes the `addr()` and `init` story sketched there. No compiler
-work has started; the language surface today still has both keywords.
+**Status.** Implemented. Amends `docs/design/ref-redesign.md` §2.3 and
+§6; supersedes the `addr()` and `init` story sketched there. The
+keywords are gone from the lexer, parser, AST, checker, and KIR.
+Construction primitives (`onCopy<T>` / `onDestroy<T>` builtins, the
+`*T → ref T` literal coercion, `std/mem.kei`'s `placeAt<T>`) are
+shipped. The required-init rule on `unsafe struct` literals is
+enforced by the checker. Stages 1–4 of §6's migration sketch are all
+merged.
 
 ## 1. Why
 
@@ -21,12 +26,12 @@ What construction actually needs:
    skip the `__destroy` that normal assignment would do for an
    "old value."
 
-Today (1) is `addr(self.field) as *void`, (2) is `addr(s.field) =
-ptr;`, (3) is `init s.field = value;`. Each is a special operator with
-its own parser rule. Once you spell out what they actually do, every
-step is just an existing primitive — a cast, a struct literal, a
-function call. The keywords are duct tape over the ergonomic gap; they
-don't earn their keep.
+Previously (1) was `addr(self.field) as *void`, (2) was
+`addr(s.field) = ptr;`, (3) was `init s.field = value;`. Each was a
+special operator with its own parser rule. Once you spell out what
+they actually do, every step is just an existing primitive — a cast,
+a struct literal, a function call. The keywords were duct tape over
+the ergonomic gap; they didn't earn their keep.
 
 This doc replaces both with a smaller set of existing tools, keeps the
 auto-deref-on-`ref T`-fields safety firewall completely intact, and
@@ -53,10 +58,11 @@ already stored in the slot — no extra load or store.
 `&(*field)` reads cleanly as "address of the value behind the ref."
 That's exactly what we want.
 
-A future ergonomic patch can let `&field` desugar to `&(*field)` for
-`ref T` values (today it returns `**T` — the slot's address — because
-of the C-style "address of variable" interpretation). The desugar is a
-**separate, additive** change; this redesign does NOT depend on it.
+A separate ergonomic patch (stage 5 in §6) can let `&field` desugar
+to `&(*field)` for `ref T` values; today `&field` returns `**T` (the
+slot's address) because of the C-style "address of variable"
+interpretation. The desugar is **additive** and self-contained — this
+redesign does NOT depend on it.
 
 ### 2.2 Write the bound pointer — struct literal
 
@@ -114,12 +120,11 @@ itself. Either way, no new keywords.
 
 ## 3. New invariant — every `ref T` field initialized at construction
 
-Today an empty struct literal `Shared<T>{}` is permitted on
-`unsafe struct`s and leaves every slot zero. That worked under the
-old design because `addr()` was supposed to seat the slots later. It
-also let users forget — `let s = Shared<T>{}; init s.refcount = ...;`
-without seating `s.value` was a UB time bomb the type system didn't
-catch.
+Under the old design an empty struct literal `Shared<T>{}` was
+permitted on `unsafe struct`s and left every slot zero — `addr()`
+was supposed to seat the slots later. It also let users forget —
+`let s = Shared<T>{}; init s.refcount = ...;` without seating
+`s.value` was a UB time bomb the type system didn't catch.
 
 The replacement rule:
 
@@ -178,9 +183,9 @@ Every line is an arithmetic op, a cast, a regular call, or a struct
 literal. No new operators. Auto-deref still hides pointers from safe
 code: callers see `s.refcount` as i64, `s.value` as T.
 
-## 5. What changes vs. today
+## 5. Old vs. new
 
-| Topic                           | Today                              | After                              |
+| Topic                           | Old                                | New                                |
 |---------------------------------|------------------------------------|------------------------------------|
 | Read bound pointer              | `addr(field) as *void` (special)   | `&(*field) as *void` (ordinary)    |
 | Write bound pointer             | `addr(field) = ptr;` (special)     | Struct literal field initializer   |
@@ -195,36 +200,20 @@ form (`init lvalue = expr`). +1 invariant (ref fields required in
 literals). +2 compiler builtins (`onCopy<T>`, `onDestroy<T>`). Existing
 casts, struct literals, and `&` cover the rest.
 
-## 6. Migration sketch
+## 6. Rollout
 
-Spec-only first; compiler work follows in its own PR(s).
+Each stage shipped as its own PR.
 
-1. **Spec PR (this doc + amendments).** Update
-   `docs/design/ref-redesign.md` §2.3 and §6 to reference this
-   redesign. Amend `spec/03-types.md`, `spec/07-structures.md` examples
-   that use `addr()` / `init`. Add the "ref fields required in
-   literals" rule to `spec/07-structures.md`.
+| Stage | PR | What it landed |
+|-------|----|----------------|
+| 1 | #25 | Spec sweep — `addr` / `init` removed from `spec/`, examples migrated, "spec describes current state" policy added to `CLAUDE.md`. |
+| 2 | #26 | Foundation — `onCopy<T>` / `onDestroy<T>` compiler builtins, `*T → ref T` coercion in `unsafe struct` literals, `placeAt<T>` in `std/mem.kei`, `std/shared.kei` migrated to the new vocabulary. |
+| 3 | #27 | Checker rule — every field of an `unsafe struct` literal must be initialized by name. Empty / partial literals are a compile error. |
+| 4 | #28 | Cleanup — `addr` and `init` removed from the lexer, parser, AST, checker, and KIR. |
 
-2. **Stdlib PR.** Add `onCopy<T>`, `onDestroy<T>` as compiler builtins.
-   Add `placeAt<T>` to `std/mem.kei`. Migrate `std/shared.kei` to the
-   new vocabulary. Tests pin the new shapes.
-
-3. **Checker PR.** Implement the "every `ref T` field must be
-   initialized in literals" rule. Migrate marker tests in
-   `tests/checker/ref-redesign.test.ts` that exercise empty-literal
-   `unsafe struct{}` patterns.
-
-4. **Parser/checker cleanup PR.** Drop `addr` keyword from the lexer
-   and grammar. Drop `init` keyword and the `init lvalue = expr`
-   statement form. Drop the corresponding AST nodes.
-
-5. **(Optional) Ergonomic PR.** Make `&field` for `field: ref T` a
-   sugar for `&(*field)` (returning the bound pointer instead of the
-   slot's address). Self-contained, no spec dependency on the rest of
-   this redesign.
-
-Each step is independently mergeable. Stages 1–4 are required;
-stage 5 is a nicety.
+**Not done:** the `&field → &(*field)` sugar for `ref T` values stays
+as an additive ergonomic patch. It's self-contained and can land any
+time without depending on the rest of this redesign.
 
 ## 7. Open questions
 
