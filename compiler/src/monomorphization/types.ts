@@ -14,8 +14,8 @@ import type { FunctionType, StructType, Type } from "../checker/types";
  * Info about a monomorphized struct instance.
  *
  * Created when a generic struct like `Box<T>` is instantiated with concrete types
- * (e.g. `Box<i32>`). Stored in the checker's `monomorphizedStructs` cache, keyed
- * by the mangled name.
+ * (e.g. `Box<i32>`). Stored in the Monomorphization module's struct registry,
+ * keyed by the mangled name.
  */
 export interface MonomorphizedStruct {
   /** The original generic struct type (with TypeParam fields). */
@@ -40,8 +40,8 @@ export interface MonomorphizedStruct {
  * Info about a monomorphized function instance.
  *
  * Created when a generic function like `identity<T>` is called with concrete types
- * (e.g. `identity<i32>(42)`). Stored in the checker's `monomorphizedFunctions` cache,
- * keyed by the mangled name.
+ * (e.g. `identity<i32>(42)`). Stored in the Monomorphization module's function
+ * registry, keyed by the mangled name.
  */
 export interface MonomorphizedFunction {
   /** The original unmangled function name (e.g. `"identity"`). */
