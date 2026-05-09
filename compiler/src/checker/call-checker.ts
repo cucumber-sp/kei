@@ -785,7 +785,7 @@ function checkGenericFunctionCallInferred(
  * Register the monomorphization triggered by a `Type<TypeArgs>.method(args)`
  * static call. Mirrors the registration that happens for a struct literal
  * `Type<TypeArgs>{...}` in literal-checker so KIR lowering finds the
- * concrete struct in `monomorphizedStructs` and emits its methods.
+ * concrete struct in the Monomorphization registry and emits its methods.
  */
 function registerStaticCallMonomorphization(
   checker: Checker,

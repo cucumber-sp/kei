@@ -18,8 +18,12 @@ import { Severity } from "../errors/diagnostic";
 import type { Span } from "../lexer/token";
 import type { Lifecycle } from "../lifecycle";
 import { createLifecycle } from "../lifecycle";
-import type { MonomorphizedFunction, MonomorphizedStruct } from "../monomorphization";
-import { mangleGenericName, substituteType } from "../monomorphization";
+import type {
+  Monomorphization,
+  MonomorphizedFunction,
+  MonomorphizedStruct,
+} from "../monomorphization";
+import { createMonomorphization, mangleGenericName, substituteType } from "../monomorphization";
 import type { SourceFile } from "../utils/source";
 import { registerBuiltins } from "./builtins";
 import { DeclarationChecker } from "./decl-checker";
@@ -56,10 +60,14 @@ export interface CheckTypes {
 
 /** Generic monomorphization output. */
 export interface CheckGenerics {
-  monomorphizedStructs: Map<string, MonomorphizedStruct>;
-  monomorphizedFunctions: Map<string, MonomorphizedFunction>;
-  /** Cache of monomorphized enum types, keyed by mangled name. */
-  monomorphizedEnums: Map<string, EnumType>;
+  /**
+   * The Monomorphization instance carrying every generic instantiation
+   * discovered during this check. KIR lowering iterates
+   * `monomorphization.products()` to emit type/function definitions; the
+   * multi-module orchestrator merges instances across modules via
+   * {@link Monomorphization.adoptStruct}/`adoptFunction`/`adoptEnum`.
+   */
+  monomorphization: Monomorphization;
   /** Maps generic call / struct literal expressions to their resolved mangled names. */
   resolutions: Map<Expression, string>;
 }
@@ -68,6 +76,20 @@ export interface CheckGenerics {
 export interface CheckLifecycle {
   autoDestroyStructs: Map<string, StructType>;
   autoOncopyStructs: Map<string, StructType>;
+}
+
+/**
+ * Optional injectable dependencies for the {@link Checker}.
+ *
+ * Mirrors the constructed-and-threaded pattern from ADR-0001's concept
+ * modules. Multi-module builds construct a single `Monomorphization` per
+ * module today (each Checker still owns its own instance, then the
+ * orchestrator routes adoptions across them); future migrations will
+ * thread a shared `Lifecycle` and Diagnostics `Collector` through here
+ * too.
+ */
+export interface CheckerOptions {
+  monomorphization?: Monomorphization;
 }
 
 export interface CheckResult {
@@ -120,14 +142,13 @@ export class Checker {
   /** Module exports available for import resolution (set externally for multi-module) */
   private moduleExports: Map<string, Map<string, ScopeSymbol>> = new Map();
 
-  /** Cache of monomorphized struct types, keyed by mangled name */
-  private monomorphizedStructs: Map<string, MonomorphizedStruct> = new Map();
-
-  /** Cache of monomorphized enum types, keyed by mangled name. */
-  private monomorphizedEnums: Map<string, EnumType> = new Map();
-
-  /** Cache of monomorphized function types, keyed by mangled name */
-  private monomorphizedFunctions: Map<string, MonomorphizedFunction> = new Map();
+  /**
+   * Generic-instantiation registry. Owned by the Monomorphization
+   * module; threaded in via the constructor's options bag (or constructed
+   * fresh per-checker if the caller doesn't supply one — single-module
+   * builds hit that path).
+   */
+  private monomorphization: Monomorphization;
 
   /**
    * When true, `check()` skips the per-instantiation body-check pass.
@@ -168,12 +189,13 @@ export class Checker {
    */
   modulePrefix: string;
 
-  constructor(program: Program, source: SourceFile, moduleName = "") {
+  constructor(program: Program, source: SourceFile, moduleName = "", options: CheckerOptions = {}) {
     this.program = program;
     this.source = source;
     this.modulePrefix = moduleName.replace(/\./g, "_");
     this.typeResolver = new TypeResolver();
     this.lifecycle = createLifecycle();
+    this.monomorphization = options.monomorphization ?? createMonomorphization();
     this.exprChecker = new ExpressionChecker(this);
     this.stmtChecker = new StatementChecker(this);
     this.declChecker = new DeclarationChecker(this, this.lifecycle);
@@ -322,9 +344,7 @@ export class Checker {
         staticMethodCalls: this.staticMethodCalls,
       },
       generics: {
-        monomorphizedStructs: this.monomorphizedStructs,
-        monomorphizedFunctions: this.monomorphizedFunctions,
-        monomorphizedEnums: this.monomorphizedEnums,
+        monomorphization: this.monomorphization,
         resolutions: this.genericResolutions,
       },
       lifecycle: {
@@ -335,35 +355,6 @@ export class Checker {
   }
 
   /**
-   * Check the bodies of monomorphized generic functions so that all expressions
-   * inside them get entries in the typeMap (needed for KIR lowering).
-   */
-  /**
-   * Adopt a monomorphized struct that was registered by another module's
-   * checker. Used by the multi-module orchestrator to route per-instantiation
-   * body checks to the DEFINING module's checker (where imports resolve).
-   * Doesn't re-check the body — the caller orchestrates that via
-   * {@link checkMonomorphizedBodies}.
-   */
-  adoptMonomorphizedStruct(mangledName: string, mono: MonomorphizedStruct): void {
-    if (!this.monomorphizedStructs.has(mangledName)) {
-      this.monomorphizedStructs.set(mangledName, mono);
-    }
-  }
-
-  /**
-   * Sibling of {@link adoptMonomorphizedStruct} for generic enums.
-   * Used so a cross-module instantiation (`Optional<i32>` from
-   * stdlib) ends up in the defining module's KIR lowering pass.
-   */
-  adoptMonomorphizedEnum(mangledName: string, mono: EnumType): void {
-    if (!this.monomorphizedEnums.has(mangledName)) {
-      this.monomorphizedEnums.set(mangledName, mono);
-      this.currentScope.define(typeSymbol(mangledName, mono));
-    }
-  }
-
-  /**
    * Public wrapper around the body-check pass so the multi-module
    * orchestrator can drive it after every module has pre-checked.
    */
@@ -371,8 +362,27 @@ export class Checker {
     this.checkMonomorphizedBodies();
   }
 
+  /** Module-internal accessor so the multi-module orchestrator can read this checker's products. */
+  getMonomorphization(): Monomorphization {
+    return this.monomorphization;
+  }
+
+  /**
+   * Adopt a monomorphized enum registered by another module's checker
+   * and make it visible in this checker's current scope. Used by the
+   * multi-module orchestrator so a cross-module instantiation
+   * (`Optional<i32>` from stdlib) is resolvable when the defining
+   * module's body-check pass runs.
+   */
+  adoptMonomorphizedEnumInScope(mangledName: string, mono: EnumType): void {
+    if (this.monomorphization.getMonomorphizedEnum(mangledName)) return;
+    this.monomorphization.adoptEnum(mangledName, mono);
+    this.currentScope.define(typeSymbol(mangledName, mono));
+  }
+
   private checkMonomorphizedBodies(): void {
-    for (const [_mangledName, monoFunc] of this.monomorphizedFunctions) {
+    const products = this.monomorphization.products();
+    for (const [_mangledName, monoFunc] of products.functions) {
       if (!monoFunc.declaration) {
         // Try to find the declaration from the program
         for (const decl of this.program.declarations) {
@@ -439,7 +449,7 @@ export class Checker {
     // so the body's typeMap holds concrete types (not unsubstituted
     // TypeParams). KIR lowering picks these up to emit signatures and
     // field accesses with the concrete types.
-    for (const [_mangledName, monoStruct] of this.monomorphizedStructs) {
+    for (const [_mangledName, monoStruct] of products.structs) {
       if (!monoStruct.originalDecl) {
         for (const decl of this.program.declarations) {
           if (
@@ -534,10 +544,13 @@ export class Checker {
       switchCaseBindings: new Map(),
       staticMethodCalls: new Map(),
     };
+    // Combined Monomorphization for the cross-module result. Each module's
+    // Checker still owns its own instance during pre-check (so adoption can
+    // be filtered by defining module); the merged view lives here and is
+    // populated during the wave-3 merge below.
+    const combinedMonomorphization = createMonomorphization();
     const generics: CheckGenerics = {
-      monomorphizedStructs: new Map(),
-      monomorphizedFunctions: new Map(),
-      monomorphizedEnums: new Map(),
+      monomorphization: combinedMonomorphization,
       resolutions: new Map(),
     };
     const lifecycle: CheckLifecycle = {
@@ -580,16 +593,17 @@ export class Checker {
         if (otherChecker === checker) continue;
         const otherResult = preResults.get(otherModName);
         if (!otherResult) continue;
-        for (const [name, mono] of otherResult.generics.monomorphizedStructs) {
+        const otherProducts = otherResult.generics.monomorphization.products();
+        for (const [name, mono] of otherProducts.structs) {
           const definingPrefix = mono.original.modulePrefix ?? "";
           if (definingPrefix === checker.modulePrefix) {
-            checker.adoptMonomorphizedStruct(name, mono);
+            checker.getMonomorphization().adoptStruct(name, mono);
           }
         }
-        for (const [name, mono] of otherResult.generics.monomorphizedEnums) {
+        for (const [name, mono] of otherProducts.enums) {
           const definingPrefix = mono.modulePrefix ?? "";
           if (definingPrefix === checker.modulePrefix) {
-            checker.adoptMonomorphizedEnum(name, mono);
+            checker.adoptMonomorphizedEnumInScope(name, mono);
           }
         }
       }
@@ -617,15 +631,7 @@ export class Checker {
       for (const [expr, info] of result.types.staticMethodCalls) {
         types.staticMethodCalls.set(expr, info);
       }
-      for (const [name, mono] of result.generics.monomorphizedStructs) {
-        generics.monomorphizedStructs.set(name, mono);
-      }
-      for (const [name, mono] of result.generics.monomorphizedFunctions) {
-        generics.monomorphizedFunctions.set(name, mono);
-      }
-      for (const [name, mono] of result.generics.monomorphizedEnums) {
-        generics.monomorphizedEnums.set(name, mono);
-      }
+      combinedMonomorphization.adopt(result.generics.monomorphization);
       for (const [expr, name] of result.generics.resolutions) {
         generics.resolutions.set(expr, name);
       }
@@ -789,13 +795,16 @@ export class Checker {
   }
 
   // ─── Monomorphization Cache ─────────────────────────────────────────
+  // Thin delegators to `this.monomorphization`. The maps live privately
+  // inside the module; these stay on Checker so the per-pass checkers
+  // (literal-checker, call-checker, etc.) keep a single call-site API.
 
   getMonomorphizedStruct(mangledName: string): MonomorphizedStruct | undefined {
-    return this.monomorphizedStructs.get(mangledName);
+    return this.monomorphization.getMonomorphizedStruct(mangledName);
   }
 
   registerMonomorphizedStruct(mangledName: string, info: MonomorphizedStruct): void {
-    this.monomorphizedStructs.set(mangledName, info);
+    this.monomorphization.registerStruct(mangledName, info);
     // Also register the concrete struct as a type in the current scope so KIR can find it
     const sym = typeSymbol(mangledName, info.concrete);
     this.currentScope.define(sym);
@@ -823,7 +832,7 @@ export class Checker {
       subs.set(base.genericParams[i]!, t);
     }
     const mangledName = mangleGenericName(base.name, typeArgs);
-    const cached = this.monomorphizedEnums.get(mangledName);
+    const cached = this.monomorphization.getMonomorphizedEnum(mangledName);
     if (cached) return cached;
     const concrete: EnumType = {
       kind: TypeKind.Enum,
@@ -839,30 +848,22 @@ export class Checker {
       genericBaseName: base.name,
       genericTypeArgs: typeArgs,
     };
-    this.monomorphizedEnums.set(mangledName, concrete);
+    this.monomorphization.registerEnum(mangledName, concrete);
     // Register so subsequent type references resolve to the same type.
     this.currentScope.define(typeSymbol(mangledName, concrete));
     return concrete;
   }
 
   getMonomorphizedEnum(mangledName: string): EnumType | undefined {
-    return this.monomorphizedEnums.get(mangledName);
+    return this.monomorphization.getMonomorphizedEnum(mangledName);
   }
 
   getMonomorphizedFunction(mangledName: string): MonomorphizedFunction | undefined {
-    return this.monomorphizedFunctions.get(mangledName);
+    return this.monomorphization.getMonomorphizedFunction(mangledName);
   }
 
   registerMonomorphizedFunction(mangledName: string, info: MonomorphizedFunction): void {
-    this.monomorphizedFunctions.set(mangledName, info);
-  }
-
-  getAllMonomorphizedStructs(): Map<string, MonomorphizedStruct> {
-    return this.monomorphizedStructs;
-  }
-
-  getAllMonomorphizedFunctions(): Map<string, MonomorphizedFunction> {
-    return this.monomorphizedFunctions;
+    this.monomorphization.registerFunction(mangledName, info);
   }
 
   // ─── Diagnostics ──────────────────────────────────────────────────────
