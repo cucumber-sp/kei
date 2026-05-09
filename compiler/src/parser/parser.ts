@@ -305,19 +305,10 @@ export class Parser implements ParserContext {
   // ─── Types ──────────────────────────────────────────────────────────
 
   parseType(): TypeNode {
-    let node = this.parseTypeWithoutNullable();
-    while (this.match(TokenKind.Question)) {
-      const qSpan = this.previous().span;
-      node = {
-        kind: "NullableType",
-        inner: node,
-        span: { start: node.span.start, end: qSpan.end },
-      };
-    }
-    return node;
+    return this.parseTypeWithoutNullable();
   }
 
-  /** Type without trailing `?` — handles `ref T`, `readonly ref T`, `*T`, base types. */
+  /** Type production. Handles `ref T`, `readonly ref T`, `*T`, base types. */
   private parseTypeWithoutNullable(): TypeNode {
     // `readonly ref T` and `ref T` — safe-reference forms. The pointee is
     // itself a full `parseType()` so `ref T?` parses as `ref (T?)`.

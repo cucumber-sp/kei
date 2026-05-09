@@ -9,9 +9,8 @@ import type { KirIntType, KirType, KirVariant } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
 import { lowerEnumDecl } from "./lowering-enum-decl";
 
-/** Extract the base name from a TypeNode — for NullableType / RefType / RawPtrType returns "ptr". */
+/** Extract the base name from a TypeNode — for RefType / RawPtrType returns "ptr". */
 function typeNodeName(node: TypeNode): string {
-  if (node.kind === "NullableType") return "ptr";
   if (node.kind === "RefType") return "ptr";
   if (node.kind === "RawPtrType") return "ptr";
   return node.name;
@@ -94,10 +93,6 @@ export function lowerCheckerType(ctx: LoweringCtx, t: Type): KirType {
 }
 
 export function lowerTypeNode(ctx: LoweringCtx, typeNode: TypeNode): KirType {
-  // NullableType (T?) → ptr<T>
-  if (typeNode.kind === "NullableType") {
-    return { kind: "ptr", pointee: lowerTypeNode(ctx, typeNode.inner) };
-  }
   // RefType (`ref T` / `readonly ref T`) and RawPtrType (`*T`) both lower
   // to a plain pointer in IR — the source distinction is enforced by the
   // checker, not by the IR.
@@ -242,12 +237,6 @@ export function getFunctionReturnType(ctx: LoweringCtx, decl: FunctionDecl): Typ
   // Try to get from the checker's type map
   // The function decl itself isn't in typeMap, but we can derive from return type annotation
   if (decl.returnType) {
-    if (decl.returnType.kind === "NullableType") {
-      return {
-        kind: "ptr",
-        pointee: getFunctionReturnType(ctx, { ...decl, returnType: decl.returnType.inner }),
-      };
-    }
     if (decl.returnType.kind === "RefType" || decl.returnType.kind === "RawPtrType") {
       return {
         kind: "ptr",

@@ -151,12 +151,6 @@ function visitTypeForNested(node: TypeNode, diags: Diagnostic[]): void {
         visitTypeForNested(arg, diags);
       }
       return;
-    case "NullableType":
-      if (node.inner.kind === "RefType") {
-        pushError("'ref T' is not allowed inside a nullable type", node.inner, diags);
-      }
-      visitTypeForNested(node.inner, diags);
-      return;
     case "RefType":
       // Top-level RefType — caller decides whether this is legal here.
       // Recurse into pointee in case there's a nested ref-of-generic.
