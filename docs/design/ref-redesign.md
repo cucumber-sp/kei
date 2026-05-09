@@ -1,9 +1,20 @@
 # Ref redesign: collapsing the pointer-type vocabulary
 
-Status: **decisions captured** — design pinned via review pass; spec/tests/
-compiler not yet updated. All sections previously marked **Open** are now
-closed (see §6); the doc is the single source of truth subsequent commits
-review against.
+Status: **shipped** — type-system shape (`ref T` / `readonly ref T` /
+`*T`, position rules, auto-deref, `unsafe struct` lifecycle ABI,
+`Shared<T>` skeleton in stdlib) is in the compiler and covered by
+tests. The construction-time pieces of this doc (`addr()` and `init`
+in §2.3 / §2.4 / §3.4 / §6.3 etc.) have since been replaced by
+`docs/design/ref-construction-redesign.md` — read that doc for the
+current construction vocabulary (`onCopy<T>` / `onDestroy<T>`
+builtins, `*T → ref T` literal coercion, `placeAt<T>` stdlib helper,
+required-init rule for `unsafe struct` literals). The keyword-form
+addr/init described below was iterated past and is no longer in the
+compiler.
+
+What remains specific to this doc and still applies as-is: §2.1
+position restrictions, §2.2 auto-deref rules, §3.1 `Shared<T>`
+shape, §6 decisions on the type system itself.
 
 This document captures the redesign of Kei's reference / pointer / lifecycle
 story. It is the result of a long design conversation that started from

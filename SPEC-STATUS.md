@@ -20,14 +20,10 @@ and covered by tests.
 | `Optional<T>` as the canonical "may be absent" type           | PLANNED  | Generic enum with `Some(value: T)` / `None`. Depends on generic enums (#19). Parser still accepts `T?` and the `null` literal as legacy spellings; both will be rejected once the migration lands. |
 | `Optional<T>` niche layout for pointer-shaped types           | PLANNED  | One-word representation when `T` is `*T`, `Shared<T>`, `Weak<T>`, or other pointer-niched types; `None` reuses the zero/null bit pattern. |
 | `Optional<T>` tag-byte fallback for non-niched primitives     | PLANNED  | `Optional<i32>`, `Optional<struct>` etc. carry an explicit tag byte. |
-| Drop `addr()` and `init` keywords                             | PLANNED  | Spec moved to "struct literal as binding ceremony" + `placeAt` / `onCopy` / `onDestroy` builtins. Parser / checker still recognise both keywords; cleanup happens once the builtins are in place. See `docs/design/ref-construction-redesign.md`. |
-| `*T → ref T` coercion in `unsafe struct` literals             | PLANNED  | Inside an `unsafe` block, a struct literal accepts `*T` for `ref T` fields and seats the binding in one step. |
-| `ref T` field initialization required in literals             | PLANNED  | Empty / partial literals of an `unsafe struct` with `ref T` fields become a checker error. |
-| `onCopy<T>` / `onDestroy<T>` compiler builtins                | PLANNED  | Fire `T`'s lifecycle hooks on a raw `*T`. Used by `placeAt<T>` and hand-written placement code in `unsafe struct` impls. |
-| `placeAt<T>` in `std/mem.kei`                                 | PLANNED  | `(dest: *T, src: ref T) → memcpy + onCopy`. Convenience helper above the `onCopy` / `memcpy` primitives. |
+| `&field` desugar for `ref T` values                           | PLANNED  | Optional ergonomic patch from `docs/design/ref-construction-redesign.md` §6 stage 5: `&field` returns `&(*field)` (the bound `*T`) for `ref T` parameters / fields instead of today's C-style `**T`. Self-contained, additive. |
 | `readonly` modifier on fields/params                          | PLANNED  | Two senses: blocks reassignment for plain types; blocks write-through for `ref T`. |
 | Lifecycle hook ABI flip (`fn __destroy(self: ref T)`, void)   | PLANNED  | `__oncopy(self: ref T)` already lands as void-returning; same flip for `__destroy` is the remaining piece. |
-| `Shared<T>` stdlib end-to-end                                 | WIP      | Type-checks and lowers; runtime path blocked on the `addr`/`init` cleanup and on auto-deref-on-read corner cases for `ref T` fields. |
+| `Shared<T>` stdlib end-to-end                                 | WIP      | Type-checks and lowers; runtime path needs auto-deref-on-read corner cases for `ref T` fields plus the `__destroy` ABI flip above. |
 | Traits / trait objects                                        | PLANNED  | Fat-pointer layout `(data, vtable)` with size + destroy slot. |
 | `String` / `Array<T>` / `List<T>` as stdlib types             | PLANNED  | `String` migration deferred — runtime currently in C (`runtime.h`). `Array<T>` and `List<T>` follow once `Shared<T>` is real. |
 
