@@ -32,3 +32,23 @@ pub fn set(dest: *u8, c: i32, n: usize) {
         memset(dest, c, n);
     }
 }
+
+/// Place a value at `dest`: bitwise-copies the bytes of `*src` into the
+/// location pointed to by `dest`, then fires T's `__oncopy` on it.
+///
+/// This is the "construction-time" write through a binding. Used by
+/// `unsafe struct` impls that allocate their own backing storage and
+/// need to install an initial T into the slot without firing
+/// `__destroy` on whatever garbage is there. After `placeAt`, the slot
+/// holds a fully-initialized T whose lifecycle hooks have already
+/// fired correctly.
+///
+/// `dest` must point at uninitialized memory of at least `sizeof(T)`
+/// bytes; `src` must reference a valid T. Both invariants are the
+/// caller's to vouch for — `unsafe`-only.
+pub fn placeAt<T>(dest: *T, src: ref T) {
+    unsafe {
+        memcpy(dest as *u8, src as *u8, sizeof(T));
+        onCopy(dest);
+    }
+}
