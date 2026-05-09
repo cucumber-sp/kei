@@ -620,6 +620,16 @@ export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
     // *p = v — store through the raw pointer.
     const ptrId = lowerExpr(ctx, expr.target.operand);
     emit(ctx, { kind: "store", ptr: ptrId, value: valueId });
+  } else if (expr.target.kind === "AddrExpr") {
+    // `addr(s.field) = v` — write the raw bytes of the slot itself.
+    // `addr(s.field)` lowers to a `field_ptr` to the slot; we store
+    // the rhs through that pointer. Lifecycle hooks deliberately do
+    // NOT fire here: an `addr` write replaces the *pointer bits* of a
+    // `ref T` field (or the bytes of a `*T` field), so neither
+    // `__destroy` on an "old value" (there is none — the slot may be
+    // uninitialized) nor `__oncopy` on the new bits applies.
+    const ptrId = lowerExpr(ctx, expr.target);
+    emit(ctx, { kind: "store", ptr: ptrId, value: valueId });
   } else if (expr.target.kind === "IndexExpr") {
     const objType = ctx.checkResult.types.typeMap.get(expr.target.object);
     const baseId =

@@ -29,6 +29,8 @@ out-survive any single conversation.
 (Add as we file them.)
 
 - #19 — Generic enums (prereq for `Optional<T>` / `Result<T, E>`)
+- #21 — C emitter references undeclared `_v1` in scope-end
+  `__destroy` after `let x = Struct.make()` (blocks `Shared<T>` e2e)
 
 ## Tooling note
 

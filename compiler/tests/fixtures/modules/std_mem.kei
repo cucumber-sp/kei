@@ -1,0 +1,10 @@
+extern fn malloc(size: usize) -> *void;
+extern fn free(p: *void) -> void;
+
+pub fn alloc(size: usize) -> *void {
+    unsafe { return malloc(size); }
+}
+
+pub fn dealloc(p: *void) {
+    unsafe { free(p); }
+}
