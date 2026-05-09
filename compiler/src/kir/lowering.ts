@@ -79,13 +79,14 @@ export function runLowering(ctx: LoweringCtx): KirModule {
     lowerDeclaration(ctx, decl);
   }
 
-  // Emit monomorphized struct definitions for generic instantiations. Each module's
-  // checker `monomorphizedStructs` map can include instantiations
+  // Emit monomorphized struct definitions for generic instantiations.
+  // Each module's `Monomorphization` instance can hold instantiations
   // adopted from another module (so cross-module body checks can run),
   // which means the same `Shared<i32>` shows up under both `main` and
   // `std`. Lower it only in the *defining* module's pass so its type
   // declaration and lifecycle methods aren't duplicated downstream.
-  for (const [mangledName, monoStruct] of ctx.checkResult.generics.monomorphizedStructs) {
+  const products = ctx.checkResult.generics.monomorphization.products();
+  for (const [mangledName, monoStruct] of products.structs) {
     const definingModulePrefix = monoStruct.original.modulePrefix ?? "";
     const ourPrefix = ctx.modulePrefix ?? "";
     if (definingModulePrefix !== ourPrefix) continue;
@@ -120,11 +121,10 @@ export function runLowering(ctx: LoweringCtx): KirModule {
     }
   }
 
-  // Emit monomorphized enum type declarations. Like
-  // monomorphizedStructs, only the defining module emits each
-  // instantiation so a cross-module `Optional<i32>` doesn't end up
-  // declared twice.
-  for (const [mangledName, monoEnum] of ctx.checkResult.generics.monomorphizedEnums) {
+  // Emit monomorphized enum type declarations. Like the struct loop
+  // above, only the defining module emits each instantiation so a
+  // cross-module `Optional<i32>` doesn't end up declared twice.
+  for (const [mangledName, monoEnum] of products.enums) {
     const definingModulePrefix = monoEnum.modulePrefix ?? "";
     const ourPrefix = ctx.modulePrefix ?? "";
     if (definingModulePrefix !== ourPrefix) continue;
@@ -143,7 +143,7 @@ export function runLowering(ctx: LoweringCtx): KirModule {
   }
 
   // Emit monomorphized function definitions for generic instantiations
-  for (const [_mangledName, monoFunc] of ctx.checkResult.generics.monomorphizedFunctions) {
+  for (const [_mangledName, monoFunc] of products.functions) {
     if (monoFunc.declaration) {
       ctx.functions.push(lowerMonomorphizedFunction(ctx, monoFunc));
     }
