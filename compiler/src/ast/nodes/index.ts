@@ -69,7 +69,6 @@ export { StmtKind } from "./statements";
 export type {
   GenericType,
   NamedType,
-  NullableType,
   RawPtrType,
   RefType,
   TypeNode,

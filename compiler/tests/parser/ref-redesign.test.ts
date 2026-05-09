@@ -79,15 +79,6 @@ describe("Parser — ref-redesign types", () => {
     if (ann?.kind !== "GenericType") throw new Error("expected GenericType");
     expect(ann.typeArgs[0]?.kind).toBe("RefType");
   });
-
-  test("`*T?` (nullable raw pointer) parses", () => {
-    const program = parse("fn f(p: *u8?) { }");
-    const fn = program.declarations[0];
-    if (fn?.kind !== "FunctionDecl") throw new Error("expected FunctionDecl");
-    const ann = fn.params[0]?.typeAnnotation;
-    if (ann?.kind !== "NullableType") throw new Error("expected NullableType");
-    expect(ann.inner.kind).toBe("RawPtrType");
-  });
 });
 
 describe("Parser — `mut` is gone", () => {
