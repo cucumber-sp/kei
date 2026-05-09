@@ -79,7 +79,6 @@ describe("Parser — ref-redesign types", () => {
     if (ann?.kind !== "GenericType") throw new Error("expected GenericType");
     expect(ann.typeArgs[0]?.kind).toBe("RefType");
   });
-
 });
 
 describe("Parser — `mut` is gone", () => {
