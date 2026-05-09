@@ -60,6 +60,59 @@ function checkSizeofCall(checker: Checker, expr: CallExpr): Type | null {
   return USIZE_TYPE;
 }
 
+/**
+ * Special case: `onCopy(p)` / `onDestroy(p)` — fire the pointee type's
+ * `__oncopy(self: ref T)` / `__destroy(self: ref T)` hook through a raw
+ * pointer. Both are unsafe-only and require the pointee to be a struct
+ * with the corresponding hook defined.
+ */
+function checkLifecycleHookBuiltin(checker: Checker, expr: CallExpr): Type | null {
+  if (expr.callee.kind !== "Identifier") return null;
+  const name = expr.callee.name;
+  if (name !== "onCopy" && name !== "onDestroy") return null;
+  // Only treat the call as a builtin when the name resolves to the
+  // builtin function symbol — user code that shadows the name with a
+  // local function falls through to the regular call path.
+  const sym = checker.currentScope.lookup(name);
+  if (!sym) return null;
+
+  if (!checker.currentScope.isInsideUnsafe()) {
+    checker.error(`'${name}' requires unsafe`, expr.span);
+    return ERROR_TYPE;
+  }
+
+  if (expr.args.length !== 1) {
+    checker.error(`'${name}' expects exactly 1 argument`, expr.span);
+    return ERROR_TYPE;
+  }
+  const arg = expr.args[0];
+  if (!arg) return ERROR_TYPE;
+  const argType = checker.checkExpression(arg);
+  if (isErrorType(argType)) return ERROR_TYPE;
+
+  if (!isPtrType(argType)) {
+    checker.error(`'${name}' expects a '*T' argument, got '${typeToString(argType)}'`, expr.span);
+    return ERROR_TYPE;
+  }
+  const pointee = argType.pointee;
+  if (pointee.kind !== "struct") {
+    checker.error(
+      `'${name}' expects a pointer to a struct, got '${typeToString(argType)}'`,
+      expr.span
+    );
+    return ERROR_TYPE;
+  }
+  const hookName = name === "onCopy" ? "__oncopy" : "__destroy";
+  if (!pointee.methods.has(hookName)) {
+    checker.error(
+      `type '${pointee.name}' has no '${hookName}' hook for '${name}' to call`,
+      expr.span
+    );
+    return ERROR_TYPE;
+  }
+  return VOID_TYPE;
+}
+
 /** Special case: alloc<T>(count) and free(ptr) — require unsafe */
 function checkBuiltinAllocFree(checker: Checker, expr: CallExpr): Type | null {
   if (expr.callee.kind !== "Identifier") return null;
@@ -114,6 +167,10 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
   // Special case: sizeof(Type)
   const sizeofResult = checkSizeofCall(checker, expr);
   if (sizeofResult !== null) return sizeofResult;
+
+  // Special case: onCopy / onDestroy lifecycle hook builtins
+  const lifecycleResult = checkLifecycleHookBuiltin(checker, expr);
+  if (lifecycleResult !== null) return lifecycleResult;
 
   // Special case: alloc<T>(count) and free(ptr) — require unsafe
   const builtinResult = checkBuiltinAllocFree(checker, expr);

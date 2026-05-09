@@ -183,8 +183,11 @@ export function typeToString(t: Type): string {
       return "string";
     case TypeKind.CChar:
       return "c_char";
-    case TypeKind.Ptr:
-      return `ptr<${typeToString(t.pointee)}>`;
+    case TypeKind.Ptr: {
+      const inner = typeToString(t.pointee);
+      if (t.isRef) return t.isReadonly ? `readonly ref ${inner}` : `ref ${inner}`;
+      return `*${inner}`;
+    }
     case TypeKind.Array:
       return `array<${typeToString(t.element)}>`;
     case TypeKind.Range:

@@ -631,12 +631,12 @@ describe("typeToString", () => {
   });
 
   describe("compound types", () => {
-    test("ptr<i32>", () => {
-      expect(typeToString(ptrType(I32_TYPE))).toBe("ptr<i32>");
+    test("*i32", () => {
+      expect(typeToString(ptrType(I32_TYPE))).toBe("*i32");
     });
 
-    test("ptr<ptr<bool>>", () => {
-      expect(typeToString(ptrType(ptrType(BOOL_TYPE)))).toBe("ptr<ptr<bool>>");
+    test("**bool", () => {
+      expect(typeToString(ptrType(ptrType(BOOL_TYPE)))).toBe("**bool");
     });
 
     test("array<f64>", () => {

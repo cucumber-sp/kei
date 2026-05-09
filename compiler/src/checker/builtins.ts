@@ -17,6 +17,7 @@ import {
   I32_TYPE,
   I64_TYPE,
   ISIZE_TYPE,
+  ptrType,
   STRING_TYPE,
   U8_TYPE,
   U16_TYPE,
@@ -86,6 +87,38 @@ export function registerBuiltins(scope: Scope): void {
       "panic",
       functionType(
         [{ name: "message", type: STRING_TYPE, isReadonly: false }],
+        VOID_TYPE,
+        [],
+        [],
+        false
+      ),
+      false
+    )
+  );
+
+  // onCopy(p: *T) -> void — fires T's `__oncopy(self: ref T)` on `p`.
+  // Resolved by name in the call checker (the placeholder type-arg below
+  // is replaced by the concrete pointee type at the call site).
+  scope.define(
+    functionSymbol(
+      "onCopy",
+      functionType(
+        [{ name: "p", type: ptrType(VOID_TYPE), isReadonly: false }],
+        VOID_TYPE,
+        [],
+        [],
+        false
+      ),
+      false
+    )
+  );
+
+  // onDestroy(p: *T) -> void — fires T's `__destroy(self: ref T)` on `p`.
+  scope.define(
+    functionSymbol(
+      "onDestroy",
+      functionType(
+        [{ name: "p", type: ptrType(VOID_TYPE), isReadonly: false }],
         VOID_TYPE,
         [],
         [],

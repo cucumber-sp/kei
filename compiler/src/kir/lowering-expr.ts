@@ -39,7 +39,12 @@ import {
   lowerStructLiteral,
 } from "./lowering-literals";
 import { lowerBinaryExpr, lowerOperatorMethodCall, lowerUnaryExpr } from "./lowering-operators";
-import { getStructLifecycle, popScopeWithDestroy, pushScope } from "./lowering-scope";
+import {
+  getStructLifecycle,
+  mangledLifecycleStructName,
+  popScopeWithDestroy,
+  pushScope,
+} from "./lowering-scope";
 import { lowerStatement } from "./lowering-stmt";
 import { lowerSwitchExpr } from "./lowering-switch";
 import {
@@ -233,6 +238,31 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
     const dest = freshVar(ctx);
     emit(ctx, { kind: "sizeof", dest, type: kirType });
     return dest;
+  }
+
+  // onCopy(p) / onDestroy(p) — direct calls to the pointee struct's
+  // mangled lifecycle hook. The checker has already verified `p` is a
+  // pointer to a struct with the corresponding hook.
+  if (
+    expr.callee.kind === "Identifier" &&
+    (expr.callee.name === "onCopy" || expr.callee.name === "onDestroy") &&
+    expr.args.length === 1
+  ) {
+    const hookName = expr.callee.name === "onCopy" ? "__oncopy" : "__destroy";
+    const arg = expr.args[0];
+    if (arg) {
+      const argType = ctx.checkResult.types.typeMap.get(arg);
+      if (argType?.kind === "ptr" && argType.pointee.kind === "struct") {
+        const ptrId = lowerExpr(ctx, arg);
+        const structName = mangledLifecycleStructName(argType.pointee);
+        emit(ctx, {
+          kind: "call_void",
+          func: `${structName}_${hookName}`,
+          args: [ptrId],
+        });
+        return emitConstInt(ctx, 0); // void; dummy
+      }
+    }
   }
 
   // Resolve the callee's function type so we can match each arg against

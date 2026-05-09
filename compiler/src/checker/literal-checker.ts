@@ -35,6 +35,7 @@ import {
   NULL_TYPE,
   STRING_TYPE,
   TypeKind,
+  typesEqual,
   typeToString,
   U8_TYPE,
   U16_TYPE,
@@ -184,6 +185,35 @@ export function checkStructLiteral(checker: Checker, expr: StructLiteral): Type 
     }
 
     const valueType = checker.checkExpression(field.value);
+
+    // `*T → ref T` coercion: a struct literal of an `unsafe struct`
+    // inside an `unsafe` block accepts a raw `*T` value for a `ref T`
+    // field — this is the binding ceremony for ref fields. Outside
+    // `unsafe`, the coercion is rejected; in safe contexts ref fields
+    // are seated only by re-using an existing same-type binding.
+    if (
+      !isErrorType(valueType) &&
+      structType.isUnsafe &&
+      expectedType.kind === "ptr" &&
+      expectedType.isRef &&
+      valueType.kind === "ptr" &&
+      !valueType.isRef
+    ) {
+      if (!checker.currentScope.isInsideUnsafe()) {
+        checker.error(
+          `field '${field.name}': expected '${typeToString(expectedType)}', got '${typeToString(valueType)}'`,
+          field.span
+        );
+      } else if (!typesEqual(valueType.pointee, expectedType.pointee)) {
+        checker.error(
+          `field '${field.name}': expected '${typeToString(expectedType)}', got '${typeToString(valueType)}'`,
+          field.span
+        );
+      }
+      // else: accepted — pointee matches and we're in unsafe.
+      continue;
+    }
+
     if (!isErrorType(valueType) && !isAssignableTo(valueType, expectedType)) {
       // Check if this is a literal that can be implicitly converted
       const litInfo = extractLiteralInfo(field.value);
