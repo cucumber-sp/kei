@@ -1,0 +1,26 @@
+// std/optional.kei — `Optional<T>` for "may be absent" values.
+//
+// Generic enum carrying either `Some(value: T)` or `None`. Wherever a
+// value may be absent — failed lookups, parse failures,
+// `Weak<T>::value()`, lazily-populated fields — return `Optional<T>`
+// instead of inventing a sentinel (`null`, `-1`, empty string, ...) or
+// throwing for the normal case.
+//
+// Pattern matching is the only way to extract the inner value:
+//
+//     match maybeName {
+//         Some(name) => print("hi " + name),
+//         None       => print("anonymous"),
+//     }
+//
+// Today every instantiation pays a tag byte (`{ tag: u8, value: T }`).
+// The niche optimization for pointer-shaped types
+// (`Optional<*T>`, `Optional<Shared<T>>`, ...) — where `None` reuses
+// the zero / null bit pattern and the whole type fits in one word —
+// is a future backend pass; tracked separately. Until it lands the
+// representation is uniform.
+
+pub enum Optional<T> {
+    Some(value: T),
+    None
+}

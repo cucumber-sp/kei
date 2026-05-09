@@ -150,3 +150,16 @@ describe("Multi-module monomorphized method body resolution", () => {
     expect(destroyCalls.some((c) => c === "dealloc")).toBe(false);
   });
 });
+
+describe("Multi-module Optional<T> stdlib import", () => {
+  test("`import { Optional } from std_optional;` lowers across modules", () => {
+    const kirModule = lowerMultiModule("main_uses_optional.kei");
+    const typeNames = kirModule.types.map((t) => t.name);
+    // The monomorphized enum type for `Optional<i32>` should appear
+    // in the combined KIR output exactly once — and importantly, it
+    // should appear, since main uses `Optional<i32>.Some` and the
+    // defining module is `std_optional`.
+    const occurrences = typeNames.filter((n) => n.endsWith("Optional_i32")).length;
+    expect(occurrences).toBe(1);
+  });
+});

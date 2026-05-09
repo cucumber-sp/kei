@@ -345,6 +345,18 @@ export class Checker {
   }
 
   /**
+   * Sibling of {@link adoptMonomorphizedStruct} for generic enums.
+   * Used so a cross-module instantiation (`Optional<i32>` from
+   * stdlib) ends up in the defining module's KIR lowering pass.
+   */
+  adoptMonomorphizedEnum(mangledName: string, mono: EnumType): void {
+    if (!this.monomorphizedEnums.has(mangledName)) {
+      this.monomorphizedEnums.set(mangledName, mono);
+      this.currentScope.define(typeSymbol(mangledName, mono));
+    }
+  }
+
+  /**
    * Public wrapper around the body-check pass so the multi-module
    * orchestrator can drive it after every module has pre-checked.
    */
@@ -565,6 +577,12 @@ export class Checker {
           const definingPrefix = mono.original.modulePrefix ?? "";
           if (definingPrefix === checker.modulePrefix) {
             checker.adoptMonomorphizedStruct(name, mono);
+          }
+        }
+        for (const [name, mono] of otherResult.generics.monomorphizedEnums) {
+          const definingPrefix = mono.modulePrefix ?? "";
+          if (definingPrefix === checker.modulePrefix) {
+            checker.adoptMonomorphizedEnum(name, mono);
           }
         }
       }
