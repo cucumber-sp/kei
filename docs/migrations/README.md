@@ -52,16 +52,22 @@ changes.
 
 ## Cadence
 
-Per [the dispatch plan](#) — see also the closing notes of the
-2026-05-09 architecture review:
+The full wave-by-wave dispatch plan with PR lists, blockers, and
+hard cross-migration gates lives in
+[`wave-plan.md`](./wave-plan.md). Quick summary:
 
 | Wave | What | Parallel? |
 |---|---|---|
-| 1 | Foundation: lifecycle/pr-1 + diagnostics/pr-1 + monomorphization/pr-1 | 3 parallel sessions, no overlap |
-| 2 | Diagnostics codemod (pr-2) + collector threading (pr-3) | Sequential within Diagnostics; doesn't block other migrations |
-| 3 | Lifecycle pr-2, Monomorphization pr-2, Diagnostics specificity (pr-4a..g) | Cross-migration parallel; specificity PRs parallelizable across categories |
-| 4 | Markers (lifecycle pr-3) + per-site cutovers (lifecycle pr-4) + monomorph pr-3..4 | Sequential within each migration |
-| 5 | Payoff PRs: monomorph pr-5 (delete override), lifecycle pr-5 (cleanup), diagnostics pr-N+1 (remove untriaged) | Cross-migration parallel |
+| 1 | Foundation: `lifecycle/pr-1` + `diagnostics/pr-1` + `monomorphization/pr-1` | 3 parallel sessions, no overlap |
+| 2 | Diagnostics codemod (`pr-2`) + collector threading (`pr-3`) | Sequential within Diagnostics; doesn't block other migrations |
+| 3 | `lifecycle/pr-2`, `monomorphization/pr-2`, Diagnostics specificity (`pr-4a..4g`) | Up to 9 parallel sessions |
+| 4 | Lifecycle markers (`pr-3`) + per-site cutovers (`pr-4a..4e`) + Monomorphization `pr-3..pr-4` | Mixed: upstream sequential per migration; lifecycle 4a–4e parallel |
+| 5 | Payoff + cleanup: `monomorphization/pr-5`, `pr-6`, `lifecycle/pr-5`, `diagnostics/pr-5` | Cross-migration parallel |
+
+For per-migration PR dependencies (within a single migration), see
+each migration's [`dispatch.md`](#layout). For execution order
+across migrations, see [`wave-plan.md`](./wave-plan.md) — that's
+what the orchestrator works from.
 
 ## Bottleneck
 
