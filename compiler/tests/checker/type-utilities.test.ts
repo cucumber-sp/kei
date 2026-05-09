@@ -66,7 +66,7 @@ function makeStruct(name: string, genericParams: string[] = []): StructType {
 }
 
 function makeEnum(name: string): EnumType {
-  return { kind: TypeKind.Enum, name, baseType: null, variants: [] };
+  return { kind: TypeKind.Enum, name, baseType: null, variants: [], genericParams: [] };
 }
 
 function intLiteral(value: number, suffix?: string): Expression {

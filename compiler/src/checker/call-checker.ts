@@ -14,7 +14,7 @@ import {
 import { extractTypeParamSubs } from "./literal-checker";
 import type { FunctionOverload } from "./symbols";
 import { SymbolKind } from "./symbols";
-import type { FunctionType, Type } from "./types";
+import type { EnumType, FunctionType, Type } from "./types";
 import {
   ERROR_TYPE,
   extractLiteralInfo,
@@ -201,26 +201,62 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
     }
   }
 
-  // Check for enum variant construction: Enum.Variant(args)
+  // Check for enum variant construction: Enum.Variant(args) or
+  // Enum<TypeArgs>.Variant(args) for a generic enum.
   if (expr.callee.kind === "MemberExpr") {
     const memberExpr = expr.callee;
     if (memberExpr.object.kind === "Identifier") {
       const enumSym = checker.currentScope.lookupType(memberExpr.object.name);
       if (enumSym && enumSym.kind === SymbolKind.Type && enumSym.type.kind === TypeKind.Enum) {
-        const enumType = enumSym.type;
-        const variant = enumType.variants.find((v) => v.name === memberExpr.property);
+        const baseEnum = enumSym.type;
+        const variant = baseEnum.variants.find((v) => v.name === memberExpr.property);
         if (variant) {
-          if (variant.fields.length === 0) {
+          // For generic enums (`Optional<i32>.Some(7)`), instantiate the
+          // enum with the supplied type args before typechecking the
+          // payload arguments. The instantiation substitutes the variant
+          // field types from `T` to the concrete type and produces a
+          // distinct, monomorphized EnumType whose name encodes the
+          // type args (e.g. `Optional_i32`).
+          let enumType = baseEnum;
+          if (baseEnum.genericParams.length > 0) {
+            if (expr.typeArgs.length === 0) {
+              checker.error(
+                `generic enum '${baseEnum.name}' requires type arguments (e.g. '${baseEnum.name}<...>.${variant.name}')`,
+                expr.span
+              );
+              return ERROR_TYPE;
+            }
+            if (expr.typeArgs.length !== baseEnum.genericParams.length) {
+              checker.error(
+                `enum '${baseEnum.name}' expects ${baseEnum.genericParams.length} type argument(s), got ${expr.typeArgs.length}`,
+                expr.span
+              );
+              return ERROR_TYPE;
+            }
+            const inst = checker.instantiateGenericEnum(baseEnum, expr.typeArgs);
+            if (isErrorType(inst)) return ERROR_TYPE;
+            enumType = inst as EnumType;
+          } else if (expr.typeArgs.length > 0) {
             checker.error(
-              `enum variant '${enumType.name}.${variant.name}' has no fields — use '${enumType.name}.${variant.name}' without call syntax`,
+              `enum '${baseEnum.name}' is not generic but was called with ${expr.typeArgs.length} type argument(s)`,
+              expr.span
+            );
+            return ERROR_TYPE;
+          }
+          const concreteVariant =
+            enumType.variants.find((v) => v.name === memberExpr.property) ?? variant;
+
+          if (concreteVariant.fields.length === 0) {
+            checker.error(
+              `enum variant '${enumType.name}.${concreteVariant.name}' has no fields — use '${enumType.name}.${concreteVariant.name}' without call syntax`,
               expr.span
             );
             return ERROR_TYPE;
           }
           // Check argument count
-          if (expr.args.length !== variant.fields.length) {
+          if (expr.args.length !== concreteVariant.fields.length) {
             checker.error(
-              `enum variant '${enumType.name}.${variant.name}' expects ${variant.fields.length} argument(s), got ${expr.args.length}`,
+              `enum variant '${enumType.name}.${concreteVariant.name}' expects ${concreteVariant.fields.length} argument(s), got ${expr.args.length}`,
               expr.span
             );
             return ERROR_TYPE;
@@ -230,7 +266,7 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
             const arg = expr.args[i];
             if (!arg) continue;
             const argType = checker.checkExpression(arg);
-            const field = variant.fields[i];
+            const field = concreteVariant.fields[i];
             if (field && !isErrorType(argType) && !isAssignableTo(argType, field.type)) {
               const litInfo = extractLiteralInfo(arg);
               const isLiteralOk =
@@ -248,7 +284,7 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
           checker.setExprType(expr.callee, enumType);
           return enumType;
         }
-        checker.error(`enum '${enumType.name}' has no variant '${memberExpr.property}'`, expr.span);
+        checker.error(`enum '${baseEnum.name}' has no variant '${memberExpr.property}'`, expr.span);
         return ERROR_TYPE;
       }
     }

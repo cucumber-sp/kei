@@ -29,6 +29,16 @@ export class EnumChecker {
       seenVariants.add(v.name);
     }
 
+    // Push a temporary scope with the generic parameters so that
+    // payload field types referencing them (e.g. `Some(value: T)`)
+    // resolve to TypeParam rather than failing as undeclared.
+    if (decl.genericParams.length > 0) {
+      this.checker.pushScope({});
+      for (const gp of decl.genericParams) {
+        this.checker.currentScope.define(typeSymbol(gp, { kind: TypeKind.TypeParam, name: gp }));
+      }
+    }
+
     const variants: EnumVariantInfo[] = decl.variants.map((v) => ({
       name: v.name,
       fields: v.fields.map((f) => ({
@@ -38,11 +48,17 @@ export class EnumChecker {
       value: v.value && v.value.kind === "IntLiteral" ? v.value.value : null,
     }));
 
+    if (decl.genericParams.length > 0) {
+      this.checker.popScope();
+    }
+
     const enumType: EnumType = {
       kind: TypeKind.Enum,
       name: decl.name,
       baseType,
       variants,
+      genericParams: decl.genericParams,
+      modulePrefix: this.checker.modulePrefix,
     };
 
     const sym = typeSymbol(decl.name, enumType, decl);
