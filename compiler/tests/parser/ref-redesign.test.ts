@@ -1,6 +1,6 @@
 /**
  * Parser tests for ref-redesign syntax: `ref T`, `readonly ref T`, `*T`,
- * `addr(...)`, `init lvalue = expr;`, `readonly` field/param modifier.
+ * `readonly` field/param modifier.
  *
  * Position rules (e.g. "ref T cannot appear in a return type") are the
  * checker's job; these tests just confirm the surface productions parse
@@ -87,65 +87,6 @@ describe("Parser — ref-redesign types", () => {
     const ann = fn.params[0]?.typeAnnotation;
     if (ann?.kind !== "NullableType") throw new Error("expected NullableType");
     expect(ann.inner.kind).toBe("RawPtrType");
-  });
-});
-
-describe("Parser — addr(...) and init", () => {
-  test("`addr(s.field)` parses to AddrExpr containing MemberExpr", () => {
-    const program = parse(`
-      fn f() {
-        unsafe { let p = addr(s.field); }
-      }
-    `);
-    const fn = program.declarations[0];
-    if (fn?.kind !== "FunctionDecl") throw new Error("expected FunctionDecl");
-    const unsafeBlock = fn.body.statements[0];
-    if (unsafeBlock?.kind !== "UnsafeBlock") throw new Error("expected UnsafeBlock");
-    const letStmt = unsafeBlock.body.statements[0];
-    if (letStmt?.kind !== "LetStmt") throw new Error("expected LetStmt");
-    expect(letStmt.initializer.kind).toBe("AddrExpr");
-    if (letStmt.initializer.kind !== "AddrExpr") return;
-    expect(letStmt.initializer.operand.kind).toBe("MemberExpr");
-  });
-
-  test("`*addr(s.field)` parses as deref of addr expr", () => {
-    const program = parse(`
-      fn f() {
-        unsafe { let v = *addr(s.field); }
-      }
-    `);
-    const fn = program.declarations[0];
-    if (fn?.kind !== "FunctionDecl") throw new Error("expected FunctionDecl");
-    const unsafeBlock = fn.body.statements[0];
-    if (unsafeBlock?.kind !== "UnsafeBlock") throw new Error("expected UnsafeBlock");
-    const letStmt = unsafeBlock.body.statements[0];
-    if (letStmt?.kind !== "LetStmt") throw new Error("expected LetStmt");
-    // The `*` creates a UnaryExpr (or DerefExpr) whose operand is the AddrExpr.
-    const init = letStmt.initializer;
-    if (init.kind === "UnaryExpr") {
-      expect(init.operator).toBe("*");
-      expect(init.operand.kind).toBe("AddrExpr");
-    } else if (init.kind === "DerefExpr") {
-      expect(init.operand.kind).toBe("AddrExpr");
-    } else {
-      throw new Error(`unexpected initializer kind: ${init.kind}`);
-    }
-  });
-
-  test("`init lvalue = expr;` parses to InitStmt", () => {
-    const program = parse(`
-      fn f() {
-        unsafe { init s.value = item; }
-      }
-    `);
-    const fn = program.declarations[0];
-    if (fn?.kind !== "FunctionDecl") throw new Error("expected FunctionDecl");
-    const unsafeBlock = fn.body.statements[0];
-    if (unsafeBlock?.kind !== "UnsafeBlock") throw new Error("expected UnsafeBlock");
-    const initStmt = unsafeBlock.body.statements[0];
-    if (initStmt?.kind !== "InitStmt") throw new Error("expected InitStmt");
-    expect(initStmt.target.kind).toBe("MemberExpr");
-    expect(initStmt.value.kind).toBe("Identifier");
   });
 });
 

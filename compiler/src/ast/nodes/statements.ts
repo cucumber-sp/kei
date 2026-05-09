@@ -19,7 +19,6 @@ export enum StmtKind {
   Assert = "AssertStmt",
   Require = "RequireStmt",
   UnsafeBlock = "UnsafeBlock",
-  Init = "InitStmt",
 }
 
 /** Braced block of statements `{ ... }`. */
@@ -145,20 +144,6 @@ export interface UnsafeBlock extends BaseNode {
   body: BlockStmt;
 }
 
-/**
- * `init lvalue = expr` — initialization-write into an uninitialized slot.
- *
- * Skips the destroy step (otherwise lifecycle would run on garbage),
- * bitwise-writes the new value into the slot, then runs `__oncopy` on
- * the new value. Unsafe-only at the field level (struct literals emit
- * the same semantics implicitly).
- */
-export interface InitStmt extends BaseNode {
-  kind: "InitStmt";
-  target: Expression;
-  value: Expression;
-}
-
 /** Union of all statement nodes. */
 export type Statement =
   | BlockStmt
@@ -176,5 +161,4 @@ export type Statement =
   | ExprStmt
   | AssertStmt
   | RequireStmt
-  | UnsafeBlock
-  | InitStmt;
+  | UnsafeBlock;

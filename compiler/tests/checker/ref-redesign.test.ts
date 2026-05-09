@@ -102,19 +102,19 @@ describe("§4.3 — `&` and `*` operators are unsafe-only", () => {
   });
 });
 
-// ─── §4.4 — `addr()` is unsafe ───────────────────────────────────────────────
+// ─── §4.4 — Constructing `unsafe struct` literals from raw pointers ──────────
 
-describe("§4.4 — `addr(...)` is unsafe-only", () => {
-  test("`addr(field)` outside `unsafe` is a compile error", () => {
+describe("§4.4 — `*T → ref T` literal coercion is unsafe-only", () => {
+  test("seating a `ref T` field with a `*T` outside `unsafe` is a compile error", () => {
     checkError(
       `
       unsafe struct Box { value: ref i32; fn __destroy(self: ref Box) {} fn __oncopy(self: ref Box) {} }
-      fn leak(b: ref Box) -> *i32 {
-        return addr(b.value);
+      fn leak(p: *i32) -> Box {
+        return Box{ value: p };
       }
       fn main() -> int { return 0; }
       `,
-      "'addr(...)' requires unsafe"
+      "expected 'ref i32', got '*i32'"
     );
   });
 });
@@ -184,39 +184,6 @@ describe("§4.6 — Shared<T> field assignment is explicit", () => {
       struct Cfg { online: Shared<bool>; }
       fn turnOff(c: ref Cfg) {
         c.online.value = false;
-      }
-      fn main() -> int { return 0; }
-    `);
-  });
-});
-
-// ─── §4.7 — `init` only valid in `unsafe` ────────────────────────────────────
-
-describe("§4.7 — `init` is unsafe-only at the field level", () => {
-  test("`init` outside `unsafe` is a compile error", () => {
-    checkError(
-      `
-      struct Item { value: i32; }
-      fn build() -> Item {
-        let i: Item = Item{ value: 0 };
-        init i.value = 42;
-        return i;
-      }
-      fn main() -> int { return 0; }
-      `,
-      "'init' requires unsafe"
-    );
-  });
-
-  test("`init` inside `unsafe` is OK", () => {
-    checkOk(`
-      unsafe struct Box { data: ref i32; fn __destroy(self: ref Box) {} fn __oncopy(self: ref Box) {} }
-      fn make(item: ref i32) -> Box {
-        unsafe {
-          let b = Box{ data: item as *i32 };
-          init b.data = item;
-          return b;
-        }
       }
       fn main() -> int { return 0; }
     `);
@@ -527,57 +494,6 @@ describe("`mut` keyword fully removed from the lexer", () => {
         return mut;
       }
     `);
-  });
-});
-
-describe("`addr(field) = expr` lowers to a store through the field pointer", () => {
-  test("addr-lvalue assignment emits a field_ptr + store pair", () => {
-    // Repro of the Shared<T> e2e gap that looked like "mem2reg eats
-    // an unstored alloca". The real cause: `lowerAssignExpr` had no
-    // case for `AddrExpr` LHS, so `addr(s.field) = expr` produced
-    // zero KIR — no field_ptr, no store. mem2reg then saw the alloca
-    // with no defs and rightly folded the load to undef.
-    //
-    // After the fix, the assignment must produce a field_ptr to the
-    // `payload` slot followed by a store of the rhs through that
-    // pointer.
-    const fn = lowerFunctionLocal(
-      `
-      unsafe struct Bag {
-        payload: ref i32;
-        fn __destroy(self: ref Bag) {}
-        fn __oncopy(self: ref Bag) {}
-      }
-      fn caller() -> i32 {
-        unsafe {
-          let b = Bag{ payload: (0 as *i32) };
-          addr(b.payload) = (0 as *i32);
-        }
-        return 0;
-      }
-    `,
-      "caller"
-    );
-
-    // The struct literal seats payload via its own field_ptr + store,
-    // and the `addr(b.payload) = ...` assignment must add a SECOND
-    // field_ptr + store pair. Before the addr-lvalue fix, the
-    // assignment dropped the bytes silently — only the literal's
-    // pair would appear.
-    const insts = fn.blocks[0]?.instructions ?? [];
-    const payloadFieldPtrs: number[] = [];
-    let storeCount = 0;
-    for (let i = 0; i < insts.length; i++) {
-      const inst = insts[i];
-      if (!inst) continue;
-      if (inst.kind === "field_ptr" && "field" in inst && inst.field === "payload") {
-        payloadFieldPtrs.push(i);
-      } else if (inst.kind === "store") {
-        storeCount += 1;
-      }
-    }
-    expect(payloadFieldPtrs.length).toBeGreaterThanOrEqual(2);
-    expect(storeCount).toBeGreaterThanOrEqual(2);
   });
 });
 

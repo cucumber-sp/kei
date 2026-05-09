@@ -144,22 +144,6 @@ function parsePrefixExpression(ctx: ParserContext): Expression {
     };
   }
 
-  // addr(expr) — slot lvalue for a `ref T` field; unsafe-only at the
-  // checker level. The parser treats it as a single-arg pseudo-call so
-  // the surface form looks like a function call but the AST captures
-  // it as AddrExpr.
-  if (token.kind === TokenKind.Addr) {
-    ctx.advance();
-    ctx.expect(TokenKind.LeftParen);
-    const operand = ctx.parseExpression();
-    const end = ctx.expect(TokenKind.RightParen);
-    return {
-      kind: "AddrExpr",
-      operand,
-      span: { start: token.span.start, end: end.span.end },
-    };
-  }
-
   // throw expr
   if (token.kind === TokenKind.Throw) {
     ctx.advance();

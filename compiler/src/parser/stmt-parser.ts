@@ -14,7 +14,6 @@ import type {
   ExprStmt,
   ForStmt,
   IfStmt,
-  InitStmt,
   LetStmt,
   RequireStmt,
   ReturnStmt,
@@ -354,30 +353,6 @@ export function parseUnsafeBlockStatement(ctx: ParserContext): UnsafeBlock {
     kind: "UnsafeBlock",
     body,
     span: { start: start.span.start, end: body.span.end },
-  };
-}
-
-/**
- * `init lvalue = expr;` — initialization-write into an uninitialized slot.
- *
- * Surface form is the same shape as an assignment but with the `init`
- * keyword as the leading token. The checker enforces unsafe-only usage
- * at the field level; struct literals emit init semantics implicitly.
- */
-export function parseInitStatement(ctx: ParserContext): InitStmt {
-  const start = ctx.expect(TokenKind.Init);
-  // Use the no-assign variant for the LHS so the parser doesn't eagerly
-  // consume the `=` into an AssignExpr. The target is a postfix-shape
-  // lvalue (`s.value`, `arr[i]`, etc.).
-  const target = ctx.parseExpressionNoAssign();
-  ctx.expect(TokenKind.Equal);
-  const value = ctx.parseExpression();
-  const end = ctx.expect(TokenKind.Semicolon);
-  return {
-    kind: "InitStmt",
-    target,
-    value,
-    span: { start: start.span.start, end: end.span.end },
   };
 }
 
