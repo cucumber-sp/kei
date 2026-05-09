@@ -212,12 +212,11 @@ describe("§4.7 — `init` is unsafe-only at the field level", () => {
     checkOk(`
       unsafe struct Box { data: ref i32; fn __destroy(self: ref Box) {} fn __oncopy(self: ref Box) {} }
       fn make(item: ref i32) -> Box {
-        let b = Box{};
         unsafe {
-          addr(b.data) = item as *i32;
+          let b = Box{ data: item as *i32 };
           init b.data = item;
+          return b;
         }
-        return b;
       }
       fn main() -> int { return 0; }
     `);
@@ -387,12 +386,19 @@ describe("`slice<T>` is removed", () => {
 describe("Shared<T> stdlib semantics — checker only (KIR/codegen pending)", () => {
   test("`Shared<T>.wrap(item)` typechecks (parser + static method dispatch)", () => {
     checkOk(`
+      extern fn malloc(size: usize) -> *u8;
+
       unsafe struct Shared<T> {
         refcount: ref i64;
         value: ref T;
         fn wrap(item: ref T) -> Shared<T> {
-          let s = Shared<T>{};
-          return s;
+          unsafe {
+            let block = malloc(sizeof(i64) + sizeof(T));
+            return Shared<T>{
+              refcount: block as *i64,
+              value: ((block as usize) + sizeof(i64)) as *T,
+            };
+          }
         }
         fn __oncopy(self: ref Shared<T>) {}
         fn __destroy(self: ref Shared<T>) {}
@@ -543,28 +549,35 @@ describe("`addr(field) = expr` lowers to a store through the field pointer", () 
         fn __oncopy(self: ref Bag) {}
       }
       fn caller() -> i32 {
-        let b = Bag{};
-        unsafe { addr(b.payload) = (0 as *i32); }
+        unsafe {
+          let b = Bag{ payload: (0 as *i32) };
+          addr(b.payload) = (0 as *i32);
+        }
         return 0;
       }
     `,
       "caller"
     );
 
-    let payloadFieldPtrIdx = -1;
-    let storeAfterIdx = -1;
+    // The struct literal seats payload via its own field_ptr + store,
+    // and the `addr(b.payload) = ...` assignment must add a SECOND
+    // field_ptr + store pair. Before the addr-lvalue fix, the
+    // assignment dropped the bytes silently — only the literal's
+    // pair would appear.
     const insts = fn.blocks[0]?.instructions ?? [];
+    const payloadFieldPtrs: number[] = [];
+    let storeCount = 0;
     for (let i = 0; i < insts.length; i++) {
       const inst = insts[i];
       if (!inst) continue;
       if (inst.kind === "field_ptr" && "field" in inst && inst.field === "payload") {
-        payloadFieldPtrIdx = i;
-      } else if (inst.kind === "store" && payloadFieldPtrIdx >= 0 && storeAfterIdx === -1) {
-        storeAfterIdx = i;
+        payloadFieldPtrs.push(i);
+      } else if (inst.kind === "store") {
+        storeCount += 1;
       }
     }
-    expect(payloadFieldPtrIdx).toBeGreaterThanOrEqual(0);
-    expect(storeAfterIdx).toBeGreaterThan(payloadFieldPtrIdx);
+    expect(payloadFieldPtrs.length).toBeGreaterThanOrEqual(2);
+    expect(storeCount).toBeGreaterThanOrEqual(2);
   });
 });
 
