@@ -159,6 +159,22 @@ export class TypeResolver {
         // Create a substituted struct type
         return this.instantiateStructType(baseType, typeArgs, scope);
       }
+      if (baseType.kind === TypeKind.Enum) {
+        if (baseType.genericParams.length === 0) {
+          this.addError(`type '${name}' is not generic`, span);
+          return ERROR_TYPE;
+        }
+        if (typeArgs.length !== baseType.genericParams.length) {
+          const paramHint =
+            baseType.genericParams.length > 0 ? ` <${baseType.genericParams.join(", ")}>` : "";
+          this.addError(
+            `type '${name}' expects ${baseType.genericParams.length} type argument(s)${paramHint}, got ${typeArgs.length}`,
+            span
+          );
+          return ERROR_TYPE;
+        }
+        return this.instantiateEnumType(baseType, typeArgs, scope);
+      }
       return baseType;
     }
 
@@ -204,6 +220,40 @@ export class TypeResolver {
       fields: newFields,
       methods: newMethods,
       isUnsafe: base.isUnsafe,
+      genericParams: [],
+      modulePrefix: base.modulePrefix,
+      genericBaseName: base.name,
+      genericTypeArgs: resolvedTypeArgs,
+    };
+  }
+
+  /** Instantiate a generic enum with concrete type arguments. */
+  private instantiateEnumType(
+    base: import("./types/index.ts").EnumType,
+    typeArgs: TypeNode[],
+    scope: Scope
+  ): Type {
+    const subs = new Map<string, Type>();
+    const resolvedTypeArgs: Type[] = [];
+    for (let i = 0; i < base.genericParams.length; i++) {
+      const typeArg = typeArgs[i];
+      if (!typeArg) continue;
+      const paramName = base.genericParams[i];
+      if (!paramName) continue;
+      const resolvedArg = this.resolve(typeArg, scope);
+      subs.set(paramName, resolvedArg);
+      resolvedTypeArgs.push(resolvedArg);
+    }
+    const mangledName = mangleGenericName(base.name, resolvedTypeArgs);
+    return {
+      kind: TypeKind.Enum,
+      name: mangledName,
+      baseType: base.baseType,
+      variants: base.variants.map((v) => ({
+        name: v.name,
+        fields: v.fields.map((f) => ({ name: f.name, type: substituteTypeGeneric(f.type, subs) })),
+        value: v.value,
+      })),
       genericParams: [],
       modulePrefix: base.modulePrefix,
       genericBaseName: base.name,
