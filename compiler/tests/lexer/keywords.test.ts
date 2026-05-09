@@ -3,7 +3,6 @@ import { TokenKind } from "../../src/lexer";
 import { lex } from "./helpers";
 
 const KEYWORD_MAP: [string, TokenKind][] = [
-  ["addr", TokenKind.Addr],
   ["assert", TokenKind.Assert],
   ["bool", TokenKind.Bool],
   ["break", TokenKind.Break],
@@ -22,7 +21,6 @@ const KEYWORD_MAP: [string, TokenKind][] = [
   ["if", TokenKind.If],
   ["import", TokenKind.Import],
   ["in", TokenKind.In],
-  ["init", TokenKind.Init],
   ["int", TokenKind.Int],
   ["let", TokenKind.Let],
   ["move", TokenKind.Move],

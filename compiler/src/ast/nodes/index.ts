@@ -15,7 +15,6 @@ export type {
 } from "./declarations";
 export { DeclKind } from "./declarations";
 export type {
-  AddrExpr,
   ArrayLiteral,
   AssignExpr,
   BinaryExpr,
@@ -57,7 +56,6 @@ export type {
   ExprStmt,
   ForStmt,
   IfStmt,
-  InitStmt,
   LetStmt,
   RequireStmt,
   ReturnStmt,
