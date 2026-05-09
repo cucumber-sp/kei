@@ -500,9 +500,7 @@ describe("mem2reg: preserves non-promotable allocas", () => {
       | { kind: "destroy"; value: string }
       | undefined;
     expect(destroyInst).toBeTruthy();
-    const allocaVarIds = new Set(
-      (allocs as { dest: string }[]).map((a) => a.dest)
-    );
+    const allocaVarIds = new Set((allocs as { dest: string }[]).map((a) => a.dest));
     expect(allocaVarIds.has(destroyInst!.value)).toBe(true);
   });
 });
