@@ -172,6 +172,42 @@ export function lowerTypeNode(ctx: LoweringCtx, typeNode: TypeNode): KirType {
     case "string":
       return { kind: "string" };
     default: {
+      // GenericType referring to a user-defined generic struct or enum:
+      // emit the mangled name. The full type declaration is emitted by
+      // the monomorphization pass in `runLowering`.
+      if (typeNode.kind === "GenericType") {
+        const argSuffix = typeNode.typeArgs
+          .map((a) => checkerTypeSuffix(ctx, lowerTypeNode(ctx, a)))
+          .join("_");
+        const mangled = `${name}_${argSuffix}`;
+        for (const decl of ctx.program.declarations) {
+          if (decl.kind === "EnumDecl" && decl.name === name) {
+            // Carry one variant per declared variant so the C emitter can
+            // tell whether this enum is a tagged union (data variants) or
+            // a plain enum. Field types are placeholders here — the
+            // canonical declaration is emitted by the monomorphization
+            // pass, which sees the substituted variant fields. The
+            // reference site only needs the right C-level form (`struct`
+            // typedef vs `enum`) to render `enum Optional_i32` vs
+            // `Optional_i32`.
+            const variants = decl.variants.map((v, i) => ({
+              name: v.name,
+              fields: v.fields.map((f) => ({
+                name: f.name,
+                type: { kind: "int" as const, bits: 32, signed: true },
+              })),
+              value: i,
+            }));
+            return { kind: "enum", name: mangled, variants };
+          }
+          if (
+            (decl.kind === "StructDecl" || decl.kind === "UnsafeStructDecl") &&
+            decl.name === name
+          ) {
+            return { kind: "struct", name: mangled, fields: [] };
+          }
+        }
+      }
       // Check if the name refers to an enum declaration
       for (const decl of ctx.program.declarations) {
         if (decl.kind === "EnumDecl" && decl.name === name) {
