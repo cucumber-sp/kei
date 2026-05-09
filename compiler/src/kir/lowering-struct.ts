@@ -1,24 +1,18 @@
 /**
  * Struct declaration lowering — operates on LoweringCtx.
- * Handles struct declarations, methods, monomorphized structs, and auto lifecycle hooks.
- * Extracted from lowering-decl.ts for modularity.
+ * Handles struct declarations, methods, and monomorphized structs.
+ *
+ * Auto-generated `__destroy` / `__oncopy` bodies live in
+ * `src/lifecycle/synthesise.ts` and are emitted from
+ * `lowering-decl.ts`'s struct case via `lifecycle.synthesise`.
  */
 
 import type { FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes";
-import type { StructType } from "../checker/types";
 import type { MonomorphizedStruct } from "../monomorphization";
-import type {
-  KirBlock,
-  KirFunction,
-  KirInst,
-  KirParam,
-  KirType,
-  KirTypeDecl,
-  VarId,
-} from "./kir-types";
+import type { KirFunction, KirParam, KirType, KirTypeDecl, VarId } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
 import { finalizeFunctionBody, resetFunctionState } from "./lowering-decl";
-import { mangledLifecycleStructName, pushScope } from "./lowering-scope";
+import { pushScope } from "./lowering-scope";
 import { lowerBlock } from "./lowering-stmt";
 import {
   getFunctionReturnType,
@@ -159,172 +153,5 @@ export function lowerMonomorphizedMethod(
     returnType,
     blocks: ctx.blocks,
     localCount: ctx.varCounter,
-  };
-}
-
-/**
- * Synthesize a __destroy KIR function for a struct with auto-generated destroy.
- * Emits field_ptr + call_extern_void("kei_string_destroy") for string fields,
- * and field_ptr + destroy for struct fields that have __destroy.
- */
-export function lowerAutoDestroy(
-  _ctx: LoweringCtx,
-  structName: string,
-  structType: StructType,
-  structPrefix: string
-): KirFunction {
-  const mangledName = `${structPrefix}___destroy`;
-  const structKirType: KirType = { kind: "struct", name: structName, fields: [] };
-  const selfType: KirType = { kind: "ptr", pointee: structKirType };
-
-  // Build instructions for the entry block
-  const insts: KirInst[] = [];
-  let varCounter = 0;
-  const freshVar = (): VarId => `%_v${varCounter++}` as VarId;
-
-  const selfVar: VarId = "%self" as VarId;
-
-  // Spec §6.9: fields are destroyed in reverse declaration order so a
-  // later-declared field that holds a reference into an earlier-declared
-  // one is torn down first. `structType.fields` is a Map preserving
-  // insertion (declaration) order, so reversing the entry list gives the
-  // intended LIFO walk.
-  const fieldsReverse = [...structType.fields].reverse();
-  for (const [fieldName, fieldType] of fieldsReverse) {
-    if (fieldType.kind === "string") {
-      // Emit: fieldPtr = &self->fieldName; kei_string_destroy(fieldPtr);
-      const fieldPtr = freshVar();
-      const kirStringType: KirType = { kind: "string" };
-      insts.push({
-        kind: "field_ptr",
-        dest: fieldPtr,
-        base: selfVar,
-        field: fieldName,
-        type: kirStringType,
-      });
-      insts.push({ kind: "call_extern_void", func: "kei_string_destroy", args: [fieldPtr] });
-    } else if (fieldType.kind === "struct" && fieldType.methods.has("__destroy")) {
-      // Emit: fieldPtr = &self->fieldName; destroy fieldPtr (pointer to nested struct)
-      const fieldPtr = freshVar();
-      const kirFieldType: KirType = { kind: "struct", name: fieldType.name, fields: [] };
-      insts.push({
-        kind: "field_ptr",
-        dest: fieldPtr,
-        base: selfVar,
-        field: fieldName,
-        type: kirFieldType,
-      });
-      insts.push({
-        kind: "destroy",
-        value: fieldPtr,
-        structName: mangledLifecycleStructName(fieldType),
-      });
-    }
-  }
-
-  const entryBlock: KirBlock = {
-    id: "entry",
-    phis: [],
-    instructions: insts,
-    terminator: { kind: "ret_void" },
-  };
-
-  return {
-    name: mangledName,
-    params: [{ name: "self", type: selfType }],
-    returnType: { kind: "void" },
-    blocks: [entryBlock],
-    localCount: varCounter,
-  };
-}
-
-/**
- * Synthesize an __oncopy KIR function for a struct with auto-generated oncopy.
- *
- * Takes self by pointer, increments refcounts for string fields via
- * `kei_string_copy`, recursively calls nested struct __oncopy hooks, and
- * returns void. The mutations are observed by the caller through the
- * pointer — no return-value copy is needed (the canonical ref-T-self
- * lifecycle ABI; see `docs/design/ref-redesign.md` §3.1).
- */
-export function lowerAutoOncopy(
-  _ctx: LoweringCtx,
-  structName: string,
-  structType: StructType,
-  structPrefix: string
-): KirFunction {
-  const mangledName = `${structPrefix}___oncopy`;
-  const structKirType: KirType = { kind: "struct", name: structName, fields: [] };
-  const selfType: KirType = { kind: "ptr", pointee: structKirType };
-
-  const insts: KirInst[] = [];
-  let varCounter = 0;
-  const freshVar = (): VarId => `%_v${varCounter++}` as VarId;
-
-  const selfVar: VarId = "%self" as VarId;
-
-  for (const [fieldName, fieldType] of structType.fields) {
-    if (fieldType.kind === "string") {
-      // fieldPtr = &self->fieldName; val = *fieldPtr; copied = kei_string_copy(val); *fieldPtr = copied;
-      const fieldPtr = freshVar();
-      const kirStringType: KirType = { kind: "string" };
-      insts.push({
-        kind: "field_ptr",
-        dest: fieldPtr,
-        base: selfVar,
-        field: fieldName,
-        type: kirStringType,
-      });
-      const loaded = freshVar();
-      insts.push({ kind: "load", dest: loaded, ptr: fieldPtr, type: kirStringType });
-      const copied = freshVar();
-      insts.push({
-        kind: "call_extern",
-        dest: copied,
-        func: "kei_string_copy",
-        args: [loaded],
-        type: kirStringType,
-      });
-      insts.push({ kind: "store", ptr: fieldPtr, value: copied });
-    } else if (fieldType.kind === "struct" && fieldType.methods.has("__oncopy")) {
-      // fieldPtr = &self->fieldName; val = *fieldPtr; oncopy val; *fieldPtr = val;
-      //
-      // The C emit for `oncopy val` becomes `X___oncopy(&val)` (void
-      // return), which mutates `val` in place via the pointer. The
-      // surrounding load/store pair propagates the mutation back to
-      // the field slot.
-      const fieldPtr = freshVar();
-      const kirFieldType: KirType = { kind: "struct", name: fieldType.name, fields: [] };
-      insts.push({
-        kind: "field_ptr",
-        dest: fieldPtr,
-        base: selfVar,
-        field: fieldName,
-        type: kirFieldType,
-      });
-      const loaded = freshVar();
-      insts.push({ kind: "load", dest: loaded, ptr: fieldPtr, type: kirFieldType });
-      insts.push({
-        kind: "oncopy",
-        value: loaded,
-        structName: mangledLifecycleStructName(fieldType),
-      });
-      insts.push({ kind: "store", ptr: fieldPtr, value: loaded });
-    }
-  }
-
-  const entryBlock: KirBlock = {
-    id: "entry",
-    phis: [],
-    instructions: insts,
-    terminator: { kind: "ret_void" },
-  };
-
-  return {
-    name: mangledName,
-    params: [{ name: "self", type: selfType }],
-    returnType: { kind: "void" },
-    blocks: [entryBlock],
-    localCount: varCounter,
   };
 }

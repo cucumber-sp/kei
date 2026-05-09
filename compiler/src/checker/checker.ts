@@ -16,7 +16,7 @@ import type {
 import type { Diagnostic, SourceLocation } from "../errors/diagnostic";
 import { Severity } from "../errors/diagnostic";
 import type { Span } from "../lexer/token";
-import type { Lifecycle } from "../lifecycle";
+import type { Lifecycle, LifecycleDecision } from "../lifecycle";
 import { createLifecycle } from "../lifecycle";
 import type { MonomorphizedFunction, MonomorphizedStruct } from "../monomorphization";
 import { mangleGenericName, substituteType } from "../monomorphization";
@@ -68,6 +68,14 @@ export interface CheckGenerics {
 export interface CheckLifecycle {
   autoDestroyStructs: Map<string, StructType>;
   autoOncopyStructs: Map<string, StructType>;
+  /**
+   * The Lifecycle module's decision lookup.  KIR lowering uses this
+   * (via `lifecycle.synthesise(struct, decision)`) to drive
+   * auto-generated `__destroy` / `__oncopy` body emission.  Returns
+   * `undefined` when no auto-generation applies (the struct has no
+   * managed fields, or the user wrote the hook explicitly).
+   */
+  getDecision(struct: StructType): LifecycleDecision | undefined;
 }
 
 export interface CheckResult {
@@ -330,6 +338,7 @@ export class Checker {
       lifecycle: {
         autoDestroyStructs,
         autoOncopyStructs,
+        getDecision: (struct) => this.lifecycle.getDecision(struct),
       },
     };
   }
@@ -540,9 +549,23 @@ export class Checker {
       monomorphizedEnums: new Map(),
       resolutions: new Map(),
     };
+    // Per-module decision lookups, registered during wave 3 so the
+    // multi-module `getDecision` can chain through them.  Each entry is
+    // the per-module `lifecycle.getDecision` from a `CheckResult`; we
+    // walk them in order until one returns a hit.  StructType identities
+    // are unique across modules, so order doesn't affect correctness —
+    // it does keep the lookup O(modules) which is fine.
+    const decisionLookups: Array<(struct: StructType) => LifecycleDecision | undefined> = [];
     const lifecycle: CheckLifecycle = {
       autoDestroyStructs: new Map(),
       autoOncopyStructs: new Map(),
+      getDecision(struct) {
+        for (const lookup of decisionLookups) {
+          const decision = lookup(struct);
+          if (decision !== undefined) return decision;
+        }
+        return undefined;
+      },
     };
 
     // The lowering pipeline treats the last module in topological order as
@@ -635,6 +658,7 @@ export class Checker {
       for (const [name, st] of result.lifecycle.autoOncopyStructs) {
         lifecycle.autoOncopyStructs.set(name, st);
       }
+      decisionLookups.push(result.lifecycle.getDecision);
       combinedDiags.push(...result.diagnostics);
     }
     void moduleNameForPrefix;
