@@ -82,7 +82,7 @@ file a GitHub issue per the repo-root policy and link it from the PR.
 Biome enforces formatting and lint: 2-space indent, double quotes, semicolons,
 100-char line, `const` over `let`, no `any`, no unused vars, template literals
 over concatenation. TypeScript is strict (`strict`, `noUncheckedIndexedAccess`).
-Relative imports use the explicit `.ts` extension.
+Relative imports are extensionless (`from "./foo"`, not `./foo.ts`) — Bun resolves the `.ts` extension automatically.
 
 ## Testing conventions
 
