@@ -129,7 +129,7 @@ struct AppConfig {
 }
 
 cfg.dbUrl = "other";                   // ERROR: readonly
-cfg.online = Shared<bool>::wrap(false); // ERROR: readonly (replaces handle)
+cfg.online = Shared<bool>.wrap(false); // ERROR: readonly (replaces handle)
 cfg.online.value = false;              // OK: writes through .value (different field)
 ```
 
@@ -219,22 +219,30 @@ user.name = "new name";
 // 3. __oncopy(&user.name) on the new value
 ```
 
-### `init` — initialization-write inside `unsafe`
+### Constructing an `unsafe struct` with `ref T` fields
 
-For uninitialized slots during construction (so `__destroy` doesn't run
-on garbage), use `init`:
+A struct literal of an `unsafe struct` is the binding ceremony for its
+`ref T` fields. Inside an `unsafe` block, the literal accepts a `*T`
+argument for each `ref T` field and seats the binding in one step:
 
 ```kei
 unsafe {
-    let block = alloc<u8>(sizeof(T));
-    addr(s.value) = block as *T;
-    init s.value = item;     // skips destroy of garbage; bitwise write + __oncopy
+    let block = alloc(sizeof(T));
+    let valuePtr = block as *T;
+    placeAt(valuePtr, item);   // memcpy + onCopy from std/mem.kei
+    let s = Shared<T>{ value: valuePtr };
 }
 ```
 
-`init` is unsafe-only at the field level. Inside a `struct` literal
-(`Foo{ x: ..., y: ... }`), the compiler emits init semantics implicitly
-because every field's slot is demonstrably uninitialized.
+Every `ref T` field of an `unsafe struct` must be initialized by name in
+every struct literal — empty literals (`Shared<T>{}`) and partial
+literals are a compile error. This makes the literal the single,
+indivisible point of construction; there is no observable
+half-initialized state to track.
+
+For details on the construction primitives (`memcpy`, `onCopy`,
+`onDestroy`, `placeAt`) see `spec/03-types.md` §**Constructing an
+`unsafe struct` with `ref T` fields**.
 
 ### Move semantics (opt-in)
 
@@ -260,14 +268,16 @@ unsafe struct Shared<T> {
     fn __destroy(self: ref Shared<T>) {
         self.refcount -= 1;
         if self.refcount == 0 {
-            self.value.__destroy();
-            unsafe { free(addr(self.refcount)); }
+            unsafe {
+                onDestroy(&(*self.value));
+                dealloc(&(*self.refcount) as *void);
+            }
         }
     }
 }
 
 // Usage
-let a = Shared<User>::wrap(User{ name: "Alice", age: 25 });
+let a = Shared<User>.wrap(User{ name: "Alice", age: 25 });
 let b = a;           // __oncopy → refcount++
 // both a and b point to same User
 ```

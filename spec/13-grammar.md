@@ -51,8 +51,8 @@ raw_ptr_type     = "*" base_type ;
    (* `*T` is unsafe-only: `unsafe struct` fields, locals inside `unsafe`
       blocks, and `extern fn` signatures. *)
 
-   (* No nullable-suffix syntax. Absence is expressed via the regular
-      generic enum `Optional<T>` (see spec/03-types.md). *)
+   (* Absence is expressed via the regular generic enum `Optional<T>`
+      (see spec/03-types.md). *)
 
 base_type        = primitive_type | IDENT [generic_args]
                  | "inline" "<" type "," INTEGER ">"
@@ -80,10 +80,6 @@ let_stmt         = "let" IDENT [":" type] "=" expr ";" ;
 const_stmt       = "const" IDENT [":" type] "=" expr ";" ;
 static_decl      = "static" IDENT [":" type] "=" expr ";" ;
    (* `static` names follow SCREAMING_SNAKE_CASE (lint-only — not grammar). *)
-init_stmt        = "init" lvalue "=" expr ";" ;
-   (* `init` is unsafe-only at the field level: skips destroy of garbage,
-      bitwise-writes the new value, runs `__oncopy` on it. Inside struct
-      literals the same semantics fire implicitly per field. *)
 return_stmt      = "return" [expr] ";" ;
 defer_stmt       = "defer" statement ;
 unsafe_block     = "unsafe" block ;
@@ -95,18 +91,16 @@ expr             = literal | IDENT | expr bin_op expr | unary_op expr
                  | expr "(" [arg_list] ")" | "if" expr block "else" block
                  | struct_literal | "(" expr ")"
                  | "&" expr                    (* raw address-of (unsafe-only): produces *T *)
-                 | "addr" "(" expr ")"          (* slot lvalue for a `ref T` field (unsafe-only): produces *T *)
                  | "move" expr
                  | expr "as" type
                  | expr "catch" catch_block
                  | expr "catch" "panic"
                  | expr "catch" "throw" ;
 
-(* Note: the `->` arrow operator is removed. For raw pointers (`*T`)
-   write `(*p).field`; for `ref T` values the `.` operator auto-derefs.
-   The `&mut` form is also removed; `&` is unsafe-only and produces `*T`.
-   At call sites taking `ref T` parameters, the address is taken
-   implicitly (no `&` needed). *)
+(* Note: For raw pointers (`*T`) write `(*p).field` to access fields;
+   for `ref T` values the `.` operator auto-derefs. `&` is unsafe-only
+   and produces `*T`. At call sites taking `ref T` parameters, the
+   address is taken implicitly (no `&` needed). *)
 
 (* Note: Kei has no postfix `++` / `--`. Use compound assignment `x += 1` / `x -= 1`. *)
 (* Note: Kei has no closures and no nested fn declarations. Functions are
@@ -130,16 +124,16 @@ block            = "{" { statement } "}" ;
 Active — recognised by the parser:
 
 ```
-addr        as          assert      bool        break
-byte        case        catch       const       continue
-default     defer       double      else        enum
-extern      false       float       fn          for
-if          import      in          init        inline
-int         let         long        move        panic
-pub         readonly    ref         require     return
-self        short       static      string      struct
-switch      throw       throws      true        type
-uint        unsafe      void        while
+as          assert      bool        break       byte
+case        catch       const       continue    default
+defer       double      else        enum        extern
+false       float       fn          for         if
+import      in          inline      int         let
+long        move        panic       pub         readonly
+ref         require     return      self        short
+static      string      struct      switch      throw
+throws      true        type        uint        unsafe
+void        while
 
 i8  i16  i32  i64  u8  u16  u32  u64  f32  f64  isize  usize
 ```

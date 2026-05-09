@@ -132,16 +132,16 @@ Strings are enclosed in double quotes and support escape sequences:
 Active keywords — recognised by the parser:
 
 ```
-addr        as          assert      bool        break
-byte        case        catch       const       continue
-default     defer       double      else        enum
-extern      false       float       fn          for
-if          import      in          init        inline
-int         let         long        move        panic
-pub         readonly    ref         require     return
-self        short       static      string      struct
-switch      throw       throws      true        type
-uint        unsafe      void        while
+as          assert      bool        break       byte
+case        catch       const       continue    default
+defer       double      else        enum        extern
+false       float       fn          for         if
+import      in          inline      int         let
+long        move        panic       pub         readonly
+ref         require     return      self        short
+static      string      struct      switch      throw
+throws      true        type        uint        unsafe
+void        while
 
 i8  i16  i32  i64  u8  u16  u32  u64  f32  f64  isize  usize
 ```
@@ -217,14 +217,11 @@ Postfix `++` / `--` are **not** part of Kei. Use `x += 1` / `x -= 1` — one ext
 .                   // Member access (auto-derefs through `ref T`)
 &                   // Raw address-of (unsafe-only): `&x` -> *T
 *                   // Raw dereference (prefix, unsafe-only) / multiplication (infix)
-addr(...)           // Slot lvalue for a `ref T` field (unsafe-only); see spec/03-types.md
 as                  // Explicit type cast:  let x = a as i32;
-?                   // Nullable type suffix: string?, *T?  (see spec/03-types.md)
 ```
 
-**`?` is a type-position suffix only.** Kei does not have a ternary operator —
-`if` as an expression covers that case. The parser only recognises `?` after
-a type (e.g. `string?`, `*T?`, after `->` or `:` in type position).
+Kei does not have a ternary operator — `if` as an expression covers
+that case.
 
 ## Separators and punctuation
 

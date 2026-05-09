@@ -194,13 +194,13 @@ unsafe struct Database {
         unsafe {
             let cPath = path.toCString();
             let raw: Optional<*void> = None;
-            let rc = sqlite3Open(cPath, addr(raw));
+            let rc = sqlite3Open(cPath, &raw as **void);
             if rc != 0 {
                 throw DbError{ code: rc, message: "Failed to open database" };
             }
             match raw {
                 Some(handle) => return Database{ handle: handle },
-                None         => throw DbError{ code: -1, message: "C call returned null" },
+                None         => throw DbError{ code: -1, message: "C call returned a missing handle" },
             }
         }
     }

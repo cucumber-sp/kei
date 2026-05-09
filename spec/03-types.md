@@ -16,9 +16,9 @@ and lets the stdlib evolve without breaking the frontend.
 | primitives (`i32`, `f64`, `bool`, …) | compiler         | builtin                                                         |
 | `ref T` / `readonly ref T`           | compiler         | safe reference — params and `unsafe struct` fields only         |
 | `*T`                                 | compiler         | raw pointer (unsafe-only)                                       |
-| `Optional<T>`                        | compiler intrinsic / stdlib | regular generic enum; replaces the old `T?` syntax. See **Optional and the absence of nulls**. |
+| `Optional<T>`                        | compiler intrinsic / stdlib | generic enum carrying `Some(value: T)` or `None`; see **Optional and the absence of nulls** |
 | `inline<T, N>`                       | compiler         | fixed-size value-type bag of N elements                         |
-| `string`                             | compiler today / stdlib goal | CoW refcounted byte string. Lowercase keyword alias for stdlib `String`. Today the runtime is in C (`runtime.h`); port deferred. |
+| `string`                             | stdlib           | CoW refcounted byte string. Lowercase keyword alias for stdlib `String`.   |
 | `Array<T>` / `array<T>` alias        | stdlib (planned) | heap array, CoW. `array<T>` is the lowercase keyword alias.     |
 | `List<T>`                            | stdlib (planned) | growable, deep-copy                                             |
 | `Shared<T>`                          | stdlib (planned) | refcounted handle                                               |
@@ -195,8 +195,7 @@ unsafe {
 }
 ```
 
-For accessing a field through a raw pointer, write `(*p).field` — the
-arrow operator (`->`) is removed.
+For accessing a field through a raw pointer, write `(*p).field`.
 
 ### Position restrictions on `ref T` / `readonly ref T`
 
@@ -232,11 +231,11 @@ pass needed.
 At method call sites taking `self: ref T`, the address is taken implicitly:
 users write `counter.increment()`, not `(&counter).increment()`.
 
-### `addr(field)` — slot lvalue for a `ref T` field (unsafe-only)
+### Constructing an `unsafe struct` with `ref T` fields
 
-To manipulate the underlying pointer of a `ref T` field of an `unsafe
-struct` (e.g. when constructing a `Shared<T>` and pointing its `value`
-slot at heap memory), use `addr(field)`:
+A struct literal of an `unsafe struct` is the binding ceremony for its
+`ref T` fields. Inside an `unsafe` block, a literal accepts a `*T`
+value for each `ref T` field and seats the binding in one step:
 
 ```kei
 unsafe struct Shared<T> {
@@ -244,37 +243,69 @@ unsafe struct Shared<T> {
     value: ref T;
 
     fn wrap(item: ref T) -> Shared<T> {
-        let s = Shared<T>{};
         unsafe {
-            let block = alloc<u8>(sizeof(i64) + sizeof(T));
-            addr(s.refcount) = block as *i64;       // sets WHERE refcount points
-            addr(s.value)    = (block + sizeof(i64)) as *T;
-            s.refcount = 1;                         // writes through (auto-deref)
-            init s.value = item;                    // initialization-write
+            let block = alloc(sizeof(i64) + sizeof(T));
+            let countPtr = block as *i64;
+            let valuePtr = ((block as usize) + sizeof(i64)) as *T;
+
+            *countPtr = 1;
+            placeAt(valuePtr, item);    // memcpy + onCopy
+
+            return Shared<T>{ refcount: countPtr, value: valuePtr };
         }
-        return s;
     }
 }
 ```
 
-`addr(field)` returns an lvalue of type `*T` aliasing the raw pointer slot
-underlying the `ref T` field. Assigning to `addr(field)` sets where the
-reference points; dereferencing it (`*addr(field)`) accesses the pointed-to
-memory without firing lifecycle hooks. Outside `unsafe`, `addr(...)` is a
-compile error.
+Three rules tie the construction story together:
 
-### `init field = value` — initialization-write (unsafe-only)
+- **Every `ref T` field of an `unsafe struct` must be initialized by
+  name in every struct literal.** Empty literals (`Shared<T>{}`) and
+  literals that omit any `ref T` field are rejected at compile time.
+  This keeps slots from observably starting null.
 
-For uninitialized slots during construction. Skips the destroy step
-(otherwise lifecycle would run on garbage), bitwise-writes the new T into
-the slot, then runs `__oncopy` on the new T. Only valid inside `unsafe`
-blocks. Inside `struct` literals, the compiler emits init semantics
-implicitly for every field.
+- **The struct literal coerces `*T → ref T` in unsafe contexts.** The
+  `*T` argument seats the slot's pointer bits. Outside `unsafe`, the
+  coercion is not available, so safe code can only construct
+  `unsafe struct`s through their public `fn` factories.
 
-## Optional and the absence of nulls
+- **Reading the bound pointer uses `&(*field)`.** For a `ref T` field
+  or parameter, `*field` auto-derefs to T; `&` of that value is the
+  field's bound `*T`. Used inside lifecycle hooks to get the underlying
+  pointer for `dealloc`, raw byte work, etc.
 
-Kei has no `null` literal at the source level and no nullable type
-suffix. Absence is expressed through the regular enum `Optional<T>`:
+### Placing values through a binding
+
+Once a `ref T` field is seated, writing a fresh T into the location it
+points at uses two primitives:
+
+- **`memcpy(dest as *void, src as *void, sizeof<T>())`** — bitwise copy.
+- **`onCopy<T>(p: *T)`** — compiler builtin that calls `T`'s
+  `__oncopy(self: ref T)` on the value at `p`.
+
+The stdlib bundles them as `placeAt<T>(dest: *T, src: ref T)`:
+
+```kei
+// std/mem.kei
+pub fn placeAt<T>(dest: *T, src: ref T) {
+    unsafe {
+        memcpy(dest as *void, &(*src) as *void, sizeof<T>());
+        onCopy(dest);
+    }
+}
+```
+
+The companion `onDestroy<T>(p: *T)` builtin runs `T`'s `__destroy` on
+the value at `p`. Used by `__destroy` of an `unsafe struct` that owns
+the storage its `ref T` fields point at.
+
+These builtins exist alongside `memcpy` / `dealloc` as the
+unsafe-construction toolkit. They operate on raw `*T` deliberately —
+the caller vouches for the bytes.
+
+## Optional — expressing absence
+
+Absence is expressed through the regular generic enum `Optional<T>`:
 
 ```kei
 enum Optional<T> {
@@ -331,8 +362,6 @@ layout per instantiation. This matches Rust's "niche" optimization for
 - `Optional<*T>` and `Optional<Shared<T>>` are zero-overhead at runtime
   thanks to niche layout; you pay for absence only when there's no niche
   to claim.
-- The KIR retains `const_null` / `null_check` ops because they operate
-  on lowered byte representations. Source code never spells "null".
 
 ## Generics
 
@@ -374,8 +403,10 @@ unsafe struct Shared<T> {
     fn __destroy(self: ref Shared<T>) {
         self.refcount -= 1;
         if self.refcount == 0 {
-            self.value.__destroy();
-            unsafe { free(addr(self.refcount)); }
+            unsafe {
+                onDestroy(&(*self.value));
+                dealloc(&(*self.refcount) as *void);
+            }
         }
     }
 }
@@ -513,10 +544,9 @@ fn explicit() -> void {     // equivalent
 }
 ```
 
-### Absence (no `null` literal)
+### Constructing absence
 
-There is no `null` keyword in Kei source. Absence is constructed with
-`Optional<T>.None`:
+Absence is constructed with `Optional<T>.None`:
 
 ```kei
 unsafe {
@@ -537,11 +567,6 @@ let p: Optional<*int> = None;
 At the C ABI boundary `Optional<*T>` and `*T` are layout-compatible: the
 `None` value is the zero pointer. `extern fn` signatures use
 `Optional<*T>` for nullable C pointers and bare `*T` for non-null.
-
-> Today the parser/checker still accept `T?` and the `null` literal,
-> lowering them to nullable raw pointers. Both are deprecated and the
-> rollout to `Optional<T>` is tracked in
-> [SPEC-STATUS.md](../SPEC-STATUS.md).
 
 ## Type aliases
 

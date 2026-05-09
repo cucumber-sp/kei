@@ -134,7 +134,7 @@ This converts a runtime-UB foot-gun into a checker error. It also kills
 the "empty literal then patch up" anti-pattern — there is no longer a
 way to observe a partially-initialized `unsafe struct`.
 
-## 4. Worked example — `Shared<T>::wrap` end-to-end
+## 4. Worked example — `Shared<T>.wrap` end-to-end
 
 ```kei
 pub unsafe struct Shared<T> {
