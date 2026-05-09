@@ -1,11 +1,12 @@
 /**
  * Diagnostic types — discriminated union shape for the diagnostics module.
  *
- * The variant union is the source of truth. PR 1 lands an empty union
- * (`Diagnostic = never`) so the formatter's exhaustive `switch` is
- * trivially satisfied; PR 2 adds the `untriaged` catch-all and PR 4+
- * carve specific variants out of it. See
- * `docs/design/diagnostics-module.md` §3.
+ * The variant union is the source of truth. PR 2 adds the `untriaged`
+ * catch-all so the existing checker emit surface (Checker.error /
+ * .warning + a few raw pushes) can route through the new module without
+ * disturbing the ~80 sub-checker call sites. PRs 4a–4g carve specific
+ * variants out of `untriaged`. See
+ * `docs/design/diagnostics-module.md` §3, §9 PR 2.
  */
 
 import type { SourceLocation } from "../errors/diagnostic";
@@ -32,10 +33,23 @@ export interface DiagnosticEnvelope {
 }
 
 /**
+ * Catch-all variant for diagnostics that haven't been triaged into a
+ * specific kind yet. The existing `Checker.error / .warning` helpers
+ * route through `diag.untriaged({...})` — PRs 4a–4g carve specific
+ * variants out of this and migrate call sites by category. The `code`
+ * is a sentinel (`'TODO'`) and intentionally not rendered by the
+ * formatter; advisory codes only appear once specific variants exist.
+ */
+export interface UntriagedDiagnostic extends DiagnosticEnvelope {
+  kind: "untriaged";
+  code: "TODO";
+  message: string;
+}
+
+/**
  * The discriminated union of all diagnostics the compiler can emit.
  *
- * Empty in PR 1 — `never` so the formatter's exhaustive `switch` compiles
- * with zero cases. PR 2 adds the `untriaged` catch-all variant; PR 4+
- * add specific variants (typeMismatch, undeclaredName, …).
+ * PR 2 introduces the `untriaged` catch-all; PR 4+ add specific variants
+ * (typeMismatch, undeclaredName, …) alongside.
  */
-export type Diagnostic = never;
+export type Diagnostic = UntriagedDiagnostic;

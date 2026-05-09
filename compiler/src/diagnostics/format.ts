@@ -3,10 +3,7 @@
  *
  * The variants do not know how they are rendered; the formatter
  * dispatches on `diag.kind` so TypeScript exhaustiveness catches a
- * missing branch when a new variant lands. PR 1 ships an empty union
- * (`Diagnostic = never`), so `formatDiagnostic` can only ever be called
- * with an impossible value — it asserts as much. PR 2 adds the first
- * real case.
+ * missing branch when a new variant lands.
  *
  * See `docs/design/diagnostics-module.md` §7.
  */
@@ -15,11 +12,13 @@ import type { Diagnostic } from "./types";
 
 /** Format a single diagnostic as a one-message text string. */
 export function formatDiagnostic(diag: Diagnostic): string {
-  // PR 2 replaces this with a `switch (diag.kind)`. Until then `diag` is
-  // `never`, and the assignment fails at type-check the moment a variant
-  // is added without a corresponding case here.
-  const _exhaustive: never = diag;
-  return _exhaustive;
+  switch (diag.kind) {
+    case "untriaged":
+      // No code prefix — the `'TODO'` sentinel is internal. Advisory
+      // codes (`error[E0042]: …`) only appear once specific variants
+      // are carved out in PRs 4a–4g.
+      return `${diag.severity}: ${diag.message}`;
+  }
 }
 
 /**
