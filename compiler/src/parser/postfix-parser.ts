@@ -93,6 +93,11 @@ export function parsePostfixExpression(ctx: ParserContext, left: Expression): Ex
             kind: "MemberExpr",
             object: left,
             property: prop.lexeme,
+            // Capture the type args so `Optional<i32>.None` (variant access
+            // without a call) retains the instantiation. For
+            // `Type<TypeArgs>.method(args)` the call carries its own
+            // typeArgs; the MemberExpr's are redundant but harmless.
+            typeArgs: typeArgsResult,
             span: { start: left.span.start, end: prop.span.end },
           };
           // Optional `(args)` — required for a method call but kept

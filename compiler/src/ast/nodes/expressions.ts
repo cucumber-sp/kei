@@ -57,6 +57,11 @@ export interface MemberExpr extends BaseNode {
   kind: "MemberExpr";
   object: Expression;
   property: string;
+  /**
+   * Type arguments for generic type access (e.g. `Optional<i32>.None`).
+   * Empty for plain field / method access.
+   */
+  typeArgs?: TypeNode[];
 }
 
 /** Indexed access (`arr[i]`). */
