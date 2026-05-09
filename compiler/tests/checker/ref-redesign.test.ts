@@ -100,6 +100,37 @@ describe("§4.3 — `&` and `*` operators are unsafe-only", () => {
       fn main() -> int { return 0; }
     `);
   });
+
+  test("`&item` for `item: ref T` yields `*T` (the bound pointer)", () => {
+    // Stage 5 ergonomic: for `ref T` values `&item` is sugar for
+    // `&(*item)`, returning the bound pointer rather than the slot's
+    // own address. This is the natural reading once auto-deref is in:
+    // `item` looks like a T to user code, and `&` on a value yields
+    // its address.
+    checkOk(`
+      fn deref_through(item: ref i32) -> i32 {
+        unsafe {
+          let p: *i32 = &item;
+          return *p;
+        }
+      }
+      fn main() -> int { return 0; }
+    `);
+  });
+
+  test("`&self.field` for a `ref T` field yields `*T`", () => {
+    checkOk(`
+      unsafe struct Bag {
+        payload: ref i32;
+        fn __destroy(self: ref Bag) {}
+        fn __oncopy(self: ref Bag) {}
+        fn raw(self: ref Bag) -> *i32 {
+          unsafe { return &self.payload; }
+        }
+      }
+      fn main() -> int { return 0; }
+    `);
+  });
 });
 
 // ─── §4.4 — Constructing `unsafe struct` literals from raw pointers ──────────
