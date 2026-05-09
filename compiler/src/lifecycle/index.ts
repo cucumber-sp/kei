@@ -15,8 +15,10 @@
 
 import type { StructType } from "../checker/types";
 import { runDecideFixedPoint } from "./decide";
+import { synthesise } from "./synthesise";
 import type { LifecycleDecision } from "./types";
 
+export { synthesise } from "./synthesise";
 export type { LifecycleDecision, ManagedFieldRef } from "./types";
 
 /**
@@ -57,6 +59,15 @@ export interface Lifecycle {
 
   /** The decision for `struct`, or `undefined` if no auto-generation applies. */
   getDecision(struct: StructType): LifecycleDecision | undefined;
+
+  /**
+   * Produce the auto-generated `__destroy` / `__oncopy` KIR functions for
+   * `struct` given its `decision`.  Re-exported pure function — see
+   * `synthesise.ts` for the contract.  Provided as a method on the
+   * Lifecycle interface so KIR lowering has a single object to thread
+   * through, mirroring how it consumes {@link getDecision}.
+   */
+  synthesise: typeof synthesise;
 }
 
 /**
@@ -95,5 +106,7 @@ export function createLifecycle(): Lifecycle {
     getDecision(struct: StructType): LifecycleDecision | undefined {
       return decisions.get(struct);
     },
+
+    synthesise,
   };
 }
