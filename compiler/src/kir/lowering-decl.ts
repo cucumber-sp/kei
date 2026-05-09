@@ -8,13 +8,14 @@
  */
 
 import type { Declaration, ExternFunctionDecl, FunctionDecl, StaticDecl } from "../ast/nodes";
+import { synthesise as lifecycleSynthesise } from "../lifecycle";
 import type { MonomorphizedFunction } from "../monomorphization";
 import type { KirExtern, KirFunction, KirGlobal, KirParam, KirType, VarId } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
 import { lowerEnumDecl } from "./lowering-enum-decl";
 import { popScopeWithDestroy, pushScope, trackScopeVarByType } from "./lowering-scope";
 import { lowerBlock } from "./lowering-stmt";
-import { lowerAutoDestroy, lowerAutoOncopy, lowerMethod, lowerStructDecl } from "./lowering-struct";
+import { lowerMethod, lowerStructDecl } from "./lowering-struct";
 import {
   getExprKirType,
   getFunctionReturnType,
@@ -55,17 +56,20 @@ export function lowerDeclaration(ctx: LoweringCtx, decl: Declaration): void {
         const mangledName = `${structPrefix}_${method.name}`;
         ctx.functions.push(lowerMethod(ctx, method, mangledName, decl.name));
       }
-      // Generate auto __destroy if the checker flagged this struct
+      // Synthesise auto-generated `__destroy` / `__oncopy` hooks. The
+      // Lifecycle module owns both the decision (which fields drive the
+      // arm) and the body shape (reverse-declaration iteration order,
+      // string vs. nested-struct emit patterns); lowering's only job is
+      // to take the resulting KIR functions and append them to the
+      // module.
       const autoDestroyType = ctx.checkResult.lifecycle.autoDestroyStructs.get(decl.name);
-      if (autoDestroyType) {
-        const structPrefix = ctx.modulePrefix ? `${ctx.modulePrefix}_${decl.name}` : decl.name;
-        ctx.functions.push(lowerAutoDestroy(ctx, decl.name, autoDestroyType, structPrefix));
-      }
-      // Generate auto __oncopy if the checker flagged this struct
       const autoOncopyType = ctx.checkResult.lifecycle.autoOncopyStructs.get(decl.name);
-      if (autoOncopyType) {
-        const structPrefix = ctx.modulePrefix ? `${ctx.modulePrefix}_${decl.name}` : decl.name;
-        ctx.functions.push(lowerAutoOncopy(ctx, decl.name, autoOncopyType, structPrefix));
+      const lifecycleStruct = autoDestroyType ?? autoOncopyType;
+      if (lifecycleStruct) {
+        const decision = ctx.checkResult.lifecycle.getDecision(lifecycleStruct);
+        if (decision) {
+          ctx.functions.push(...lifecycleSynthesise(lifecycleStruct, decision));
+        }
       }
       break;
     }
