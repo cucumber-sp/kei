@@ -227,28 +227,45 @@ export class StructChecker {
       }
     }
 
-    // Validate lifecycle hook signatures
+    // Validate lifecycle hook signatures.
+    //
+    // Both `__destroy` and `__oncopy` take `self: ref T` and return void.
+    // Mutate-the-slot-in-place is the contract: bitwise copy fires the
+    // hook on the destination, and the destination is the slot we want
+    // the hook to operate on. By-value `self: T` would copy the struct
+    // before the hook runs, leaving the actual slot untouched; raw
+    // `*T` lets safe code observe an unbound pointer. `ref T` is the
+    // only spelling that matches the C-emitted prototype.
     for (const method of decl.methods) {
-      if (method.name === "__destroy") {
-        if (method.params.length !== 1) {
-          this.checker.error(
-            `lifecycle hook '__destroy' must take exactly 1 parameter`,
-            method.span
-          );
-        }
-        if (method.returnType) {
-          const retType = this.checker.resolveType(method.returnType);
-          if (retType.kind !== TypeKind.Void) {
-            this.checker.error(`lifecycle hook '__destroy' must return void`, method.span);
-          }
-        }
-      } else if (method.name === "__oncopy") {
-        const selfParam = method.params[0];
-        if (method.params.length >= 1 && selfParam && selfParam.name !== "self") {
-          this.checker.error(
-            `lifecycle hook '__oncopy' first parameter must be named 'self'`,
-            method.span
-          );
+      if (method.name !== "__destroy" && method.name !== "__oncopy") continue;
+      if (method.params.length !== 1) {
+        this.checker.error(
+          `lifecycle hook '${method.name}' must take exactly 1 parameter ('self: ref ${decl.name}')`,
+          method.span
+        );
+        continue;
+      }
+      const selfParam = method.params[0];
+      if (!selfParam) continue;
+      if (selfParam.name !== "self") {
+        this.checker.error(
+          `lifecycle hook '${method.name}' first parameter must be named 'self'`,
+          method.span
+        );
+      }
+      const selfType = this.checker.resolveType(selfParam.typeAnnotation);
+      const isRefSelf =
+        selfType.kind === TypeKind.Ptr && (selfType as { isRef?: boolean }).isRef === true;
+      if (!isRefSelf) {
+        this.checker.error(
+          `lifecycle hook '${method.name}' must take 'self: ref ${decl.name}'`,
+          method.span
+        );
+      }
+      if (method.returnType) {
+        const retType = this.checker.resolveType(method.returnType);
+        if (retType.kind !== TypeKind.Void) {
+          this.checker.error(`lifecycle hook '${method.name}' must return void`, method.span);
         }
       }
     }

@@ -301,7 +301,7 @@ describe("Checker — Unsafe Edge Cases", () => {
         `
           unsafe struct Bad {
             data: *u8;
-            fn __destroy(self: Bad) { }
+            fn __destroy(self: ref Bad) { }
           }
           fn main() -> int { return 0; }
         `,
@@ -314,15 +314,10 @@ describe("Checker — Unsafe Edge Cases", () => {
         unsafe struct Buffer {
           data: *u8;
           size: usize;
-          fn __destroy(self: Buffer) {
+          fn __destroy(self: ref Buffer) {
             unsafe { free(self.data); }
           }
-          fn __oncopy(self: Buffer) -> Buffer {
-            unsafe {
-              let new_data = alloc(self.size);
-              return Buffer{ data: new_data, size: self.size };
-            }
-          }
+          fn __oncopy(self: ref Buffer) {}
         }
         fn main() -> int { return 0; }
       `);

@@ -8,8 +8,8 @@ describe("KIR: lifecycle — destroy", () => {
       `
       unsafe struct Res {
         data: *u8;
-        fn __destroy(self: Res) { }
-        fn __oncopy(self: Res) -> Res { return Res{ data: self.data }; }
+        fn __destroy(self: ref Res) { }
+        fn __oncopy(self: ref Res) {}
       }
       fn foo() {
         let a = Res{ data: null };
@@ -33,8 +33,8 @@ describe("KIR: lifecycle — destroy", () => {
       `
       unsafe struct Res {
         data: *u8;
-        fn __destroy(self: Res) { }
-        fn __oncopy(self: Res) -> Res { return Res{ data: self.data }; }
+        fn __destroy(self: ref Res) { }
+        fn __oncopy(self: ref Res) {}
       }
       fn foo() {
         let a = Res{ data: null };
@@ -53,8 +53,8 @@ describe("KIR: lifecycle — destroy", () => {
       `
       unsafe struct Res {
         data: *u8;
-        fn __destroy(self: Res) { }
-        fn __oncopy(self: Res) -> Res { return Res{ data: self.data }; }
+        fn __destroy(self: ref Res) { }
+        fn __oncopy(self: ref Res) {}
       }
       fn foo() -> Res {
         let a = Res{ data: null };
@@ -73,8 +73,8 @@ describe("KIR: lifecycle — destroy", () => {
       `
       unsafe struct Res {
         data: *u8;
-        fn __destroy(self: Res) { }
-        fn __oncopy(self: Res) -> Res { return Res{ data: self.data }; }
+        fn __destroy(self: ref Res) { }
+        fn __oncopy(self: ref Res) {}
       }
       fn foo() -> Res {
         let a = Res{ data: null };
@@ -96,8 +96,8 @@ describe("KIR: lifecycle — oncopy", () => {
       `
       unsafe struct Res {
         data: *u8;
-        fn __destroy(self: Res) { }
-        fn __oncopy(self: Res) -> Res { return Res{ data: self.data }; }
+        fn __destroy(self: ref Res) { }
+        fn __oncopy(self: ref Res) {}
       }
       fn foo() {
         let a = Res{ data: null };
@@ -119,8 +119,8 @@ describe("KIR: lifecycle — move", () => {
       `
       unsafe struct Res {
         data: *u8;
-        fn __destroy(self: Res) { }
-        fn __oncopy(self: Res) -> Res { return Res{ data: self.data }; }
+        fn __destroy(self: ref Res) { }
+        fn __oncopy(self: ref Res) {}
       }
       fn foo() {
         let a = Res{ data: null };
@@ -160,8 +160,8 @@ describe("KIR: lifecycle — move", () => {
       `
       unsafe struct Res {
         data: *u8;
-        fn __destroy(self: Res) { }
-        fn __oncopy(self: Res) -> Res { return Res{ data: self.data }; }
+        fn __destroy(self: ref Res) { }
+        fn __oncopy(self: ref Res) {}
       }
       fn foo() {
         let a = Res{ data: null };
@@ -306,8 +306,8 @@ describe("KIR: lifecycle — printer", () => {
     const printed = lowerAndPrint(`
       unsafe struct Res {
         data: *u8;
-        fn __destroy(self: Res) { }
-        fn __oncopy(self: Res) -> Res { return Res{ data: self.data }; }
+        fn __destroy(self: ref Res) { }
+        fn __oncopy(self: ref Res) {}
       }
       fn foo() {
         let a = Res{ data: null };

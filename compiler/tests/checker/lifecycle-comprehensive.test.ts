@@ -15,7 +15,7 @@ describe("Checker — Lifecycle Hooks (comprehensive)", () => {
         `
           unsafe struct Buf {
             data: *u8;
-            fn __destroy(self: Buf) { }
+            fn __destroy(self: ref Buf) { }
           }
           fn main() -> int { return 0; }
         `,
@@ -27,12 +27,10 @@ describe("Checker — Lifecycle Hooks (comprehensive)", () => {
       checkOk(`${MEM_STUBS}
         unsafe struct Res {
           data: *u8;
-          fn __destroy(self: Res) {
+          fn __destroy(self: ref Res) {
             unsafe { free(self.data); }
           }
-          fn __oncopy(self: Res) -> Res {
-            return Res{ data: self.data };
-          }
+          fn __oncopy(self: ref Res) {}
         }
         fn main() -> int { return 0; }
       `);
@@ -47,9 +45,7 @@ describe("Checker — Lifecycle Hooks (comprehensive)", () => {
         `
           unsafe struct Buf {
             data: *u8;
-            fn __oncopy(self: Buf) -> Buf {
-              return Buf{ data: self.data };
-            }
+            fn __oncopy(self: ref Buf) {}
           }
           fn main() -> int { return 0; }
         `,
@@ -62,15 +58,10 @@ describe("Checker — Lifecycle Hooks (comprehensive)", () => {
         unsafe struct Data {
           ptr_field: *u8;
           size: usize;
-          fn __destroy(self: Data) {
+          fn __destroy(self: ref Data) {
             unsafe { free(self.ptr_field); }
           }
-          fn __oncopy(self: Data) -> Data {
-            unsafe {
-              let new_ptr = alloc(self.size);
-              return Data{ ptr_field: new_ptr, size: self.size };
-            }
-          }
+          fn __oncopy(self: ref Data) {}
         }
         fn main() -> int { return 0; }
       `);
@@ -85,15 +76,10 @@ describe("Checker — Lifecycle Hooks (comprehensive)", () => {
         unsafe struct Buffer {
           data: *u8;
           size: usize;
-          fn __destroy(self: Buffer) {
+          fn __destroy(self: ref Buffer) {
             unsafe { free(self.data); }
           }
-          fn __oncopy(self: Buffer) -> Buffer {
-            unsafe {
-              let new_data = alloc(self.size);
-              return Buffer{ data: new_data, size: self.size };
-            }
-          }
+          fn __oncopy(self: ref Buffer) {}
         }
         fn main() -> int { return 0; }
       `);
@@ -104,15 +90,10 @@ describe("Checker — Lifecycle Hooks (comprehensive)", () => {
         unsafe struct SmartPtr {
           data: *u8;
           len: usize;
-          fn __destroy(self: SmartPtr) {
+          fn __destroy(self: ref SmartPtr) {
             unsafe { free(self.data); }
           }
-          fn __oncopy(self: SmartPtr) -> SmartPtr {
-            unsafe {
-              let new_data = alloc(self.len);
-              return SmartPtr{ data: new_data, len: self.len };
-            }
-          }
+          fn __oncopy(self: ref SmartPtr) {}
           fn length(self: SmartPtr) -> usize {
             return self.len;
           }
@@ -292,14 +273,12 @@ describe("Checker — Lifecycle Hooks (comprehensive)", () => {
         unsafe struct TwoPtr {
           a: *u8;
           b: *i32;
-          fn __destroy(self: TwoPtr) {
+          fn __destroy(self: ref TwoPtr) {
             unsafe {
               free(self.a);
             }
           }
-          fn __oncopy(self: TwoPtr) -> TwoPtr {
-            return TwoPtr{ a: self.a, b: self.b };
-          }
+          fn __oncopy(self: ref TwoPtr) {}
         }
         fn main() -> int { return 0; }
       `);

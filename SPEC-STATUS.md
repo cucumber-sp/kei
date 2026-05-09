@@ -22,7 +22,6 @@ and covered by tests.
 | `Optional<T>` tag-byte fallback for non-niched primitives     | PLANNED  | `Optional<i32>`, `Optional<struct>` etc. carry an explicit tag byte. |
 | `&field` desugar for `ref T` values                           | PLANNED  | Optional ergonomic patch from `docs/design/ref-construction-redesign.md` §6 stage 5: `&field` returns `&(*field)` (the bound `*T`) for `ref T` parameters / fields instead of today's C-style `**T`. Self-contained, additive. |
 | `readonly` modifier on fields/params                          | PLANNED  | Two senses: blocks reassignment for plain types; blocks write-through for `ref T`. |
-| Lifecycle hook ABI flip (`fn __destroy(self: ref T)`, void)   | PLANNED  | `__oncopy(self: ref T)` already lands as void-returning; same flip for `__destroy` is the remaining piece. |
 | `Shared<T>` stdlib end-to-end                                 | WIP      | Type-checks and lowers; runtime path needs auto-deref-on-read corner cases for `ref T` fields plus the `__destroy` ABI flip above. |
 | Traits / trait objects                                        | PLANNED  | Fat-pointer layout `(data, vtable)` with size + destroy slot. |
 | `String` / `Array<T>` / `List<T>` as stdlib types             | PLANNED  | `String` migration deferred — runtime currently in C (`runtime.h`). `Array<T>` and `List<T>` follow once `Shared<T>` is real. |

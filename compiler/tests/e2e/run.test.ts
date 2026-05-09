@@ -1181,7 +1181,7 @@ describe("Complex: structs with lifecycle", () => {
       struct Resource {
         id: int;
 
-        fn __destroy(self: Resource) {
+        fn __destroy(self: ref Resource) {
           print("destroy");
           print(self.id);
         }
@@ -1210,12 +1210,12 @@ describe("Complex: structs with lifecycle", () => {
       struct Counter {
         val: int;
 
-        fn __oncopy(self: Counter) -> Counter {
+        fn __oncopy(self: ref Counter) {
           print("copied");
-          return Counter{ val: self.val + 100 };
+          self.val = self.val + 100;
         }
 
-        fn __destroy(self: Counter) {
+        fn __destroy(self: ref Counter) {
           print("destroy");
           print(self.val);
         }

@@ -75,15 +75,10 @@ describe("Checker — Lifecycle Hook Signatures", () => {
       extern fn c_free(p: *void);
       unsafe struct Buffer {
         data: *void;
-        fn __destroy(self: Buffer) {
+        fn __destroy(self: ref Buffer) {
           unsafe { c_free(self.data); }
         }
-        fn __oncopy(self: Buffer) -> Buffer {
-          unsafe {
-            let new_data = malloc(1);
-            return Buffer{ data: new_data };
-          }
-        }
+        fn __oncopy(self: ref Buffer) {}
       }
       fn main() -> int { return 0; }
     `);
@@ -98,9 +93,7 @@ describe("Checker — Lifecycle Hook Signatures", () => {
           fn __destroy(self: Buffer, extra: int) {
             unsafe { c_free(self.data); }
           }
-          fn __oncopy(self: Buffer) -> Buffer {
-            return Buffer{ data: self.data };
-          }
+          fn __oncopy(self: ref Buffer) {}
         }
         fn main() -> int { return 0; }
       `,
@@ -115,9 +108,7 @@ describe("Checker — Lifecycle Hook Signatures", () => {
           data: *void;
           fn __destroy() {
           }
-          fn __oncopy(self: Buffer) -> Buffer {
-            return Buffer{ data: self.data };
-          }
+          fn __oncopy(self: ref Buffer) {}
         }
         fn main() -> int { return 0; }
       `,
@@ -131,7 +122,7 @@ describe("Checker — Lifecycle Hook Signatures", () => {
         extern fn c_free(p: *void);
         unsafe struct Buffer {
           data: *void;
-          fn __destroy(self: Buffer) {
+          fn __destroy(self: ref Buffer) {
             unsafe { c_free(self.data); }
           }
           fn __oncopy(other: Buffer) -> Buffer {
@@ -150,13 +141,11 @@ describe("Checker — Lifecycle Hook Signatures", () => {
         extern fn c_free(p: *void);
         unsafe struct Buffer {
           data: *void;
-          fn __destroy(self: Buffer) -> int {
+          fn __destroy(self: ref Buffer) -> int {
             unsafe { c_free(self.data); }
             return 0;
           }
-          fn __oncopy(self: Buffer) -> Buffer {
-            return Buffer{ data: self.data };
-          }
+          fn __oncopy(self: ref Buffer) {}
         }
         fn main() -> int { return 0; }
       `,
