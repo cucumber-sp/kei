@@ -18,7 +18,6 @@ and covered by tests.
 | Item                                                          | Status   | Notes                                              |
 |---------------------------------------------------------------|----------|----------------------------------------------------|
 | `Optional<T>` niche layout for pointer-shaped types           | PLANNED  | One-word representation when `T` is `*T`, `Shared<T>`, `Weak<T>`, or other pointer-niched types; `None` reuses the zero/null bit pattern. Today every instantiation pays a tag byte. |
-| Drop `null` literal at the source level                       | PLANNED  | The spec calls for `Optional<*T>.None` everywhere; the `null` keyword is still accepted as a temporary back-compat for raw-pointer initialization until the niche layout above lands and stdlib helpers cover the FFI patterns. |
 | `&field` desugar for `ref T` values                           | PLANNED  | Optional ergonomic patch from `docs/design/ref-construction-redesign.md` §6 stage 5: `&field` returns `&(*field)` (the bound `*T`) for `ref T` parameters / fields instead of today's C-style `**T`. Self-contained, additive. |
 | `readonly` modifier on fields/params                          | PLANNED  | Two senses: blocks reassignment for plain types; blocks write-through for `ref T`. |
 | `Shared<T>` stdlib end-to-end                                 | WIP      | Type-checks and lowers; runtime path needs auto-deref-on-read corner cases for `ref T` fields plus the `__destroy` ABI flip above. |
