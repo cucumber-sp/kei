@@ -171,10 +171,7 @@ export function lowerIdentifier(ctx: LoweringCtx, expr: Identifier): VarId {
   // *T`, etc. — bypass `lowerIdentifier` and reach for `varId`
   // directly.
   const checkerType = ctx.checkResult.types.typeMap.get(expr);
-  if (
-    checkerType?.kind === "ptr" &&
-    (checkerType as { isRef?: boolean }).isRef === true
-  ) {
+  if (checkerType?.kind === "ptr" && (checkerType as { isRef?: boolean }).isRef === true) {
     const innerType = ctx.currentBodyTypeMap?.get(expr);
     const kirInner = innerType
       ? lowerCheckerType(ctx, innerType)
@@ -472,10 +469,7 @@ export function lowerMemberExpr(ctx: LoweringCtx, expr: MemberExpr): VarId {
     (objectType as { isRef?: boolean }).isRef === true &&
     objectType.pointee.kind === "struct";
   let baseId: VarId;
-  if (
-    expr.object.kind === "Identifier" &&
-    (objectType?.kind === "struct" || isRefStructObj)
-  ) {
+  if (expr.object.kind === "Identifier" && (objectType?.kind === "struct" || isRefStructObj)) {
     const varId = ctx.varMap.get(expr.object.name);
     if (varId && isStackAllocVar(ctx, varId)) {
       baseId = varId; // Use alloc pointer directly
@@ -515,8 +509,7 @@ export function lowerMemberExpr(ctx: LoweringCtx, expr: MemberExpr): VarId {
     structFieldType = objectType.pointee.fields.get(expr.property);
   }
   const isRefField =
-    structFieldType?.kind === "ptr" &&
-    (structFieldType as { isRef?: boolean }).isRef === true;
+    structFieldType?.kind === "ptr" && (structFieldType as { isRef?: boolean }).isRef === true;
   if (isRefField && resultType.kind === "ptr") {
     const innerType = resultType.pointee;
     const slotPtr = freshVar(ctx);
