@@ -1,7 +1,7 @@
+export type { MonomorphizedFunction, MonomorphizedStruct } from "../monomorphization";
+export { mangleGenericName, substituteFunctionType, substituteType } from "../monomorphization";
 export type { CheckResult } from "./checker";
 export { Checker } from "./checker";
-export type { MonomorphizedFunction, MonomorphizedStruct } from "./generics";
-export { mangleGenericName, substituteFunctionType, substituteType } from "./generics";
 export { BINARY_OP_METHODS } from "./operator-checker";
 export type {
   ArrayType,

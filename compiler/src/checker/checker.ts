@@ -16,12 +16,12 @@ import type {
 import type { Diagnostic, SourceLocation } from "../errors/diagnostic";
 import { Severity } from "../errors/diagnostic";
 import type { Span } from "../lexer/token";
+import type { MonomorphizedFunction, MonomorphizedStruct } from "../monomorphization";
+import { mangleGenericName, substituteType } from "../monomorphization";
 import type { SourceFile } from "../utils/source";
 import { registerBuiltins } from "./builtins";
 import { DeclarationChecker } from "./decl-checker";
 import { ExpressionChecker } from "./expr-checker";
-import type { MonomorphizedFunction, MonomorphizedStruct } from "./generics";
-import { mangleGenericName, substituteType } from "./generics";
 import { validateRefPositions } from "./ref-position-checker";
 import { Scope } from "./scope";
 import { StatementChecker } from "./stmt-checker";

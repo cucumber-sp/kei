@@ -5,12 +5,12 @@
  */
 
 import type { CallExpr, Expression, FunctionDecl } from "../ast/nodes";
-import type { Checker } from "./checker";
 import {
   mangleGenericName,
   substituteFunctionType,
   substituteType as substituteTypeGeneric,
-} from "./generics";
+} from "../monomorphization";
+import type { Checker } from "./checker";
 import { extractTypeParamSubs } from "./literal-checker";
 import type { FunctionOverload } from "./symbols";
 import { SymbolKind } from "./symbols";

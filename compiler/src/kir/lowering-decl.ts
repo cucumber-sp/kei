@@ -8,7 +8,7 @@
  */
 
 import type { Declaration, ExternFunctionDecl, FunctionDecl, StaticDecl } from "../ast/nodes";
-import type { MonomorphizedFunction } from "../checker/generics";
+import type { MonomorphizedFunction } from "../monomorphization";
 import type { KirExtern, KirFunction, KirGlobal, KirParam, KirType, VarId } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
 import { lowerEnumDecl } from "./lowering-enum-decl";

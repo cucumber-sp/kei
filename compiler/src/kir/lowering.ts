@@ -79,7 +79,7 @@ export function runLowering(ctx: LoweringCtx): KirModule {
     lowerDeclaration(ctx, decl);
   }
 
-  // Emit monomorphized struct definitions from generics. Each module's
+  // Emit monomorphized struct definitions for generic instantiations. Each module's
   // checker `monomorphizedStructs` map can include instantiations
   // adopted from another module (so cross-module body checks can run),
   // which means the same `Shared<i32>` shows up under both `main` and
@@ -142,7 +142,7 @@ export function runLowering(ctx: LoweringCtx): KirModule {
     });
   }
 
-  // Emit monomorphized function definitions from generics
+  // Emit monomorphized function definitions for generic instantiations
   for (const [_mangledName, monoFunc] of ctx.checkResult.generics.monomorphizedFunctions) {
     if (monoFunc.declaration) {
       ctx.functions.push(lowerMonomorphizedFunction(ctx, monoFunc));

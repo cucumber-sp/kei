@@ -5,12 +5,12 @@
 
 import type { TypeNode } from "../ast/nodes";
 import type { Span } from "../lexer/token";
-import { lookupPrimitiveType } from "./builtins";
 import {
   mangleGenericName,
   substituteFunctionType,
   substituteType as substituteTypeGeneric,
-} from "./generics";
+} from "../monomorphization";
+import { lookupPrimitiveType } from "./builtins";
 import type { Scope } from "./scope";
 import { SymbolKind } from "./symbols";
 import type { FunctionType, Type } from "./types";

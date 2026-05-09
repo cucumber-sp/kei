@@ -5,8 +5,8 @@
  */
 
 import type { FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes";
-import type { MonomorphizedStruct } from "../checker/generics";
 import type { StructType } from "../checker/types";
+import type { MonomorphizedStruct } from "../monomorphization";
 import type {
   KirBlock,
   KirFunction,
