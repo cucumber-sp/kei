@@ -262,22 +262,45 @@ empty text formatter. No call-site changes. Old
 `src/errors/diagnostic.ts` untouched. Tests for the new module are
 trivially empty.
 
-**PR 2 — Untriaged catch-all + codemod.** Add a single variant
+**PR 2 — Untriaged catch-all + connect existing helpers.** Add a
+single variant
 `{ kind: 'untriaged'; code: 'TODO'; severity; span; message: string }`
-to the union. Codemod (a small Bun script) replaces every
-`new Diagnostic(severity, span, message)` call site with
-`diag.untriaged({ severity, span, message })`. Behaviour identical
-(codes don't appear in user output yet because untriaged renders
-without a code prefix). All 162 sites land in one mechanical PR; the
-test suite verifies behaviour preservation. Old type stays as alias
-for transition.
+to the union, plus the typed-method
+`diag.untriaged({ severity, span, message })` and a formatter case.
+
+The codebase's emit surface today is **not** `new Diagnostic(...)`
+constructor calls — it's the `Checker.error(msg, span)` and
+`Checker.warning(msg, span)` helpers (~80+ sub-checker call sites
+go through them) plus 4 raw `this.diagnostics.push({ severity,
+message, location })` literal sites in `checker.ts` and
+`ref-position-checker.ts`. There is no constructor to migrate
+because `Diagnostic` is an interface (`{ severity, message,
+location }`).
+
+So PR 2 is small: re-route the existing helpers and the 4 raw
+pushes through `diag.untriaged({...})`. The ~80 sub-checker call
+sites that already call `this.checker.error(...) / .warning(...)`
+**do not change** — they keep going through the same helper, which
+now emits via the new `Diagnostic` union and `Collector`. Old
+`src/errors/diagnostic.ts` stays as a transition alias for the
+`SourceLocation` type and `Severity` enum (removed in PR N+1).
+
+Diff scope: ~80–150 lines, mostly inside `Checker` and
+`ref-position-checker.ts`. Behaviour-preserving: untriaged renders
+without a code prefix, so user-visible output is byte-identical.
 
 This is the equivalent of the Lifecycle migration's "PR 3 — pass
 slot, no-op rewrite" — introduce infrastructure first, migrate
 behaviour second.
 
-**PR 3 — Wire `Collector` through `Checker`.** The `Checker` class
-gains a `Collector` field instead of holding `diagnostics` directly.
+**PR 3 — Externalise the `Collector`.** PR 2 makes the helpers
+emit via an internally-constructed `Collector` on `Checker`. PR 3
+moves the `Collector` to be passed in via the `Checker`
+constructor instead of created internally — per design doc §5
+("constructed and threaded (b)"). The CLI driver constructs
+`createDiagnostics({})` and passes it in. Tests get a fresh
+collector per compile.
+
 Plumbing change, no behaviour change.
 
 **PR 4..N — Specificity, parallelizable.** Each PR carves a category
