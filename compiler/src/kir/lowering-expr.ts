@@ -163,6 +163,31 @@ export function lowerIdentifier(ctx: LoweringCtx, expr: Identifier): VarId {
     return `%${expr.name}`;
   }
 
+  // Auto-deref through a `ref T` parameter / local. The variable's
+  // runtime value is already a `*T` (the bound pointer); reading it
+  // in expression position yields the T, so emit a load. Use sites
+  // that explicitly need the pointer — `&item`, the call-site
+  // address-of for `ref T` parameter passing, the cast `item as
+  // *T`, etc. — bypass `lowerIdentifier` and reach for `varId`
+  // directly.
+  const checkerType = ctx.checkResult.types.typeMap.get(expr);
+  if (
+    checkerType?.kind === "ptr" &&
+    (checkerType as { isRef?: boolean }).isRef === true
+  ) {
+    const innerType = ctx.currentBodyTypeMap?.get(expr);
+    const kirInner = innerType
+      ? lowerCheckerType(ctx, innerType)
+      : ((): KirType => {
+          const lowered = getExprKirType(ctx, expr);
+          if (lowered.kind === "ptr") return lowered.pointee;
+          return lowered;
+        })();
+    const dest = freshVar(ctx);
+    emit(ctx, { kind: "load", dest, ptr: varId, type: kirInner });
+    return dest;
+  }
+
   // If the var is a stack_alloc pointer, load it
   // Check if it's a param (params don't need loading)
   if (varId.startsWith("%") && isStackAllocVar(ctx, varId)) {
@@ -280,6 +305,21 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
       (paramType as { isRef?: boolean }).isRef &&
       argType?.kind !== "ptr"
     ) {
+      return lowerExprAsPtr(ctx, a);
+    }
+    // ref T → ref T forwarding: pass the bound pointer directly,
+    // bypassing the auto-deref-on-read that `lowerExpr` would
+    // perform on a `ref T`-typed identifier in expression position.
+    if (
+      paramType?.kind === "ptr" &&
+      (paramType as { isRef?: boolean }).isRef &&
+      argType?.kind === "ptr" &&
+      (argType as { isRef?: boolean }).isRef
+    ) {
+      if (a.kind === "Identifier") {
+        const varId = ctx.varMap.get(a.name);
+        if (varId) return varId;
+      }
       return lowerExprAsPtr(ctx, a);
     }
     return argType?.kind === "struct" ? lowerExprAsPtr(ctx, a) : lowerExpr(ctx, a);
@@ -423,8 +463,19 @@ export function lowerMemberExpr(ctx: LoweringCtx, expr: MemberExpr): VarId {
 
   // For struct field access, use the alloc pointer directly (not a loaded value).
   // This ensures the alloc is address-taken and won't be incorrectly promoted by mem2reg.
+  // For `ref Struct` identifiers (a `ref T` parameter pointing at a struct),
+  // the same logic applies — `lowerExpr` would auto-deref to a Counter value,
+  // but we want the pointer for `field_ptr`.
+  const isRefStructObj =
+    expr.object.kind === "Identifier" &&
+    objectType?.kind === "ptr" &&
+    (objectType as { isRef?: boolean }).isRef === true &&
+    objectType.pointee.kind === "struct";
   let baseId: VarId;
-  if (expr.object.kind === "Identifier" && objectType?.kind === "struct") {
+  if (
+    expr.object.kind === "Identifier" &&
+    (objectType?.kind === "struct" || isRefStructObj)
+  ) {
     const varId = ctx.varMap.get(expr.object.name);
     if (varId && isStackAllocVar(ctx, varId)) {
       baseId = varId; // Use alloc pointer directly
@@ -444,6 +495,45 @@ export function lowerMemberExpr(ctx: LoweringCtx, expr: MemberExpr): VarId {
   }
 
   const resultType = getExprKirType(ctx, expr);
+
+  // Auto-deref through a `ref T` field. The field's storage on the
+  // struct is a `*T` (the bound pointer); the user-visible value is
+  // the T behind it. emit field_ptr + load to get the bound pointer,
+  // then a second load to fetch the T. We use the struct's declared
+  // field type (not the expression's checker type) because the
+  // checker keeps the `ref T` spelling there — `getExprKirType`
+  // already collapses it to `*T`, which is the slot type we need
+  // to pass to field_ptr / the first load.
+  let structFieldType: import("../checker/types").Type | undefined;
+  if (objectType?.kind === "struct") {
+    structFieldType = objectType.fields.get(expr.property);
+  } else if (
+    objectType?.kind === "ptr" &&
+    objectType.isRef &&
+    objectType.pointee.kind === "struct"
+  ) {
+    structFieldType = objectType.pointee.fields.get(expr.property);
+  }
+  const isRefField =
+    structFieldType?.kind === "ptr" &&
+    (structFieldType as { isRef?: boolean }).isRef === true;
+  if (isRefField && resultType.kind === "ptr") {
+    const innerType = resultType.pointee;
+    const slotPtr = freshVar(ctx);
+    emit(ctx, {
+      kind: "field_ptr",
+      dest: slotPtr,
+      base: baseId,
+      field: expr.property,
+      type: resultType,
+    });
+    const boundPtr = freshVar(ctx);
+    emit(ctx, { kind: "load", dest: boundPtr, ptr: slotPtr, type: resultType });
+    const value = freshVar(ctx);
+    emit(ctx, { kind: "load", dest: value, ptr: boundPtr, type: innerType });
+    return value;
+  }
+
   return emitFieldLoad(ctx, baseId, expr.property, resultType);
 }
 
@@ -572,11 +662,26 @@ export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
     // (C does not allow `&value->field`). Use the alloc pointer for stack vars,
     // the inner ptr for `(*p).field`, and the param pointer for `self.field`.
     const objectType = ctx.checkResult.types.typeMap.get(expr.target.object);
+    const isRefStructLhs =
+      expr.target.object.kind === "Identifier" &&
+      objectType?.kind === "ptr" &&
+      (objectType as { isRef?: boolean }).isRef === true &&
+      objectType.pointee.kind === "struct";
     let baseId: VarId;
     if (expr.target.object.kind === "DerefExpr") {
       baseId = lowerExpr(ctx, expr.target.object.operand);
-    } else if (expr.target.object.kind === "Identifier" && objectType?.kind === "struct") {
-      baseId = lowerExprAsPtr(ctx, expr.target.object);
+    } else if (
+      expr.target.object.kind === "Identifier" &&
+      (objectType?.kind === "struct" || isRefStructLhs)
+    ) {
+      // For `ref Struct` parameters, the var already IS the struct pointer;
+      // `lowerExprAsPtr` would allocate + store again. Reach for varMap directly.
+      const varId = ctx.varMap.get(expr.target.object.name);
+      if (varId) {
+        baseId = varId;
+      } else {
+        baseId = lowerExprAsPtr(ctx, expr.target.object);
+      }
     } else {
       baseId = lowerExpr(ctx, expr.target.object);
     }
@@ -627,22 +732,35 @@ export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
       }
     }
 
-    // Destroy old field value if it has lifecycle hooks
-    const checkerType = ctx.checkResult.types.typeMap.get(expr.target);
-    const lifecycle = getStructLifecycle(ctx, checkerType);
-    if (lifecycle?.hasDestroy) {
-      const oldVal = freshVar(ctx);
-      emit(ctx, { kind: "load", dest: oldVal, ptr: ptrDest, type: fieldType });
-      emit(ctx, { kind: "destroy", value: oldVal, structName: lifecycle.structName });
-    } else if (checkerType?.kind === "string") {
-      // String field: call kei_string_destroy on the pointer to the old value
-      emit(ctx, { kind: "call_extern_void", func: "kei_string_destroy", args: [ptrDest] });
-    }
-
-    emit(ctx, { kind: "store", ptr: ptrDest, value: valueId });
-
-    if (lifecycle?.hasOncopy && expr.value.kind !== "MoveExpr") {
-      emit(ctx, { kind: "oncopy", value: valueId, structName: lifecycle.structName });
+    // Auto-deref through a `ref T` field on a simple `=` assignment.
+    // The slot holds a `*T` (the bound pointer); the user-visible
+    // write goes through that pointer to update the T behind it.
+    // Without this, `b.value = 7` would overwrite the slot's bytes
+    // with 7 (interpreting 7 as a pointer) instead of writing 7 to
+    // the pointed-to i32.
+    const targetCheckerType = ctx.checkResult.types.typeMap.get(expr.target);
+    const isRefField =
+      fieldType.kind === "ptr" &&
+      targetCheckerType?.kind === "ptr" &&
+      (targetCheckerType as { isRef?: boolean }).isRef === true;
+    if (isRefField && fieldType.kind === "ptr") {
+      const innerPtr = freshVar(ctx);
+      emit(ctx, { kind: "load", dest: innerPtr, ptr: ptrDest, type: fieldType });
+      emit(ctx, { kind: "store", ptr: innerPtr, value: valueId });
+    } else {
+      // Destroy old field value if it has lifecycle hooks
+      const lifecycle = getStructLifecycle(ctx, targetCheckerType);
+      if (lifecycle?.hasDestroy) {
+        const oldVal = freshVar(ctx);
+        emit(ctx, { kind: "load", dest: oldVal, ptr: ptrDest, type: fieldType });
+        emit(ctx, { kind: "destroy", value: oldVal, structName: lifecycle.structName });
+      } else if (targetCheckerType?.kind === "string") {
+        emit(ctx, { kind: "call_extern_void", func: "kei_string_destroy", args: [ptrDest] });
+      }
+      emit(ctx, { kind: "store", ptr: ptrDest, value: valueId });
+      if (lifecycle?.hasOncopy && expr.value.kind !== "MoveExpr") {
+        emit(ctx, { kind: "oncopy", value: valueId, structName: lifecycle.structName });
+      }
     }
   } else if (expr.target.kind === "DerefExpr") {
     // *p = v — store through the raw pointer.
