@@ -61,8 +61,8 @@ describe("KIR: nullable type (T?)", () => {
       struct Inner { x: i32; }
       unsafe struct Outer {
         child: Inner?;
-        fn __destroy(self: Outer) {}
-        fn __oncopy(self: Outer) -> Outer { return Outer { child: null }; }
+        fn __destroy(self: ref Outer) {}
+        fn __oncopy(self: ref Outer) {}
       }
       fn foo() {}
     `);

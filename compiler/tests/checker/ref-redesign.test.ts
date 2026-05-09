@@ -428,7 +428,7 @@ describe.skip("Shared<T> stdlib semantics — original placeholder (e2e + monomo
 
 describe.skip("future: auto-generated lifecycle hooks use `self: ref T` ABI", () => {
   // Auto-derived __destroy / __oncopy on a `struct` with managed fields
-  // (e.g. `string`) currently emit `fn __destroy(self: T)` (by-value).
+  // (e.g. `string`) currently emit `fn __destroy(self: ref T)` (by-value).
   // Per §3.1 / §07-structures the canonical ABI is `fn __destroy(self:
   // ref T)` returning void. User-defined hooks already accept the new
   // form; this is about flipping the COMPILER-generated ones too. Once
