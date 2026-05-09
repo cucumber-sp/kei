@@ -91,10 +91,7 @@ function checkLifecycleHookBuiltin(checker: Checker, expr: CallExpr): Type | nul
   if (isErrorType(argType)) return ERROR_TYPE;
 
   if (!isPtrType(argType)) {
-    checker.error(
-      `'${name}' expects a '*T' argument, got '${typeToString(argType)}'`,
-      expr.span
-    );
+    checker.error(`'${name}' expects a '*T' argument, got '${typeToString(argType)}'`, expr.span);
     return ERROR_TYPE;
   }
   const pointee = argType.pointee;
