@@ -1,4 +1,34 @@
-# Repo policy for Claude
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Repo layout
+
+```
+kei/
+├── compiler/        TypeScript-on-Bun compiler + stdlib (.kei). Has its own CLAUDE.md.
+├── spec/            Language specification (01-design.md … 13-grammar.md). Reference manual, not changelog.
+├── docs/            getting-started.md, language guide, design docs in docs/design/.
+└── SPEC-STATUS.md   What's spec'd vs. implemented (WIP / PLANNED / BLOCKED tags).
+```
+
+The compiler is the only buildable artifact. Run things from `compiler/`; see
+[`compiler/CLAUDE.md`](./compiler/CLAUDE.md) for build / test / lint commands and
+the lexer → parser → checker → KIR → backend pipeline.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues (`cucumber-sp/kei`); skills use the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical role names — `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
 ## Backlog lives on GitHub
 
@@ -28,9 +58,15 @@ out-survive any single conversation.
 
 (Add as we file them.)
 
-- #19 — Generic enums (prereq for `Optional<T>` / `Result<T, E>`)
-- #21 — C emitter references undeclared `_v1` in scope-end
-  `__destroy` after `let x = Struct.make()` (blocks `Shared<T>` e2e)
+- #38 — Spec gap: defer vs auto-destroy ordering at scope exit
+  (blocks Lifecycle module migration, [ADR-0001](./docs/adr/0001-concept-cohesive-modules.md))
+- #39 — Architecture review: extract `src/throws/` as a
+  concept-cohesive module (next ADR-0001 candidate after the three
+  designed modules ship)
+- #40 — `LoweringCtx`: internal seams hygiene cleanup (after
+  Lifecycle and Monomorphization migrations land)
+
+(Closed: #19 generic enums, #21 `_v1` scope-end destroy bug.)
 
 ## Spec describes the current language, not its history
 
@@ -65,8 +101,10 @@ Rules of thumb when editing spec:
 The mental model: design docs are the *journey*; the spec is the
 *destination*. Each survives independently.
 
-## Tooling note
+## Split between this file and `compiler/CLAUDE.md`
 
-The compiler subdirectory has its own `compiler/CLAUDE.md` with Bun /
-runtime conventions. This file is for *project-wide policy*; that one
-is for *how to run things*.
+This file is *project-wide policy* (backlog discipline, what belongs in
+spec vs. design docs vs. issues). `compiler/CLAUDE.md` is *how to run
+things* (Bun commands, pipeline overview, where to add a new
+keyword/type/instruction). When a rule applies to all of `kei/` it
+goes here; when it applies only to the compiler subdir it goes there.

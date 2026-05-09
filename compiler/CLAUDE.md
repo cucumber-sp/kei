@@ -1,110 +1,95 @@
+# compiler/CLAUDE.md
 
-Default to using Bun instead of Node.js.
+How to build, test, and navigate the kei compiler. Project-wide policy
+(backlog, spec rules) lives in the repo-root `CLAUDE.md`.
 
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
-- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
-- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
-- Use `bunx <package> <command>` instead of `npx <package> <command>`
-- Bun automatically loads .env, so don't use dotenv.
+## Runtime: Bun, not Node
 
-## APIs
+This subdir runs on [Bun](https://bun.sh/). Use `bun` / `bun test` / `bun run`
+/ `bunx` — never `node`, `vitest`, `jest`, `npm`, `pnpm`, `npx`. Bun loads
+`.env` automatically. Compiling a `.kei` program also requires a C compiler
+on `PATH` (`cc`, `gcc`, or `clang`).
 
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa.
+## Commands
 
-## Testing
+Run everything from `compiler/`.
 
-Use `bun test` to run tests.
+```bash
+bun install                                      # one-time
+bun test                                         # ~1,900 tests across lexer/parser/checker/kir/backend/e2e
+bun test tests/checker/arrays.test.ts            # single file
+bun test tests/checker/arrays.test.ts -t "name"  # single test by name pattern
+bunx biome check src/ tests/                     # lint + format check
+bunx biome check --write src/ tests/             # auto-fix
 
-```ts#index.test.ts
-import { test, expect } from "bun:test";
+# Compile + run a .kei program
+bun src/cli.ts program.kei --run         # compile and execute
+bun src/cli.ts program.kei --build       # binary only (debug; --release for -O2 -DNDEBUG)
+bun src/cli.ts program.kei --check       # type-check only
+bun src/cli.ts program.kei --ast         # print AST
+bun src/cli.ts program.kei --kir         # print KIR (pre-mem2reg)
+bun src/cli.ts program.kei --kir-opt     # print KIR (post-mem2reg)
+bun src/cli.ts program.kei --emit-c      # print generated C
+bun src/cli.ts program.kei --build --backend=clang   # pick C compiler
 
-test("hello world", () => {
-  expect(1).toBe(1);
-});
+# Standalone binary (no Bun runtime needed at runtime)
+bun run build                            # writes dist/kei + dist/std/
+./dist/kei program.kei --run
 ```
 
-## Frontend
+The standalone build relies on `std/` sitting next to the binary; the build
+script copies it. Don't move `std/` without updating the loader.
 
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
+## Compilation pipeline
 
-Server:
-
-```ts#index.ts
-import index from "./index.html"
-
-Bun.serve({
-  routes: {
-    "/": index,
-    "/api/users/:id": {
-      GET: (req) => {
-        return new Response(JSON.stringify({ id: req.params.id }));
-      },
-    },
-  },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
-  development: {
-    hmr: true,
-    console: true,
-  }
-})
+```
+.kei source
+  → lexer       (src/lexer/)    → tokens
+  → parser      (src/parser/)   → AST  (src/ast/)
+  → checker     (src/checker/)  → typed AST + diagnostics
+  → kir lower   (src/kir/)      → SSA-form IR
+  → mem2reg     (src/kir/)      → optimised SSA
+  → de-SSA      (src/backend/)  → phi-free IR
+  → C emitter   (src/backend/)  → readable C
+  → cc                          → native binary
 ```
 
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
+Hand-written recursive-descent parser. Checker runs in passes: pass 1
+registers declarations, pass 1.5 auto-generates `__destroy` / `__oncopy`
+lifecycle hooks, pass 2 type-checks bodies. KIR is block-based SSA;
+`mem2reg` promotes stack allocations to SSA values before C emission.
+Modules are resolved with cyclic-import detection in `src/modules/`.
 
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
-```
+The std lib (`std/*.kei`: `arena`, `io`, `mem`, `optional`, `shared`) is
+written *in kei* and compiled with the user program — touching it requires
+the same checker/backend understanding as language work.
 
-With the following `frontend.tsx`:
+## Where to add a feature
 
-```tsx#frontend.tsx
-import React from "react";
-import { createRoot } from "react-dom/client";
+| Adding…                | Touch (in order)                                                                                         |
+|------------------------|----------------------------------------------------------------------------------------------------------|
+| keyword / syntax       | `src/lexer/token.ts` → `src/lexer/lexer.ts` → `src/ast/` → matching `src/parser/*-parser.ts` → matching `src/checker/*-checker.ts` → matching `src/kir/lowering-*.ts` → `src/backend/c-emitter-*.ts` |
+| type                   | `src/checker/types/` → checker rules → KIR lowering → C emitter (size/layout/destroy)                    |
+| KIR instruction        | `src/kir/kir-types/` → lowering pass that produces it → de-SSA pass → `src/backend/c-emitter-insts.ts`   |
+| stdlib API             | `std/*.kei` (it's kei source — same rules as user code)                                                  |
 
-// import .css files directly and it works
-import './index.css';
+Skipping a layer leaves silent gaps (e.g. checker accepts something the
+emitter can't produce). When a feature can't land end-to-end in one PR,
+file a GitHub issue per the repo-root policy and link it from the PR.
 
-const root = createRoot(document.body);
+## Code style
 
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
-}
+Biome enforces formatting and lint: 2-space indent, double quotes, semicolons,
+100-char line, `const` over `let`, no `any`, no unused vars, template literals
+over concatenation. TypeScript is strict (`strict`, `noUncheckedIndexedAccess`).
+Relative imports use the explicit `.ts` extension.
 
-root.render(<Frontend />);
-```
+## Testing conventions
 
-Then, run index.ts
-
-```sh
-bun --hot ./index.ts
-```
-
-For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
-
+`bun:test` (`import { test, expect } from "bun:test"`). Tests live under
+`tests/` mirroring `src/` (`tests/lexer/`, `tests/parser/`, `tests/checker/`,
+`tests/kir/`, `tests/backend/`, plus end-to-end binary tests). Add a test for
+every feature touch; CI runs `bun test` and `biome check` and both must pass.
 
 <claude-mem-context>
 # Recent Activity
