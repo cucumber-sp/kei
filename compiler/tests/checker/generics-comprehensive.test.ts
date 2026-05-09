@@ -407,8 +407,9 @@ describe("Checker: Generics (comprehensive)", () => {
       `;
       const { result } = checkSource(source);
       expect(errorsOf(result.diagnostics).length).toBe(0);
-      expect(result.generics.monomorphizedStructs.has("Box_i32")).toBe(true);
-      expect(result.generics.monomorphizedStructs.has("Box_bool")).toBe(true);
+      const mono = result.generics.monomorphization;
+      expect(mono.getMonomorphizedStruct("Box_i32")).toBeDefined();
+      expect(mono.getMonomorphizedStruct("Box_bool")).toBeDefined();
     });
 
     test("monomorphizedFunctions populated for generic function", () => {
@@ -424,8 +425,9 @@ describe("Checker: Generics (comprehensive)", () => {
       `;
       const { result } = checkSource(source);
       expect(errorsOf(result.diagnostics).length).toBe(0);
-      expect(result.generics.monomorphizedFunctions.has("identity_i32")).toBe(true);
-      expect(result.generics.monomorphizedFunctions.has("identity_bool")).toBe(true);
+      const mono = result.generics.monomorphization;
+      expect(mono.getMonomorphizedFunction("identity_i32")).toBeDefined();
+      expect(mono.getMonomorphizedFunction("identity_bool")).toBeDefined();
     });
 
     test("genericResolutions populated for generic calls", () => {
