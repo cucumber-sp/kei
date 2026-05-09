@@ -70,7 +70,12 @@ export function lowerDeclaration(ctx: LoweringCtx, decl: Declaration): void {
       break;
     }
     case "EnumDecl":
-      ctx.typeDecls.push(lowerEnumDecl(ctx, decl));
+      // Generic enums are emitted per-instantiation by the monomorphization
+      // pass in `runLowering`, not from the original decl (whose payload
+      // types still reference TypeParams).
+      if (decl.genericParams.length === 0) {
+        ctx.typeDecls.push(lowerEnumDecl(ctx, decl));
+      }
       break;
     case "StaticDecl":
       ctx.globals.push(lowerStaticDecl(ctx, decl));

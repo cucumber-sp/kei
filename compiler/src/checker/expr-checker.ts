@@ -192,13 +192,32 @@ export class ExpressionChecker {
     }
 
     if (objectType.kind === TypeKind.Enum) {
-      // Enum variant access
-      const variant = objectType.variants.find((v) => v.name === expr.property);
-      if (variant) {
-        // For simple enums, the variant value is the enum type itself
-        return objectType;
+      // Generic enum variant access: `Optional<i32>.None` carries the
+      // type args on the MemberExpr; instantiate so the variant lookup
+      // and the typeMap entry for the object both refer to the
+      // monomorphized type (`Optional_i32`).
+      let resolvedEnum = objectType;
+      if (objectType.genericParams.length > 0 && expr.typeArgs && expr.typeArgs.length > 0) {
+        if (expr.typeArgs.length !== objectType.genericParams.length) {
+          this.checker.error(
+            `enum '${objectType.name}' expects ${objectType.genericParams.length} type argument(s), got ${expr.typeArgs.length}`,
+            expr.span
+          );
+          return ERROR_TYPE;
+        }
+        const inst = this.checker.instantiateGenericEnum(objectType, expr.typeArgs);
+        if (isErrorType(inst)) return ERROR_TYPE;
+        if (inst.kind === TypeKind.Enum) resolvedEnum = inst;
+        this.checker.setExprType(expr.object, resolvedEnum);
       }
-      this.checker.error(`enum '${objectType.name}' has no variant '${expr.property}'`, expr.span);
+      const variant = resolvedEnum.variants.find((v) => v.name === expr.property);
+      if (variant) {
+        return resolvedEnum;
+      }
+      this.checker.error(
+        `enum '${resolvedEnum.name}' has no variant '${expr.property}'`,
+        expr.span
+      );
       return ERROR_TYPE;
     }
 

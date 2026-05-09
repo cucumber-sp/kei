@@ -56,6 +56,8 @@ export interface CheckTypes {
 export interface CheckGenerics {
   monomorphizedStructs: Map<string, MonomorphizedStruct>;
   monomorphizedFunctions: Map<string, MonomorphizedFunction>;
+  /** Cache of monomorphized enum types, keyed by mangled name. */
+  monomorphizedEnums: Map<string, EnumType>;
   /** Maps generic call / struct literal expressions to their resolved mangled names. */
   resolutions: Map<Expression, string>;
 }
@@ -315,6 +317,7 @@ export class Checker {
       generics: {
         monomorphizedStructs: this.monomorphizedStructs,
         monomorphizedFunctions: this.monomorphizedFunctions,
+        monomorphizedEnums: this.monomorphizedEnums,
         resolutions: this.genericResolutions,
       },
       lifecycle: {
@@ -515,6 +518,7 @@ export class Checker {
     const generics: CheckGenerics = {
       monomorphizedStructs: new Map(),
       monomorphizedFunctions: new Map(),
+      monomorphizedEnums: new Map(),
       resolutions: new Map(),
     };
     const lifecycle: CheckLifecycle = {
@@ -593,6 +597,9 @@ export class Checker {
       }
       for (const [name, mono] of result.generics.monomorphizedFunctions) {
         generics.monomorphizedFunctions.set(name, mono);
+      }
+      for (const [name, mono] of result.generics.monomorphizedEnums) {
+        generics.monomorphizedEnums.set(name, mono);
       }
       for (const [expr, name] of result.generics.resolutions) {
         generics.resolutions.set(expr, name);

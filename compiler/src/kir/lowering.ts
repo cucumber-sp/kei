@@ -30,7 +30,7 @@ import type { KirModule } from "./kir-types";
 import { createLoweringCtx, type LoweringCtx } from "./lowering-ctx";
 import { lowerDeclaration, lowerMonomorphizedFunction } from "./lowering-decl";
 import { lowerMethod, lowerMonomorphizedMethod, lowerMonomorphizedStruct } from "./lowering-struct";
-import { lowerTypeNode, mangleFunctionName } from "./lowering-types";
+import { lowerCheckerType, lowerTypeNode, mangleFunctionName } from "./lowering-types";
 
 /**
  * Run the full AST → KIR lowering against a prepared context. Mutates `ctx`
@@ -118,6 +118,28 @@ export function runLowering(ctx: LoweringCtx): KirModule {
         }
       }
     }
+  }
+
+  // Emit monomorphized enum type declarations. Like
+  // monomorphizedStructs, only the defining module emits each
+  // instantiation so a cross-module `Optional<i32>` doesn't end up
+  // declared twice.
+  for (const [mangledName, monoEnum] of ctx.checkResult.generics.monomorphizedEnums) {
+    const definingModulePrefix = monoEnum.modulePrefix ?? "";
+    const ourPrefix = ctx.modulePrefix ?? "";
+    if (definingModulePrefix !== ourPrefix) continue;
+    ctx.typeDecls.push({
+      name: mangledName,
+      type: {
+        kind: "enum",
+        name: mangledName,
+        variants: monoEnum.variants.map((v, i) => ({
+          name: v.name,
+          fields: v.fields.map((f) => ({ name: f.name, type: lowerCheckerType(ctx, f.type) })),
+          value: v.value ?? i,
+        })),
+      },
+    });
   }
 
   // Emit monomorphized function definitions from generics
