@@ -165,13 +165,13 @@ extern fn sqlite3Open(filename: *c_char, db: **Sqlite3) -> int;
 fn openDatabase(path: string) -> Database throws DatabaseError {
     unsafe {
         let db: Optional<*Sqlite3> = None;
-        let result = sqlite3Open(path.toCString(), addr(db));
+        let result = sqlite3Open(path.toCString(), &db as **Sqlite3);
         if result != SQLITE_OK {
             throw DatabaseError{ message: "Failed to open database" };
         }
         match db {
             Some(handle) => return Database{ handle: handle },
-            None         => throw DatabaseError{ message: "C call returned null" },
+            None         => throw DatabaseError{ message: "C call returned a missing handle" },
         }
     }
 }

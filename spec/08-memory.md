@@ -116,12 +116,18 @@ user = otherUser;
 // 3. __oncopy(&user)            — recursively bumps refcounts on all fields
 ```
 
-### `init` — initialization-write
+### Constructing fresh slots
 
-For uninitialized slots, `init field = value` skips the destroy step
-(otherwise it would run on garbage), bitwise-writes the new value, then
-runs `__oncopy`. `init` is unsafe-only at the field level; struct
-literals (`Foo{ x: ... }`) emit init semantics implicitly.
+The struct literal is the construction site. Every field's slot is
+demonstrably uninitialized at that point, so the literal emits a
+bitwise write of each field followed by `__oncopy` — no `__destroy`
+on the slot's prior contents (there are none).
+
+For raw memory written through a pointer (e.g. heap storage allocated
+by `alloc`), use `memcpy` for the bitwise copy and the `onCopy<T>`
+compiler builtin to fire the lifecycle hook. The stdlib bundles them
+as `placeAt<T>(dest: *T, src: ref T)` in `std/mem.kei`; see
+`spec/03-types.md` for the surrounding vocabulary.
 
 ## `move` — Explicit ownership transfer
 
@@ -507,7 +513,7 @@ is no auto-deref:
 
 - `s.value = newT` writes through (destroy old inner, write, oncopy
   new). Refcount unchanged. All aliases see the change.
-- `s = Shared<T>::wrap(newT)` replaces the handle (destroy old shared,
+- `s = Shared<T>.wrap(newT)` replaces the handle (destroy old shared,
   write new, oncopy new).
 
 ### `String` — CoW string
@@ -564,9 +570,9 @@ unsafe struct List<T> {
 
     fn __oncopy(self: ref List<T>) {
         unsafe {
-            let newData = alloc<T>(self.cap);
+            let newData = alloc(self.cap * sizeof<T>()) as *T;
             for (let i: usize = 0; i < self.len; i += 1) {
-                init *(newData + i) = *(self.data + i);
+                placeAt(newData + i, *(self.data + i) as ref T);
             }
             self.data = newData;
         }
@@ -575,9 +581,9 @@ unsafe struct List<T> {
     fn __destroy(self: ref List<T>) {
         unsafe {
             for (let i: usize = 0; i < self.len; i += 1) {
-                ((*self.data + i) as ref T).__destroy();
+                onDestroy(self.data + i);
             }
-            free(self.data);
+            dealloc(self.data as *void);
         }
     }
 }

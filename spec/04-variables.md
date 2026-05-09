@@ -151,7 +151,6 @@ x <<= 2;              // equivalent to x = x << 2
 ```kei
 &                     // Raw address-of (unsafe-only) — produces *T
 *                     // Raw dereference (prefix, unsafe-only)
-addr(...)             // Slot lvalue for a `ref T` field (unsafe-only)
 []                    // Index access
 .                     // Member access (auto-derefs through `ref T`)
 ```
