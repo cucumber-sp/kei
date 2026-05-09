@@ -1,0 +1,12 @@
+import { Optional } from std_optional;
+
+fn main() -> i32 {
+    let s = Optional<i32>.Some(42);
+    switch s {
+        case Some(v):
+            return v;
+        case None:
+            return 0;
+    }
+    return 0;
+}

@@ -1,0 +1,8 @@
+// Local fixture mirroring `compiler/std/optional.kei` so the
+// resolver-based multi-module tests can use it without importing
+// from the actual stdlib path.
+
+pub enum Optional<T> {
+    Some(value: T),
+    None
+}
