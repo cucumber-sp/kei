@@ -265,10 +265,7 @@ export class StructChecker {
       if (method.returnType) {
         const retType = this.checker.resolveType(method.returnType);
         if (retType.kind !== TypeKind.Void) {
-          this.checker.error(
-            `lifecycle hook '${method.name}' must return void`,
-            method.span
-          );
+          this.checker.error(`lifecycle hook '${method.name}' must return void`, method.span);
         }
       }
     }
