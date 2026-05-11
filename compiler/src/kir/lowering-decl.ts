@@ -13,7 +13,7 @@ import type { MonomorphizedFunction } from "../monomorphization";
 import type { KirExtern, KirFunction, KirGlobal, KirParam, KirType, VarId } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
 import { lowerEnumDecl } from "./lowering-enum-decl";
-import { popScopeWithDestroy, pushScope, trackScopeVarByType } from "./lowering-scope";
+import { popScopeWithDestroy, pushScope } from "./lowering-scope";
 import { lowerBlock } from "./lowering-stmt";
 import { lowerMethod, lowerStructDecl } from "./lowering-struct";
 import {
@@ -26,6 +26,7 @@ import {
   resolveParamType,
 } from "./lowering-types";
 import {
+  emit,
   emitConstInt,
   ensureTerminator,
   isBlockTerminated,
@@ -188,10 +189,19 @@ export function lowerFunction(ctx: LoweringCtx, decl: FunctionDecl): KirFunction
     addThrowsParams(ctx, params, originalReturnType);
   }
 
-  // Track params with lifecycle hooks for destroy on function exit
+  // Emit `mark_param` for each managed-struct param. The Lifecycle pass
+  // (`src/lifecycle/pass.ts`) rewrites each marker into a destroy call at
+  // every function exit point (every `ret`/`ret_void` terminator).
+  //
+  // String params are values (not stack pointers), so they are not
+  // destroyed at exit — matching the prior `trackScopeVarByType`
+  // exclusion. They are filtered here by the `kind === "struct"` guard:
+  // `Lifecycle.getDecision` is only populated for structs.
   for (const p of decl.params) {
     const checkerType = resolveParamCheckerType(ctx, decl, p.name);
-    trackScopeVarByType(ctx, p.name, `%${p.name}`, checkerType);
+    if (checkerType?.kind !== "struct") continue;
+    if (!ctx.checkResult.lifecycle.getDecision(checkerType)?.destroy) continue;
+    emit(ctx, { kind: "mark_param", param: `%${p.name}` });
   }
 
   // For throws functions, the actual return type is i32 (tag)
