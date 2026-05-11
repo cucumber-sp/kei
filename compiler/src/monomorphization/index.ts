@@ -7,7 +7,6 @@
  * it through to the {@link Checker} (and, downstream, to KIR lowering).
  *
  * Subsequent migration PRs deepen this module:
- * - PR 3: pass-3 body-check driver moves here.
  * - PR 4: registration switches to baking fully-substituted AST decls.
  * - PR 5: deletes the per-instantiation override stack on `LoweringCtx`.
  *
@@ -17,6 +16,7 @@
 
 import type { EnumType } from "../checker/types";
 import { adoptEnum, adoptFunction, adoptStruct } from "./adopt";
+import { type CheckBodyCallback, checkBodies as runCheckBodies } from "./check-bodies";
 import {
   type MonomorphizationStores,
   registerEnum,
@@ -25,6 +25,7 @@ import {
 } from "./register";
 import type { MonomorphizedFunction, MonomorphizedStruct } from "./types";
 
+export type { CheckBodyCallback, MonomorphizedProduct } from "./check-bodies";
 export { mangleGenericName } from "./mangle";
 export { substituteFunctionType, substituteType } from "./substitute";
 export type { MonomorphizedFunction, MonomorphizedStruct } from "./types";
@@ -86,6 +87,16 @@ export interface Monomorphization {
    * for tests and bulk merges that don't need cross-module filtering.
    */
   adopt(other: Monomorphization): void;
+
+  /**
+   * Drive pass 3 — invoke `checkBody` once per registered instantiation
+   * (functions first, then structs) so the caller can type-check the
+   * body under that instantiation's substitution map. The per-decl
+   * checking work stays in the Checker; this module owns the loop
+   * (pattern-consistent with Lifecycle owning its fixed-point sweep).
+   * See `docs/design/monomorphization-module.md` §3, §7.4, §8 PR 3.
+   */
+  checkBodies(checkBody: CheckBodyCallback): void;
 }
 
 /**
@@ -141,6 +152,9 @@ export function createMonomorphization(): Monomorphization {
       for (const [name, info] of p.structs) adoptStruct(stores, name, info);
       for (const [name, info] of p.functions) adoptFunction(stores, name, info);
       for (const [name, info] of p.enums) adoptEnum(stores, name, info);
+    },
+    checkBodies(checkBody) {
+      runCheckBodies(products, checkBody);
     },
   };
 

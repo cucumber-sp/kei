@@ -301,7 +301,7 @@ function instantiateGenericStruct(
     original: baseStruct,
     typeArgs: resolvedTypeArgs,
     concrete: concreteStruct,
-    // originalDecl will be resolved later in checkMonomorphizedBodies
+    // originalDecl will be resolved later by the pass-3 body-check driver
   });
 
   // Store generic resolution for the struct literal

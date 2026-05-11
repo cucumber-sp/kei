@@ -23,6 +23,7 @@ import { createLifecycle } from "../lifecycle";
 import type {
   Monomorphization,
   MonomorphizedFunction,
+  MonomorphizedProduct,
   MonomorphizedStruct,
 } from "../monomorphization";
 import { createMonomorphization, mangleGenericName, substituteType } from "../monomorphization";
@@ -202,9 +203,9 @@ export class Checker {
   /** Static method calls dispatched as `Type.method` / `Type<TypeArgs>.method` */
   staticMethodCalls: Map<Expression, { structName: string; mangledStructName: string }> = new Map();
 
-  /** Per-instantiation type map, set during checkMonomorphizedBodies */
+  /** Per-instantiation type map, set while a body-check pass is running. */
   private currentBodyTypeMap: Map<Expression, Type> | null = null;
-  /** Per-instantiation generic resolutions, set during checkMonomorphizedBodies */
+  /** Per-instantiation generic resolutions, set while a body-check pass is running. */
   private currentBodyGenericResolutions: Map<Expression, string> | null = null;
 
   /**
@@ -338,7 +339,7 @@ export class Checker {
     // method defined in module A but instantiated by module B is
     // checked under A's scope (where A's imports are visible).
     if (!this.deferMonomorphizedBodyChecks) {
-      this.checkMonomorphizedBodies();
+      this.monomorphization.checkBodies((product) => this.checkBody(product));
     }
 
     // Collect auto-destroy struct types
@@ -386,9 +387,11 @@ export class Checker {
   /**
    * Public wrapper around the body-check pass so the multi-module
    * orchestrator can drive it after every module has pre-checked.
+   * Delegates the iteration to the Monomorphization module; the
+   * per-decl checking primitive stays on `Checker`.
    */
   runMonomorphizedBodyChecks(): void {
-    this.checkMonomorphizedBodies();
+    this.monomorphization.checkBodies((product) => this.checkBody(product));
   }
 
   /** Module-internal accessor so the multi-module orchestrator can read this checker's products. */
@@ -409,100 +412,115 @@ export class Checker {
     this.currentScope.define(typeSymbol(mangledName, mono));
   }
 
-  private checkMonomorphizedBodies(): void {
-    const products = this.monomorphization.products();
-    for (const [_mangledName, monoFunc] of products.functions) {
-      if (!monoFunc.declaration) {
-        // Try to find the declaration from the program
-        for (const decl of this.program.declarations) {
-          if (
-            decl.kind === "FunctionDecl" &&
-            decl.name === monoFunc.originalName &&
-            decl.genericParams.length > 0
-          ) {
-            monoFunc.declaration = decl;
-            break;
-          }
+  /**
+   * Per-decl body-check primitive — invoked by the Monomorphization
+   * driver once per registered instantiation.  The driver iterates the
+   * products map(s); this method owns the per-instantiation setup
+   * (substitution map, scope, per-body type-map override) and the
+   * statement walk.  Splitting the responsibility this way keeps the
+   * loop ordering in `Monomorphization.checkBodies()` and the
+   * checker-internal machinery (scopes, type tables, type resolver)
+   * here on the Checker.  See `docs/design/monomorphization-module.md`
+   * §3, §7.4.
+   */
+  private checkBody(product: MonomorphizedProduct): void {
+    if (product.kind === "function") {
+      this.checkMonomorphizedFunctionBody(product.product);
+    } else {
+      this.checkMonomorphizedStructMethodBodies(product.product);
+    }
+  }
+
+  /**
+   * Type-check a single monomorphized function's body under its
+   * per-instantiation substitution map and capture the resulting
+   * per-body type-map / generic-resolution snapshots on the
+   * `MonomorphizedFunction` record.
+   */
+  private checkMonomorphizedFunctionBody(monoFunc: MonomorphizedFunction): void {
+    if (!monoFunc.declaration) {
+      // Try to find the declaration from the program
+      for (const decl of this.program.declarations) {
+        if (
+          decl.kind === "FunctionDecl" &&
+          decl.name === monoFunc.originalName &&
+          decl.genericParams.length > 0
+        ) {
+          monoFunc.declaration = decl;
+          break;
         }
       }
-      if (!monoFunc.declaration) continue;
+    }
+    if (!monoFunc.declaration) return;
 
-      const decl = monoFunc.declaration;
-      const concreteType = monoFunc.concrete;
+    const decl = monoFunc.declaration;
+    const concreteType = monoFunc.concrete;
 
-      // Build type parameter substitution map (e.g. A→i32, B→bool)
-      // so that struct literals like Pair<A, B>{...} resolve correctly
-      const typeSubs = new Map<string, Type>();
-      for (let i = 0; i < decl.genericParams.length; i++) {
-        const paramName = decl.genericParams[i];
-        const concreteArg = monoFunc.typeArgs[i];
-        if (paramName && concreteArg) {
-          typeSubs.set(paramName, concreteArg);
-        }
+    // Build type parameter substitution map (e.g. A→i32, B→bool)
+    // so that struct literals like Pair<A, B>{...} resolve correctly
+    const typeSubs = new Map<string, Type>();
+    for (let i = 0; i < decl.genericParams.length; i++) {
+      const paramName = decl.genericParams[i];
+      const concreteArg = monoFunc.typeArgs[i];
+      if (paramName && concreteArg) {
+        typeSubs.set(paramName, concreteArg);
       }
-      this.typeResolver.setSubstitutions(typeSubs);
+    }
+    this.typeResolver.setSubstitutions(typeSubs);
 
-      // Set up per-instantiation type map to avoid shared-AST conflicts
-      const bodyTypeMap = new Map<Expression, Type>();
-      const bodyGenericResolutions = new Map<Expression, string>();
-      this.currentBodyTypeMap = bodyTypeMap;
-      this.currentBodyGenericResolutions = bodyGenericResolutions;
+    // Set up per-instantiation type map to avoid shared-AST conflicts
+    const bodyTypeMap = new Map<Expression, Type>();
+    const bodyGenericResolutions = new Map<Expression, string>();
+    this.currentBodyTypeMap = bodyTypeMap;
+    this.currentBodyGenericResolutions = bodyGenericResolutions;
 
-      // Push a function scope with concrete param types
-      this.pushScope({ functionContext: concreteType });
+    // Push a function scope with concrete param types
+    this.pushScope({ functionContext: concreteType });
 
-      for (let i = 0; i < decl.params.length; i++) {
-        // biome-ignore lint/style/noNonNullAssertion: index is bounded by decl.params.length
-        const param = decl.params[i]!;
-        const paramType = concreteType.params[i]?.type ?? ({ kind: TypeKind.Void } as Type);
-        this.defineVariable(param.name, paramType, !param.isReadonly, false, param.span);
-      }
-
-      // Check body statements — this populates typeMap for all expressions
-      for (const stmt of decl.body.statements) {
-        this.checkStatement(stmt);
-      }
-
-      this.popScope();
-      this.typeResolver.clearSubstitutions();
-      this.currentBodyTypeMap = null;
-      this.currentBodyGenericResolutions = null;
-
-      // Store per-instantiation maps on the monomorphized function
-      monoFunc.bodyTypeMap = bodyTypeMap;
-      monoFunc.bodyGenericResolutions = bodyGenericResolutions;
+    for (let i = 0; i < decl.params.length; i++) {
+      // biome-ignore lint/style/noNonNullAssertion: index is bounded by decl.params.length
+      const param = decl.params[i]!;
+      const paramType = concreteType.params[i]?.type ?? ({ kind: TypeKind.Void } as Type);
+      this.defineVariable(param.name, paramType, !param.isReadonly, false, param.span);
     }
 
-    // Also store struct declarations in MonomorphizedStruct, then check
-    // each method's body under a per-instantiation type-substitution map
-    // so the body's typeMap holds concrete types (not unsubstituted
-    // TypeParams). KIR lowering picks these up to emit signatures and
-    // field accesses with the concrete types.
-    for (const [_mangledName, monoStruct] of products.structs) {
-      if (!monoStruct.originalDecl) {
-        for (const decl of this.program.declarations) {
-          if (
-            (decl.kind === "StructDecl" || decl.kind === "UnsafeStructDecl") &&
-            decl.name === monoStruct.original.name &&
-            decl.genericParams.length > 0
-          ) {
-            monoStruct.originalDecl = decl;
-            break;
-          }
-        }
-      }
-
-      if (!monoStruct.originalDecl) continue;
-      this.checkMonomorphizedStructMethodBodies(monoStruct);
+    // Check body statements — this populates typeMap for all expressions
+    for (const stmt of decl.body.statements) {
+      this.checkStatement(stmt);
     }
+
+    this.popScope();
+    this.typeResolver.clearSubstitutions();
+    this.currentBodyTypeMap = null;
+    this.currentBodyGenericResolutions = null;
+
+    // Store per-instantiation maps on the monomorphized function
+    monoFunc.bodyTypeMap = bodyTypeMap;
+    monoFunc.bodyGenericResolutions = bodyGenericResolutions;
   }
 
   /**
    * Walk every method on a monomorphized generic struct under the type-
    * substitution map for this instantiation, populating per-method body
    * type maps so KIR lowering sees concrete types.
+   *
+   * The literal-checker registers struct instantiations without an
+   * `originalDecl` reference; this method lazily backfills it by name +
+   * arity match against the program before walking the methods.
    */
   private checkMonomorphizedStructMethodBodies(monoStruct: MonomorphizedStruct): void {
+    if (!monoStruct.originalDecl) {
+      for (const decl of this.program.declarations) {
+        if (
+          (decl.kind === "StructDecl" || decl.kind === "UnsafeStructDecl") &&
+          decl.name === monoStruct.original.name &&
+          decl.genericParams.length > 0
+        ) {
+          monoStruct.originalDecl = decl;
+          break;
+        }
+      }
+    }
     const decl = monoStruct.originalDecl;
     if (!decl) return;
     if (decl.methods.length === 0) return;

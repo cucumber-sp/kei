@@ -27,7 +27,7 @@ export interface MonomorphizedStruct {
   /** Original AST declaration (needed for lowering methods). */
   originalDecl?: StructDecl | UnsafeStructDecl;
   /**
-   * Per-method body type maps populated during checkMonomorphizedBodies.
+   * Per-method body type maps populated during the pass-3 body-check sweep.
    * Keyed by method name; each map records the concrete types of every
    * expression node in that method's body for this instantiation. KIR
    * lowering uses these to emit signatures and field accesses with
