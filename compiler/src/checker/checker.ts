@@ -223,11 +223,6 @@ export class Checker {
   /** Static method calls dispatched as `Type.method` / `Type<TypeArgs>.method` */
   staticMethodCalls: Map<Expression, { structName: string; mangledStructName: string }> = new Map();
 
-  /** Per-instantiation type map, set while a body-check pass is running. */
-  private currentBodyTypeMap: Map<Expression, Type> | null = null;
-  /** Per-instantiation generic resolutions, set while a body-check pass is running. */
-  private currentBodyGenericResolutions: Map<Expression, string> | null = null;
-
   /**
    * Mangled prefix for top-level symbols defined in this module — derived from
    * the dotted module name (`net.http` → `net_http`). Empty string for the main
@@ -462,15 +457,12 @@ export class Checker {
    * per-body type-map / generic-resolution snapshots on the
    * `MonomorphizedFunction` record.
    *
-   * **Y-a-clone (PR 4, design doc §4).** When the Monomorphization
-   * driver has stashed a baked AST clone on `monoFunc.bakedDecl`, this
-   * method walks the clone — every `setExprType` then writes into the
-   * global `typeMap` keyed by clone identities. KIR lowering reads
-   * those entries directly when lowering the clone, so the per-body
-   * override on `LoweringCtx` becomes a no-op for synthesised decls.
-   *
-   * The `bodyTypeMap` / `bodyGenericResolutions` capture is retained as
-   * a transition shim — PR 5 deletes it along with the override stack.
+   * **Y-a-clone (PR 4, design doc §4).** The Monomorphization driver
+   * stashes a baked AST clone on `monoFunc.bakedDecl` before invoking
+   * this callback. Every `setExprType` writes into the global
+   * `typeMap` keyed by clone identities; KIR lowering reads those
+   * entries directly when lowering the clone — no per-instantiation
+   * override stack on either side of the pipeline.
    *
    * @param typeSubs Explicit type-parameter substitution map. Built
    * once by the Monomorphization driver from the template's
@@ -497,6 +489,12 @@ export class Checker {
     }
     if (!monoFunc.declaration) return;
 
+    // Skip if we've already checked this instantiation. The same
+    // monoFunc can land in multiple checkers' products via the
+    // multi-module orchestrator's adopt path (see `adoptFunction`).
+    if (monoFunc.bodyChecked) return;
+    monoFunc.bodyChecked = true;
+
     // Build (or accept) the type-parameter substitution map. Derive from
     // the template's genericParams when the caller didn't supply one —
     // the bake clone has empty genericParams (it's concrete), so the
@@ -514,15 +512,6 @@ export class Checker {
 
     this.typeResolver.setSubstitutions(subs);
 
-    // Set up per-instantiation type map to avoid shared-AST conflicts.
-    // Transition shim — PR 5 deletes this alongside the LoweringCtx
-    // override. The global `typeMap` already receives the same entries
-    // via `setExprType` (keyed by clone identity, which is unique).
-    const bodyTypeMap = new Map<Expression, Type>();
-    const bodyGenericResolutions = new Map<Expression, string>();
-    this.currentBodyTypeMap = bodyTypeMap;
-    this.currentBodyGenericResolutions = bodyGenericResolutions;
-
     // Push a function scope with concrete param types
     this.pushScope({ functionContext: concreteType });
 
@@ -533,19 +522,14 @@ export class Checker {
       this.defineVariable(param.name, paramType, !param.isReadonly, false, param.span);
     }
 
-    // Check body statements — this populates typeMap for all expressions
+    // Check body statements — this populates the global typeMap for
+    // every expression in the clone, keyed by clone identity.
     for (const stmt of decl.body.statements) {
       this.checkStatement(stmt);
     }
 
     this.popScope();
     this.typeResolver.clearSubstitutions();
-    this.currentBodyTypeMap = null;
-    this.currentBodyGenericResolutions = null;
-
-    // Store per-instantiation maps on the monomorphized function
-    monoFunc.bodyTypeMap = bodyTypeMap;
-    monoFunc.bodyGenericResolutions = bodyGenericResolutions;
   }
 
   /**
@@ -597,24 +581,19 @@ export class Checker {
     const subs =
       typeSubs ?? buildTypeSubstitutionMap(templateDecl.genericParams, monoStruct.typeArgs);
 
+    // Skip if we've already checked this instantiation. The same
+    // monoStruct can land in multiple checkers' products via the
+    // multi-module orchestrator's adopt path (see `adoptStruct`).
+    if (monoStruct.bodyChecked) return;
+    monoStruct.bodyChecked = true;
+
     // Walk the bake clone when available; the clone's methods have
     // fresh identities for every nested Expression / Statement /
-    // TypeNode. Fall back to the template otherwise. Indexed in
-    // declaration order so the per-method bodyTypeMap key (the
-    // template's method name) lines up regardless of which path runs.
+    // TypeNode. Fall back to the template otherwise.
     const decl: StructDecl | UnsafeStructDecl = monoStruct.bakedDecl ?? templateDecl;
 
-    monoStruct.methodBodyTypeMaps ??= new Map();
-
     for (const method of decl.methods) {
-      // Skip if we've already checked this method for this instantiation.
-      if (monoStruct.methodBodyTypeMaps.has(method.name)) continue;
-
       this.typeResolver.setSubstitutions(subs);
-      const bodyTypeMap = new Map<Expression, Type>();
-      const bodyGenericResolutions = new Map<Expression, string>();
-      this.currentBodyTypeMap = bodyTypeMap;
-      this.currentBodyGenericResolutions = bodyGenericResolutions;
 
       // Pull the method's already-substituted FunctionType from the
       // concrete struct so the param types match what KIR will emit.
@@ -640,10 +619,6 @@ export class Checker {
 
       this.popScope();
       this.typeResolver.clearSubstitutions();
-      this.currentBodyTypeMap = null;
-      this.currentBodyGenericResolutions = null;
-
-      monoStruct.methodBodyTypeMaps.set(method.name, bodyTypeMap);
     }
   }
 
@@ -876,9 +851,6 @@ export class Checker {
 
   setExprType(expr: Expression, type: Type): void {
     this.typeMap.set(expr, type);
-    if (this.currentBodyTypeMap) {
-      this.currentBodyTypeMap.set(expr, type);
-    }
   }
 
   getExprType(expr: Expression): Type | undefined {
@@ -887,9 +859,6 @@ export class Checker {
 
   setGenericResolution(expr: Expression, mangledName: string): void {
     this.genericResolutions.set(expr, mangledName);
-    if (this.currentBodyGenericResolutions) {
-      this.currentBodyGenericResolutions.set(expr, mangledName);
-    }
   }
 
   // ─── Throws Tracking ──────────────────────────────────────────────────

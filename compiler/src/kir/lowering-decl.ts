@@ -309,20 +309,11 @@ export function lowerMonomorphizedFunction(
     ? { kind: "int" as const, bits: 32 as const, signed: true }
     : originalReturnType;
 
-  // Set per-instantiation type map override for correct type resolution
-  if (monoFunc.bodyTypeMap) {
-    ctx.currentBodyTypeMap = monoFunc.bodyTypeMap;
-  }
-  if (monoFunc.bodyGenericResolutions) {
-    ctx.currentBodyGenericResolutions = monoFunc.bodyGenericResolutions;
-  }
-
-  // Lower body
+  // Lower body — every expression in the baked clone has its concrete
+  // type recorded in the global `Checker.typeMap` keyed by clone
+  // identity, so `getExprKirType` resolves directly without any
+  // per-instantiation override.
   lowerBlock(ctx, decl.body);
-
-  // Clear per-instantiation overrides
-  ctx.currentBodyTypeMap = null;
-  ctx.currentBodyGenericResolutions = null;
 
   finalizeFunctionBody(ctx, isThrows, returnType);
 

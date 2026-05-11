@@ -91,36 +91,22 @@ export function runLowering(ctx: LoweringCtx): KirModule {
     const ourPrefix = ctx.modulePrefix ?? "";
     if (definingModulePrefix !== ourPrefix) continue;
     ctx.typeDecls.push(lowerMonomorphizedStruct(ctx, mangledName, monoStruct));
-    // Lower methods for monomorphized structs. Each method's body was
-    // re-checked under the per-instantiation type substitution, so its
-    // typeMap is on `monoStruct.methodBodyTypeMaps`. Using `lowerMonomorphizedMethod`
-    // emits the method with the concrete FunctionType (from
-    // `monoStruct.concrete.methods`) for params/return + the per-method
-    // bodyTypeMap so all expressions inside the body see concrete types.
-    // Walk the *baked clone* (Path A, PR 4) when available. The clone's
-    // methods have fresh AST identities and the global `Checker.typeMap`
-    // carries entries keyed by them, so `getExprKirType` returns
-    // concrete types for every expression inside the body — no
-    // per-instantiation override needed. Falls back to the template
-    // when no clone is attached (e.g. body-check skipped via the
-    // multi-module orchestrator's defer flag).
+    // Lower methods on the *baked clone* (Path A, PR 4). The clone's
+    // methods have fresh AST identities and the global
+    // `Checker.typeMap` carries entries keyed by them, so
+    // `getExprKirType` returns concrete types for every expression
+    // inside the body without any per-instantiation override. Falls
+    // back to the template when no clone is attached (e.g. body-check
+    // skipped via the multi-module orchestrator's defer flag).
     const methodSource = monoStruct.bakedDecl ?? monoStruct.originalDecl;
     if (methodSource) {
       for (const method of methodSource.methods) {
         const structPrefix = ctx.modulePrefix ? `${ctx.modulePrefix}_${mangledName}` : mangledName;
         const methodMangledName = `${structPrefix}_${method.name}`;
         const concreteMethod = monoStruct.concrete.methods.get(method.name);
-        const bodyTypeMap = monoStruct.methodBodyTypeMaps?.get(method.name);
         if (concreteMethod) {
           ctx.functions.push(
-            lowerMonomorphizedMethod(
-              ctx,
-              method,
-              methodMangledName,
-              mangledName,
-              concreteMethod,
-              bodyTypeMap
-            )
+            lowerMonomorphizedMethod(ctx, method, methodMangledName, mangledName, concreteMethod)
           );
         } else {
           ctx.functions.push(lowerMethod(ctx, method, methodMangledName, mangledName));
