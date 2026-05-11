@@ -13,7 +13,7 @@ import type { Lifecycle } from "../lifecycle";
 import type { Checker } from "./checker";
 import { typeSymbol } from "./symbols";
 import type { FunctionType, StructType } from "./types";
-import { functionType, isPtrType, TypeKind, VOID_TYPE } from "./types";
+import { isPtrType, TypeKind } from "./types";
 
 export class StructChecker {
   private checker: Checker;
@@ -109,12 +109,12 @@ export class StructChecker {
    * fixed-point iteration over the registered structs to handle nested
    * structs (struct A has field of struct B which has a string field).
    *
-   * Transition shim: while the migration is underway (PRs 1-3 of the
-   * plan in `docs/design/lifecycle-module.md` §7), we mirror each
-   * decision back onto `structType.methods` so type-check call sites
-   * that reference `s.__destroy()` / `s.__oncopy()` keep resolving via
-   * the type table. PR 4 replaces those lookups with Lifecycle
-   * queries and the mirror disappears.
+   * The arm callback only flips the `autoDestroy` / `autoOncopy` flags on
+   * the struct type so later passes (KIR lowering's pre-pass over
+   * `CheckResult.lifecycle.autoDestroyStructs`) know which structs need
+   * synthesised hook bodies. Hook *presence* queries go through
+   * `lifecycle.hasDestroy` / `lifecycle.hasOncopy` directly — no
+   * type-table mirror is maintained.
    */
   runLifecycleDecide(declarations: Declaration[]): void {
     const structDecls = declarations.filter(
@@ -131,29 +131,9 @@ export class StructChecker {
     }
 
     this.lifecycle.runFixedPoint((structType, arm) => {
-      // Mirror the decision onto the type table so the rest of the
-      // checker (and KIR lowering, until PR 4) can keep looking it up
-      // via `structType.methods`. The exact FunctionType shape matches
-      // the historical pass-1.5 output so behaviour is preserved.
       if (arm === "destroy") {
-        const destroyType = functionType(
-          [{ name: "self", type: structType, isReadonly: false }],
-          VOID_TYPE,
-          [],
-          [],
-          false
-        );
-        structType.methods.set("__destroy", destroyType);
         structType.autoDestroy = true;
       } else {
-        const oncopyType = functionType(
-          [{ name: "self", type: structType, isReadonly: false }],
-          structType,
-          [],
-          [],
-          false
-        );
-        structType.methods.set("__oncopy", oncopyType);
         structType.autoOncopy = true;
       }
     });

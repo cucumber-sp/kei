@@ -27,14 +27,19 @@ export function mangledLifecycleStructName(t: { name: string; modulePrefix?: str
   return t.modulePrefix ? `${t.modulePrefix}_${t.name}` : t.name;
 }
 
-/** Check if a checker Type is a struct that has __destroy or __oncopy methods */
+/**
+ * Check if a checker Type is a struct that has a `__destroy` / `__oncopy`
+ * hook, whether user-written (registered on `methods`) or auto-generated
+ * (signalled by the `autoDestroy` / `autoOncopy` flags the Lifecycle
+ * decision sets on the struct type). Returns null for anything else.
+ */
 export function getStructLifecycle(
   checkerType: Type | undefined
 ): { hasDestroy: boolean; hasOncopy: boolean; structName: string } | null {
   if (!checkerType) return null;
   if (checkerType.kind !== "struct") return null;
-  const hasDestroy = checkerType.methods.has("__destroy");
-  const hasOncopy = checkerType.methods.has("__oncopy");
+  const hasDestroy = checkerType.methods.has("__destroy") || checkerType.autoDestroy === true;
+  const hasOncopy = checkerType.methods.has("__oncopy") || checkerType.autoOncopy === true;
   if (!hasDestroy && !hasOncopy) return null;
   return { hasDestroy, hasOncopy, structName: mangledLifecycleStructName(checkerType) };
 }
