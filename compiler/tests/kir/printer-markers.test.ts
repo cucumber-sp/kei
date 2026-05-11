@@ -49,8 +49,8 @@ describe("printKir — lifecycle markers", () => {
   });
 
   test("mark_moved", () => {
-    const out = printKir(modWithInst({ kind: "mark_moved", varId: "%x" }));
-    expect(out).toContain("mark_moved %x");
+    const out = printKir(modWithInst({ kind: "mark_moved", var: "x" }));
+    expect(out).toContain("mark_moved x");
   });
 
   test("mark_assign — copy", () => {
