@@ -56,24 +56,22 @@ Lifecycle integration also lands here. Each baked struct gets a
 design doc §5. This resolves the Q5c interaction question that
 was deferred from the lifecycle design.
 
-## How "fresh AST decl" is realised — Y-a-clone (Path A)
+## How "fresh AST decl" is realised — Path A (revised, take 4)
 
-**Critical context (read carefully — a prior attempt failed here):**
+**Critical context — three prior attempts hit escape hatches; this
+section preserves what each learned:**
 
-- Kei stores `resolvedType` in a **Checker-owned side-map**, NOT on
-  AST nodes. See `Checker.typeMap: Map<Expression, Type>` and
-  `Checker.genericResolutions: Map<Expression, string>` at
-  `compiler/src/checker/checker.ts:159,195`.
-- **Kei does not body-check generic templates in pass 2.** The
-  Checker's global `typeMap` has *no* entries for any expression
-  inside a generic body until pass 3 walks an instantiation.
-- Today's mechanism: pass 3 re-walks the template AST with
-  substitutions threaded through `typeResolver`. The checker's
-  `setExprType` writes the substituted-during-check type into a
-  per-instantiation map. Substitution is a *type-checker* operation,
-  not a post-hoc transform on a pre-existing map.
+1. First framing assumed `resolvedType` lives on AST nodes. **It
+   doesn't** — kei stores it in a Checker side-map.
+2. Second framing assumed pass 2 body-checks templates and we
+   substitute that map. **It doesn't** — templates are body-checked
+   only in pass 3, against a specific instantiation's substitutions.
+3. Third framing introduced `BakedDecl` with its own typeMap to
+   avoid touching the global. **Over-designed** — clone-keyed
+   entries in the global typeMap don't corrupt template-keyed ones
+   (different identities, same map). No wrapper needed.
 
-This PR's bake operation therefore has two cooperating halves:
+The kei-faithful realisation:
 
 ### Half 1 — AST clone (`bake.ts`, pure)
 
@@ -94,47 +92,74 @@ Signature:
 bake(genericDecl: Declaration, substitutionMap: Map<string, Type>) → Declaration
 ```
 
-### Half 2 — Body type-check (`checker.checkBody`, populates typeMap)
+### Half 2 — Body type-check (extend `checker.checkBody` signature)
 
-The checker re-walks the **cloned** AST with `typeResolver.setSubstitutions`
-set and a fresh `currentBodyTypeMap` (+ `currentBodyGenericResolutions`).
-The checker's normal `setExprType` writes into the fresh maps, keyed
-by the cloned expression nodes. This mirrors today's pass-3 re-walk
-exactly, except the walk target is the clones, not the template.
+Today's `checkMonomorphizedFunctionBody` /
+`checkMonomorphizedStructMethodBodies` derive `typeSubs` from
+`decl.genericParams.zip(monoX.typeArgs)`. Clones have empty
+`genericParams` (they're concrete), so that derivation yields an
+empty map — substitution would never apply.
 
-After the walk, the freshly-populated maps are pulled out of the
-Checker and stored on the `BakedDecl`.
-
-### The baked product
+**The signature must change** to accept `typeSubs` explicitly:
 
 ```ts
-type BakedDecl = {
-  decl: Declaration;                       // pure AST clone (from bake.ts)
-  typeMap: Map<Expression, Type>;          // populated by checker.checkBody
-  genericResolutions: Map<Expression, string>;
-};
+// Before (derives typeSubs from decl.genericParams):
+checkBody(decl: Declaration): void
+// After (accepts typeSubs explicitly):
+checkBody(decl: Declaration, typeSubs?: Map<string, Type>): void
 ```
 
-`Monomorphization.products()` returns `BakedDecl[]`. Downstream
-consumers (KIR lowering) read from `BakedDecl.typeMap` — keyed by the
-clone identities, fully resolved, fully concrete.
+Backward-compatible — omitted / empty `typeSubs` yields current
+behaviour. The Monomorphization driver passes the substitution map
+explicitly when calling against a clone. The existing pass-3 callers
+also migrate to pass `typeSubs` explicitly rather than deriving
+from `decl.genericParams`.
+
+The checker re-walks the clone with
+`typeResolver.setSubstitutions(typeSubs)` set. The checker's normal
+`setExprType` writes into the global `this.typeMap` and
+`this.genericResolutions` keyed by the cloned expression nodes —
+clone-keyed entries live alongside template-keyed ones from pass 2.
+Different identities, no collision.
+
+### The product shape — just `Declaration[]`
+
+```ts
+// Monomorphization.products() returns Declaration[].
+// Type info lives in Checker.typeMap keyed by clone identities.
+type Product = Declaration;
+```
+
+**No `BakedDecl` wrapper, no per-product side-map.** Downstream
+consumers (KIR lowering) walk the product directly and read each
+expression's resolved type from `Checker.typeMap` by clone identity
+— exactly the path used today for user-written decls.
+
+### KIR walks the clone, not the template
+
+Today's KIR lowering iterates `monoStruct.originalDecl.methods` and
+`monoFunc.declaration.body` — the **template**. For clone-keyed
+entries to be useful, KIR must walk the **clone** when lowering a
+monomorphized decl. This PR updates the lowering iteration sites
+(`lowering.ts:101`, `lowering-decl.ts:250`,
+`lowering-struct.ts:147`-ish region, `lowering-types.ts`) to walk
+the cloned `Product` instead. Expression type reads then hit the
+global `typeMap` by clone identity — same path as user-written decls.
 
 ### When bake runs
 
 **Lazily inside `Monomorphization.checkBodies`**, not at register
-time. This matters because:
+time. Registration sites (`literal-checker.ts:300,385`,
+`call-checker.ts:630,820`) stay unchanged — they continue to build
+the existing `MonomorphizedStruct/Function` records inline (the
+`originalDecl` is back-filled in pass 3 via
+`checker.ts:441-453,512-523`).
 
-- Today's registration sites (`literal-checker.ts:300,385`,
-  `call-checker.ts:630,820`) build `MonomorphizedStruct/Function`
-  records inline; some don't have the originalDecl in hand (it's
-  back-filled in pass 3 via `checker.ts:441-453,512-523`).
-- Baking lazily during `checkBodies` keeps register sites
-  unchanged. The PR-3 driver already iterates products; it now
-  bakes each on the fly, runs `checker.checkBody` on the clone,
-  packages the result as a `BakedDecl`.
-- Lifecycle integration (`lifecycle.register(monoStructType)`)
-  happens at register time — that's the existing path; struct
-  types are available at register time even without the originalDecl.
+The PR-3 driver already iterates registered instantiations; it now
+bakes each on the fly, then calls
+`checker.checkBody(clonedDecl, typeSubs)`. Lifecycle integration
+(`lifecycle.register(monoStructType)`) happens at register time on
+the existing path; struct types are available without the originalDecl.
 
 ### Walker scope (bake.ts)
 
@@ -153,98 +178,88 @@ The cloner recurses over the AST discriminated unions in
   clone.
 - **Type AST nodes**: call `substituteType` inline.
 
-Use exhaustive `switch (node.kind)` — TS will tell you if a kind is
-missed.
+Use exhaustive `switch (node.kind)` — TS exhaustiveness will catch
+a missed kind.
 
-### Why not "substitute the template typeMap"
+**Spans on cloned nodes** point at the template (template span
+primary; instantiation site goes into diagnostic `secondarySpans`
+at error-emission time, not onto the AST node).
 
-The earlier brief sketched `bakedTypeMap.set(eClone, substituteType(templateTypeMap.get(eTemplate), subs))`.
-That recipe doesn't work in kei: `templateTypeMap.get(eTemplate)` is
-`undefined` for body-internal expressions because templates aren't
-body-checked in pass 2. The substitution must come *from the
-type-checker* during a re-walk (Path A above). The override-stack
-this PR's bake replaces is exactly the per-instantiation map the
-checker writes into today — Path A renames it (`BakedDecl.typeMap`)
-and reads it from a different place (clone identities).
+### PR 5's payoff (unchanged from earlier framings)
 
-### PR 5's payoff under Path A
-
-Still meaningful. PR 5 deletes `LoweringCtx.currentBodyTypeMap` and
+PR 5 still deletes `LoweringCtx.currentBodyTypeMap` and
 `LoweringCtx.currentBodyGenericResolutions` and every lowering-side
-push/pop site. Lowering reads from `BakedDecl.typeMap` directly.
+push/pop site. Lowering reads from `Checker.typeMap` directly by
+clone identity — same path as user-written decls take today. No
+override needed; clone keys are already first-class in the global
+map.
 
-The Checker's *internal* `currentBodyTypeMap` field (used during
-pass-3 re-walks) stays — it's where the checker writes during bake.
-It's a different field from the LoweringCtx override; PR 5 doesn't
-touch it. That's an implementation detail of `checker.checkBody`,
-not the user-visible "override stack" the migration narrative targets.
+The Checker's *internal* per-instantiation map field stays as an
+implementation detail of `checker.checkBody`'s pass-3 re-walk —
+different field from the LoweringCtx override that PR 5 deletes.
 
 ## Files affected
 
 - **NEW** `compiler/src/monomorphization/bake.ts` — the **pure AST
-  clone walker** (Half 1 above). Signature: `bake(genericDecl:
-  Declaration, substitutionMap: Map<string, Type>) → Declaration`.
+  clone walker** (Half 1 above). Signature:
+  `bake(genericDecl: Declaration, substitutionMap: Map<string, Type>) → Declaration`.
   Returns a cloned `Declaration` with fresh node identities; type
   nodes have `substituteType` applied; nested-generic struct/call
   names use `mangleGenericName`. Writes no type-side-map entries.
   Cloned nodes carry the **template's source span** (per design
   doc §4 / §9).
-- **MODIFIED** `compiler/src/monomorphization/types.ts` — add the
-  `BakedDecl` type:
-  ```ts
-  type BakedDecl = {
-    decl: Declaration;
-    typeMap: Map<Expression, Type>;
-    genericResolutions: Map<Expression, string>;
-  };
-  ```
-  Keep `MonomorphizedStruct/Function/Enum` records as transition
-  type aliases or extend them with a `baked?: BakedDecl` field —
-  pick whichever requires fewer call-site changes at register time.
-- **MODIFIED** `compiler/src/monomorphization/register.ts` —
-  registration sites continue to build the existing records (no
-  Declaration plumbing required). The records gain enough info to
-  enable lazy baking later (the originalDecl backfill via
-  `checker.ts:441-453,512-523` already happens; this PR doesn't
-  reorder it). For structs, call
-  `lifecycle.register(monoStructType)` here as today's pattern.
+- **MODIFIED** `compiler/src/checker/checker.ts` — **extend the
+  `checkBody` / `checkMonomorphizedFunctionBody` /
+  `checkMonomorphizedStructMethodBodies` signatures to accept
+  `typeSubs?: Map<string, Type>` explicitly** (default = empty
+  map). Inside, instead of deriving `typeSubs` from
+  `decl.genericParams.zip(monoX.typeArgs)`, use the parameter when
+  provided and fall back to the derivation when omitted. Existing
+  pass-3 callers migrate to pass `typeSubs` explicitly (compute it
+  once from the registration's `typeArgs`).
 - **MODIFIED** `compiler/src/monomorphization/check-bodies.ts` —
   for each registered instantiation, **drive the bake**:
-  1. Call `bake(originalDecl, substitutionMap)` to get the cloned
+  1. Compute the substitution map (template `genericParams` zipped
+     with `monoX.typeArgs`).
+  2. Call `bake(originalDecl, substitutionMap)` to get the cloned
      `Declaration`.
-  2. Set `checker.currentBodyTypeMap = new Map()` and
-     `currentBodyGenericResolutions = new Map()` (the existing
-     pass-3 re-walk hooks).
-  3. Set `typeResolver.setSubstitutions(typeSubs)` for the
-     instantiation.
-  4. Invoke the existing per-decl primitive
-     (`checker.checkBody(bakedDecl)` or the struct-method
-     counterpart) — this re-walks the **clone** and writes type
-     resolutions into the fresh maps.
-  5. Read the populated maps back out of the Checker and package
-     into a `BakedDecl`.
-  6. Append to the products list / instance map keyed by mangled
-     name.
-- **MODIFIED** `compiler/src/checker/checker.ts` — the existing
-  `checkBody` / `checkMonomorphizedFunctionBody` /
-  `checkMonomorphizedStructMethodBodies` machinery accepts the
-  bake's cloned decl as input. No new method needed if the existing
-  ones already accept a `Declaration` argument (they do — they
-  read `originalDecl.body`). Confirm the substitutions plumbing
-  works against the clone before relying on it.
+  3. Invoke
+     `checker.checkBody(clonedDecl, typeSubs=substitutionMap)`
+     (or the struct-method counterpart). The checker re-walks the
+     clone with substitutions threaded through `typeResolver`;
+     `setExprType` writes into `Checker.typeMap` keyed by the clone
+     identities.
+  4. Append the cloned `Declaration` to the products list / instance
+     map keyed by mangled name.
+- **MODIFIED** `compiler/src/monomorphization/types.ts` —
+  optionally extend the existing `MonomorphizedStruct/Function/Enum`
+  records with a `baked?: Declaration` field carrying the clone,
+  or replace them with `Declaration` directly. Pick whichever
+  requires fewer call-site changes at register time.
 - **MODIFIED** `compiler/src/monomorphization/index.ts` — the
-  `products()` API returns `BakedDecl[]` (or extends the existing
-  return shape). Update the `Monomorphization` factory to take
-  `lifecycle` in the options bag.
-- **MODIFIED** `compiler/src/kir/lowering-decl.ts`,
-  `lowering-struct.ts`, `lowering-types.ts` — lowering reads
-  expression types from `BakedDecl.typeMap` keyed by clone
-  identities. **The existing override push/pop sites stay**: they
-  now populate the override from `BakedDecl.typeMap` instead of
-  from `MonomorphizedFunction.bodyTypeMap`. The override remains a
-  no-op functionally (each instantiation already has its own map);
-  PR 5 deletes the override and switches lowering to read
-  `BakedDecl.typeMap` directly.
+  `products()` API returns `Declaration[]` (the cloned decls).
+  Internal accessors return the clone for lookup-by-mangled-name.
+  Update the `Monomorphization` factory to take `lifecycle` in the
+  options bag.
+- **MODIFIED** `compiler/src/monomorphization/register.ts` —
+  registration sites stay structurally unchanged. They still build
+  the existing records inline. For structs, call
+  `lifecycle.register(monoStructType)` here as today's pattern.
+- **MODIFIED** `compiler/src/kir/lowering.ts:101`,
+  `lowering-decl.ts:250`, `lowering-struct.ts` (~`lowerMonomorphizedMethod`),
+  `lowering-types.ts` — **switch the iteration target from
+  `originalDecl` (template) to the cloned `Declaration` (product)**.
+  Today these read `monoStruct.originalDecl.methods` and
+  `monoFunc.declaration.body` — now they read from the clone.
+  Expression type reads through `getExprKirType` / similar already
+  go through `Checker.typeMap`; they'll hit the clone-keyed entries
+  naturally once the iteration target switches.
+- **MODIFIED** `compiler/src/kir/lowering-ctx.ts` and any
+  `LoweringCtx.currentBodyTypeMap` / `currentBodyGenericResolutions`
+  push/pop site — **the override remains in place but becomes a
+  no-op for cloned decls** (the global `Checker.typeMap` already
+  has the right entries by clone identity). PR 5 deletes the
+  override entirely.
 - **MODIFIED** call site that constructs `Monomorphization` — pass
   `lifecycle` into the options bag.
 
@@ -324,18 +339,20 @@ Pure-data tests; no full compiler run required.
   records-on-the-side, no "legacy mode" flag.
 - **Don't reformat unrelated code.** Biome must report changes
   only in files you touched intentionally.
-- **Don't mutate the Checker's global `typeMap` or
-  `genericResolutions` during bake.** The walker emits a fresh
-  side-map per `BakedDecl`. The global maps stay
-  template-only — touching them breaks template re-checks and
-  diagnostics keyed by template identity.
+- **Don't try to suppress global-typeMap writes during bake.**
+  `Checker.setExprType` writes to the global `typeMap`. Walking a
+  clone naturally writes clone-keyed entries into the global —
+  these don't corrupt template-keyed entries (different
+  identities). The previous brief's "global stays template-only"
+  rule was wrong; clone-keyed entries in global are fine and
+  expected.
 - **Don't skip cloning any AST node kind.** Every Expression /
   Statement / Type kind in `src/ast/nodes/` must have a clone
   case. If a kind doesn't appear in `bake.ts`, an instantiation
   using it will share node identity with the template — and
-  reads from the baked `typeMap` will miss because the side-map
-  is keyed by clone identity. TS exhaustiveness checks on
-  `switch (node.kind)` are your friend; lean on them.
+  reads from `Checker.typeMap` by the expected clone identity
+  would miss. TS exhaustiveness checks on `switch (node.kind)`
+  are your friend; lean on them.
 - **Don't bake a generic decl's `genericParams` list into the
   baked decl.** The baked decl is *concrete* — its `genericParams`
   should be empty. Downstream consumers gate on
