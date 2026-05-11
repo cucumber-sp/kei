@@ -156,6 +156,77 @@ export interface MethodNotFoundDiagnostic extends DiagnosticEnvelope {
 }
 
 /**
+ * Operator-category variants (PR 4f). Carved out of `untriaged` by
+ * `operator-checker.ts`. Each carries the operator string in its
+ * payload (`op`) plus the pre-formatted message text so existing
+ * checker wording survives the migration. See
+ * `docs/design/diagnostics-module.md` §9 PR 4f and §11 for the
+ * `E6xxx` code range.
+ */
+
+/**
+ * Operator has no overload — built-in or user-defined — that applies
+ * here. Covers "unknown binary operator", "unknown unary operator",
+ * and "unknown assignment operator" sites: the operator token has no
+ * usable overload at all.
+ */
+export interface NoOperatorOverloadDiagnostic extends DiagnosticEnvelope {
+  kind: "noOperatorOverload";
+  code: "E6001";
+  /** The operator token (e.g. `+`, `<<`, `!`). */
+  op: string;
+  message: string;
+}
+
+/**
+ * Single-operand operator (unary minus on a struct without `op_neg`,
+ * malformed overload-method signatures, etc.) applied to a value the
+ * operator can't accept. `unaryTypeMismatch` is the narrower sibling
+ * when the unary operator has a known built-in type rule; this
+ * variant covers the broader "operand isn't shaped right for the
+ * operator at all" cases.
+ */
+export interface InvalidOperandDiagnostic extends DiagnosticEnvelope {
+  kind: "invalidOperand";
+  code: "E6002";
+  /** The operator token (e.g. `-`, `[]=`, `op_neg`). */
+  op: string;
+  message: string;
+}
+
+/**
+ * Binary operator where the operand types are individually acceptable
+ * but don't pair (e.g. `i32 + str`), or the target type of a binary
+ * operator rejects the operand category outright (e.g. `&&` on a
+ * non-bool, `<<` on a non-integer). Compound-assignment operators
+ * (`+=`, `<<=`, …) and indexed-write overload checks also surface as
+ * this variant — they have two effective operands.
+ */
+export interface BinaryTypeMismatchDiagnostic extends DiagnosticEnvelope {
+  kind: "binaryTypeMismatch";
+  code: "E6003";
+  /** The operator token (e.g. `+`, `==`, `+=`). */
+  op: string;
+  message: string;
+}
+
+/**
+ * Unary operator with a known built-in type rule applied to an operand
+ * that misses the rule (`-` on a non-numeric, `!` on a non-bool, `~`
+ * on a non-integer). Distinct from `invalidOperand` because arity is
+ * part of the diagnostic's identity — the formatter wording for unary
+ * type rules differs from the broader "operand isn't shaped right"
+ * variant.
+ */
+export interface UnaryTypeMismatchDiagnostic extends DiagnosticEnvelope {
+  kind: "unaryTypeMismatch";
+  code: "E6004";
+  /** The operator token (e.g. `-`, `!`, `~`). */
+  op: string;
+  message: string;
+}
+
+/**
  * The discriminated union of all diagnostics the compiler can emit.
  *
  * PR 2 introduces the `untriaged` catch-all; PR 4c adds the calls slice
@@ -168,4 +239,8 @@ export type Diagnostic =
   | ArgumentTypeMismatchDiagnostic
   | NotCallableDiagnostic
   | GenericArgMismatchDiagnostic
-  | MethodNotFoundDiagnostic;
+  | MethodNotFoundDiagnostic
+  | NoOperatorOverloadDiagnostic
+  | InvalidOperandDiagnostic
+  | BinaryTypeMismatchDiagnostic
+  | UnaryTypeMismatchDiagnostic;

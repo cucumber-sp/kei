@@ -1023,6 +1023,34 @@ export class Checker {
     });
   }
 
+  // ─── Operator-category diagnostics (PR 4f, E6xxx) ───────────────────────
+  // Pass-through helpers for `operator-checker.ts` call sites. They handle
+  // the lexer-span → `SourceLocation` conversion that the new union's
+  // `Span` type still expects, and route into the typed methods on
+  // `diag`. `message` carries the pre-formatted body so existing wording
+  // survives the migration (see `docs/design/diagnostics-module.md` §9
+  // PR 4f).
+
+  /** Operator has no overload — built-in or user-defined — that applies. */
+  errorNoOperatorOverload(op: string, message: string, span: Span): void {
+    this.diag.noOperatorOverload({ span: this.spanToLocation(span), op, message });
+  }
+
+  /** Single-operand operator (incl. struct-overload arity) on an operand the operator can't accept. */
+  errorInvalidOperand(op: string, message: string, span: Span): void {
+    this.diag.invalidOperand({ span: this.spanToLocation(span), op, message });
+  }
+
+  /** Binary operator (incl. compound assign) where operands don't pair or violate the operator's type rule. */
+  errorBinaryTypeMismatch(op: string, message: string, span: Span): void {
+    this.diag.binaryTypeMismatch({ span: this.spanToLocation(span), op, message });
+  }
+
+  /** Unary operator with a built-in type rule applied to an operand that misses the rule. */
+  errorUnaryTypeMismatch(op: string, message: string, span: Span): void {
+    this.diag.unaryTypeMismatch({ span: this.spanToLocation(span), op, message });
+  }
+
   private spanToLocation(span: Span): SourceLocation {
     const lc = this.source.lineCol(span.start);
     return {

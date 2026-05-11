@@ -49,6 +49,15 @@ export function formatDiagnostic(diag: Diagnostic): string {
       const head = `${diag.severity}[${diag.code}]: ${diag.message}`;
       return `${head}${renderEnvelopeTail(diag)}`;
     }
+    case "noOperatorOverload":
+    case "invalidOperand":
+    case "binaryTypeMismatch":
+    case "unaryTypeMismatch":
+      // Operator variants (PR 4f) all carry `op` + a pre-formatted
+      // `message` body. The formatter adds the Rust-style advisory
+      // code prefix; the body text matches the historical wording
+      // emitted before the variants were carved out of `untriaged`.
+      return `${diag.severity}[${diag.code}]: ${diag.message}`;
   }
 }
 
