@@ -306,8 +306,8 @@ export type Diagnostic =
   | InvalidOperandDiagnostic
   | BinaryTypeMismatchDiagnostic
   | UnaryTypeMismatchDiagnostic;
-  | InvalidLifecycleSignatureDiagnostic
+| InvalidLifecycleSignatureDiagnostic
   | UnsafeStructMissingDestroyDiagnostic
   | UnsafeStructMissingOncopyDiagnostic
   | LifecycleHookSelfMismatchDiagnostic
-  | LifecycleReturnTypeWrongDiagnostic;
+  | LifecycleReturnTypeWrongDiagnostic

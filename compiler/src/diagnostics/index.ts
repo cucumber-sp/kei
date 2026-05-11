@@ -15,6 +15,7 @@ import type { Diagnostic, Severity, Span } from "./types";
 export type { Collector, LintConfig } from "./collector";
 export { resolveSeverity } from "./collector";
 export { formatDiagnostic, formatDiagnostics } from "./format";
+
 export type {
   ArgumentTypeMismatchDiagnostic,
   ArityMismatchDiagnostic,
@@ -29,7 +30,13 @@ export type {
   Severity,
   Span,
   UnaryTypeMismatchDiagnostic,
-export { formatDiagnostic, formatDiagnostics, messageOf } from "./format";
+export
+{
+  formatDiagnostic, formatDiagnostics, messageOf;
+}
+from;
+("./format");
+
 export type {
   Diagnostic,
   DiagnosticEnvelope,
