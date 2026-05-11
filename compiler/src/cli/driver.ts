@@ -22,6 +22,7 @@ import { lowerModulesToKir, lowerToKir } from "../kir/lowering";
 import { runMem2Reg } from "../kir/mem2reg";
 import { printKir } from "../kir/printer";
 import { Lexer } from "../lexer";
+import { type LifecycleDecisionLookup, runLifecyclePass } from "../lifecycle";
 import { ModuleResolver } from "../modules";
 import { Parser } from "../parser";
 import { SourceFile } from "../utils/source";
@@ -59,10 +60,11 @@ export async function runDriver(flags: CliFlags): Promise<number> {
   }
 
   if (flags.emitC || flags.build || flags.run) {
-    const kir = compileToKir(flags.filePath, program, source, parseDiagnostics);
-    if (kir === null) return 1;
+    const compiled = compileToKir(flags.filePath, program, source, parseDiagnostics);
+    if (compiled === null) return 1;
 
-    const cCode = emitC(runDeSsa(runMem2Reg(kir)));
+    const afterLifecycle = runLifecyclePass(compiled.kir, compiled.getDecision);
+    const cCode = emitC(runDeSsa(runMem2Reg(afterLifecycle)));
     if (flags.emitC) {
       console.log(cCode);
       return 0;
@@ -76,9 +78,10 @@ export async function runDriver(flags: CliFlags): Promise<number> {
   }
 
   if (flags.showKir || flags.showKirOpt) {
-    const kir = compileToKir(flags.filePath, program, source, parseDiagnostics);
-    if (kir === null) return 1;
-    console.log(printKir(flags.showKirOpt ? runMem2Reg(kir) : kir));
+    const compiled = compileToKir(flags.filePath, program, source, parseDiagnostics);
+    if (compiled === null) return 1;
+    const afterLifecycle = runLifecyclePass(compiled.kir, compiled.getDecision);
+    console.log(printKir(flags.showKirOpt ? runMem2Reg(afterLifecycle) : afterLifecycle));
     return 0;
   }
 
@@ -192,14 +195,21 @@ function runChecker(filePath: string, program: Program, source: SourceFile): Che
 
 /**
  * Type-check (single- or multi-module depending on imports) and lower to KIR.
- * Returns null on errors (already printed).
+ * Returns null on errors (already printed). The returned `getDecision`
+ * lookup is the bridge from checker-time decisions to the Lifecycle
+ * rewrite pass that runs between lowering and mem2reg.
  */
+interface CompiledKir {
+  kir: KirModule;
+  getDecision: LifecycleDecisionLookup;
+}
+
 function compileToKir(
   filePath: string,
   program: Program,
   source: SourceFile,
   parseDiagnostics: Diagnostic[]
-): KirModule | null {
+): CompiledKir | null {
   const outcome = runChecker(filePath, program, source);
   if (outcome === null) return null;
 
@@ -211,9 +221,11 @@ function compileToKir(
     return null;
   }
 
-  return outcome.mode === "multi"
-    ? lowerModulesToKir(outcome.modules, outcome.result)
-    : lowerToKir(program, outcome.result);
+  const kir =
+    outcome.mode === "multi"
+      ? lowerModulesToKir(outcome.modules, outcome.result)
+      : lowerToKir(program, outcome.result);
+  return { kir, getDecision: outcome.result.lifecycle.getDecision };
 }
 
 /** --check: type-check only. Returns exit code. */
