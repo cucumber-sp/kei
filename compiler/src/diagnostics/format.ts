@@ -58,7 +58,42 @@ export function formatDiagnostic(diag: Diagnostic): string {
       // code prefix; the body text matches the historical wording
       // emitted before the variants were carved out of `untriaged`.
       return `${diag.severity}[${diag.code}]: ${diag.message}`;
+/**
+ * Render the human message text for a diagnostic (without severity or
+ * code prefix). Exposed separately from `formatDiagnostic` so the
+ * checker's legacy-shape adapter
+ * (`Checker.collectDiagnostics → { severity, message, location }`) can
+ * pull the wording without doubling-up the severity prefix that
+ * `cli/diagnostics-format.ts` adds.
+ */
+export function messageOf(diag: Diagnostic): string {
+  switch (diag.kind) {
+    case "untriaged":
+      return diag.message;
+    case "invalidLifecycleSignature":
+      return diag.reason === "wrong-arity"
+        ? `lifecycle hook '${diag.hookName}' must take exactly 1 parameter ('self: ref ${diag.structName}')`
+        : `lifecycle hook '${diag.hookName}' first parameter must be named 'self'`;
+    case "unsafeStructMissingDestroy":
+      return `unsafe struct '${diag.structName}' with ptr<T> fields must define '__destroy'`;
+    case "unsafeStructMissingOncopy":
+      return `unsafe struct '${diag.structName}' with ptr<T> fields must define '__oncopy'`;
+    case "lifecycleHookSelfMismatch":
+      return `lifecycle hook '${diag.hookName}' must take 'self: ref ${diag.structName}'`;
+    case "lifecycleReturnTypeWrong":
+      return `lifecycle hook '${diag.hookName}' must return void`;
   }
+}
+
+/** Format a single diagnostic as a one-message text string. */
+export function formatDiagnostic(diag: Diagnostic): string {
+  const body = messageOf(diag);
+  if (diag.kind === "untriaged") {
+    // No code prefix — the `'TODO'` sentinel is internal. Advisory codes
+    // only appear once specific variants are carved out in PRs 4a–4g.
+    return `${diag.severity}: ${body}`;
+  }
+  return `${diag.severity}[${diag.code}]: ${body}`;
 }
 
 /**

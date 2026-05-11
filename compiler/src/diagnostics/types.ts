@@ -227,6 +227,68 @@ export interface UnaryTypeMismatchDiagnostic extends DiagnosticEnvelope {
 }
 
 /**
+ * Lifecycle / checker-rules variants (E5xxx) — see
+ * `docs/design/diagnostics-module.md` §9 PR 4e.
+ *
+ * Scope: *user-authored* `__destroy` / `__oncopy` hooks on an
+ * `unsafe struct`. Auto-generated hooks belong to the Lifecycle module
+ * (`src/lifecycle/`); the two concerns share keywords only.
+ */
+
+/**
+ * `__destroy` / `__oncopy` declared with the wrong shape — wrong arity,
+ * or first parameter not named `self`. Distinct from
+ * `lifecycleHookSelfMismatch` (param type wrong) and
+ * `lifecycleReturnTypeWrong` (non-void return).
+ */
+export interface InvalidLifecycleSignatureDiagnostic extends DiagnosticEnvelope {
+  kind: "invalidLifecycleSignature";
+  code: "E5001";
+  /** `"__destroy"` or `"__oncopy"`. */
+  hookName: string;
+  /** Owning unsafe-struct name (used in the message). */
+  structName: string;
+  /** Why the signature is invalid — drives the message wording. */
+  reason: "wrong-arity" | "first-param-not-self";
+}
+
+/**
+ * `unsafe struct` with `ptr<T>` field(s) declares `__oncopy` but not
+ * `__destroy` (or no lifecycle hooks at all). The pair rule comes from
+ * the spec — fields that may own resources need both halves.
+ */
+export interface UnsafeStructMissingDestroyDiagnostic extends DiagnosticEnvelope {
+  kind: "unsafeStructMissingDestroy";
+  code: "E5002";
+  structName: string;
+}
+
+/** Symmetric pair-rule companion to `unsafeStructMissingDestroy`. */
+export interface UnsafeStructMissingOncopyDiagnostic extends DiagnosticEnvelope {
+  kind: "unsafeStructMissingOncopy";
+  code: "E5003";
+  structName: string;
+}
+
+/**
+ * `self` parameter type doesn't match `ref Self`. By-value `self: T` or
+ * raw `*T` doesn't fit the C-emitted prototype; only `ref T` does.
+ */
+export interface LifecycleHookSelfMismatchDiagnostic extends DiagnosticEnvelope {
+  kind: "lifecycleHookSelfMismatch";
+  code: "E5004";
+  hookName: string;
+  structName: string;
+}
+
+/** Lifecycle hook return type isn't `void`. */
+export interface LifecycleReturnTypeWrongDiagnostic extends DiagnosticEnvelope {
+  kind: "lifecycleReturnTypeWrong";
+  code: "E5005";
+  hookName: string;
+}
+
+/**
  * The discriminated union of all diagnostics the compiler can emit.
  *
  * PR 2 introduces the `untriaged` catch-all; PR 4c adds the calls slice
@@ -244,3 +306,8 @@ export type Diagnostic =
   | InvalidOperandDiagnostic
   | BinaryTypeMismatchDiagnostic
   | UnaryTypeMismatchDiagnostic;
+  | InvalidLifecycleSignatureDiagnostic
+  | UnsafeStructMissingDestroyDiagnostic
+  | UnsafeStructMissingOncopyDiagnostic
+  | LifecycleHookSelfMismatchDiagnostic
+  | LifecycleReturnTypeWrongDiagnostic;
