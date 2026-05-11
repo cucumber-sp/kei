@@ -305,7 +305,7 @@ export type Diagnostic =
   | NoOperatorOverloadDiagnostic
   | InvalidOperandDiagnostic
   | BinaryTypeMismatchDiagnostic
-  | UnaryTypeMismatchDiagnostic;
+  | UnaryTypeMismatchDiagnostic
   | InvalidLifecycleSignatureDiagnostic
   | UnsafeStructMissingDestroyDiagnostic
   | UnsafeStructMissingOncopyDiagnostic

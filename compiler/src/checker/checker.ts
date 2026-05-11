@@ -1063,7 +1063,6 @@ export class Checker {
     this.diag.unaryTypeMismatch({ span: this.spanToLocation(span), op, message });
   }
 
-  private spanToLocation(span: Span): SourceLocation {
   /**
    * Convert a lexer span (`{ start, end }` byte offsets) to the
    * `SourceLocation` shape the diagnostics module's `Span` alias

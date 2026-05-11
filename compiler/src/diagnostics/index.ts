@@ -14,7 +14,7 @@ import type { Diagnostic, Severity, Span } from "./types";
 
 export type { Collector, LintConfig } from "./collector";
 export { resolveSeverity } from "./collector";
-export { formatDiagnostic, formatDiagnostics } from "./format";
+export { formatDiagnostic, formatDiagnostics, messageOf } from "./format";
 export type {
   ArgumentTypeMismatchDiagnostic,
   ArityMismatchDiagnostic,
@@ -22,22 +22,16 @@ export type {
   Diagnostic,
   DiagnosticEnvelope,
   GenericArgMismatchDiagnostic,
+  InvalidLifecycleSignatureDiagnostic,
   InvalidOperandDiagnostic,
+  LifecycleHookSelfMismatchDiagnostic,
+  LifecycleReturnTypeWrongDiagnostic,
   MethodNotFoundDiagnostic,
   NoOperatorOverloadDiagnostic,
   NotCallableDiagnostic,
   Severity,
   Span,
   UnaryTypeMismatchDiagnostic,
-export { formatDiagnostic, formatDiagnostics, messageOf } from "./format";
-export type {
-  Diagnostic,
-  DiagnosticEnvelope,
-  InvalidLifecycleSignatureDiagnostic,
-  LifecycleHookSelfMismatchDiagnostic,
-  LifecycleReturnTypeWrongDiagnostic,
-  Severity,
-  Span,
   UnsafeStructMissingDestroyDiagnostic,
   UnsafeStructMissingOncopyDiagnostic,
   UntriagedDiagnostic,
@@ -280,6 +274,8 @@ export function createDiagnostics(config: LintConfig = {}): Diagnostics {
         span,
         op,
         message,
+      });
+    },
     invalidLifecycleSignature({ span, hookName, structName, reason }) {
       collector.emit({
         kind: "invalidLifecycleSignature",
