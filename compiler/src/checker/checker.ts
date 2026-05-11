@@ -7,11 +7,14 @@ import type {
   CallExpr,
   Declaration,
   Expression,
+  FunctionDecl,
   ImportDecl,
   Program,
   Statement,
+  StructDecl,
   SwitchCase,
   TypeNode,
+  UnsafeStructDecl,
 } from "../ast/nodes";
 import type { Diagnostics } from "../diagnostics";
 import { createDiagnostics, messageOf } from "../diagnostics";
@@ -26,7 +29,12 @@ import type {
   MonomorphizedProduct,
   MonomorphizedStruct,
 } from "../monomorphization";
-import { createMonomorphization, mangleGenericName, substituteType } from "../monomorphization";
+import {
+  buildTypeSubstitutionMap,
+  createMonomorphization,
+  mangleGenericName,
+  substituteType,
+} from "../monomorphization";
 import type { SourceFile } from "../utils/source";
 import { registerBuiltins } from "./builtins";
 import { DeclarationChecker } from "./decl-checker";
@@ -235,7 +243,12 @@ export class Checker {
     this.modulePrefix = moduleName.replace(/\./g, "_");
     this.typeResolver = new TypeResolver();
     this.lifecycle = createLifecycle();
-    this.monomorphization = options.monomorphization ?? createMonomorphization();
+    // Thread `lifecycle` into the Monomorphization factory so each
+    // baked struct registration triggers a `lifecycle.register(concrete)`
+    // call (design doc §5). Falls back to a fresh instance for callers
+    // that don't supply one (single-module builds).
+    this.monomorphization =
+      options.monomorphization ?? createMonomorphization({ lifecycle: this.lifecycle });
     this._diag = options.diag ?? createDiagnostics({});
     this.exprChecker = new ExpressionChecker(this);
     this.stmtChecker = new StatementChecker(this);
@@ -448,8 +461,27 @@ export class Checker {
    * per-instantiation substitution map and capture the resulting
    * per-body type-map / generic-resolution snapshots on the
    * `MonomorphizedFunction` record.
+   *
+   * **Y-a-clone (PR 4, design doc §4).** When the Monomorphization
+   * driver has stashed a baked AST clone on `monoFunc.bakedDecl`, this
+   * method walks the clone — every `setExprType` then writes into the
+   * global `typeMap` keyed by clone identities. KIR lowering reads
+   * those entries directly when lowering the clone, so the per-body
+   * override on `LoweringCtx` becomes a no-op for synthesised decls.
+   *
+   * The `bodyTypeMap` / `bodyGenericResolutions` capture is retained as
+   * a transition shim — PR 5 deletes it along with the override stack.
+   *
+   * @param typeSubs Explicit type-parameter substitution map. Built
+   * once by the Monomorphization driver from the template's
+   * genericParams paired with the instantiation's typeArgs; passed in
+   * so we don't re-derive from `decl.genericParams` (the bake clone has
+   * empty genericParams).
    */
-  private checkMonomorphizedFunctionBody(monoFunc: MonomorphizedFunction): void {
+  private checkMonomorphizedFunctionBody(
+    monoFunc: MonomorphizedFunction,
+    typeSubs?: Map<string, Type>
+  ): void {
     if (!monoFunc.declaration) {
       // Try to find the declaration from the program
       for (const decl of this.program.declarations) {
@@ -465,22 +497,27 @@ export class Checker {
     }
     if (!monoFunc.declaration) return;
 
-    const decl = monoFunc.declaration;
+    // Build (or accept) the type-parameter substitution map. Derive from
+    // the template's genericParams when the caller didn't supply one —
+    // the bake clone has empty genericParams (it's concrete), so the
+    // derivation must always run against the template.
+    const subs =
+      typeSubs ?? buildTypeSubstitutionMap(monoFunc.declaration.genericParams, monoFunc.typeArgs);
     const concreteType = monoFunc.concrete;
 
-    // Build type parameter substitution map (e.g. A→i32, B→bool)
-    // so that struct literals like Pair<A, B>{...} resolve correctly
-    const typeSubs = new Map<string, Type>();
-    for (let i = 0; i < decl.genericParams.length; i++) {
-      const paramName = decl.genericParams[i];
-      const concreteArg = monoFunc.typeArgs[i];
-      if (paramName && concreteArg) {
-        typeSubs.set(paramName, concreteArg);
-      }
-    }
-    this.typeResolver.setSubstitutions(typeSubs);
+    // Walk the bake clone when one is available (Y-a-clone path); fall
+    // back to the template otherwise. The clone has fresh identities
+    // for every nested Expression / Statement / TypeNode — the same
+    // `subs` work against either because TypeResolver substitutes by
+    // name, not by node identity.
+    const decl: FunctionDecl = monoFunc.bakedDecl ?? monoFunc.declaration;
 
-    // Set up per-instantiation type map to avoid shared-AST conflicts
+    this.typeResolver.setSubstitutions(subs);
+
+    // Set up per-instantiation type map to avoid shared-AST conflicts.
+    // Transition shim — PR 5 deletes this alongside the LoweringCtx
+    // override. The global `typeMap` already receives the same entries
+    // via `setExprType` (keyed by clone identity, which is unique).
     const bodyTypeMap = new Map<Expression, Type>();
     const bodyGenericResolutions = new Map<Expression, string>();
     this.currentBodyTypeMap = bodyTypeMap;
@@ -519,8 +556,24 @@ export class Checker {
    * The literal-checker registers struct instantiations without an
    * `originalDecl` reference; this method lazily backfills it by name +
    * arity match against the program before walking the methods.
+   *
+   * **Y-a-clone (PR 4, design doc §4).** When the Monomorphization
+   * driver has stashed a baked AST clone on `monoStruct.bakedDecl`, we
+   * iterate the *clone's* methods (each itself a clone produced by
+   * `bake.ts`). `setExprType` then writes into the global `typeMap`
+   * keyed by clone identities — KIR lowering reads those entries when
+   * walking the same clone.
+   *
+   * @param typeSubs Explicit type-parameter substitution map. Built
+   * once by the Monomorphization driver from the template's
+   * genericParams paired with the instantiation's typeArgs; passed in
+   * so we don't re-derive from `decl.genericParams` (the bake clone has
+   * empty genericParams).
    */
-  private checkMonomorphizedStructMethodBodies(monoStruct: MonomorphizedStruct): void {
+  private checkMonomorphizedStructMethodBodies(
+    monoStruct: MonomorphizedStruct,
+    typeSubs?: Map<string, Type>
+  ): void {
     if (!monoStruct.originalDecl) {
       for (const decl of this.program.declarations) {
         if (
@@ -533,17 +586,23 @@ export class Checker {
         }
       }
     }
-    const decl = monoStruct.originalDecl;
-    if (!decl) return;
-    if (decl.methods.length === 0) return;
+    const templateDecl = monoStruct.originalDecl;
+    if (!templateDecl) return;
+    if (templateDecl.methods.length === 0) return;
 
-    // Build the type-substitution map (e.g. T → i32).
-    const typeSubs = new Map<string, Type>();
-    for (let i = 0; i < decl.genericParams.length; i++) {
-      const paramName = decl.genericParams[i];
-      const concreteArg = monoStruct.typeArgs[i];
-      if (paramName && concreteArg) typeSubs.set(paramName, concreteArg);
-    }
+    // Build (or accept) the type-substitution map. Derive from the
+    // template's genericParams when the caller didn't supply one — the
+    // bake clone has empty genericParams (it's concrete), so the
+    // derivation must always run against the template.
+    const subs =
+      typeSubs ?? buildTypeSubstitutionMap(templateDecl.genericParams, monoStruct.typeArgs);
+
+    // Walk the bake clone when available; the clone's methods have
+    // fresh identities for every nested Expression / Statement /
+    // TypeNode. Fall back to the template otherwise. Indexed in
+    // declaration order so the per-method bodyTypeMap key (the
+    // template's method name) lines up regardless of which path runs.
+    const decl: StructDecl | UnsafeStructDecl = monoStruct.bakedDecl ?? templateDecl;
 
     monoStruct.methodBodyTypeMaps ??= new Map();
 
@@ -551,7 +610,7 @@ export class Checker {
       // Skip if we've already checked this method for this instantiation.
       if (monoStruct.methodBodyTypeMaps.has(method.name)) continue;
 
-      this.typeResolver.setSubstitutions(typeSubs);
+      this.typeResolver.setSubstitutions(subs);
       const bodyTypeMap = new Map<Expression, Type>();
       const bodyGenericResolutions = new Map<Expression, string>();
       this.currentBodyTypeMap = bodyTypeMap;

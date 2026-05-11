@@ -97,8 +97,16 @@ export function runLowering(ctx: LoweringCtx): KirModule {
     // emits the method with the concrete FunctionType (from
     // `monoStruct.concrete.methods`) for params/return + the per-method
     // bodyTypeMap so all expressions inside the body see concrete types.
-    if (monoStruct.originalDecl) {
-      for (const method of monoStruct.originalDecl.methods) {
+    // Walk the *baked clone* (Path A, PR 4) when available. The clone's
+    // methods have fresh AST identities and the global `Checker.typeMap`
+    // carries entries keyed by them, so `getExprKirType` returns
+    // concrete types for every expression inside the body — no
+    // per-instantiation override needed. Falls back to the template
+    // when no clone is attached (e.g. body-check skipped via the
+    // multi-module orchestrator's defer flag).
+    const methodSource = monoStruct.bakedDecl ?? monoStruct.originalDecl;
+    if (methodSource) {
+      for (const method of methodSource.methods) {
         const structPrefix = ctx.modulePrefix ? `${ctx.modulePrefix}_${mangledName}` : mangledName;
         const methodMangledName = `${structPrefix}_${method.name}`;
         const concreteMethod = monoStruct.concrete.methods.get(method.name);
@@ -142,9 +150,12 @@ export function runLowering(ctx: LoweringCtx): KirModule {
     });
   }
 
-  // Emit monomorphized function definitions for generic instantiations
+  // Emit monomorphized function definitions for generic instantiations.
+  // `bakedDecl` (set by the Y-a-clone bake driver) is preferred; falling
+  // back to the template's `declaration` means pre-PR-4 callers /
+  // orchestration paths that haven't body-checked yet still get lowered.
   for (const [_mangledName, monoFunc] of products.functions) {
-    if (monoFunc.declaration) {
+    if (monoFunc.bakedDecl || monoFunc.declaration) {
       ctx.functions.push(lowerMonomorphizedFunction(ctx, monoFunc));
     }
   }

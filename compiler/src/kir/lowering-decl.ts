@@ -259,8 +259,14 @@ export function lowerMonomorphizedFunction(
   ctx: LoweringCtx,
   monoFunc: MonomorphizedFunction
 ): KirFunction {
+  // Walk the *baked clone* (Path A, PR 4) when available. The clone's
+  // body has fresh AST identities and the global `Checker.typeMap`
+  // carries entries keyed by them, so every `getExprKirType` inside the
+  // body returns a concrete type. Falls back to the template when no
+  // clone is attached (defensive — pre-PR-4 callers, or the
+  // multi-module orchestrator's deferred body-check path).
   // biome-ignore lint/style/noNonNullAssertion: monomorphized functions always have a declaration set before lowering
-  const decl = monoFunc.declaration!;
+  const decl = monoFunc.bakedDecl ?? monoFunc.declaration!;
   const concreteType = monoFunc.concrete;
 
   resetFunctionState(ctx);
