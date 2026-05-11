@@ -18,6 +18,7 @@ import { runDecideFixedPoint } from "./decide";
 import { synthesise } from "./synthesise";
 import type { LifecycleDecision } from "./types";
 
+export { type LifecycleDecisionLookup, runLifecyclePass } from "./pass";
 export { synthesise } from "./synthesise";
 export type { LifecycleDecision, ManagedFieldRef } from "./types";
 
