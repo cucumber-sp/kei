@@ -9,18 +9,30 @@
  *
  * Migration status (`docs/design/lifecycle-module.md` §7):
  *
- * - PR 3 — pass slot, no-op rewrite. All markers stripped.
- * - PR 4c — `mark_param` rewrites into per-exit destroys.
+ * - PR 3 — pass slot, no-op rewrite. All markers stripped, nothing
+ *   concrete emitted in their place.
+ * - PR 4a — `mark_scope_exit` rewrites into per-scope destroys in
+ *   reverse declaration order, skipping moved-out vars. String slots
+ *   lower to `call_extern_void("kei_string_destroy")`; struct slots
+ *   lower to `destroy`. The marker carries only a `scopeId`; vars and
+ *   the moved-set come from a transitional `KirFunction.lifecycleScopeExits`
+ *   side-table populated by lowering. Sibling PRs 4d / 4e migrate
+ *   `mark_moved` / `mark_track` into the IR proper, after which the
+ *   pass reconstructs the same info from the marker stream and the
+ *   side-table is removed.
  * - PR 4b — `mark_assign` rewrites into load/destroy/store/oncopy
  *   (the slot's pointee KIR type drives the dispatch).
- * - PR 4a/4d/4e — sibling cut-overs still pending; their markers
- *   remain stripped without effect for now.
+ * - PR 4c — `mark_param` rewrites into per-exit destroys.
  *
- * After the pass, no `mark_*` instruction survives — mem2reg, de-SSA,
- * and the C emitter never see markers.
+ * Other markers (`mark_scope_enter`, `mark_track`, `mark_moved`) remain
+ * stripped without effect; their cut-overs land in sibling PRs 4d / 4e.
  *
- * See `docs/design/lifecycle-module.md` §2 (pipeline diagram) and §3
- * (marker IR table).
+ * After the pass, no `mark_*` instruction survives and no
+ * `lifecycleScopeExits` side-table survives — mem2reg, de-SSA, and the
+ * C emitter never see either.
+ *
+ * See `docs/design/lifecycle-module.md` §2 (pipeline diagram), §3
+ * (marker IR table), and §5 (defer-vs-destroy interleave).
  */
 
 import type { StructType } from "../checker/types";
@@ -30,6 +42,7 @@ import type {
   KirInst,
   KirMarkAssign,
   KirModule,
+  KirScopeExitInfo,
   KirTerminator,
   KirType,
   VarId,
@@ -57,6 +70,13 @@ interface StructHookSets {
  * names (`<mangled>___destroy` / `___oncopy`) rather than from the
  * decision map, because both auto-generated and user-written hooks
  * share the same mangling.
+ *
+ * `mark_scope_exit` is rewritten into reverse-order destroys for the
+ * scope's tracked vars (read from the function's transitional
+ * `lifecycleScopeExits` side-table, skipping any var named in the
+ * matching `skipNames` set).
+ *
+ * Returns a new module — input is not mutated.
  */
 export function runLifecyclePass(
   module: KirModule,
@@ -104,10 +124,15 @@ function rewriteFunction(fn: KirFunction, hooks: StructHookSets): KirFunction {
   // collide with names lowering already used.
   const counter = { next: fn.localCount };
 
+  const scopeExits = fn.lifecycleScopeExits;
+
   const blocks = fn.blocks.map((block) =>
-    rewriteBlock(block, hooks, pointees, counter, paramDestroys)
+    rewriteBlock(block, hooks, pointees, counter, paramDestroys, scopeExits)
   );
-  return { ...fn, blocks, localCount: counter.next };
+  // The side-table is consumed here; downstream passes (mem2reg, de-SSA,
+  // C emitter) never see it.
+  const { lifecycleScopeExits: _, ...rest } = fn;
+  return { ...rest, blocks, localCount: counter.next };
 }
 
 /**
@@ -168,12 +193,18 @@ function rewriteBlock(
   hooks: StructHookSets,
   pointees: Map<VarId, KirType>,
   counter: { next: number },
-  paramDestroys: KirInst[]
+  paramDestroys: KirInst[],
+  scopeExits: ReadonlyMap<number, KirScopeExitInfo> | undefined
 ): KirBlock {
   const out: KirInst[] = [];
   for (const inst of block.instructions) {
     if (inst.kind === "mark_assign") {
       rewriteMarkAssign(out, inst, hooks, pointees, counter);
+      continue;
+    }
+    if (inst.kind === "mark_scope_exit") {
+      const info = scopeExits?.get(inst.scopeId);
+      if (info) emitScopeExitDestroys(out, info);
       continue;
     }
     if (isOtherMarker(inst)) continue;
@@ -191,13 +222,33 @@ function isExitTerminator(t: KirTerminator): boolean {
 }
 
 /**
- * Non-`mark_assign` markers that this pass currently strips without
- * concrete rewrite (`mark_assign` has its own rewrite path).
+ * Emit destroys for `info.vars` in reverse declaration order, skipping
+ * any var whose name appears in `info.skipNames` (moved-out vars and,
+ * for the early-return case, the named local being returned). String
+ * vars rewrite to `kei_string_destroy`; struct vars rewrite to
+ * `destroy`.
+ */
+function emitScopeExitDestroys(out: KirInst[], info: KirScopeExitInfo): void {
+  for (let i = info.vars.length - 1; i >= 0; i--) {
+    const v = info.vars[i];
+    if (!v) continue;
+    if (info.skipNames.has(v.name)) continue;
+    if (v.isString) {
+      out.push({ kind: "call_extern_void", func: "kei_string_destroy", args: [v.varId] });
+    } else {
+      out.push({ kind: "destroy", value: v.varId, structName: v.structName });
+    }
+  }
+}
+
+/**
+ * Non-`mark_assign` / non-`mark_scope_exit` markers that this pass
+ * currently strips without concrete rewrite. `mark_assign` and
+ * `mark_scope_exit` have their own rewrite paths above.
  */
 function isOtherMarker(inst: KirInst): boolean {
   switch (inst.kind) {
     case "mark_scope_enter":
-    case "mark_scope_exit":
     case "mark_track":
     case "mark_moved":
     case "mark_param":

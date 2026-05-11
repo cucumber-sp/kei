@@ -1,9 +1,32 @@
-import type { BlockId, VarId } from "./identifiers";
+import type { BlockId, ScopeId, VarId } from "./identifiers";
 import type { KirInst } from "./instructions";
 import type { KirTerminator } from "./terminators";
 import type { KirType } from "./types";
 
 // ─── Function ────────────────────────────────────────────────────────────────
+
+/**
+ * Snapshot accompanying a `mark_scope_exit` marker: the live vars in
+ * declaration order, plus the set of var names to skip when emitting
+ * destroys (moved-out vars and, where relevant, the named local being
+ * returned).
+ *
+ * Transitional side-channel for Lifecycle PR 4a — lowering still owns
+ * the moved-set and the scope stack, so it captures the relevant slice
+ * here at marker-emission time and the pass reads it back. Sibling PRs
+ * 4d / 4e migrate `mark_moved` / `mark_track` into the IR proper, after
+ * which the pass reconstructs the same info from the marker stream and
+ * this field is removed.
+ */
+export interface KirScopeExitInfo {
+  vars: ReadonlyArray<{
+    name: string;
+    varId: VarId;
+    structName: string;
+    isString?: boolean;
+  }>;
+  skipNames: ReadonlySet<string>;
+}
 
 /** A KIR function — a list of basic blocks in SSA form. */
 export interface KirFunction {
@@ -18,6 +41,14 @@ export interface KirFunction {
    * appended to params.
    */
   throwsTypes?: KirType[];
+  /**
+   * Transitional Lifecycle PR 4a side-table: scope-exit snapshots keyed
+   * by the `scopeId` baked into each `mark_scope_exit` instruction. Set
+   * by lowering, consumed and stripped by the Lifecycle pass.
+   * `undefined` after the pass and on functions that lowering produced
+   * without any scope-exit markers.
+   */
+  lifecycleScopeExits?: ReadonlyMap<ScopeId, KirScopeExitInfo>;
 }
 
 /** Named function parameter. */
