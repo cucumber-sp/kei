@@ -181,9 +181,7 @@ function rewriteBlock(
   }
   // Append per-exit param destroys if this block ends with a function
   // exit terminator (ret / ret_void).
-  const instructions = isExitTerminator(block.terminator)
-    ? [...out, ...paramDestroys]
-    : out;
+  const instructions = isExitTerminator(block.terminator) ? [...out, ...paramDestroys] : out;
   return { ...block, instructions };
 }
 
