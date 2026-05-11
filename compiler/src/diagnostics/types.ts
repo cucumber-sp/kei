@@ -20,6 +20,7 @@
  *   E5xxx — lifecycle               (PR 4e)
  *   E6xxx — operators               (PR 4f)
  *   E7xxx — modules / imports       (PR 4g)
+ *   W0xxx — warnings (cross-cutting)
  *
  * Per design doc §10.6 codes are *advisory* until kei stabilises —
  * they appear in output for searchability but carry no SemVer
@@ -518,13 +519,56 @@ export interface MixedModuleStylesDiagnostic extends DiagnosticEnvelope {
   message: string;
 }
 
+// ─── E2xxx — name resolution (PR 4b) ─────────────────────────────────────
+
+/** Value identifier referenced before declaration / not in scope. */
+export interface UndeclaredNameDiagnostic extends DiagnosticEnvelope {
+  kind: "undeclaredName";
+  code: "E2001";
+  name: string;
+}
+
+/** Two declarations of the same name in the same scope. */
+export interface DuplicateDeclDiagnostic extends DiagnosticEnvelope {
+  kind: "duplicateDecl";
+  code: "E2002";
+  name: string;
+  /** Optional suffix detail (e.g. "(same parameter signature)"). */
+  detail?: string;
+}
+
+/**
+ * Selective `import { x } from m;` where `x` exists nowhere in module `m`'s
+ * export set. Module-level resolution failures (missing module, cyclic
+ * import) are 4g's territory; this is the symbol-level slice.
+ */
+export interface UnresolvedImportDiagnostic extends DiagnosticEnvelope {
+  kind: "unresolvedImport";
+  code: "E2003";
+  name: string;
+  module: string;
+}
+
+/**
+ * Qualified-name lookup misses on a module value — `m.foo` where
+ * `foo` isn't in `m`'s export set. Field-not-found on a struct and
+ * variant-not-found on an enum live in 4d / 4c respectively.
+ */
+export interface NameNotFoundDiagnostic extends DiagnosticEnvelope {
+  kind: "nameNotFound";
+  code: "E2004";
+  name: string;
+  /** The container being searched (module name). */
+  container: string;
+}
+
 /**
  * The discriminated union of all diagnostics the compiler can emit.
  *
  * PR 2 introduced the `untriaged` catch-all; PRs 4a–4g carve specific
- * categories out by category (E1xxx type errors, E3xxx calls, E4xxx
- * structs, E5xxx lifecycle, E6xxx operators). The catch-all is removed
- * once every category is carved.
+ * categories out by category (E1xxx type errors, E2xxx name resolution,
+ * E3xxx calls, E4xxx structs, E5xxx lifecycle, E6xxx operators, E7xxx
+ * modules). The catch-all is removed once every category is carved.
  */
 export type Diagnostic =
   | UntriagedDiagnostic
@@ -556,4 +600,8 @@ export type Diagnostic =
   | CyclicImportDiagnostic
   | ModuleNotFoundDiagnostic
   | ImportedSymbolNotExportedDiagnostic
-  | MixedModuleStylesDiagnostic;
+  | MixedModuleStylesDiagnostic
+  | UndeclaredNameDiagnostic
+  | DuplicateDeclDiagnostic
+  | UnresolvedImportDiagnostic
+  | NameNotFoundDiagnostic;

@@ -31,6 +31,7 @@ export type {
   CyclicImportDiagnostic,
   Diagnostic,
   DiagnosticEnvelope,
+  DuplicateDeclDiagnostic,
   ExpectedTypeDiagnostic,
   GenericArgMismatchDiagnostic,
   ImportedSymbolNotExportedDiagnostic,
@@ -44,6 +45,7 @@ export type {
   MissingFieldDiagnostic,
   MixedModuleStylesDiagnostic,
   ModuleNotFoundDiagnostic,
+  NameNotFoundDiagnostic,
   NonOptionalAccessDiagnostic,
   NoOperatorOverloadDiagnostic,
   NotCallableDiagnostic,
@@ -51,8 +53,10 @@ export type {
   Span,
   TypeMismatchDiagnostic,
   UnaryTypeMismatchDiagnostic,
+  UndeclaredNameDiagnostic,
   UnknownFieldDiagnostic,
   UnknownTypeDiagnostic,
+  UnresolvedImportDiagnostic,
   UnsafeStructFieldRuleDiagnostic,
   UnsafeStructMissingDestroyDiagnostic,
   UnsafeStructMissingOncopyDiagnostic,
@@ -235,6 +239,20 @@ export interface Diagnostics {
 
   /** Emit a `mixedModuleStyles` (E7004). */
   mixedModuleStyles(payload: { span: Span; message: string }): void;
+
+  // ─── E2xxx — name resolution (PR 4b) ──────────────────────────────────
+
+  /** Value identifier not in scope. Severity default: `error`. */
+  undeclaredName(payload: { span: Span; name: string }): void;
+
+  /** Same-scope duplicate of an existing declaration. Severity default: `error`. */
+  duplicateDecl(payload: { span: Span; name: string; detail?: string }): void;
+
+  /** Selective-import symbol not in the module's export set. Severity default: `error`. */
+  unresolvedImport(payload: { span: Span; name: string; module: string }): void;
+
+  /** Qualified-name lookup miss on a module value. Severity default: `error`. */
+  nameNotFound(payload: { span: Span; name: string; container: string }): void;
 
   /** Frozen snapshot of all diagnostics emitted so far. */
   diagnostics(): readonly Diagnostic[];
@@ -487,6 +505,11 @@ export function createDiagnostics(config: LintConfig = {}): Diagnostics {
         message,
       });
     },
+
+    undeclaredName: (p) => emit("undeclaredName", "E2001", p),
+    duplicateDecl: (p) => emit("duplicateDecl", "E2002", p),
+    unresolvedImport: (p) => emit("unresolvedImport", "E2003", p),
+    nameNotFound: (p) => emit("nameNotFound", "E2004", p),
 
     diagnostics: () => collector.snapshot(),
   };
