@@ -12,6 +12,7 @@
 import { describe, expect, test } from "bun:test";
 import { Checker } from "../../src/checker/checker";
 import { createDiagnostics, type Diagnostics } from "../../src/diagnostics";
+import { messageOf } from "../../src/diagnostics/format";
 import { parseSource } from "../helpers/pipeline";
 
 function checkWithSink(content: string, filename: string, diag: Diagnostics) {
@@ -30,8 +31,8 @@ describe("Checker — externalised Collector isolation", () => {
     checkWithSink("fn main() { let x = nope_a; }", "a.kei", diagA);
     checkWithSink("fn main() { let y = nope_b; }", "b.kei", diagB);
 
-    const messagesA = diagA.diagnostics().map((d) => (d.kind === "untriaged" ? d.message : ""));
-    const messagesB = diagB.diagnostics().map((d) => (d.kind === "untriaged" ? d.message : ""));
+    const messagesA = diagA.diagnostics().map(messageOf);
+    const messagesB = diagB.diagnostics().map(messageOf);
 
     expect(messagesA.some((m) => m.includes("nope_a"))).toBe(true);
     expect(messagesA.some((m) => m.includes("nope_b"))).toBe(false);
@@ -46,8 +47,6 @@ describe("Checker — externalised Collector isolation", () => {
     checkWithSink("fn main() { let z = missing_name; }", "c.kei", diag);
 
     const snap = diag.diagnostics();
-    expect(snap.some((d) => d.kind === "untriaged" && d.message.includes("missing_name"))).toBe(
-      true
-    );
+    expect(snap.some((d) => d.kind === "undeclaredName" && d.name === "missing_name")).toBe(true);
   });
 });
