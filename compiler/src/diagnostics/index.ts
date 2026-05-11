@@ -29,6 +29,17 @@ export type {
   Severity,
   Span,
   UnaryTypeMismatchDiagnostic,
+export { formatDiagnostic, formatDiagnostics, messageOf } from "./format";
+export type {
+  Diagnostic,
+  DiagnosticEnvelope,
+  InvalidLifecycleSignatureDiagnostic,
+  LifecycleHookSelfMismatchDiagnostic,
+  LifecycleReturnTypeWrongDiagnostic,
+  Severity,
+  Span,
+  UnsafeStructMissingDestroyDiagnostic,
+  UnsafeStructMissingOncopyDiagnostic,
   UntriagedDiagnostic,
 } from "./types";
 
@@ -119,6 +130,31 @@ export interface Diagnostics {
    * misses the rule. Severity defaults to `error`.
    */
   unaryTypeMismatch(payload: { span: Span; op: string; message: string }): void;
+  // ─── Lifecycle / checker-rules (E5xxx, PR 4e) ─────────────────────────
+  //
+  // Scope: validation of user-authored `__destroy` / `__oncopy` hooks on
+  // an `unsafe struct`. Auto-generated hooks belong to the Lifecycle
+  // module and emit through a separate surface.
+
+  /** User wrote `__destroy` / `__oncopy` with wrong arity or non-`self` first param. */
+  invalidLifecycleSignature(payload: {
+    span: Span;
+    hookName: string;
+    structName: string;
+    reason: "wrong-arity" | "first-param-not-self";
+  }): void;
+
+  /** `unsafe struct` with `ptr<T>` field(s) is missing `__destroy`. */
+  unsafeStructMissingDestroy(payload: { span: Span; structName: string }): void;
+
+  /** `unsafe struct` with `ptr<T>` field(s) is missing `__oncopy`. */
+  unsafeStructMissingOncopy(payload: { span: Span; structName: string }): void;
+
+  /** Lifecycle hook `self` parameter type isn't `ref Self`. */
+  lifecycleHookSelfMismatch(payload: { span: Span; hookName: string; structName: string }): void;
+
+  /** Lifecycle hook return type isn't `void`. */
+  lifecycleReturnTypeWrong(payload: { span: Span; hookName: string }): void;
 
   /** Frozen snapshot of all diagnostics emitted so far. */
   diagnostics(): readonly Diagnostic[];
@@ -244,6 +280,52 @@ export function createDiagnostics(config: LintConfig = {}): Diagnostics {
         span,
         op,
         message,
+    invalidLifecycleSignature({ span, hookName, structName, reason }) {
+      collector.emit({
+        kind: "invalidLifecycleSignature",
+        code: "E5001",
+        severity: resolveSeverity("invalidLifecycleSignature", config, "error"),
+        span,
+        hookName,
+        structName,
+        reason,
+      });
+    },
+    unsafeStructMissingDestroy({ span, structName }) {
+      collector.emit({
+        kind: "unsafeStructMissingDestroy",
+        code: "E5002",
+        severity: resolveSeverity("unsafeStructMissingDestroy", config, "error"),
+        span,
+        structName,
+      });
+    },
+    unsafeStructMissingOncopy({ span, structName }) {
+      collector.emit({
+        kind: "unsafeStructMissingOncopy",
+        code: "E5003",
+        severity: resolveSeverity("unsafeStructMissingOncopy", config, "error"),
+        span,
+        structName,
+      });
+    },
+    lifecycleHookSelfMismatch({ span, hookName, structName }) {
+      collector.emit({
+        kind: "lifecycleHookSelfMismatch",
+        code: "E5004",
+        severity: resolveSeverity("lifecycleHookSelfMismatch", config, "error"),
+        span,
+        hookName,
+        structName,
+      });
+    },
+    lifecycleReturnTypeWrong({ span, hookName }) {
+      collector.emit({
+        kind: "lifecycleReturnTypeWrong",
+        code: "E5005",
+        severity: resolveSeverity("lifecycleReturnTypeWrong", config, "error"),
+        span,
+        hookName,
       });
     },
     diagnostics: () => collector.snapshot(),

@@ -14,7 +14,7 @@ import type {
   TypeNode,
 } from "../ast/nodes";
 import type { Diagnostics } from "../diagnostics";
-import { createDiagnostics } from "../diagnostics";
+import { createDiagnostics, messageOf } from "../diagnostics";
 import type { Diagnostic, SourceLocation } from "../errors/diagnostic";
 import { Severity } from "../errors/diagnostic";
 import type { Span } from "../lexer/token";
@@ -152,10 +152,22 @@ export class Checker {
    * `docs/design/diagnostics-module.md` §5: the CLI driver /
    * orchestrator owns the sink and passes it in via `CheckerOptions`.
    * The `error / warning` helpers route here via
-   * `diag.untriaged({...})`. Defaults to a fresh sink when no caller
+   * `diag.untriaged({...})`; specific PR 4+ variants (e.g. PR 4e's
+   * `invalidLifecycleSignature`) are called by sub-checkers via the
+   * `diag` accessor below. Defaults to a fresh sink when no caller
    * supplied one (test convenience).
    */
-  private diag: Diagnostics;
+  private _diag: Diagnostics;
+
+  /**
+   * Exposed so sub-checkers can call typed variant methods (e.g.
+   * `this.checker.diag.invalidLifecycleSignature({...})`) without
+   * routing through the `error / warning` catch-alls. Read-only —
+   * sub-checkers don't get to swap the sink mid-compile.
+   */
+  get diag(): Diagnostics {
+    return this._diag;
+  }
   private typeMap: Map<Expression, Type> = new Map();
   private scopeStack: Scope[] = [];
   private typeResolver: TypeResolver;
@@ -224,7 +236,7 @@ export class Checker {
     this.typeResolver = new TypeResolver();
     this.lifecycle = createLifecycle();
     this.monomorphization = options.monomorphization ?? createMonomorphization();
-    this.diag = options.diag ?? createDiagnostics({});
+    this._diag = options.diag ?? createDiagnostics({});
     this.exprChecker = new ExpressionChecker(this);
     this.stmtChecker = new StatementChecker(this);
     this.declChecker = new DeclarationChecker(this, this.lifecycle);
@@ -1052,6 +1064,14 @@ export class Checker {
   }
 
   private spanToLocation(span: Span): SourceLocation {
+  /**
+   * Convert a lexer span (`{ start, end }` byte offsets) to the
+   * `SourceLocation` shape the diagnostics module's `Span` alias
+   * resolves to. Sub-checkers calling typed `diag.*` methods (PR 4+)
+   * need this to construct the payload; the legacy `error / warning`
+   * helpers use it internally.
+   */
+  spanToLocation(span: Span): SourceLocation {
     const lc = this.source.lineCol(span.start);
     return {
       file: this.source.filename,
@@ -1070,11 +1090,16 @@ export class Checker {
    * branch wide as new variants land (PR 4c adds the calls slice with
    * `E3xxx` codes; the structured payload fields stay invisible to
    * legacy consumers).
+   * the new union shape; until then we adapt at the boundary. The
+   * message text is pulled through `messageOf` so each variant (including
+   * the PR 4e lifecycle-rule ones with structured fields) renders its
+   * wording without the new `error[E5xxx]:` prefix — the legacy CLI
+   * formatter already adds the severity prefix on top.
    */
   private collectDiagnostics(): Diagnostic[] {
     return this.diag.diagnostics().map((d) => ({
       severity: d.severity === "warning" ? Severity.Warning : Severity.Error,
-      message: d.message,
+      message: messageOf(d),
       location: d.span,
     }));
   }

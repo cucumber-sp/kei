@@ -189,17 +189,20 @@ export class StructChecker {
         const hasDestroy = decl.methods.some((m) => m.name === "__destroy");
         const hasOncopy = decl.methods.some((m) => m.name === "__oncopy");
 
-        if (!hasDestroy) {
-          this.checker.error(
-            `unsafe struct '${decl.name}' with ptr<T> fields must define '__destroy'`,
-            decl.span
-          );
-        }
-        if (!hasOncopy) {
-          this.checker.error(
-            `unsafe struct '${decl.name}' with ptr<T> fields must define '__oncopy'`,
-            decl.span
-          );
+        if (!hasDestroy || !hasOncopy) {
+          const declLoc = this.checker.spanToLocation(decl.span);
+          if (!hasDestroy) {
+            this.checker.diag.unsafeStructMissingDestroy({
+              span: declLoc,
+              structName: decl.name,
+            });
+          }
+          if (!hasOncopy) {
+            this.checker.diag.unsafeStructMissingOncopy({
+              span: declLoc,
+              structName: decl.name,
+            });
+          }
         }
       }
     }
@@ -215,34 +218,43 @@ export class StructChecker {
     // only spelling that matches the C-emitted prototype.
     for (const method of decl.methods) {
       if (method.name !== "__destroy" && method.name !== "__oncopy") continue;
+      const methodLoc = this.checker.spanToLocation(method.span);
       if (method.params.length !== 1) {
-        this.checker.error(
-          `lifecycle hook '${method.name}' must take exactly 1 parameter ('self: ref ${decl.name}')`,
-          method.span
-        );
+        this.checker.diag.invalidLifecycleSignature({
+          span: methodLoc,
+          hookName: method.name,
+          structName: decl.name,
+          reason: "wrong-arity",
+        });
         continue;
       }
       const selfParam = method.params[0];
       if (!selfParam) continue;
       if (selfParam.name !== "self") {
-        this.checker.error(
-          `lifecycle hook '${method.name}' first parameter must be named 'self'`,
-          method.span
-        );
+        this.checker.diag.invalidLifecycleSignature({
+          span: methodLoc,
+          hookName: method.name,
+          structName: decl.name,
+          reason: "first-param-not-self",
+        });
       }
       const selfType = this.checker.resolveType(selfParam.typeAnnotation);
       const isRefSelf =
         selfType.kind === TypeKind.Ptr && (selfType as { isRef?: boolean }).isRef === true;
       if (!isRefSelf) {
-        this.checker.error(
-          `lifecycle hook '${method.name}' must take 'self: ref ${decl.name}'`,
-          method.span
-        );
+        this.checker.diag.lifecycleHookSelfMismatch({
+          span: methodLoc,
+          hookName: method.name,
+          structName: decl.name,
+        });
       }
       if (method.returnType) {
         const retType = this.checker.resolveType(method.returnType);
         if (retType.kind !== TypeKind.Void) {
-          this.checker.error(`lifecycle hook '${method.name}' must return void`, method.span);
+          this.checker.diag.lifecycleReturnTypeWrong({
+            span: methodLoc,
+            hookName: method.name,
+          });
         }
       }
     }
