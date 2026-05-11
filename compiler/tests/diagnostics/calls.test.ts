@@ -44,7 +44,9 @@ function expectOne<K extends NewDiagnostic["kind"]>(
   const matches = diags.filter((d): d is Extract<NewDiagnostic, { kind: K }> => d.kind === kind);
   const [first, ...rest] = matches;
   if (!first || rest.length > 0) {
-    const summary = diags.map((d) => `${d.kind}: ${d.message}`).join("\n  ");
+    const summary = diags
+      .map((d) => `${d.kind}: ${"message" in d ? d.message : JSON.stringify(d)}`)
+      .join("\n  ");
     throw new Error(
       `Expected exactly one '${kind}' diagnostic, got ${matches.length}. All diagnostics:\n  ${summary}`
     );

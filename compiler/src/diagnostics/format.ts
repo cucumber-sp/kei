@@ -29,35 +29,6 @@ function renderEnvelopeTail(diag: Diagnostic): string {
   return parts.length === 0 ? "" : `\n${parts.join("\n")}`;
 }
 
-/** Format a single diagnostic as a one-message text string. */
-export function formatDiagnostic(diag: Diagnostic): string {
-  switch (diag.kind) {
-    case "untriaged":
-      // No code prefix — the `'TODO'` sentinel is internal. Advisory
-      // codes (`error[E0042]: …`) only appear once specific variants
-      // are carved out in PRs 4a–4g.
-      return `${diag.severity}: ${diag.message}`;
-
-    case "arityMismatch":
-    case "argumentTypeMismatch":
-    case "notCallable":
-    case "genericArgMismatch":
-    case "methodNotFound": {
-      // PR 4c (calls) — advisory `E3xxx` codes prefix the message; the
-      // semantic message text is preserved byte-for-byte from the
-      // pre-migration wording so existing substring tests keep passing.
-      const head = `${diag.severity}[${diag.code}]: ${diag.message}`;
-      return `${head}${renderEnvelopeTail(diag)}`;
-    }
-    case "noOperatorOverload":
-    case "invalidOperand":
-    case "binaryTypeMismatch":
-    case "unaryTypeMismatch":
-      // Operator variants (PR 4f) all carry `op` + a pre-formatted
-      // `message` body. The formatter adds the Rust-style advisory
-      // code prefix; the body text matches the historical wording
-      // emitted before the variants were carved out of `untriaged`.
-      return `${diag.severity}[${diag.code}]: ${diag.message}`;
 /**
  * Render the human message text for a diagnostic (without severity or
  * code prefix). Exposed separately from `formatDiagnostic` so the
@@ -69,6 +40,20 @@ export function formatDiagnostic(diag: Diagnostic): string {
 export function messageOf(diag: Diagnostic): string {
   switch (diag.kind) {
     case "untriaged":
+      return diag.message;
+    case "arityMismatch":
+    case "argumentTypeMismatch":
+    case "notCallable":
+    case "genericArgMismatch":
+    case "methodNotFound":
+      // PR 4c (calls) — semantic message text preserved byte-for-byte
+      // from the pre-migration wording.
+      return diag.message;
+    case "noOperatorOverload":
+    case "invalidOperand":
+    case "binaryTypeMismatch":
+    case "unaryTypeMismatch":
+      // PR 4f (operators) — carry op + pre-formatted message body.
       return diag.message;
     case "invalidLifecycleSignature":
       return diag.reason === "wrong-arity"
@@ -93,7 +78,8 @@ export function formatDiagnostic(diag: Diagnostic): string {
     // only appear once specific variants are carved out in PRs 4a–4g.
     return `${diag.severity}: ${body}`;
   }
-  return `${diag.severity}[${diag.code}]: ${body}`;
+  const head = `${diag.severity}[${diag.code}]: ${body}`;
+  return `${head}${renderEnvelopeTail(diag)}`;
 }
 
 /**

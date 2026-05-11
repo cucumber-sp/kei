@@ -1063,7 +1063,6 @@ export class Checker {
     this.diag.unaryTypeMismatch({ span: this.spanToLocation(span), op, message });
   }
 
-  private spanToLocation(span: Span): SourceLocation {
   /**
    * Convert a lexer span (`{ start, end }` byte offsets) to the
    * `SourceLocation` shape the diagnostics module's `Span` alias
@@ -1096,10 +1095,11 @@ export class Checker {
    * wording without the new `error[E5xxx]:` prefix — the legacy CLI
    * formatter already adds the severity prefix on top.
    */
-  private collectDiagnostics(): Diagnostic[] 
+  private collectDiagnostics(): Diagnostic[] {
     return this.diag.diagnostics().map((d) => ({
       severity: d.severity === "warning" ? Severity.Warning : Severity.Error,
       message: messageOf(d),
       location: d.span,
     }));
+  }
 }
