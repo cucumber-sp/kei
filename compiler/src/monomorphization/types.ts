@@ -7,7 +7,7 @@
  * separate struct types named `Box_i32` and `Box_bool`.
  */
 
-import type { Expression, FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes";
+import type { FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes";
 import type { FunctionType, StructType, Type } from "../checker/types";
 
 /**
@@ -41,17 +41,12 @@ export interface MonomorphizedStruct {
    */
   bakedDecl?: StructDecl | UnsafeStructDecl;
   /**
-   * Per-method body type maps populated during the pass-3 body-check sweep.
-   * Keyed by method name; each map records the concrete types of every
-   * expression node in that method's body for this instantiation.
-   *
-   * Retained as a transition shim — KIR lowering reads from the global
-   * `Checker.typeMap` by clone identity now that bodies are checked
-   * against the bake clone. The override stack on `LoweringCtx` (which
-   * this map feeds) becomes a no-op for synthesised decls in PR 4 and
-   * gets deleted entirely in PR 5.
+   * Set to `true` once the pass-3 body-check sweep has run on this
+   * instantiation. Guards against re-checking when the same monomorphized
+   * struct appears in multiple checkers' products (the multi-module
+   * orchestrator's adopt path can do that — see `adoptStruct`).
    */
-  methodBodyTypeMaps?: Map<string, Map<Expression, Type>>;
+  bodyChecked?: boolean;
 }
 
 /**
@@ -87,13 +82,10 @@ export interface MonomorphizedFunction {
    */
   bakedDecl?: FunctionDecl;
   /**
-   * Per-instantiation type map for body expressions. Retained as a
-   * transition shim — KIR lowering reads from the global
-   * `Checker.typeMap` by clone identity now. The override stack on
-   * `LoweringCtx` (which this map feeds) becomes a no-op for synthesised
-   * decls in PR 4 and gets deleted entirely in PR 5.
+   * Set to `true` once the pass-3 body-check sweep has run on this
+   * instantiation. Guards against re-checking when the same monomorphized
+   * function appears in multiple checkers' products (the multi-module
+   * orchestrator's adopt path can do that — see `adoptFunction`).
    */
-  bodyTypeMap?: Map<Expression, Type>;
-  /** Per-instantiation generic resolutions for body expressions. Same transition-shim note as {@link bodyTypeMap}. */
-  bodyGenericResolutions?: Map<Expression, string>;
+  bodyChecked?: boolean;
 }

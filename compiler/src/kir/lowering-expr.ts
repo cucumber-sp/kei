@@ -167,14 +167,8 @@ export function lowerIdentifier(ctx: LoweringCtx, expr: Identifier): VarId {
   // directly.
   const checkerType = ctx.checkResult.types.typeMap.get(expr);
   if (checkerType?.kind === "ptr" && (checkerType as { isRef?: boolean }).isRef === true) {
-    const innerType = ctx.currentBodyTypeMap?.get(expr);
-    const kirInner = innerType
-      ? lowerCheckerType(ctx, innerType)
-      : ((): KirType => {
-          const lowered = getExprKirType(ctx, expr);
-          if (lowered.kind === "ptr") return lowered.pointee;
-          return lowered;
-        })();
+    const lowered = getExprKirType(ctx, expr);
+    const kirInner: KirType = lowered.kind === "ptr" ? lowered.pointee : lowered;
     const dest = freshVar(ctx);
     emit(ctx, { kind: "load", dest, ptr: varId, type: kirInner });
     return dest;
@@ -323,8 +317,7 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
   let funcName: string;
 
   // Check for generic call resolution (e.g. max<i32>(a, b) → max_i32)
-  const genericName =
-    ctx.currentBodyGenericResolutions?.get(expr) ?? ctx.checkResult.generics.resolutions.get(expr);
+  const genericName = ctx.checkResult.generics.resolutions.get(expr);
   if (genericName) {
     funcName = ctx.modulePrefix ? `${ctx.modulePrefix}_${genericName}` : genericName;
   } else if (expr.callee.kind === "Identifier") {
