@@ -865,8 +865,9 @@ export function lowerMoveExpr(ctx: LoweringCtx, expr: MoveExpr): VarId {
   emit(ctx, { kind: "move", dest, source: sourceId, type });
 
   // Mark the source variable as moved so it won't be destroyed at scope exit
+  // (Lifecycle pass consumes the marker and skips the matching destroy).
   if (expr.operand.kind === "Identifier") {
-    ctx.movedVars.add(expr.operand.name);
+    emit(ctx, { kind: "mark_moved", var: expr.operand.name });
   }
 
   return dest;

@@ -180,7 +180,7 @@ function printInst(inst: KirInst): string {
     case "mark_track":
       return `mark_track ${inst.varId}, ${inst.scopeId}`;
     case "mark_moved":
-      return `mark_moved ${inst.varId}`;
+      return `mark_moved ${inst.var}`;
     case "mark_assign":
       return `mark_assign ${inst.slot}, ${inst.newValue}${inst.isMove ? ", move" : ""}`;
     case "mark_param":
