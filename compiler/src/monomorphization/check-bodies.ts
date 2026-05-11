@@ -42,7 +42,10 @@ export type CheckBodyCallback = (product: MonomorphizedProduct) => void;
  * Functions are visited first (matching the historical order on
  * `Checker`); structs follow.
  */
-export function checkBodies(products: MonomorphizationProducts, checkBody: CheckBodyCallback): void {
+export function checkBodies(
+  products: MonomorphizationProducts,
+  checkBody: CheckBodyCallback
+): void {
   for (const monoFunc of products.functions.values()) {
     checkBody({ kind: "function", product: monoFunc });
   }

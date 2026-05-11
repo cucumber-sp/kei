@@ -25,9 +25,9 @@ import {
 } from "./register";
 import type { MonomorphizedFunction, MonomorphizedStruct } from "./types";
 
+export type { CheckBodyCallback, MonomorphizedProduct } from "./check-bodies";
 export { mangleGenericName } from "./mangle";
 export { substituteFunctionType, substituteType } from "./substitute";
-export type { CheckBodyCallback, MonomorphizedProduct } from "./check-bodies";
 export type { MonomorphizedFunction, MonomorphizedStruct } from "./types";
 
 /** Read-only view of all registered instantiations, grouped by kind. */
