@@ -69,10 +69,12 @@ function emitScopeDeferInsts(ctx: LoweringCtx, frame: KirInst[][]): void {
 
 /**
  * Emit a `mark_scope_exit` marker for `scope`, snapshotting the vars and
- * the current moved-set (optionally extended with `extraSkipName`) so the
- * Lifecycle pass can rewrite the marker into destroys in reverse
- * declaration order. The pass enforces the reverse-order invariant; this
- * function passes the vars in declaration order.
+ * (optionally) the early-return retained name so the Lifecycle pass can
+ * rewrite the marker into destroys in reverse declaration order. The
+ * moved-set is reconstructed by the pass from the surrounding
+ * `mark_moved` markers — it isn't captured here. The pass enforces the
+ * reverse-order invariant; this function passes the vars in declaration
+ * order.
  */
 function emitScopeExit(
   ctx: LoweringCtx,
@@ -80,7 +82,7 @@ function emitScopeExit(
   extraSkipName: string | null
 ): void {
   const scopeId: ScopeId = ctx.scopeIdCounter++;
-  const skipNames = new Set<string>(ctx.movedVars);
+  const skipNames = new Set<string>();
   if (extraSkipName !== null) skipNames.add(extraSkipName);
   ctx.scopeExitData.set(scopeId, {
     vars: scope.slice(),

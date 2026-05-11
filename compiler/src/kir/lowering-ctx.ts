@@ -66,8 +66,6 @@ export interface LoweringCtx {
   scopeStack: ScopeVar[][];
   /** Deferred instruction sequences — one frame per scope, each holding captured insts in push order (emitted LIFO at scope exit). */
   deferStack: KirInst[][][];
-  /** Variables explicitly `move`'d — skipped at scope-exit destroy. */
-  movedVars: Set<string>;
 
   /** Cache of `(structName) → { hasDestroy, hasOncopy }` to avoid repeated lookups. */
   structLifecycleCache: Map<string, { hasDestroy: boolean; hasOncopy: boolean }>;
@@ -81,10 +79,9 @@ export interface LoweringCtx {
    * Lifecycle pass can rewrite each marker into its destroys without
    * threading lowering state through the pass call.
    *
-   * Transitional bridge while sibling PRs 4d/4e still own `movedVars` /
-   * `scopeStack`. After they migrate `mark_moved` / `mark_track` into
-   * the IR, the pass reconstructs the same info from the marker stream
-   * and this side-table goes away.
+   * Transitional bridge while sibling PR 4e still owns `scopeStack`.
+   * After it migrates `mark_track` into the IR, the pass reconstructs
+   * the same info from the marker stream and this side-table goes away.
    */
   scopeExitData: Map<ScopeId, KirScopeExitInfo>;
 
@@ -149,7 +146,6 @@ export function createLoweringCtx(
 
     scopeStack: [],
     deferStack: [],
-    movedVars: new Set(),
 
     structLifecycleCache: new Map(),
 

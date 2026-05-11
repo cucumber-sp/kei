@@ -104,7 +104,6 @@ export function resetFunctionState(ctx: LoweringCtx): void {
   ctx.loopContinueTarget = null;
   ctx.scopeStack = [];
   ctx.deferStack = [];
-  ctx.movedVars = new Set();
   ctx.scopeIdCounter = 0;
   ctx.scopeExitData = new Map();
 }

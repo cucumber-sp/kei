@@ -328,10 +328,10 @@ export interface KirMarkTrack {
   scopeId: ScopeId;
 }
 
-/** Mark `varId` as moved out — the pass skips its future scope-exit destroy. */
+/** Mark `var` as moved out — the pass skips its future scope-exit and per-param destroys. */
 export interface KirMarkMoved {
   kind: "mark_moved";
-  varId: VarId;
+  var: string;
 }
 
 /**
