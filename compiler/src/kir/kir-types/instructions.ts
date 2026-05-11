@@ -1,4 +1,4 @@
-import type { VarId } from "./identifiers";
+import type { ScopeId, VarId } from "./identifiers";
 import type { KirFloatType, KirIntType, KirType } from "./types";
 
 // ─── Instructions ────────────────────────────────────────────────────────────
@@ -37,6 +37,14 @@ export type KirInst =
   | KirDestroy
   | KirOncopy
   | KirMove
+  // Lifecycle markers (ephemeral — emitted by lowering, consumed by the
+  // Lifecycle rewrite pass; must not survive into mem2reg).
+  | KirMarkScopeEnter
+  | KirMarkScopeExit
+  | KirMarkTrack
+  | KirMarkMoved
+  | KirMarkAssign
+  | KirMarkParam
   // Debug
   | KirBoundsCheck
   | KirOverflowCheck
@@ -280,6 +288,67 @@ export interface KirMove {
   dest: VarId;
   source: VarId;
   type: KirType;
+}
+
+// ── Lifecycle markers ─────────────────────────────────────────────────────
+//
+// Ephemeral instructions emitted by KIR lowering and consumed by the
+// Lifecycle rewrite pass (see `src/lifecycle/pass.ts`). The pass walks the
+// module, rewrites markers into concrete `destroy` / `oncopy` instructions
+// using the Lifecycle decision map, and drops any marker that doesn't
+// produce output. After the pass, no `mark_*` instruction survives — they
+// are not visible to mem2reg, de-SSA, or the C emitter.
+//
+// Markers are deliberately type-agnostic: `mark_track` / `mark_assign`
+// carry vars/slots, not types. Type is re-read off the var's KIR type at
+// rewrite time. This keeps the planned String stdlib migration additive
+// (string becomes just-another-managed-struct without churning marker
+// shapes). See `docs/design/lifecycle-module.md` §3.
+
+/** Open a new lexical scope frame. Paired with `mark_scope_exit`. */
+export interface KirMarkScopeEnter {
+  kind: "mark_scope_enter";
+  scopeId: ScopeId;
+}
+
+/**
+ * Close the scope frame opened by `mark_scope_enter`. The Lifecycle pass
+ * emits destroys for live tracked vars in reverse declaration order,
+ * skipping moved ones.
+ */
+export interface KirMarkScopeExit {
+  kind: "mark_scope_exit";
+  scopeId: ScopeId;
+}
+
+/** Register `varId` as a managed local in `scopeId`'s frame. */
+export interface KirMarkTrack {
+  kind: "mark_track";
+  varId: VarId;
+  scopeId: ScopeId;
+}
+
+/** Mark `varId` as moved out — the pass skips its future scope-exit destroy. */
+export interface KirMarkMoved {
+  kind: "mark_moved";
+  varId: VarId;
+}
+
+/**
+ * Assignment to a managed slot. The Lifecycle pass rewrites this as
+ * destroy-old, store, then a conditional `oncopy` when `isMove` is false.
+ */
+export interface KirMarkAssign {
+  kind: "mark_assign";
+  slot: VarId;
+  newValue: VarId;
+  isMove: boolean;
+}
+
+/** Destroy `param` at every function exit. */
+export interface KirMarkParam {
+  kind: "mark_param";
+  param: VarId;
 }
 
 // ── Debug checks ─────────────────────────────────────────────────────────────

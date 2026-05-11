@@ -173,6 +173,18 @@ function printInst(inst: KirInst): string {
       return `oncopy ${inst.value}`;
     case "move":
       return `${inst.dest} = move ${inst.source}`;
+    case "mark_scope_enter":
+      return `mark_scope_enter ${inst.scopeId}`;
+    case "mark_scope_exit":
+      return `mark_scope_exit ${inst.scopeId}`;
+    case "mark_track":
+      return `mark_track ${inst.varId}, ${inst.scopeId}`;
+    case "mark_moved":
+      return `mark_moved ${inst.varId}`;
+    case "mark_assign":
+      return `mark_assign ${inst.slot}, ${inst.newValue}${inst.isMove ? ", move" : ""}`;
+    case "mark_param":
+      return `mark_param ${inst.param}`;
   }
 }
 
