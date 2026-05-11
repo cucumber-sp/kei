@@ -256,10 +256,12 @@ export class ExpressionChecker {
         // biome-ignore lint/style/noNonNullAssertion: params.length === 2 is guaranteed by the guard above
         const indexParam = method.params[1]!;
         if (!isAssignableTo(indexType, indexParam.type)) {
-          this.checker.error(
-            `index type mismatch: expected '${typeToString(indexParam.type)}', got '${typeToString(indexType)}'`,
-            expr.span
-          );
+          this.checker.diagnostics.typeMismatch({
+            span: this.checker.spanToLocation(expr.span),
+            context: "index type mismatch",
+            expected: typeToString(indexParam.type),
+            got: typeToString(indexType),
+          });
           return ERROR_TYPE;
         }
         this.checker.operatorMethods.set(expr, { methodName: "op_index", structType: objectType });
@@ -273,10 +275,12 @@ export class ExpressionChecker {
     }
 
     if (!isIntegerType(indexType)) {
-      this.checker.error(
-        `index must be an integer type, got '${typeToString(indexType)}'`,
-        expr.span
-      );
+      this.checker.diagnostics.expectedType({
+        span: this.checker.spanToLocation(expr.span),
+        context: "index",
+        expected: "an integer type",
+        got: typeToString(indexType),
+      });
       return ERROR_TYPE;
     }
 
@@ -307,10 +311,12 @@ export class ExpressionChecker {
   private checkIfExpression(expr: IfExpr): Type {
     const condType = this.checkExpression(expr.condition);
     if (!isErrorType(condType) && condType.kind !== TypeKind.Bool) {
-      this.checker.error(
-        `if expression condition must be bool, got '${typeToString(condType)}'`,
-        expr.condition.span
-      );
+      this.checker.diagnostics.expectedType({
+        span: this.checker.spanToLocation(expr.condition.span),
+        context: "if expression condition",
+        expected: "bool",
+        got: typeToString(condType),
+      });
     }
 
     // Check both branches
@@ -476,10 +482,12 @@ export class ExpressionChecker {
     if (isErrorType(startType) || isErrorType(endType)) return ERROR_TYPE;
 
     if (!isIntegerType(startType)) {
-      this.checker.error(
-        `range start must be integer type, got '${typeToString(startType)}'`,
-        expr.span
-      );
+      this.checker.diagnostics.expectedType({
+        span: this.checker.spanToLocation(expr.span),
+        context: "range start",
+        expected: "integer type",
+        got: typeToString(startType),
+      });
       return ERROR_TYPE;
     }
 
@@ -540,10 +548,11 @@ export class ExpressionChecker {
       return targetType;
     }
 
-    this.checker.error(
-      `cannot cast '${typeToString(operandType)}' to '${typeToString(targetType)}'`,
-      expr.span
-    );
+    this.checker.diagnostics.cannotCast({
+      span: this.checker.spanToLocation(expr.span),
+      from: typeToString(operandType),
+      to: typeToString(targetType),
+    });
     return ERROR_TYPE;
   }
 }

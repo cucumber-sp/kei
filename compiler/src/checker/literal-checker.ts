@@ -124,10 +124,12 @@ export function checkArrayLiteral(checker: Checker, expr: ArrayLiteral): Type {
       const litInfo = extractLiteralInfo(element);
       const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, firstType);
       if (!isLiteralOk) {
-        checker.error(
-          `array element ${i}: expected '${typeToString(firstType)}', got '${typeToString(elemType)}'`,
-          element.span
-        );
+        checker.diagnostics.typeMismatch({
+          span: checker.spanToLocation(element.span),
+          context: `array element ${i}`,
+          expected: typeToString(firstType),
+          got: typeToString(elemType),
+        });
       }
     }
   }
@@ -139,7 +141,10 @@ export function checkStructLiteral(checker: Checker, expr: StructLiteral): Type 
   // Look up the struct type
   const sym = checker.currentScope.lookupType(expr.name);
   if (!sym || sym.kind !== SymbolKind.Type) {
-    checker.error(`undeclared type '${expr.name}'`, expr.span);
+    checker.diagnostics.unknownType({
+      span: checker.spanToLocation(expr.span),
+      name: expr.name,
+    });
     return ERROR_TYPE;
   }
 
@@ -199,16 +204,14 @@ export function checkStructLiteral(checker: Checker, expr: StructLiteral): Type 
       valueType.kind === "ptr" &&
       !valueType.isRef
     ) {
-      if (!checker.currentScope.isInsideUnsafe()) {
-        checker.error(
-          `field '${field.name}': expected '${typeToString(expectedType)}', got '${typeToString(valueType)}'`,
-          field.span
-        );
-      } else if (!typesEqual(valueType.pointee, expectedType.pointee)) {
-        checker.error(
-          `field '${field.name}': expected '${typeToString(expectedType)}', got '${typeToString(valueType)}'`,
-          field.span
-        );
+      const insideUnsafe = checker.currentScope.isInsideUnsafe();
+      if (!insideUnsafe || !typesEqual(valueType.pointee, expectedType.pointee)) {
+        checker.diagnostics.incompatibleAssignment({
+          span: checker.spanToLocation(field.span),
+          target: `field '${field.name}'`,
+          expected: typeToString(expectedType),
+          got: typeToString(valueType),
+        });
       }
       // else: accepted — pointee matches and we're in unsafe.
       continue;
@@ -223,10 +226,12 @@ export function checkStructLiteral(checker: Checker, expr: StructLiteral): Type 
         // Update typeMap so KIR lowering uses the correct type (e.g. i32 literal → f64)
         checker.setExprType(field.value, expectedType);
       } else {
-        checker.error(
-          `field '${field.name}': expected '${typeToString(expectedType)}', got '${typeToString(valueType)}'`,
-          field.span
-        );
+        checker.diagnostics.incompatibleAssignment({
+          span: checker.spanToLocation(field.span),
+          target: `field '${field.name}'`,
+          expected: typeToString(expectedType),
+          got: typeToString(valueType),
+        });
       }
     }
   }
