@@ -53,7 +53,7 @@ A new top-level directory `compiler/src/monomorphization/`. Owns:
 - Cross-module adoption — pulling in instantiations registered by
   other modules.
 - The integration with [Lifecycle](./lifecycle-module.md): for each
-  baked struct, call `Lifecycle.decide(struct)` so the new
+  baked struct, call `Lifecycle.register(struct)` so the new
   instance gets its own decision.
 
 Lowering loses its generics-awareness entirely.
@@ -108,7 +108,71 @@ Every `Type` node, every expression's `resolvedType`, every nested
 struct reference — substituted. No reference to the type variable
 `T` survives in the baked decl.
 
-Three downstream consequences:
+### Y-a-clone: how "fresh AST decl" is realised
+
+The kei codebase stores `resolvedType` for every expression in a
+**side-map keyed by expression identity** on the `Checker`
+(`typeMap: Map<Expression, Type>`, plus `genericResolutions:
+Map<Expression, string>`). AST expression nodes themselves don't carry
+the resolved type; pre-monomorphization, the per-instantiation overrides
+on `LoweringCtx` mirror this side-map for the body of each instantiation
+(this is the override stack PR 5 deletes).
+
+To produce a "fresh AST decl" where each expression's resolved type is
+concrete under the substitution, the bake walker **deep-clones every
+AST node** in the template's body and emits a new side-map keyed by
+the clones. Each baked product owns:
+
+- A fresh `Declaration` AST node (struct / function / enum) with cloned
+  body — every nested `Expression`, `Statement`, and `Type` node has a
+  new identity.
+- A fresh side-map `Map<Expression, Type>` (and matching
+  `genericResolutions`) keyed by the cloned expression nodes. Each entry
+  is the template's resolved type with the substitution applied via
+  `substituteType`.
+
+**Walker scope.** The cloner recurses over the AST's discriminated
+unions defined in `src/ast/nodes/`:
+
+- 24 expression kinds (literal, identifier, binary, unary, call,
+  member, index, struct-literal, array-literal, cast, if-expr,
+  block-expr, match-expr, move, …)
+- 17 statement kinds (let, assign, return, if, while, for, switch,
+  break, continue, defer, expr-stmt, block, unsafe-block,
+  panic-stmt, throw-stmt, …)
+- Type nodes (passed to the existing `substituteType` helper from
+  `src/monomorphization/substitute.ts`)
+
+Most kinds have trivial substitution: recurse on children, clone the
+record. A small number have non-trivial work (struct-literal /
+call-expr resolve mangled names for nested generic references via
+`mangleGenericName`).
+
+**Side-map population.** For every cloned `Expression` node `eClone`
+created from template `eTemplate`, the walker writes
+`bakedTypeMap.set(eClone, substituteType(templateTypeMap.get(eTemplate), substitutionMap))`.
+Same shape for `genericResolutions`.
+
+**Spans on cloned nodes** point at the template (per §9's recommendation
+— template span primary, instantiation site goes into diagnostic
+`secondarySpans` at error-emission time, not onto the AST node).
+
+**The baked product** is a record like:
+
+```ts
+type BakedDecl = {
+  decl: Declaration;                       // synthesised AST
+  typeMap: Map<Expression, Type>;          // keyed by `decl`'s nodes
+  genericResolutions: Map<Expression, string>;
+};
+```
+
+`Monomorphization.products()` returns `BakedDecl[]`. Downstream
+consumers (checker pass-3 body-check, KIR lowering) read from the
+baked decl's own `typeMap`, not from the Checker's global map — that
+global map only contains template entries, untouched by bake.
+
+### Three downstream consequences
 
 **Pass 3 type-checks baked decls directly.** Pass 3 (now driven by
 Monomorphization) walks each baked decl and runs the standard checker
@@ -145,16 +209,16 @@ in the lifecycle design as Q5c) resolves cleanly:
 Monomorphization.register(genericStructDecl, [string]) {
   baked = bake(genericStructDecl, { T: string });    // synthesise AST
   this.products.push(baked);
-  lifecycle.decide(baked);                             // ← single line
+  lifecycle.register(bakedStructType);                             // ← single line
 }
 ```
 
-`Lifecycle.decide` was already designed to run on concrete struct
+`Lifecycle.register` was already designed to run on concrete struct
 types (see [lifecycle design §2](./lifecycle-module.md)).
 Monomorphization produces concrete struct types. The seam is one
 function call per registration.
 
-Note also that the fixed-point iteration in `Lifecycle.decide` runs
+Note also that the fixed-point iteration in `Lifecycle.register` runs
 *after* all modules have registered their instantiations. So
 Monomorphization's `register` only schedules the decide call;
 Lifecycle's fixed-point sweeps over the products map once everyone is
@@ -264,7 +328,7 @@ MonomorphizedStruct/Function" to "list of synthesised AST decls."
 Pass 3 type-checks the synthesised decls directly. Lowering still
 has the override stack but it's a no-op for synthesised decls (they
 already carry concrete resolved types). Lifecycle integration
-(`lifecycle.decide(baked)`) wires up here.
+(`lifecycle.register(bakedStructType)`) wires up here.
 
 **PR 5 — Delete the override stack.** Remove `LoweringCtx`'s
 per-instantiation type map field and all push/pop sites in

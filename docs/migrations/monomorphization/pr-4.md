@@ -13,11 +13,11 @@ touching any code, read these files in order:
 2. `docs/design/monomorphization-module.md` — full design;
    read in full, but especially §4 (Y-a — the synthesised-AST
    decision and its three downstream consequences), §5 (Lifecycle
-   integration — the `lifecycle.decide(baked)` hook), §6
+   integration — the `lifecycle.register(bakedStructType)` hook), §6
    (Diagnostics integration — `secondarySpans` for instantiation
    context), §7 (alternatives X, Y-b, Z and why Y-a wins), §8 PR 4
    (this PR), §9 (open questions — span policy in particular)
-3. `docs/design/lifecycle-module.md` §2 — `Lifecycle.decide` is
+3. `docs/design/lifecycle-module.md` §2 — `Lifecycle.register` is
    designed to run on concrete struct types; baked structs are
    exactly that
 4. `docs/design/diagnostics-module.md` §6 — the β envelope
@@ -52,60 +52,114 @@ override stack on `LoweringCtx` becomes a no-op for synthesised
 decls — and PR 5 deletes the dead code.
 
 Lifecycle integration also lands here. Each baked struct gets a
-`lifecycle.decide(baked)` call as part of registration, per
+`lifecycle.register(bakedStructType)` call as part of registration, per
 design doc §5. This resolves the Q5c interaction question that
 was deferred from the lifecycle design.
 
-**Files affected:**
+## How "fresh AST decl" is realised — Y-a-clone
 
-- **NEW** `compiler/src/monomorphization/bake.ts` — pure
-  substitution from `(genericDecl, substitutionMap)` to a fresh
-  synthesised AST decl. Walks the AST; for every type node,
-  rewrite via `substituteType`; for every expression's
-  `resolvedType`, rewrite via `substituteType`; for every nested
-  struct reference, rewrite the referenced type's name (mangled
-  if it itself becomes an instantiation). Source spans on
-  synthesised nodes point at the generic template per design doc
-  §4 and the open-question recommendation in §9 (template span
-  primary; instantiation site goes into diagnostic
-  `secondarySpans`, not into the AST node itself).
+**Critical: kei stores `resolvedType` in a Checker-owned side-map,
+NOT on AST nodes.** See `Checker.typeMap: Map<Expression, Type>` and
+`Checker.genericResolutions: Map<Expression, string>` at
+`compiler/src/checker/checker.ts:159,195`. AST expression nodes
+themselves don't carry type info. So "fresh AST decl with each
+expression's `resolvedType` substituted" means **the walker
+deep-clones AST nodes and emits a new side-map keyed by the clones**.
+
+Each baked product is:
+
+```ts
+type BakedDecl = {
+  decl: Declaration;                       // synthesised AST, cloned subtree
+  typeMap: Map<Expression, Type>;          // keyed by `decl`'s expression nodes
+  genericResolutions: Map<Expression, string>;
+};
+```
+
+The walker's contract per expression `eClone` cloned from template
+`eTemplate`:
+
+```
+bakedTypeMap.set(eClone, substituteType(templateTypeMap.get(eTemplate), substitutionMap));
+// same for genericResolutions
+```
+
+Downstream consumers (pass-3 body-check, KIR lowering) read from the
+baked decl's own side-maps, not from the Checker's global
+`typeMap` — that global map is untouched by bake and only contains
+template entries.
+
+**Walker scope** (see `compiler/src/ast/nodes/`):
+
+- All `Expression` discriminated-union arms in
+  `compiler/src/ast/nodes/expressions.ts`. Most have trivial
+  substitution: recurse on children, clone the record. A small
+  number need name resolution via `mangleGenericName` (struct-literal
+  instantiations of nested generics, call-expr against generic
+  functions).
+- All `Statement` discriminated-union arms in
+  `compiler/src/ast/nodes/statements.ts`. Same shape — recurse + clone.
+- All `Type` AST-node arms — call the existing `substituteType` from
+  `src/monomorphization/substitute.ts`.
+
+Most kinds are mechanical. The non-trivial cases are flagged below
+in "Forbidden shortcuts."
+
+## Files affected
+
+- **NEW** `compiler/src/monomorphization/bake.ts` — implements the
+  clone walker. Signature: `bake(genericDecl: Declaration,
+  substitutionMap: Map<string, Type>, ctx: BakeCtx) → BakedDecl`,
+  where `ctx` carries the Checker's template-side `typeMap` and
+  `genericResolutions` (read-only inputs). The walker recurses over
+  every Expression / Statement / Type kind and emits a fresh
+  side-map. Cloned nodes carry the **template's source span** (per
+  design doc §4 / §9: template span is the AST node's primary span;
+  instantiation site goes into diagnostic `secondarySpans` at
+  error-emission time, not onto the AST node).
+- **NEW** `compiler/src/monomorphization/bake-types.ts` (optional) —
+  if the clone walker grows large enough to need splitting, factor
+  the type-node cloning out. Otherwise inline into `bake.ts`.
+- **MODIFIED** `compiler/src/monomorphization/types.ts` — add the
+  `BakedDecl` type. The old `MonomorphizedStruct/Function/Enum`
+  records can either stay as type aliases for transition (cleaner)
+  or be removed entirely if no consumer still reads them. Pick
+  transition aliases unless removal is cheap.
 - **MODIFIED** `compiler/src/monomorphization/register.ts` —
-  `register(genericDecl, typeArgs)` now (a) computes the
-  substitution map, (b) invokes `bake(...)` to produce a
-  synthesised AST decl, (c) appends to the products list, (d)
-  for baked structs, calls `lifecycle.decide(baked)` (design doc
-  §5). The old `MonomorphizedStruct/Function/Enum` record path
-  is deleted.
+  `register(genericDecl, typeArgs)` now (a) computes the substitution
+  map, (b) invokes `bake(...)` to produce a `BakedDecl`, (c) appends
+  to the products list, (d) for baked structs, calls
+  `lifecycle.register(bakedStructType)` (design doc §5). The old
+  record-construction path is deleted.
 - **MODIFIED** `compiler/src/monomorphization/index.ts` — the
-  `products()` API now returns `AstDecl[]` (the union of
-  synthesised structs / functions / enums). Internal accessors
-  (`getMonomorphizedStruct(name)` etc.) return the synthesised
-  AST decl rather than the old record. Update the
-  `Monomorphization` factory to take `lifecycle` (already in the
-  options bag from the design doc §3 example).
+  `products()` API now returns `BakedDecl[]`. Internal accessors
+  (`getMonomorphizedStruct(name)` etc.) return `BakedDecl` (or
+  `BakedDecl.decl` for direct AST consumers; pick one and document).
+  Update the `Monomorphization` factory to take `lifecycle` in the
+  options bag.
 - **MODIFIED** `compiler/src/monomorphization/check-bodies.ts` —
-  iterates synthesised AST decls directly. The callback into
-  `checker.checkBody(decl)` now receives a fully-resolved decl;
-  no per-instantiation override needed at the call site. Pass-3
-  errors emitted under this driver use the diagnostics module's
-  `secondarySpans` envelope to point at the instantiation call
-  site, per design doc §6.
-- **MODIFIED** `compiler/src/checker/checker.ts` — wherever the
-  Checker previously read a `MonomorphizedStruct.fields` (or
-  `MonomorphizedFunction.params`, etc.) record shape, it now
-  reads from the synthesised AST decl instead. The information
-  is the same; the access shape changes.
+  iterates `BakedDecl[]`. The callback into `checker.checkBody(decl,
+  typeMap, genericResolutions)` now receives the baked decl plus its
+  side-maps; pass-3 reads types from the baked maps, not from the
+  Checker's global maps. Pass-3 errors use the diagnostics module's
+  `secondarySpans` envelope per design doc §6.
+- **MODIFIED** `compiler/src/checker/checker.ts` — `checkBody` (and
+  its struct-method counterparts) accept optional baked side-maps
+  and prefer them over `this.typeMap` / `this.genericResolutions`
+  when present. Sites that previously read
+  `MonomorphizedStruct.fields` / `MonomorphizedFunction.params` now
+  read from `BakedDecl.decl` (the AST) instead.
 - **MODIFIED** `compiler/src/kir/lowering-decl.ts`,
   `lowering-struct.ts`, `lowering-types.ts` — lowering iterates
-  synthesised decls instead of records. The override push/pop
-  sites stay (push the override, lower, pop the override) but
-  for synthesised decls the override is now an empty map — no
-  substitution required, the decl already carries resolved
-  types. The override is a no-op in this PR; PR 5 deletes the
-  field and every push/pop site.
-- **MODIFIED** call site that constructs `Monomorphization` —
-  pass `lifecycle` into the options bag (already available from
-  the surrounding driver per Lifecycle's own migration).
+  `BakedDecl`s and reads expression types from `BakedDecl.typeMap`
+  (a fresh read site replacing the existing override-stack read).
+  The override push/pop sites stay but **populate the override from
+  `BakedDecl.typeMap` instead of from the Checker's global map**.
+  The override is structurally a no-op (each baked decl carries
+  its own complete map); PR 5 deletes the field and every push/pop
+  site.
+- **MODIFIED** call site that constructs `Monomorphization` — pass
+  `lifecycle` into the options bag.
 
 **Out of scope (do not touch in this PR):**
 
@@ -117,8 +171,8 @@ was deferred from the lifecycle design.
   Bake fully at register time per design doc §4. Memory cost is
   acknowledged in §9 as a future measurement; first make it
   correct.
-- **Don't conflate `lifecycle.decide` calls with body-check
-  timing.** `lifecycle.decide` runs as part of `register`; pass
+- **Don't conflate `lifecycle.register` calls with body-check
+  timing.** `lifecycle.register` runs as part of `register`; pass
   3 (body-check) runs later, driven by
   `Monomorphization.checkBodies`. Lifecycle's fixed-point sweep
   runs after all modules have registered (design doc §5).
@@ -154,7 +208,7 @@ don't update the test.
   `Bar<T>` baking through to `Bar_i32`, (d) function with `T`
   parameter and `T` return, (e) enum with `T` variant payload.
 - **EXTENDED** `compiler/tests/monomorphization/register.test.ts`
-  — additionally assert that `lifecycle.decide` is called once
+  — additionally assert that `lifecycle.register` is called once
   per baked struct registration (use a stub `lifecycle` that
   records calls).
 
@@ -171,8 +225,8 @@ Pure-data tests; no full compiler run required.
   Bake fully at register time per design doc §4. If the design
   doc's choice creates measurable memory cost in practice,
   that's a §9 follow-up question for after PR 4 lands.
-- **Don't conflate `lifecycle.decide` calls with body-check
-  timing.** `lifecycle.decide` runs in `register`; pass 3 runs
+- **Don't conflate `lifecycle.register` calls with body-check
+  timing.** `lifecycle.register` runs in `register`; pass 3 runs
   later in `checkBodies`. Lifecycle's fixed-point runs after all
   registrations complete.
 - **Don't change source spans on synthesised AST nodes.** Spans
@@ -183,6 +237,31 @@ Pure-data tests; no full compiler run required.
   records-on-the-side, no "legacy mode" flag.
 - **Don't reformat unrelated code.** Biome must report changes
   only in files you touched intentionally.
+- **Don't mutate the Checker's global `typeMap` or
+  `genericResolutions` during bake.** The walker emits a fresh
+  side-map per `BakedDecl`. The global maps stay
+  template-only — touching them breaks template re-checks and
+  diagnostics keyed by template identity.
+- **Don't skip cloning any AST node kind.** Every Expression /
+  Statement / Type kind in `src/ast/nodes/` must have a clone
+  case. If a kind doesn't appear in `bake.ts`, an instantiation
+  using it will share node identity with the template — and
+  reads from the baked `typeMap` will miss because the side-map
+  is keyed by clone identity. TS exhaustiveness checks on
+  `switch (node.kind)` are your friend; lean on them.
+- **Don't bake a generic decl's `genericParams` list into the
+  baked decl.** The baked decl is *concrete* — its `genericParams`
+  should be empty. Downstream consumers gate on
+  `genericParams.length > 0` to decide "is this a template I
+  should skip?"; getting this wrong causes the baked decl to be
+  treated as another template.
+- **Don't fold name resolution into the clone walker beyond
+  `mangleGenericName`.** Struct-literal / call-expr nodes that
+  reference nested generics need their target name mangled (e.g.
+  `Bar<T>` baked under `{T: i32}` becomes `Bar_i32`). Anything
+  else (resolving a method on a substituted struct, etc.) stays
+  in the existing checker / lowering paths — they read the
+  baked side-map.
 - **Don't introduce new dependencies.** `package.json` should
   not change.
 
@@ -196,7 +275,7 @@ Pure-data tests; no full compiler run required.
    for nested generic references.
 2. Wire `register.ts` to call `bake.ts`. The output goes into
    the products list. For struct bakes, also call
-   `lifecycle.decide(baked)`. Delete the old code path that
+   `lifecycle.register(bakedStructType)`. Delete the old code path that
    built `MonomorphizedStruct/Function/Enum` records.
 3. Update the `Monomorphization` interface: `products()` returns
    `AstDecl[]`; targeted accessors return synthesised AST decls.
@@ -232,7 +311,7 @@ If any check fails, stop and report.
 
 ```
 feat(monomorphization): bake instantiations into synthesised AST decls (Y-a)
-feat(monomorphization): hook lifecycle.decide on baked structs
+feat(monomorphization): hook lifecycle.register on baked structs
 refactor(checker,kir): consume synthesised AST decls instead of records
 test(monomorphization): cover bake substitution and lifecycle hook
 ```
@@ -248,7 +327,7 @@ test(monomorphization): cover bake substitution and lifecycle hook
   records to fully-substituted synthesised AST decls; pass 3
   type-checks them directly without a per-instantiation override
 - Lifecycle integration: each baked struct receives a
-  `lifecycle.decide(baked)` call at registration time
+  `lifecycle.register(bakedStructType)` call at registration time
 - Diagnostics integration: pass-3 errors carry the instantiation
   site via `secondarySpans`
 - The `LoweringCtx` override stack remains in place but is now a
@@ -256,14 +335,14 @@ test(monomorphization): cover bake substitution and lifecycle hook
 - Diff size note: this is the largest PR in the migration
   (~800–1200 lines). Reviewer focuses on (1) bake.ts
   correctness, (2) the products() API change, (3) the
-  lifecycle.decide hook
+  lifecycle.register hook
 
 ## Test plan
 - [ ] `bun test` passes (no regressions)
 - [ ] `bunx biome check` passes
 - [ ] New tests: `tests/monomorphization/bake.test.ts`
 - [ ] Extended: `tests/monomorphization/register.test.ts` asserts
-      `lifecycle.decide` is called per baked struct
+      `lifecycle.register` is called per baked struct
 ```
 
 ## Escape hatches
@@ -283,7 +362,7 @@ Stop and report if:
 4. The diff exceeds ~1500 lines — well past the design doc's
    load-bearing-PR estimate; suggests scope creep or a missing
    prerequisite extraction.
-5. `lifecycle.decide` doesn't yet exist (Lifecycle PR 1 hasn't
+5. `lifecycle.register` doesn't yet exist (Lifecycle PR 1 hasn't
    landed). Stop and report; don't stub it.
 
 Report format per `_brief-template.md`.
