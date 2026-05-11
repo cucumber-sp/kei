@@ -21,9 +21,11 @@ import type {
   KirFunction,
   KirGlobal,
   KirInst,
+  KirScopeExitInfo,
   KirTerminator,
   KirType,
   KirTypeDecl,
+  ScopeId,
   VarId,
 } from "./kir-types";
 
@@ -69,6 +71,22 @@ export interface LoweringCtx {
 
   /** Cache of `(structName) → { hasDestroy, hasOncopy }` to avoid repeated lookups. */
   structLifecycleCache: Map<string, { hasDestroy: boolean; hasOncopy: boolean }>;
+
+  /** Monotonic allocator for `mark_scope_exit` scope ids — fresh per function. */
+  scopeIdCounter: ScopeId;
+  /**
+   * Per-marker scope-exit snapshots indexed by the scope id baked into
+   * the matching `mark_scope_exit` instruction. Populated by
+   * `emitScopeExit` and attached to the returned `KirFunction` so the
+   * Lifecycle pass can rewrite each marker into its destroys without
+   * threading lowering state through the pass call.
+   *
+   * Transitional bridge while sibling PRs 4d/4e still own `movedVars` /
+   * `scopeStack`. After they migrate `mark_moved` / `mark_track` into
+   * the IR, the pass reconstructs the same info from the marker stream
+   * and this side-table goes away.
+   */
+  scopeExitData: Map<ScopeId, KirScopeExitInfo>;
 
   // ─── Module-level collected output ────────────────────────────────────
   functions: KirFunction[];
@@ -134,6 +152,9 @@ export function createLoweringCtx(
     movedVars: new Set(),
 
     structLifecycleCache: new Map(),
+
+    scopeIdCounter: 0,
+    scopeExitData: new Map(),
 
     functions: [],
     externs: [],

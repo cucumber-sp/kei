@@ -5,8 +5,8 @@
 
 import type { Expression } from "../ast/nodes";
 import type { Type } from "../checker/types";
-import type { KirInst, VarId } from "./kir-types";
-import type { LoweringCtx } from "./lowering-ctx";
+import type { KirInst, ScopeId, VarId } from "./kir-types";
+import type { LoweringCtx, ScopeVar } from "./lowering-ctx";
 import { emit } from "./lowering-utils";
 
 /**
@@ -51,12 +51,12 @@ export function pushScope(ctx: LoweringCtx): void {
   ctx.deferStack.push([]);
 }
 
-/** Pop scope and emit destroy for all live variables in reverse declaration order */
+/** Pop the current scope frame, emit its lowered defer block, then the scope-exit marker. */
 export function popScopeWithDestroy(ctx: LoweringCtx): void {
   const scope = ctx.scopeStack.pop();
   const defers = ctx.deferStack.pop();
   if (defers) emitScopeDeferInsts(ctx, defers);
-  if (scope) emitScopeDestroys(ctx, scope);
+  if (scope) emitScopeExit(ctx, scope, null);
 }
 
 /** Emit captured defer instruction sequences for one scope frame, in LIFO order. */
@@ -67,62 +67,65 @@ function emitScopeDeferInsts(ctx: LoweringCtx, frame: KirInst[][]): void {
   }
 }
 
-/** Emit destroys for scope variables in reverse order, skipping moved vars */
-export function emitScopeDestroys(
+/**
+ * Emit a `mark_scope_exit` marker for `scope`, snapshotting the vars and
+ * the current moved-set (optionally extended with `extraSkipName`) so the
+ * Lifecycle pass can rewrite the marker into destroys in reverse
+ * declaration order. The pass enforces the reverse-order invariant; this
+ * function passes the vars in declaration order.
+ */
+function emitScopeExit(
   ctx: LoweringCtx,
-  scope: { name: string; varId: VarId; structName: string; isString?: boolean }[]
+  scope: readonly ScopeVar[],
+  extraSkipName: string | null
 ): void {
-  for (let i = scope.length - 1; i >= 0; i--) {
-    const sv = scope[i];
-    if (!sv) continue;
-    if (ctx.movedVars.has(sv.name)) continue;
-    if (sv.isString) {
-      emit(ctx, { kind: "call_extern_void", func: "kei_string_destroy", args: [sv.varId] });
-    } else {
-      emit(ctx, { kind: "destroy", value: sv.varId, structName: sv.structName });
-    }
+  const scopeId: ScopeId = ctx.scopeIdCounter++;
+  const skipNames = new Set<string>(ctx.movedVars);
+  if (extraSkipName !== null) skipNames.add(extraSkipName);
+  ctx.scopeExitData.set(scopeId, {
+    vars: scope.slice(),
+    skipNames,
+  });
+  emit(ctx, { kind: "mark_scope_exit", scopeId });
+}
+
+/**
+ * Walk scope frames inner→outer from `startDepth` to the top, emit each
+ * frame's lowered defer block followed by its `mark_scope_exit` marker.
+ * Used by early-return / `break` / `continue` paths that unwind through
+ * multiple scopes without popping them (the function or enclosing
+ * statement still owns the stack).
+ */
+function emitScopeExitsFromDepth(
+  ctx: LoweringCtx,
+  startDepth: number,
+  extraSkipName: string | null
+): void {
+  for (let i = ctx.scopeStack.length - 1; i >= startDepth; i--) {
+    const defers = ctx.deferStack[i];
+    if (defers) emitScopeDeferInsts(ctx, defers);
+    const scope = ctx.scopeStack[i];
+    if (scope) emitScopeExit(ctx, scope, extraSkipName);
   }
 }
 
-/** Emit destroys for all scopes (for early return) without popping */
+/** Emit defer + scope-exit marker for every live scope (early return). */
 export function emitAllScopeDestroys(ctx: LoweringCtx): void {
-  for (let i = ctx.scopeStack.length - 1; i >= 0; i--) {
-    const defers = ctx.deferStack[i];
-    if (defers) emitScopeDeferInsts(ctx, defers);
-    const scope = ctx.scopeStack[i];
-    if (scope) emitScopeDestroys(ctx, scope);
-  }
+  emitScopeExitsFromDepth(ctx, 0, null);
 }
 
-/** Emit destroys only for scopes inside the current loop (from loopScopeDepth onward) */
+/** Emit defer + scope-exit marker for scopes inside the current loop (`break` / `continue`). */
 export function emitLoopScopeDestroys(ctx: LoweringCtx): void {
-  for (let i = ctx.scopeStack.length - 1; i >= ctx.loopScopeDepth; i--) {
-    const defers = ctx.deferStack[i];
-    if (defers) emitScopeDeferInsts(ctx, defers);
-    const scope = ctx.scopeStack[i];
-    if (scope) emitScopeDestroys(ctx, scope);
-  }
+  emitScopeExitsFromDepth(ctx, ctx.loopScopeDepth, null);
 }
 
-/** Emit destroys for all scopes, but skip a named variable (the returned value) */
+/**
+ * Emit defer + scope-exit marker for every live scope (early return),
+ * threading `skipName` into each marker's skip-set so the named local
+ * survives as the returned value.
+ */
 export function emitAllScopeDestroysExceptNamed(ctx: LoweringCtx, skipName: string | null): void {
-  for (let i = ctx.scopeStack.length - 1; i >= 0; i--) {
-    const defers = ctx.deferStack[i];
-    if (defers) emitScopeDeferInsts(ctx, defers);
-    const scope = ctx.scopeStack[i];
-    if (!scope) continue;
-    for (let j = scope.length - 1; j >= 0; j--) {
-      const sv = scope[j];
-      if (!sv) continue;
-      if (ctx.movedVars.has(sv.name)) continue;
-      if (skipName !== null && sv.name === skipName) continue;
-      if (sv.isString) {
-        emit(ctx, { kind: "call_extern_void", func: "kei_string_destroy", args: [sv.varId] });
-      } else {
-        emit(ctx, { kind: "destroy", value: sv.varId, structName: sv.structName });
-      }
-    }
-  }
+  emitScopeExitsFromDepth(ctx, 0, skipName);
 }
 
 /** Track a variable in the current scope if it has lifecycle hooks */

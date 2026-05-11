@@ -16,11 +16,12 @@ import { lowerSource } from "../helpers/pipeline";
 /**
  * Parse, check, lower to KIR, and run the Lifecycle rewrite pass.
  *
- * The pass strips lifecycle markers and rewrites `mark_assign` into
- * concrete `destroy` / `store` / `oncopy` sequences — the same KIR shape
- * mem2reg and the C emitter consume downstream. Running it here keeps
- * KIR-level assertions stable as insertion sites cut over from inline
- * emission to markers (Lifecycle migration PR 4a–4e).
+ * The pass strips lifecycle markers and rewrites `mark_assign` /
+ * `mark_scope_exit` into concrete `destroy` / `store` / `oncopy`
+ * sequences — the same KIR shape mem2reg and the C emitter consume
+ * downstream. Running it here keeps KIR-level assertions stable as
+ * insertion sites cut over from inline emission to markers (Lifecycle
+ * migration PR 4a–4e).
  */
 export function lower(source: string): KirModule {
   return runLifecyclePass(lowerSource(source), () => undefined);
