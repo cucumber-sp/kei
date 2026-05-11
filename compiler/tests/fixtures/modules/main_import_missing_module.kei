@@ -1,0 +1,6 @@
+// Imports a module that doesn't exist anywhere on the search path.
+import { thing } from no_such_module;
+
+fn main() -> i32 {
+    return 0;
+}

@@ -1196,7 +1196,7 @@ export class Checker {
    * rest of the pipeline still consume. PR 4+ migrates consumers onto
    * the new union shape; until then we adapt at the boundary. The
    * message text is pulled through `messageOf` so each variant (including
-   * the PR 4a–4f ones with structured fields) renders its wording
+   * the PR 4a–4g ones with structured fields) renders its wording
    * without the new `error[Exxxx]:` prefix — the legacy CLI formatter
    * already adds the severity prefix on top.
    */

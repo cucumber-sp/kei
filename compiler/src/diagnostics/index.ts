@@ -28,10 +28,12 @@ export type {
   BinaryTypeMismatchDiagnostic,
   CannotCastDiagnostic,
   CannotConstructStructDiagnostic,
+  CyclicImportDiagnostic,
   Diagnostic,
   DiagnosticEnvelope,
   ExpectedTypeDiagnostic,
   GenericArgMismatchDiagnostic,
+  ImportedSymbolNotExportedDiagnostic,
   IncompatibleAssignmentDiagnostic,
   InvalidFieldAccessDiagnostic,
   InvalidLifecycleSignatureDiagnostic,
@@ -40,6 +42,8 @@ export type {
   LifecycleReturnTypeWrongDiagnostic,
   MethodNotFoundDiagnostic,
   MissingFieldDiagnostic,
+  MixedModuleStylesDiagnostic,
+  ModuleNotFoundDiagnostic,
   NonOptionalAccessDiagnostic,
   NoOperatorOverloadDiagnostic,
   NotCallableDiagnostic,
@@ -208,6 +212,29 @@ export interface Diagnostics {
     fieldName: string;
     message: string;
   }): void;
+
+  // ─── Modules (PR 4g) ───────────────────────────────────────────────────────
+
+  /**
+   * Emit a `cyclicImport` (E7001). Severity defaults to `error`; pass an
+   * override to opt into lint-config resolution.
+   */
+  cyclicImport(payload: { span: Span; path: readonly string[] }): void;
+
+  /** Emit a `moduleNotFound` (E7002). */
+  moduleNotFound(payload: {
+    span: Span;
+    importPath: string;
+    importerModule?: string;
+    searched?: readonly string[];
+    notes?: string[];
+  }): void;
+
+  /** Emit an `importedSymbolNotExported` (E7003). */
+  importedSymbolNotExported(payload: { span: Span; modulePath: string; symbolName: string }): void;
+
+  /** Emit a `mixedModuleStyles` (E7004). */
+  mixedModuleStyles(payload: { span: Span; message: string }): void;
 
   /** Frozen snapshot of all diagnostics emitted so far. */
   diagnostics(): readonly Diagnostic[];
@@ -419,6 +446,47 @@ export function createDiagnostics(config: LintConfig = {}): Diagnostics {
     invalidFieldAccess: (p) => emit("invalidFieldAccess", "E4003", p),
     cannotConstructStruct: (p) => emit("cannotConstructStruct", "E4004", p),
     unsafeStructFieldRule: (p) => emit("unsafeStructFieldRule", "E4005", p),
+
+    cyclicImport({ span, path }) {
+      collector.emit({
+        kind: "cyclicImport",
+        code: "E7001",
+        severity: resolveSeverity("cyclicImport", config, "error"),
+        span,
+        path,
+      });
+    },
+    moduleNotFound({ span, importPath, importerModule, searched, notes }) {
+      collector.emit({
+        kind: "moduleNotFound",
+        code: "E7002",
+        severity: resolveSeverity("moduleNotFound", config, "error"),
+        span,
+        importPath,
+        importerModule,
+        searched,
+        notes,
+      });
+    },
+    importedSymbolNotExported({ span, modulePath, symbolName }) {
+      collector.emit({
+        kind: "importedSymbolNotExported",
+        code: "E7003",
+        severity: resolveSeverity("importedSymbolNotExported", config, "error"),
+        span,
+        modulePath,
+        symbolName,
+      });
+    },
+    mixedModuleStyles({ span, message }) {
+      collector.emit({
+        kind: "mixedModuleStyles",
+        code: "E7004",
+        severity: resolveSeverity("mixedModuleStyles", config, "error"),
+        span,
+        message,
+      });
+    },
 
     diagnostics: () => collector.snapshot(),
   };
