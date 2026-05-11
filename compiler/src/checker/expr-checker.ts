@@ -122,7 +122,7 @@ export class ExpressionChecker {
   private checkIdentifier(expr: Identifier): Type {
     const sym = this.checker.currentScope.lookup(expr.name);
     if (!sym) {
-      this.checker.error(`undeclared variable '${expr.name}'`, expr.span);
+      this.checker.undeclaredName(expr.name, expr.span);
       return ERROR_TYPE;
     }
 
@@ -167,10 +167,7 @@ export class ExpressionChecker {
       const exportedType = objectType.exports.get(expr.property);
       if (exportedType) return exportedType;
 
-      this.checker.error(
-        `module '${objectType.name}' has no exported member '${expr.property}'`,
-        expr.span
-      );
+      this.checker.nameNotFound(expr.property, objectType.name, expr.span);
       return ERROR_TYPE;
     }
 
