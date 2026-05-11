@@ -39,12 +39,7 @@ import {
   lowerStructLiteral,
 } from "./lowering-literals";
 import { lowerBinaryExpr, lowerOperatorMethodCall, lowerUnaryExpr } from "./lowering-operators";
-import {
-  getStructLifecycle,
-  mangledLifecycleStructName,
-  popScopeWithDestroy,
-  pushScope,
-} from "./lowering-scope";
+import { mangledLifecycleStructName, popScopeWithDestroy, pushScope } from "./lowering-scope";
 import { lowerStatement } from "./lowering-stmt";
 import { lowerSwitchExpr } from "./lowering-switch";
 import {
@@ -629,26 +624,16 @@ export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
         }
       }
 
-      // For simple assignment to managed type: destroy old, store new, oncopy new
-      const checkerType = ctx.checkResult.types.typeMap.get(expr.target);
-      const lifecycle = getStructLifecycle(ctx, checkerType);
-      if (lifecycle?.hasDestroy) {
-        // Load old value and destroy it
-        const oldVal = freshVar(ctx);
-        const type = getExprKirType(ctx, expr.target);
-        emit(ctx, { kind: "load", dest: oldVal, ptr: ptrId, type });
-        emit(ctx, { kind: "destroy", value: oldVal, structName: lifecycle.structName });
-      } else if (checkerType?.kind === "string") {
-        // String: call kei_string_destroy on the pointer to the old value
-        emit(ctx, { kind: "call_extern_void", func: "kei_string_destroy", args: [ptrId] });
-      }
-
-      emit(ctx, { kind: "store", ptr: ptrId, value: valueId });
-
-      // Oncopy the new value (unless it's a move)
-      if (lifecycle?.hasOncopy && expr.value.kind !== "MoveExpr") {
-        emit(ctx, { kind: "oncopy", value: valueId, structName: lifecycle.structName });
-      }
+      // Assignment to a managed slot — the Lifecycle pass rewrites this
+      // marker into load/destroy/store/(oncopy unless isMove) at rewrite
+      // time, reading the slot's pointee KIR type to dispatch. See
+      // `docs/design/lifecycle-module.md` §3.
+      emit(ctx, {
+        kind: "mark_assign",
+        slot: ptrId,
+        newValue: valueId,
+        isMove: expr.value.kind === "MoveExpr",
+      });
     }
   } else if (expr.target.kind === "MemberExpr") {
     // s.field = v — we need a *pointer* to the struct, never a loaded value
@@ -741,19 +726,16 @@ export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
       emit(ctx, { kind: "load", dest: innerPtr, ptr: ptrDest, type: fieldType });
       emit(ctx, { kind: "store", ptr: innerPtr, value: valueId });
     } else {
-      // Destroy old field value if it has lifecycle hooks
-      const lifecycle = getStructLifecycle(ctx, targetCheckerType);
-      if (lifecycle?.hasDestroy) {
-        const oldVal = freshVar(ctx);
-        emit(ctx, { kind: "load", dest: oldVal, ptr: ptrDest, type: fieldType });
-        emit(ctx, { kind: "destroy", value: oldVal, structName: lifecycle.structName });
-      } else if (targetCheckerType?.kind === "string") {
-        emit(ctx, { kind: "call_extern_void", func: "kei_string_destroy", args: [ptrDest] });
-      }
-      emit(ctx, { kind: "store", ptr: ptrDest, value: valueId });
-      if (lifecycle?.hasOncopy && expr.value.kind !== "MoveExpr") {
-        emit(ctx, { kind: "oncopy", value: valueId, structName: lifecycle.structName });
-      }
+      // Assignment to a managed field slot — the Lifecycle pass rewrites
+      // this marker into load/destroy/store/(oncopy unless isMove) at
+      // rewrite time, reading the slot's pointee KIR type to dispatch.
+      // See `docs/design/lifecycle-module.md` §3.
+      emit(ctx, {
+        kind: "mark_assign",
+        slot: ptrDest,
+        newValue: valueId,
+        isMove: expr.value.kind === "MoveExpr",
+      });
     }
   } else if (expr.target.kind === "DerefExpr") {
     // *p = v — store through the raw pointer.
@@ -770,18 +752,16 @@ export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
     const ptrDest = freshVar(ctx);
     emit(ctx, { kind: "index_ptr", dest: ptrDest, base: baseId, index: indexId, type: elemType });
 
-    // Destroy old element value if it's a managed type
-    const checkerType = ctx.checkResult.types.typeMap.get(expr.target);
-    const lifecycle = getStructLifecycle(ctx, checkerType);
-    if (lifecycle?.hasDestroy) {
-      const oldVal = freshVar(ctx);
-      emit(ctx, { kind: "load", dest: oldVal, ptr: ptrDest, type: elemType });
-      emit(ctx, { kind: "destroy", value: oldVal, structName: lifecycle.structName });
-    } else if (checkerType?.kind === "string") {
-      emit(ctx, { kind: "call_extern_void", func: "kei_string_destroy", args: [ptrDest] });
-    }
-
-    emit(ctx, { kind: "store", ptr: ptrDest, value: valueId });
+    // Assignment to a managed array element — the Lifecycle pass rewrites
+    // this marker into load/destroy/store/(oncopy unless isMove) at rewrite
+    // time, reading the slot's pointee KIR type to dispatch. See
+    // `docs/design/lifecycle-module.md` §3.
+    emit(ctx, {
+      kind: "mark_assign",
+      slot: ptrDest,
+      newValue: valueId,
+      isMove: expr.value.kind === "MoveExpr",
+    });
   }
 
   return valueId;
