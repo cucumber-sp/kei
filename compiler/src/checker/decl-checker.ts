@@ -293,10 +293,12 @@ export class DeclarationChecker {
         !isErrorType(annotatedType) &&
         !isAssignableTo(initType, annotatedType)
       ) {
-        this.checker.error(
-          `type mismatch: expected '${typeToString(annotatedType)}', got '${typeToString(initType)}'`,
-          decl.span
-        );
+        this.checker.diagnostics.typeMismatch({
+          span: this.checker.spanToLocation(decl.span),
+          context: "type mismatch",
+          expected: typeToString(annotatedType),
+          got: typeToString(initType),
+        });
       }
     }
   }

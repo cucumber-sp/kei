@@ -5,6 +5,16 @@
  * dispatches on `diag.kind` so TypeScript exhaustiveness catches a
  * missing branch when a new variant lands.
  *
+ * `messageOf` is the single source of truth for variant body text:
+ * it returns the human message without the severity / code prefix so
+ * the legacy checker adapter (`Checker.collectDiagnostics`) and the
+ * formatter share one renderer. `formatDiagnostic` composes severity
+ * and code on top using Rust's `severity[CODE]: body` shape
+ * (`error[E1042]: ...`).
+ *
+ * `untriaged` renders without a code prefix — the `'TODO'` sentinel is
+ * internal and would only confuse users to see in output.
+ *
  * See `docs/design/diagnostics-module.md` §7.
  */
 
@@ -41,6 +51,18 @@ export function messageOf(diag: Diagnostic): string {
   switch (diag.kind) {
     case "untriaged":
       return diag.message;
+    case "typeMismatch":
+      return `${diag.context}: expected '${diag.expected}', got '${diag.got}'`;
+    case "expectedType":
+      return `${diag.context} must be ${diag.expected}, got '${diag.got}'`;
+    case "cannotCast":
+      return `cannot cast '${diag.from}' to '${diag.to}'`;
+    case "incompatibleAssignment":
+      return `${diag.target}: expected '${diag.expected}', got '${diag.got}'`;
+    case "nonOptionalAccess":
+      return `${diag.operation} requires Optional<T>, got '${diag.got}'`;
+    case "unknownType":
+      return `undeclared type '${diag.name}'`;
     case "arityMismatch":
     case "argumentTypeMismatch":
     case "notCallable":

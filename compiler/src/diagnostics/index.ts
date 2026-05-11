@@ -4,7 +4,14 @@
  * `createDiagnostics(config)` returns the typed-methods object call sites
  * use. PR 2 exposes the `untriaged` catch-all so the existing checker
  * emit surface (Checker.error / .warning) can route through this module
- * unchanged at the call sites; PR 4+ add specific methods alongside.
+ * unchanged at the call sites; PRs 4a–4g carve specific variants out of
+ * the catch-all by category.
+ *
+ * Severity is resolved at emit time from the catalog default through
+ * `resolveSeverity` (per design doc §6). v1 `LintConfig` is empty so
+ * the catalog default flows through unchanged; the resolver hook is in
+ * place so future CLI flags / `kei.toml` lint sections do not have to
+ * thread anything new through call sites.
  *
  * See `docs/design/diagnostics-module.md` §4.
  */
@@ -19,19 +26,25 @@ export type {
   ArgumentTypeMismatchDiagnostic,
   ArityMismatchDiagnostic,
   BinaryTypeMismatchDiagnostic,
+  CannotCastDiagnostic,
   Diagnostic,
   DiagnosticEnvelope,
+  ExpectedTypeDiagnostic,
   GenericArgMismatchDiagnostic,
+  IncompatibleAssignmentDiagnostic,
   InvalidLifecycleSignatureDiagnostic,
   InvalidOperandDiagnostic,
   LifecycleHookSelfMismatchDiagnostic,
   LifecycleReturnTypeWrongDiagnostic,
   MethodNotFoundDiagnostic,
+  NonOptionalAccessDiagnostic,
   NoOperatorOverloadDiagnostic,
   NotCallableDiagnostic,
   Severity,
   Span,
+  TypeMismatchDiagnostic,
   UnaryTypeMismatchDiagnostic,
+  UnknownTypeDiagnostic,
   UnsafeStructMissingDestroyDiagnostic,
   UnsafeStructMissingOncopyDiagnostic,
   UntriagedDiagnostic,
@@ -39,20 +52,34 @@ export type {
 
 /**
  * The typed-methods object handed to checker call sites. PR 2 exposes
- * the `untriaged` catch-all; PR 4c adds the calls-slice methods
- * (`arityMismatch`, `argumentTypeMismatch`, `notCallable`,
- * `genericArgMismatch`, `methodNotFound`). Each typed method composes
- * the user-visible `message` string itself so call sites pass payload
- * data rather than pre-formatted prose.
+ * the `untriaged` catch-all; later PRs add typed methods alongside.
+ * Each named method takes its variant-specific payload (no severity —
+ * that resolves from the catalog default at emit time) plus the standard
+ * `span`, and returns `void` (caller blind, per design doc §6's "Caller
+ * doesn't see the diagnostic").
  */
 export interface Diagnostics {
   /**
    * Catch-all emit method. Routes through the collector with severity
    * provided by the caller (the existing `Checker.error / .warning`
-   * helpers know the severity from the method name; future-specific
-   * variants resolve severity from the catalog default at emit time).
+   * helpers know the severity from the method name; the specific
+   * variants below resolve severity from the catalog default at emit
+   * time).
    */
   untriaged(payload: { severity: Severity; span: Span; message: string }): void;
+
+  /** Type-error variants (PR 4a, `E1xxx`). */
+  typeMismatch(payload: { span: Span; context: string; expected: string; got: string }): void;
+  expectedType(payload: { span: Span; context: string; expected: string; got: string }): void;
+  cannotCast(payload: { span: Span; from: string; to: string }): void;
+  incompatibleAssignment(payload: {
+    span: Span;
+    target: string;
+    expected: string;
+    got: string;
+  }): void;
+  nonOptionalAccess(payload: { span: Span; operation: string; got: string }): void;
+  unknownType(payload: { span: Span; name: string }): void;
 
   /** Wrong argument count at a call site. */
   arityMismatch(payload: {
@@ -165,10 +192,40 @@ export function createDiagnostics(config: LintConfig = {}): Diagnostics {
     return span === undefined ? undefined : [{ span, label }];
   }
 
+  // Stamp kind / code / catalog-default severity onto a variant-specific
+  // payload. Centralises the three-field boilerplate that every typed
+  // method below would otherwise repeat. The cast is safe because each
+  // call site supplies a `payload` typed against the matching variant's
+  // own field list minus the stamped fields.
+  function emit<K extends Exclude<Diagnostic["kind"], "untriaged">>(
+    kind: K,
+    code: Extract<Diagnostic, { kind: K }>["code"],
+    payload: Omit<Extract<Diagnostic, { kind: K }>, "kind" | "code" | "severity">
+  ): void {
+    // TODO(#61): the `as unknown as Diagnostic` cast is a known
+    // escape hatch — TS can't structurally narrow the generic
+    // `emit<K>` payload to a specific union arm. Issue #61
+    // tracks refactoring this helper into per-variant explicit
+    // constructors (no generic, no cast).
+    collector.emit({
+      kind,
+      code,
+      severity: resolveSeverity(kind, config, "error"),
+      ...payload,
+    } as unknown as Diagnostic);
+  }
+
   return {
     untriaged({ severity, span, message }) {
       collector.emit({ kind: "untriaged", code: "TODO", severity, span, message });
     },
+
+    typeMismatch: (p) => emit("typeMismatch", "E1001", p),
+    expectedType: (p) => emit("expectedType", "E1002", p),
+    cannotCast: (p) => emit("cannotCast", "E1003", p),
+    incompatibleAssignment: (p) => emit("incompatibleAssignment", "E1004", p),
+    nonOptionalAccess: (p) => emit("nonOptionalAccess", "E1005", p),
+    unknownType: (p) => emit("unknownType", "E1006", p),
 
     arityMismatch({ span, expected, got, message }) {
       const text = message ?? `expected ${expected} argument(s), got ${got}`;

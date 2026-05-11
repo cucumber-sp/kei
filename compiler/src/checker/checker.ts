@@ -1123,11 +1123,27 @@ export class Checker {
   }
 
   /**
-   * Convert a lexer span (`{ start, end }` byte offsets) to the
-   * `SourceLocation` shape the diagnostics module's `Span` alias
-   * resolves to. Sub-checkers calling typed `diag.*` methods (PR 4+)
-   * need this to construct the payload; the legacy `error / warning`
-   * helpers use it internally.
+   * Public accessor for the typed-method diagnostics sink. Sub-checkers
+   * (expr/decl/literal/…) call `this.checker.diagnostics.typeMismatch({...})`
+   * to emit specific variants directly, bypassing the legacy
+   * `error`/`warning` untriaged path. PR 4a (this PR) routes the
+   * type-error category through this accessor; sibling categories still
+   * use `this.checker.error(...)` until their own PRs land. The
+   * accessor is exposed as a getter (not a public field) so the
+   * underlying `Diagnostics` value stays an implementation detail of
+   * the Checker — replacing it via `CheckerOptions` is the only
+   * intended mutation path.
+   */
+  get diagnostics(): Diagnostics {
+    return this.diag;
+  }
+
+  /**
+   * Map a lexer {@link Span} to a diagnostics-module
+   * {@link SourceLocation} using this Checker's source file. Public so
+   * sub-checkers calling `diagnostics.typeMismatch({...})` directly can
+   * convert spans without each one re-implementing the lineCol lookup.
+   * The legacy `error / warning` helpers use it internally.
    */
   spanToLocation(span: Span): SourceLocation {
     const lc = this.source.lineCol(span.start);
@@ -1143,16 +1159,11 @@ export class Checker {
    * Snapshot the current diagnostics as the legacy
    * `{ severity, message, location }` shape that `CheckResult` and the
    * rest of the pipeline still consume. PR 4+ migrates consumers onto
-   * the new union shape; until then we adapt at the boundary. Every
-   * variant carries a pre-built `.message` so this adapter stays one
-   * branch wide as new variants land (PR 4c adds the calls slice with
-   * `E3xxx` codes; the structured payload fields stay invisible to
-   * legacy consumers).
    * the new union shape; until then we adapt at the boundary. The
    * message text is pulled through `messageOf` so each variant (including
-   * the PR 4e lifecycle-rule ones with structured fields) renders its
-   * wording without the new `error[E5xxx]:` prefix — the legacy CLI
-   * formatter already adds the severity prefix on top.
+   * the PR 4a–4f ones with structured fields) renders its wording
+   * without the new `error[Exxxx]:` prefix — the legacy CLI formatter
+   * already adds the severity prefix on top.
    */
   private collectDiagnostics(): Diagnostic[] {
     return this.diag.diagnostics().map((d) => ({
