@@ -165,7 +165,7 @@ export function checkStructLiteral(checker: Checker, expr: StructLiteral): Type 
   }
 
   if (structType.kind !== TypeKind.Struct) {
-    checker.error(`'${expr.name}' is not a struct type`, expr.span);
+    checker.cannotConstructStruct({ span: expr.span, name: expr.name });
     return ERROR_TYPE;
   }
 
@@ -185,7 +185,12 @@ export function checkStructLiteral(checker: Checker, expr: StructLiteral): Type 
 
     const expectedType = structType.fields.get(field.name);
     if (!expectedType) {
-      checker.error(`struct '${structType.name}' has no field '${field.name}'`, field.span);
+      checker.unknownField({
+        span: field.span,
+        structName: structType.name,
+        fieldName: field.name,
+        access: "literal",
+      });
       continue;
     }
 
@@ -242,7 +247,7 @@ export function checkStructLiteral(checker: Checker, expr: StructLiteral): Type 
   // same reason that safe structs do.
   for (const [fieldName, _fieldType] of structType.fields) {
     if (providedFields.has(fieldName)) continue;
-    checker.error(`missing field '${fieldName}' in struct literal '${structType.name}'`, expr.span);
+    checker.missingField({ span: expr.span, structName: structType.name, fieldName });
   }
 
   return structType;
@@ -333,7 +338,12 @@ function checkGenericStructLiteralInferred(
     providedFields.add(field.name);
 
     if (!structType.fields.has(field.name)) {
-      checker.error(`struct '${structType.name}' has no field '${field.name}'`, field.span);
+      checker.unknownField({
+        span: field.span,
+        structName: structType.name,
+        fieldName: field.name,
+        access: "literal",
+      });
       continue;
     }
 
@@ -345,7 +355,7 @@ function checkGenericStructLiteralInferred(
   // explicit-args path above; the `ref T` exception is gone).
   for (const [fieldName, _fieldType] of structType.fields) {
     if (providedFields.has(fieldName)) continue;
-    checker.error(`missing field '${fieldName}' in struct literal '${structType.name}'`, expr.span);
+    checker.missingField({ span: expr.span, structName: structType.name, fieldName });
   }
 
   // Infer type param substitutions from field types (recursive)
