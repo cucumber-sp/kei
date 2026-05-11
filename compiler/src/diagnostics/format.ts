@@ -122,6 +122,16 @@ export function messageOf(diag: Diagnostic): string {
       return `'${diag.symbolName}' is not exported by module '${diag.modulePath}'`;
     case "mixedModuleStyles":
       return diag.message;
+    case "undeclaredName":
+      return `undeclared variable '${diag.name}'`;
+    case "duplicateDecl": {
+      const suffix = diag.detail === undefined ? "" : ` ${diag.detail}`;
+      return `duplicate declaration '${diag.name}'${suffix}`;
+    }
+    case "unresolvedImport":
+      return `'${diag.name}' is not exported by module '${diag.module}'`;
+    case "nameNotFound":
+      return `module '${diag.container}' has no exported member '${diag.name}'`;
   }
 }
 

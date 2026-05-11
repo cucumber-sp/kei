@@ -1173,6 +1173,29 @@ export class Checker {
     this.diag.unsafeStructFieldRule({ ...payload, span: this.spanToLocation(payload.span) });
   }
 
+  // ─── Typed diagnostics (PR 4b: name resolution) ───────────────────────
+  //
+  // Sub-checkers call these instead of `error()` so the resulting
+  // diagnostic carries a specific `kind` + `code` rather than landing in
+  // the `untriaged` catch-all. Each method mirrors a `Diagnostics` typed
+  // method and forwards `span -> SourceLocation` for the sink.
+
+  undeclaredName(name: string, span: Span): void {
+    this.diag.undeclaredName({ span: this.spanToLocation(span), name });
+  }
+
+  duplicateDecl(name: string, span: Span, detail?: string): void {
+    this.diag.duplicateDecl({ span: this.spanToLocation(span), name, detail });
+  }
+
+  unresolvedImport(name: string, module: string, span: Span): void {
+    this.diag.unresolvedImport({ span: this.spanToLocation(span), name, module });
+  }
+
+  nameNotFound(name: string, container: string, span: Span): void {
+    this.diag.nameNotFound({ span: this.spanToLocation(span), name, container });
+  }
+
   /**
    * Map a lexer {@link Span} to a diagnostics-module
    * {@link SourceLocation} using this Checker's source file. Public so

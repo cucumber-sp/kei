@@ -124,10 +124,7 @@ export class DeclarationChecker {
     const funcType = this.buildFunctionType(decl);
     const sym = functionSymbol(decl.name, funcType, false, decl);
     if (!this.checker.currentScope.define(sym)) {
-      this.checker.error(
-        `duplicate declaration '${decl.name}' (same parameter signature)`,
-        decl.span
-      );
+      this.checker.duplicateDecl(decl.name, decl.span, "(same parameter signature)");
     }
   }
 
@@ -143,7 +140,7 @@ export class DeclarationChecker {
     const funcType = functionType(params, returnType, [], [], true);
     const sym = functionSymbol(decl.name, funcType, true);
     if (!this.checker.currentScope.define(sym)) {
-      this.checker.error(`duplicate declaration '${decl.name}'`, decl.span);
+      this.checker.duplicateDecl(decl.name, decl.span);
     }
   }
 
@@ -151,7 +148,7 @@ export class DeclarationChecker {
     const resolvedType = this.checker.resolveType(decl.typeValue);
     const sym = typeSymbol(decl.name, resolvedType);
     if (!this.checker.currentScope.define(sym)) {
-      this.checker.error(`duplicate declaration '${decl.name}'`, decl.span);
+      this.checker.duplicateDecl(decl.name, decl.span);
     }
   }
 
@@ -163,7 +160,7 @@ export class DeclarationChecker {
 
     const sym = variableSymbol(decl.name, initType, false, true);
     if (!this.checker.currentScope.define(sym)) {
-      this.checker.error(`duplicate declaration '${decl.name}'`, decl.span);
+      this.checker.duplicateDecl(decl.name, decl.span);
     }
   }
 
@@ -199,7 +196,7 @@ export class DeclarationChecker {
         if (sym) {
           this.checker.currentScope.define(sym);
         } else {
-          this.checker.error(`'${item}' is not exported by module '${decl.path}'`, decl.span);
+          this.checker.unresolvedImport(item, decl.path, decl.span);
         }
       }
     } else {
