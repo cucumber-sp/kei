@@ -8,14 +8,22 @@
  * variants out of `untriaged`. See
  * `docs/design/diagnostics-module.md` §3, §9 PR 2.
  *
- * PR 4c (calls) — adds five call-site variants in the `E3xxx` range:
- * `arityMismatch`, `argumentTypeMismatch` (carries `paramIndex` plus an
- * optional secondary-span pointer at the parameter declaration),
- * `notCallable`, `genericArgMismatch`, `methodNotFound`. Each variant
- * stores a pre-built `message` field so the legacy
- * `{ severity, message, location }` adapter in `Checker.collectDiagnostics`
- * keeps working unchanged through the migration; the structured payload
- * fields exist for the formatter and future tooling consumers.
+ * Code numbering — categorical ranges (per design doc §11). Each
+ * category of diagnostic gets a `Exxxx` block so codes from related
+ * variants cluster together. Reserved ranges (mirror the PR 4a–4g
+ * categories from design doc §9):
+ *
+ *   E1xxx — type errors             (PR 4a)
+ *   E2xxx — name resolution         (PR 4b)
+ *   E3xxx — calls / arity           (PR 4c)
+ *   E4xxx — structs / fields        (PR 4d)
+ *   E5xxx — lifecycle               (PR 4e)
+ *   E6xxx — operators               (PR 4f)
+ *   E7xxx — modules / imports       (PR 4g)
+ *
+ * Per design doc §10.6 codes are *advisory* until kei stabilises —
+ * they appear in output for searchability but carry no SemVer
+ * stability promise; renumbering is allowed pre-1.0.
  */
 
 import type { SourceLocation } from "../errors/diagnostic";
@@ -53,6 +61,90 @@ export interface UntriagedDiagnostic extends DiagnosticEnvelope {
   kind: "untriaged";
   code: "TODO";
   message: string;
+}
+
+// ─── E1xxx — type errors (PR 4a) ─────────────────────────────────────────
+
+/**
+ * Two types do not unify where one is required to assign / equal another.
+ *
+ * `context` carries the call-site framing ("type mismatch", "index type
+ * mismatch", "array element 3", "'main' return type") so the formatter
+ * can prefix the canonical `expected '...', got '...'` body without
+ * losing the caller's locality cue. Type names are pre-rendered to
+ * keep the diagnostics module decoupled from the checker's `Type`.
+ */
+export interface TypeMismatchDiagnostic extends DiagnosticEnvelope {
+  kind: "typeMismatch";
+  code: "E1001";
+  context: string;
+  expected: string;
+  got: string;
+}
+
+/**
+ * The context required a specific type and got a value that cannot
+ * satisfy it. Distinct from `typeMismatch` in that the requirement is
+ * structural ("must be bool", "must be integer type") rather than an
+ * equality / assignability check against a concrete declared type.
+ */
+export interface ExpectedTypeDiagnostic extends DiagnosticEnvelope {
+  kind: "expectedType";
+  code: "E1002";
+  context: string;
+  expected: string;
+  got: string;
+}
+
+/**
+ * Explicit `as` cast between two types the cast rules do not allow.
+ */
+export interface CannotCastDiagnostic extends DiagnosticEnvelope {
+  kind: "cannotCast";
+  code: "E1003";
+  from: string;
+  to: string;
+}
+
+/**
+ * Assignment-target / RHS shape mismatch — typically a named slot
+ * (struct field, future: local variable, parameter) where the value
+ * does not fit the slot. The `target` carries the slot identifier
+ * already-quoted to match existing wording (`field 'x'`).
+ */
+export interface IncompatibleAssignmentDiagnostic extends DiagnosticEnvelope {
+  kind: "incompatibleAssignment";
+  code: "E1004";
+  target: string;
+  expected: string;
+  got: string;
+}
+
+/**
+ * `.unwrap` or similar projection used on a value whose type is not
+ * `Optional<T>`. No checker site emits this yet — the variant is
+ * pre-declared so once the checker grows `Optional<T>`-aware lowering
+ * (see [#19] and the `Optional` stdlib type), the call site has a
+ * landing pad in the catalog without another PR-4-shaped migration.
+ */
+export interface NonOptionalAccessDiagnostic extends DiagnosticEnvelope {
+  kind: "nonOptionalAccess";
+  code: "E1005";
+  operation: string;
+  got: string;
+}
+
+/**
+ * Type-name resolution failure inside a type position (`let x: Foo`,
+ * `fn f(x: Bar)`, struct-literal head `Baz { ... }`). Distinct from
+ * the value-namespace `undeclaredName` (PR 4b) — type and value
+ * namespaces are separate in kei, and the wording / hint surface
+ * differs ("did you mean a type, not a value?").
+ */
+export interface UnknownTypeDiagnostic extends DiagnosticEnvelope {
+  kind: "unknownType";
+  code: "E1006";
+  name: string;
 }
 
 // ─── PR 4c — Calls (E3xxx) ───────────────────────────────────────────────────
@@ -291,12 +383,19 @@ export interface LifecycleReturnTypeWrongDiagnostic extends DiagnosticEnvelope {
 /**
  * The discriminated union of all diagnostics the compiler can emit.
  *
- * PR 2 introduces the `untriaged` catch-all; PR 4c adds the calls slice
- * (`E3xxx`). Sibling categories remain on `untriaged` until their PRs
- * land.
+ * PR 2 introduced the `untriaged` catch-all; PRs 4a–4g carve specific
+ * categories out (this PR adds the E1xxx type-errors slice; siblings
+ * have already added E3xxx calls, E5xxx lifecycle, E6xxx operators).
+ * The catch-all is removed once every category is carved.
  */
 export type Diagnostic =
   | UntriagedDiagnostic
+  | TypeMismatchDiagnostic
+  | ExpectedTypeDiagnostic
+  | CannotCastDiagnostic
+  | IncompatibleAssignmentDiagnostic
+  | NonOptionalAccessDiagnostic
+  | UnknownTypeDiagnostic
   | ArityMismatchDiagnostic
   | ArgumentTypeMismatchDiagnostic
   | NotCallableDiagnostic
