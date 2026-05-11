@@ -33,7 +33,8 @@ function requireSameTypes(
   span: { start: number; end: number }
 ): boolean {
   if (!typesEqual(left, right)) {
-    checker.error(
+    checker.errorBinaryTypeMismatch(
+      op,
       `operator '${op}' requires same types, got '${typeToString(left)}' and '${typeToString(right)}'`,
       span
     );
@@ -96,7 +97,8 @@ export function checkBinaryExpression(checker: Checker, expr: BinaryExpr): Type 
   // Arithmetic operators
   if (ARITHMETIC_OPS.has(op)) {
     if (!isNumericType(left)) {
-      checker.error(
+      checker.errorBinaryTypeMismatch(
+        op,
         `operator '${op}' requires numeric operands, got '${typeToString(left)}'`,
         expr.span
       );
@@ -109,7 +111,8 @@ export function checkBinaryExpression(checker: Checker, expr: BinaryExpr): Type 
   // Comparison operators
   if (COMPARISON_OPS.has(op)) {
     if (!isNumericType(left)) {
-      checker.error(
+      checker.errorBinaryTypeMismatch(
+        op,
         `operator '${op}' requires numeric operands, got '${typeToString(left)}'`,
         expr.span
       );
@@ -135,7 +138,8 @@ export function checkBinaryExpression(checker: Checker, expr: BinaryExpr): Type 
       if (litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, right)) ok = true;
     }
     if (!ok) {
-      checker.error(
+      checker.errorBinaryTypeMismatch(
+        op,
         `operator '${op}' requires same types, got '${typeToString(left)}' and '${typeToString(right)}'`,
         expr.span
       );
@@ -147,14 +151,16 @@ export function checkBinaryExpression(checker: Checker, expr: BinaryExpr): Type 
   // Logical operators
   if (LOGICAL_OPS.has(op)) {
     if (left.kind !== TypeKind.Bool) {
-      checker.error(
+      checker.errorBinaryTypeMismatch(
+        op,
         `operator '${op}' requires bool operands, got '${typeToString(left)}'`,
         expr.span
       );
       return ERROR_TYPE;
     }
     if (right.kind !== TypeKind.Bool) {
-      checker.error(
+      checker.errorBinaryTypeMismatch(
+        op,
         `operator '${op}' requires bool operands, got '${typeToString(right)}'`,
         expr.span
       );
@@ -166,7 +172,8 @@ export function checkBinaryExpression(checker: Checker, expr: BinaryExpr): Type 
   // Bitwise operators
   if (BITWISE_OPS.has(op)) {
     if (!isIntegerType(left)) {
-      checker.error(
+      checker.errorBinaryTypeMismatch(
+        op,
         `operator '${op}' requires integer operands, got '${typeToString(left)}'`,
         expr.span
       );
@@ -176,7 +183,7 @@ export function checkBinaryExpression(checker: Checker, expr: BinaryExpr): Type 
     return left;
   }
 
-  checker.error(`unknown binary operator '${op}'`, expr.span);
+  checker.errorNoOperatorOverload(op, `unknown binary operator '${op}'`, expr.span);
   return ERROR_TYPE;
 }
 
@@ -192,7 +199,8 @@ export function checkUnaryExpression(checker: Checker, expr: UnaryExpr): Type {
         if (method) {
           // op_neg takes only self, no extra args
           if (method.params.length !== 1) {
-            checker.error(
+            checker.errorInvalidOperand(
+              "-",
               `'op_neg' method must take exactly 1 parameter (self), got ${method.params.length}`,
               expr.span
             );
@@ -201,14 +209,16 @@ export function checkUnaryExpression(checker: Checker, expr: UnaryExpr): Type {
           checker.operatorMethods.set(expr, { methodName: "op_neg", structType: operand });
           return method.returnType;
         }
-        checker.error(
+        checker.errorInvalidOperand(
+          "-",
           `unary '-' requires numeric operand, got '${typeToString(operand)}'`,
           expr.span
         );
         return ERROR_TYPE;
       }
       if (!isNumericType(operand)) {
-        checker.error(
+        checker.errorUnaryTypeMismatch(
+          "-",
           `unary '-' requires numeric operand, got '${typeToString(operand)}'`,
           expr.span
         );
@@ -218,14 +228,19 @@ export function checkUnaryExpression(checker: Checker, expr: UnaryExpr): Type {
 
     case "!":
       if (operand.kind !== TypeKind.Bool) {
-        checker.error(`unary '!' requires bool operand, got '${typeToString(operand)}'`, expr.span);
+        checker.errorUnaryTypeMismatch(
+          "!",
+          `unary '!' requires bool operand, got '${typeToString(operand)}'`,
+          expr.span
+        );
         return ERROR_TYPE;
       }
       return BOOL_TYPE;
 
     case "~":
       if (!isIntegerType(operand)) {
-        checker.error(
+        checker.errorUnaryTypeMismatch(
+          "~",
           `unary '~' requires integer operand, got '${typeToString(operand)}'`,
           expr.span
         );
@@ -235,6 +250,9 @@ export function checkUnaryExpression(checker: Checker, expr: UnaryExpr): Type {
 
     case "&":
       if (!checker.currentScope.isInsideUnsafe()) {
+        // Stays on `untriaged` (PR 4f) — this is a context-mode error,
+        // not an operator type rule. A future PR carves out unsafe-block
+        // diagnostics into their own category.
         checker.error("address-of operator '&' requires unsafe block", expr.span);
         return ERROR_TYPE;
       }
@@ -250,7 +268,11 @@ export function checkUnaryExpression(checker: Checker, expr: UnaryExpr): Type {
       return ptrType(operand);
 
     default:
-      checker.error(`unknown unary operator '${expr.operator}'`, expr.span);
+      checker.errorNoOperatorOverload(
+        expr.operator,
+        `unknown unary operator '${expr.operator}'`,
+        expr.span
+      );
       return ERROR_TYPE;
   }
 }
@@ -276,7 +298,8 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
         if (method) {
           // op_index_set takes self + index + value (3 params)
           if (method.params.length !== 3) {
-            checker.error(
+            checker.errorInvalidOperand(
+              "[]=",
               `'op_index_set' method must take exactly 3 parameters (self, index, value), got ${method.params.length}`,
               expr.span
             );
@@ -286,7 +309,8 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
           // biome-ignore lint/style/noNonNullAssertion: params.length === 3 is checked above, so index 1 is guaranteed
           const indexParam = method.params[1]!;
           if (indexType && !isAssignableTo(indexType, indexParam.type)) {
-            checker.error(
+            checker.errorBinaryTypeMismatch(
+              "[]=",
               `index type mismatch: expected '${typeToString(indexParam.type)}', got '${typeToString(indexType)}'`,
               expr.span
             );
@@ -295,7 +319,8 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
           // biome-ignore lint/style/noNonNullAssertion: params.length === 3 is checked above, so index 2 is guaranteed
           const valueParam = method.params[2]!;
           if (!isAssignableTo(valueType, valueParam.type)) {
-            checker.error(
+            checker.errorBinaryTypeMismatch(
+              "[]=",
               `value type mismatch: expected '${typeToString(valueParam.type)}', got '${typeToString(valueType)}'`,
               expr.span
             );
@@ -312,6 +337,9 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
       const litInfo = extractLiteralInfo(expr.value);
       const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, targetType);
       if (!isLiteralOk) {
+        // Stays on `untriaged` (PR 4f) — plain `=` type mismatch is the
+        // assignment-context `typeMismatch` shape that PR 4a owns. See
+        // `docs/migrations/diagnostics/pr-4f.md` Out-of-scope.
         checker.error(
           `type mismatch: expected '${typeToString(targetType)}', got '${typeToString(valueType)}'`,
           expr.span
@@ -335,7 +363,8 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
       effectiveValue = effectiveValue.pointee;
     }
     if (!isNumericType(effectiveTarget)) {
-      checker.error(
+      checker.errorBinaryTypeMismatch(
+        op,
         `operator '${op}' requires numeric type, got '${typeToString(targetType)}'`,
         expr.span
       );
@@ -346,7 +375,8 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
       // literal 1 defaults to i32 but fits in i64.
       const litInfo = extractLiteralInfo(expr.value);
       if (!litInfo || !isLiteralAssignableTo(litInfo.kind, litInfo.value, effectiveTarget)) {
-        checker.error(
+        checker.errorBinaryTypeMismatch(
+          op,
           `operator '${op}' requires same types, got '${typeToString(effectiveTarget)}' and '${typeToString(effectiveValue)}'`,
           expr.span
         );
@@ -358,7 +388,8 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
 
   if (COMPOUND_BITWISE_OPS.has(op)) {
     if (!isIntegerType(targetType)) {
-      checker.error(
+      checker.errorBinaryTypeMismatch(
+        op,
         `operator '${op}' requires integer type, got '${typeToString(targetType)}'`,
         expr.span
       );
@@ -368,7 +399,7 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
     return targetType;
   }
 
-  checker.error(`unknown assignment operator '${op}'`, expr.span);
+  checker.errorNoOperatorOverload(op, `unknown assignment operator '${op}'`, expr.span);
   return ERROR_TYPE;
 }
 
@@ -379,6 +410,9 @@ function checkAssignTarget(checker: Checker, target: Expression): void {
   if (target.kind === "Identifier") {
     const sym = checker.currentScope.lookup(target.name);
     if (sym && sym.kind === SymbolKind.Variable && !sym.isMutable) {
+      // Mutability error — not an operator type rule. Stays on
+      // `untriaged` (PR 4f); a future PR carves out binding/mutability
+      // diagnostics into their own category.
       checker.error(`cannot assign to immutable variable '${target.name}'`, target.span);
     }
   }
@@ -396,6 +430,8 @@ function checkAssignTarget(checker: Checker, target: Expression): void {
       objectType.kind === TypeKind.Struct &&
       objectType.readonlyFields?.has(target.property)
     ) {
+      // Readonly-field error — stays on `untriaged` (PR 4f) for the
+      // same reason as the immutable-variable site above.
       checker.error(`cannot assign to readonly field '${target.property}'`, target.span);
     }
   }
@@ -426,6 +462,8 @@ function checkAssignRoot(checker: Checker, target: Expression): void {
       // `readonly ref T` parameter — write-through is forbidden, and
       // field paths rooted at `x` count as writes through the ref.
       if (sym.type.kind === TypeKind.Ptr && sym.type.isRef && sym.type.isReadonly) {
+        // Readonly-ref write-through — stays on `untriaged` (PR 4f);
+        // not an operator type rule.
         checker.error(`cannot write through readonly reference '${target.name}'`, target.span);
       }
     }
@@ -437,6 +475,8 @@ function checkAssignRoot(checker: Checker, target: Expression): void {
   }
   if (target.kind === "DerefExpr") {
     if (!checker.currentScope.isInsideUnsafe()) {
+      // Unsafe-context error — stays on `untriaged` (PR 4f); not an
+      // operator type rule.
       checker.error("pointer dereference assignment requires unsafe block", target.span);
     }
     return;
@@ -458,7 +498,8 @@ function resolveOperatorMethod(
 ): Type {
   // Operator method should have exactly 2 params: self + rhs
   if (method.params.length !== 2) {
-    checker.error(
+    checker.errorInvalidOperand(
+      methodName,
       `'${methodName}' method must take exactly 2 parameters (self, rhs), got ${method.params.length}`,
       expr.span
     );
@@ -468,7 +509,8 @@ function resolveOperatorMethod(
   // biome-ignore lint/style/noNonNullAssertion: params.length === 2 is checked above, so index 1 is guaranteed
   const rhsParam = method.params[1]!;
   if (!isAssignableTo(rightType, rhsParam.type)) {
-    checker.error(
+    checker.errorBinaryTypeMismatch(
+      methodName,
       `operator method '${methodName}': expected '${typeToString(rhsParam.type)}' for right operand, got '${typeToString(rightType)}'`,
       expr.span
     );

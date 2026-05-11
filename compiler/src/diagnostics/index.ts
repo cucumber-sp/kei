@@ -18,13 +18,17 @@ export { formatDiagnostic, formatDiagnostics } from "./format";
 export type {
   ArgumentTypeMismatchDiagnostic,
   ArityMismatchDiagnostic,
+  BinaryTypeMismatchDiagnostic,
   Diagnostic,
   DiagnosticEnvelope,
   GenericArgMismatchDiagnostic,
+  InvalidOperandDiagnostic,
   MethodNotFoundDiagnostic,
+  NoOperatorOverloadDiagnostic,
   NotCallableDiagnostic,
   Severity,
   Span,
+  UnaryTypeMismatchDiagnostic,
   UntriagedDiagnostic,
 } from "./types";
 
@@ -89,6 +93,32 @@ export interface Diagnostics {
 
   /** Method-call dispatch couldn't find a method of that name. */
   methodNotFound(payload: { span: Span; typeName: string; methodName: string }): void;
+  /**
+   * Operator token has no usable overload (built-in or user-defined).
+   * Severity resolves from the catalog default (`error`).
+   */
+  noOperatorOverload(payload: { span: Span; op: string; message: string }): void;
+
+  /**
+   * Single-operand operator applied to a value the operator can't accept.
+   * Broader sibling of `unaryTypeMismatch` — covers struct-overload
+   * arity errors and "operator doesn't accept this operand category"
+   * cases. Severity defaults to `error`.
+   */
+  invalidOperand(payload: { span: Span; op: string; message: string }): void;
+
+  /**
+   * Binary operator where the operands don't pair, or the operator's
+   * target-type rule rejects one or both operands. Severity defaults
+   * to `error`.
+   */
+  binaryTypeMismatch(payload: { span: Span; op: string; message: string }): void;
+
+  /**
+   * Unary operator with a built-in type rule applied to an operand that
+   * misses the rule. Severity defaults to `error`.
+   */
+  unaryTypeMismatch(payload: { span: Span; op: string; message: string }): void;
 
   /** Frozen snapshot of all diagnostics emitted so far. */
   diagnostics(): readonly Diagnostic[];
@@ -176,6 +206,46 @@ export function createDiagnostics(config: LintConfig = {}): Diagnostics {
       });
     },
 
+    noOperatorOverload({ span, op, message }) {
+      collector.emit({
+        kind: "noOperatorOverload",
+        code: "E6001",
+        severity: resolveSeverity("noOperatorOverload", config, "error"),
+        span,
+        op,
+        message,
+      });
+    },
+    invalidOperand({ span, op, message }) {
+      collector.emit({
+        kind: "invalidOperand",
+        code: "E6002",
+        severity: resolveSeverity("invalidOperand", config, "error"),
+        span,
+        op,
+        message,
+      });
+    },
+    binaryTypeMismatch({ span, op, message }) {
+      collector.emit({
+        kind: "binaryTypeMismatch",
+        code: "E6003",
+        severity: resolveSeverity("binaryTypeMismatch", config, "error"),
+        span,
+        op,
+        message,
+      });
+    },
+    unaryTypeMismatch({ span, op, message }) {
+      collector.emit({
+        kind: "unaryTypeMismatch",
+        code: "E6004",
+        severity: resolveSeverity("unaryTypeMismatch", config, "error"),
+        span,
+        op,
+        message,
+      });
+    },
     diagnostics: () => collector.snapshot(),
   };
 }
