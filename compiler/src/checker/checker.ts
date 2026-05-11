@@ -1138,6 +1138,41 @@ export class Checker {
     return this.diag;
   }
 
+  // Typed emit shims (PR 4d, structs). Sub-checkers carry the AST
+  // `Span`; conversion to `SourceLocation` happens once, here, so the
+  // call sites stay one-liners and the typed-method payload mirrors
+  // the variant shape.
+
+  unknownField(payload: {
+    span: Span;
+    structName: string;
+    fieldName: string;
+    access: "literal" | "member";
+  }): void {
+    this.diag.unknownField({ ...payload, span: this.spanToLocation(payload.span) });
+  }
+
+  missingField(payload: { span: Span; structName: string; fieldName: string }): void {
+    this.diag.missingField({ ...payload, span: this.spanToLocation(payload.span) });
+  }
+
+  invalidFieldAccess(payload: { span: Span; typeName: string; property: string }): void {
+    this.diag.invalidFieldAccess({ ...payload, span: this.spanToLocation(payload.span) });
+  }
+
+  cannotConstructStruct(payload: { span: Span; name: string }): void {
+    this.diag.cannotConstructStruct({ ...payload, span: this.spanToLocation(payload.span) });
+  }
+
+  unsafeStructFieldRule(payload: {
+    span: Span;
+    structName: string;
+    fieldName: string;
+    message: string;
+  }): void {
+    this.diag.unsafeStructFieldRule({ ...payload, span: this.spanToLocation(payload.span) });
+  }
+
   /**
    * Map a lexer {@link Span} to a diagnostics-module
    * {@link SourceLocation} using this Checker's source file. Public so

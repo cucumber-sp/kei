@@ -184,10 +184,12 @@ export class ExpressionChecker {
       if (methodType) return methodType;
 
       // Check if it's a type being used for static method access
-      this.checker.error(
-        `type '${objectType.name}' has no field or method '${expr.property}'`,
-        expr.span
-      );
+      this.checker.unknownField({
+        span: expr.span,
+        structName: objectType.name,
+        fieldName: expr.property,
+        access: "member",
+      });
       return ERROR_TYPE;
     }
 
@@ -228,10 +230,11 @@ export class ExpressionChecker {
       }
     }
 
-    this.checker.error(
-      `type '${typeToString(objectType)}' has no property '${expr.property}'`,
-      expr.span
-    );
+    this.checker.invalidFieldAccess({
+      span: expr.span,
+      typeName: typeToString(objectType),
+      property: expr.property,
+    });
     return ERROR_TYPE;
   }
 

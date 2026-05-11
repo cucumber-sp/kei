@@ -27,16 +27,19 @@ export type {
   ArityMismatchDiagnostic,
   BinaryTypeMismatchDiagnostic,
   CannotCastDiagnostic,
+  CannotConstructStructDiagnostic,
   Diagnostic,
   DiagnosticEnvelope,
   ExpectedTypeDiagnostic,
   GenericArgMismatchDiagnostic,
   IncompatibleAssignmentDiagnostic,
+  InvalidFieldAccessDiagnostic,
   InvalidLifecycleSignatureDiagnostic,
   InvalidOperandDiagnostic,
   LifecycleHookSelfMismatchDiagnostic,
   LifecycleReturnTypeWrongDiagnostic,
   MethodNotFoundDiagnostic,
+  MissingFieldDiagnostic,
   NonOptionalAccessDiagnostic,
   NoOperatorOverloadDiagnostic,
   NotCallableDiagnostic,
@@ -44,7 +47,9 @@ export type {
   Span,
   TypeMismatchDiagnostic,
   UnaryTypeMismatchDiagnostic,
+  UnknownFieldDiagnostic,
   UnknownTypeDiagnostic,
+  UnsafeStructFieldRuleDiagnostic,
   UnsafeStructMissingDestroyDiagnostic,
   UnsafeStructMissingOncopyDiagnostic,
   UntriagedDiagnostic,
@@ -176,6 +181,33 @@ export interface Diagnostics {
 
   /** Lifecycle hook return type isn't `void`. */
   lifecycleReturnTypeWrong(payload: { span: Span; hookName: string }): void;
+
+  // ─── Struct field-rule variants (E4xxx, PR 4d) ────────────────────────
+
+  /** Struct/struct-literal references a field name that doesn't exist. */
+  unknownField(payload: {
+    span: Span;
+    structName: string;
+    fieldName: string;
+    access: "literal" | "member";
+  }): void;
+
+  /** Struct literal omits a required field. */
+  missingField(payload: { span: Span; structName: string; fieldName: string }): void;
+
+  /** `.field` access on a type that doesn't carry fields. */
+  invalidFieldAccess(payload: { span: Span; typeName: string; property: string }): void;
+
+  /** Struct-literal name doesn't resolve to a struct type. */
+  cannotConstructStruct(payload: { span: Span; name: string }): void;
+
+  /** Struct/unsafe-struct field declaration violates the safe/unsafe rule. */
+  unsafeStructFieldRule(payload: {
+    span: Span;
+    structName: string;
+    fieldName: string;
+    message: string;
+  }): void;
 
   /** Frozen snapshot of all diagnostics emitted so far. */
   diagnostics(): readonly Diagnostic[];
@@ -381,6 +413,13 @@ export function createDiagnostics(config: LintConfig = {}): Diagnostics {
         hookName,
       });
     },
+
+    unknownField: (p) => emit("unknownField", "E4001", p),
+    missingField: (p) => emit("missingField", "E4002", p),
+    invalidFieldAccess: (p) => emit("invalidFieldAccess", "E4003", p),
+    cannotConstructStruct: (p) => emit("cannotConstructStruct", "E4004", p),
+    unsafeStructFieldRule: (p) => emit("unsafeStructFieldRule", "E4005", p),
+
     diagnostics: () => collector.snapshot(),
   };
 }

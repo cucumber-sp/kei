@@ -170,10 +170,12 @@ export class StructChecker {
       for (const field of decl.fields) {
         const ft = this.checker.resolveType(field.typeAnnotation);
         if (isPtrType(ft)) {
-          this.checker.error(
-            `struct '${decl.name}' cannot have pointer field '${field.name}'; use 'unsafe struct' for pointer fields`,
-            field.span
-          );
+          this.checker.unsafeStructFieldRule({
+            span: field.span,
+            structName: decl.name,
+            fieldName: field.name,
+            message: `struct '${decl.name}' cannot have pointer field '${field.name}'; use 'unsafe struct' for pointer fields`,
+          });
         }
       }
     }
