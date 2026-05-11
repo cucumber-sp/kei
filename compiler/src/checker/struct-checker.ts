@@ -1,11 +1,10 @@
 /**
  * Type-checks struct and unsafe struct declarations.  Lifecycle hook
  * auto-generation (`__destroy` / `__oncopy`) is delegated to the
- * Lifecycle module (`src/lifecycle/`); this checker keeps a thin shim
- * that mirrors decisions back onto `StructType.methods` so existing
- * type-check call sites that look up `s.__destroy()` keep working.
- * The shim is removed in PR 4 of the migration plan
- * (`docs/design/lifecycle-module.md` §7).
+ * Lifecycle module (`src/lifecycle/`); this checker only kicks off
+ * registration and the fixed-point decide pass, and flips the
+ * `autoDestroy` / `autoOncopy` flags on the struct type so KIR
+ * synthesis can find the structs that need bodies emitted.
  */
 
 import type { Declaration, FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes";

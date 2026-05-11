@@ -341,10 +341,10 @@ export class Checker {
     }
 
     // Pass 1.5: Decide which structs need auto-generated __destroy /
-    // __oncopy. Owned by the Lifecycle module; the checker just kicks
-    // off the fixed point and lets the module mirror its decisions
-    // back onto `StructType.methods` (transition shim — see
-    // `docs/design/lifecycle-module.md` §7 PR 1; removed in PR 4).
+    // __oncopy. Owned by the Lifecycle module; the checker kicks off
+    // the fixed point and the module flips `autoDestroy` /
+    // `autoOncopy` on each struct's type so KIR synthesis can locate
+    // the structs that need bodies emitted.
     this.declChecker.runLifecycleDecide(this.program.declarations);
 
     // Pass 2: Check all declarations
