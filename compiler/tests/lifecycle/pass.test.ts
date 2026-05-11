@@ -107,15 +107,14 @@ describe("runLifecyclePass — no-op rewrite (PR 3)", () => {
   });
 
   describe("strips each marker kind in isolation", () => {
+    // `mark_assign` has its own real rewrite as of PR 4b (see
+    // `pass-assign.test.ts`), so it's deliberately not in this list — the
+    // no-op assertion only applies to the markers still awaiting cut-over.
     const markers: { name: string; inst: KirInst }[] = [
       { name: "mark_scope_enter", inst: { kind: "mark_scope_enter", scopeId: 1 } },
       { name: "mark_scope_exit", inst: { kind: "mark_scope_exit", scopeId: 1 } },
       { name: "mark_track", inst: { kind: "mark_track", varId: "%0", scopeId: 1 } },
       { name: "mark_moved", inst: { kind: "mark_moved", varId: "%0" } },
-      {
-        name: "mark_assign",
-        inst: { kind: "mark_assign", slot: "%0", newValue: "%1", isMove: false },
-      },
       { name: "mark_param", inst: { kind: "mark_param", param: "%p" } },
     ];
 

@@ -9,12 +9,12 @@
  *
  * Migration status (`docs/design/lifecycle-module.md` §7):
  *
- * - PR 3 — pass slot, no-op rewrite. All markers are stripped, no real
- *   destroy / oncopy emitted in their place.
- * - PR 4c — `mark_param` rewrites into per-exit destroys. The remaining
- *   four markers (`mark_scope_enter`/`exit`, `mark_track`, `mark_moved`,
- *   `mark_assign`) are still stripped without effect; their cut-over
- *   lands in sibling PRs 4a/4b/4d/4e.
+ * - PR 3 — pass slot, no-op rewrite. All markers stripped.
+ * - PR 4c — `mark_param` rewrites into per-exit destroys.
+ * - PR 4b — `mark_assign` rewrites into load/destroy/store/oncopy
+ *   (the slot's pointee KIR type drives the dispatch).
+ * - PR 4a/4d/4e — sibling cut-overs still pending; their markers
+ *   remain stripped without effect for now.
  *
  * After the pass, no `mark_*` instruction survives — mem2reg, de-SSA,
  * and the C emitter never see markers.
@@ -28,8 +28,10 @@ import type {
   KirBlock,
   KirFunction,
   KirInst,
+  KirMarkAssign,
   KirModule,
   KirTerminator,
+  KirType,
   VarId,
 } from "../kir/kir-types";
 import type { LifecycleDecision } from "./types";
@@ -41,33 +43,71 @@ import type { LifecycleDecision } from "./types";
  */
 export type LifecycleDecisionLookup = (struct: StructType) => LifecycleDecision | undefined;
 
+/** Mangled struct names that have an auto-or-user `__destroy` / `__oncopy`. */
+interface StructHookSets {
+  destroys: Set<string>;
+  oncopies: Set<string>;
+}
+
 /**
- * Run the Lifecycle rewrite pass over `module`. Marker instructions are
- * stripped; every other instruction passes through in its original order.
- *
- * Returns a new module — input is not mutated.
+ * Run the Lifecycle pass over a KIR module. Returns a new module with
+ * markers rewritten (or stripped for not-yet-cut-over markers). The
+ * decisions parameter is plumbed through for future use; today's
+ * implementation reads the hook presence from the module's function
+ * names (`<mangled>___destroy` / `___oncopy`) rather than from the
+ * decision map, because both auto-generated and user-written hooks
+ * share the same mangling.
  */
 export function runLifecyclePass(
   module: KirModule,
   _decisions: LifecycleDecisionLookup
 ): KirModule {
+  const hooks = collectStructHooks(module);
   return {
     ...module,
-    functions: module.functions.map(rewriteFunction),
+    functions: module.functions.map((fn) => rewriteFunction(fn, hooks)),
   };
 }
 
-function rewriteFunction(fn: KirFunction): KirFunction {
+/**
+ * Scan `module.functions` for `<struct>___destroy` / `<struct>___oncopy`
+ * entries. These are emitted in two ways — by `Lifecycle.synthesise` for
+ * auto-generated arms and by `lowering-decl.ts` when the user wrote the
+ * method explicitly. Both paths share the same mangling, so a single
+ * name-based scan covers both.
+ */
+function collectStructHooks(module: KirModule): StructHookSets {
+  const destroys = new Set<string>();
+  const oncopies = new Set<string>();
+  for (const fn of module.functions) {
+    if (fn.name.endsWith("___destroy")) {
+      destroys.add(fn.name.slice(0, -"___destroy".length));
+    } else if (fn.name.endsWith("___oncopy")) {
+      oncopies.add(fn.name.slice(0, -"___oncopy".length));
+    }
+  }
+  return { destroys, oncopies };
+}
+
+function rewriteFunction(fn: KirFunction, hooks: StructHookSets): KirFunction {
   // Pre-pass: collect `mark_param` markers across all blocks. Params live
-  // for the entire function and must be destroyed at every exit point —
-  // collection-then-emit lets the rewrite walk avoid order dependencies
-  // between marker placement and the terminators that consume them.
+  // for the entire function and must be destroyed at every exit point.
   const paramDestroys = collectParamDestroys(fn);
 
-  return {
-    ...fn,
-    blocks: fn.blocks.map((block) => rewriteBlock(block, paramDestroys)),
-  };
+  // Pre-pass: pointee KIR types for pointer-producing instructions.
+  // `mark_assign slot, _, _` recovers the slot's pointee at rewrite time
+  // from this map (markers don't carry types — see design doc §3).
+  const pointees = collectPointeeTypes(fn);
+
+  // The mark_assign rewrite may inject `load` instructions. Those need
+  // fresh VarIds; start numbering at `fn.localCount` so they don't
+  // collide with names lowering already used.
+  const counter = { next: fn.localCount };
+
+  const blocks = fn.blocks.map((block) =>
+    rewriteBlock(block, hooks, pointees, counter, paramDestroys)
+  );
+  return { ...fn, blocks, localCount: counter.next };
 }
 
 /**
@@ -101,15 +141,50 @@ function collectParamDestroys(fn: KirFunction): KirInst[] {
   return destroys;
 }
 
-function rewriteBlock(block: KirBlock, paramDestroys: KirInst[]): KirBlock {
-  const filtered = block.instructions.filter(isNotMarker);
+/**
+ * Walk every instruction in `fn` and collect the pointee KIR type for
+ * each pointer-producing instruction (`stack_alloc`, `field_ptr`,
+ * `index_ptr`). The pass uses this to recover the slot's pointee type
+ * when rewriting a `mark_assign` marker.
+ */
+function collectPointeeTypes(fn: KirFunction): Map<VarId, KirType> {
+  const pointees = new Map<VarId, KirType>();
+  for (const block of fn.blocks) {
+    for (const inst of block.instructions) {
+      switch (inst.kind) {
+        case "stack_alloc":
+        case "field_ptr":
+        case "index_ptr":
+          pointees.set(inst.dest, inst.type);
+          break;
+      }
+    }
+  }
+  return pointees;
+}
+
+function rewriteBlock(
+  block: KirBlock,
+  hooks: StructHookSets,
+  pointees: Map<VarId, KirType>,
+  counter: { next: number },
+  paramDestroys: KirInst[]
+): KirBlock {
+  const out: KirInst[] = [];
+  for (const inst of block.instructions) {
+    if (inst.kind === "mark_assign") {
+      rewriteMarkAssign(out, inst, hooks, pointees, counter);
+      continue;
+    }
+    if (isOtherMarker(inst)) continue;
+    out.push(inst);
+  }
+  // Append per-exit param destroys if this block ends with a function
+  // exit terminator (ret / ret_void).
   const instructions = isExitTerminator(block.terminator)
-    ? [...filtered, ...paramDestroys]
-    : filtered;
-  return {
-    ...block,
-    instructions,
-  };
+    ? [...out, ...paramDestroys]
+    : out;
+  return { ...block, instructions };
 }
 
 /** Function exits (`ret` / `ret_void`) trigger param destroys; other terminators don't. */
@@ -117,16 +192,65 @@ function isExitTerminator(t: KirTerminator): boolean {
   return t.kind === "ret" || t.kind === "ret_void";
 }
 
-function isNotMarker(inst: KirInst): boolean {
+/**
+ * Non-`mark_assign` markers that this pass currently strips without
+ * concrete rewrite (`mark_assign` has its own rewrite path).
+ */
+function isOtherMarker(inst: KirInst): boolean {
   switch (inst.kind) {
     case "mark_scope_enter":
     case "mark_scope_exit":
     case "mark_track":
     case "mark_moved":
-    case "mark_assign":
     case "mark_param":
-      return false;
-    default:
       return true;
+    default:
+      return false;
   }
+}
+
+/**
+ * Rewrite a `mark_assign slot, newValue, isMove` into the concrete
+ * lifecycle sequence appropriate for the slot's pointee type:
+ *
+ * - Managed-struct slot — load the old value, `destroy` it, store the
+ *   new value, then (unless `isMove`) `oncopy` the new value.
+ * - String slot — `kei_string_destroy(slot)` then store the new value.
+ *   The pointer is passed directly; no load needed (the runtime peeks
+ *   through the slot).
+ * - Anything else — bare `store`. The marker is a no-op for
+ *   non-managed slots.
+ */
+function rewriteMarkAssign(
+  out: KirInst[],
+  inst: KirMarkAssign,
+  hooks: StructHookSets,
+  pointees: Map<VarId, KirType>,
+  counter: { next: number }
+): void {
+  const pointee = pointees.get(inst.slot);
+
+  if (pointee?.kind === "struct") {
+    const structName = pointee.name;
+    const hasDestroy = hooks.destroys.has(structName);
+    const hasOncopy = hooks.oncopies.has(structName);
+    if (hasDestroy) {
+      const oldVal = `%${counter.next++}` as VarId;
+      out.push({ kind: "load", dest: oldVal, ptr: inst.slot, type: pointee });
+      out.push({ kind: "destroy", value: oldVal, structName });
+    }
+    out.push({ kind: "store", ptr: inst.slot, value: inst.newValue });
+    if (hasOncopy && !inst.isMove) {
+      out.push({ kind: "oncopy", value: inst.newValue, structName });
+    }
+    return;
+  }
+
+  if (pointee?.kind === "string") {
+    out.push({ kind: "call_extern_void", func: "kei_string_destroy", args: [inst.slot] });
+    out.push({ kind: "store", ptr: inst.slot, value: inst.newValue });
+    return;
+  }
+
+  out.push({ kind: "store", ptr: inst.slot, value: inst.newValue });
 }

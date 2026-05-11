@@ -14,6 +14,7 @@ import type { Diagnostic } from "../../src/errors/diagnostic";
 import { lowerToKir } from "../../src/kir/lowering";
 import { runMem2Reg } from "../../src/kir/mem2reg";
 import { Lexer } from "../../src/lexer";
+import { runLifecyclePass } from "../../src/lifecycle";
 import { Parser } from "../../src/parser";
 import { SourceFile } from "../../src/utils/source";
 
@@ -43,6 +44,7 @@ function compileFull(source: string): string {
   }
 
   let mod = lowerToKir(program, result);
+  mod = runLifecyclePass(mod, result.lifecycle.getDecision);
   mod = runMem2Reg(mod);
   mod = runDeSsa(mod);
   return emitC(mod);
