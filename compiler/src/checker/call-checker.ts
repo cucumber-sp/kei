@@ -5,6 +5,7 @@
  */
 
 import type { CallExpr, Expression, FunctionDecl } from "../ast/nodes";
+import type { Span } from "../lexer/token";
 import {
   mangleGenericName,
   substituteFunctionType,
@@ -35,7 +36,12 @@ function checkSizeofCall(checker: Checker, expr: CallExpr): Type | null {
   if (expr.callee.kind !== "Identifier" || expr.callee.name !== "sizeof") return null;
 
   if (expr.args.length !== 1) {
-    checker.error("'sizeof' expects exactly 1 argument", expr.span);
+    checker.arityMismatch({
+      expected: 1,
+      got: expr.args.length,
+      span: expr.span,
+      message: "'sizeof' expects exactly 1 argument",
+    });
     return ERROR_TYPE;
   }
   const arg = expr.args[0];
@@ -82,7 +88,12 @@ function checkLifecycleHookBuiltin(checker: Checker, expr: CallExpr): Type | nul
   }
 
   if (expr.args.length !== 1) {
-    checker.error(`'${name}' expects exactly 1 argument`, expr.span);
+    checker.arityMismatch({
+      expected: 1,
+      got: expr.args.length,
+      span: expr.span,
+      message: `'${name}' expects exactly 1 argument`,
+    });
     return ERROR_TYPE;
   }
   const arg = expr.args[0];
@@ -91,6 +102,8 @@ function checkLifecycleHookBuiltin(checker: Checker, expr: CallExpr): Type | nul
   if (isErrorType(argType)) return ERROR_TYPE;
 
   if (!isPtrType(argType)) {
+    // The `'*T' argument` check is a builtin-shape constraint (not a
+    // generic parameter-type mismatch), so it stays on `untriaged`.
     checker.error(`'${name}' expects a '*T' argument, got '${typeToString(argType)}'`, expr.span);
     return ERROR_TYPE;
   }
@@ -126,7 +139,12 @@ function checkBuiltinAllocFree(checker: Checker, expr: CallExpr): Type | null {
 
   if (name === "alloc") {
     if (expr.args.length !== 1) {
-      checker.error("'alloc' expects exactly 1 argument", expr.span);
+      checker.arityMismatch({
+        expected: 1,
+        got: expr.args.length,
+        span: expr.span,
+        message: "'alloc' expects exactly 1 argument",
+      });
       return ERROR_TYPE;
     }
     const allocArg = expr.args[0];
@@ -136,7 +154,13 @@ function checkBuiltinAllocFree(checker: Checker, expr: CallExpr): Type | null {
 
     // alloc<T>(count) returns ptr<T>; alloc(count) returns ptr<void>
     if (expr.typeArgs.length > 1) {
-      checker.error("'alloc' expects at most 1 type argument", expr.span);
+      checker.genericArgMismatch({
+        span: expr.span,
+        message: "'alloc' expects at most 1 type argument",
+        name: "alloc",
+        expected: 1,
+        got: expr.typeArgs.length,
+      });
       return ERROR_TYPE;
     }
     const typeArg = expr.typeArgs[0];
@@ -150,13 +174,21 @@ function checkBuiltinAllocFree(checker: Checker, expr: CallExpr): Type | null {
 
   // free
   if (expr.args.length !== 1) {
-    checker.error("'free' expects exactly 1 argument", expr.span);
+    checker.arityMismatch({
+      expected: 1,
+      got: expr.args.length,
+      span: expr.span,
+      message: "'free' expects exactly 1 argument",
+    });
     return ERROR_TYPE;
   }
   const freeArg = expr.args[0];
   if (!freeArg) return ERROR_TYPE;
   const argType = checker.checkExpression(freeArg);
   if (!isErrorType(argType) && !isPtrType(argType)) {
+    // The `'free' expects a pointer` check is a builtin-shape constraint
+    // (any pointer kind, not a specific parameter type), so it stays
+    // on `untriaged`.
     checker.error(`'free' expects a pointer argument, got '${typeToString(argType)}'`, expr.span);
     return ERROR_TYPE;
   }
@@ -220,33 +252,45 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
           let enumType = baseEnum;
           if (baseEnum.genericParams.length > 0) {
             if (expr.typeArgs.length === 0) {
-              checker.error(
-                `generic enum '${baseEnum.name}' requires type arguments (e.g. '${baseEnum.name}<...>.${variant.name}')`,
-                expr.span
-              );
+              checker.genericArgMismatch({
+                span: expr.span,
+                message: `generic enum '${baseEnum.name}' requires type arguments (e.g. '${baseEnum.name}<...>.${variant.name}')`,
+                name: baseEnum.name,
+                expected: baseEnum.genericParams.length,
+                got: 0,
+              });
               return ERROR_TYPE;
             }
             if (expr.typeArgs.length !== baseEnum.genericParams.length) {
-              checker.error(
-                `enum '${baseEnum.name}' expects ${baseEnum.genericParams.length} type argument(s), got ${expr.typeArgs.length}`,
-                expr.span
-              );
+              checker.genericArgMismatch({
+                span: expr.span,
+                message: `enum '${baseEnum.name}' expects ${baseEnum.genericParams.length} type argument(s), got ${expr.typeArgs.length}`,
+                name: baseEnum.name,
+                expected: baseEnum.genericParams.length,
+                got: expr.typeArgs.length,
+              });
               return ERROR_TYPE;
             }
             const inst = checker.instantiateGenericEnum(baseEnum, expr.typeArgs);
             if (isErrorType(inst)) return ERROR_TYPE;
             enumType = inst as EnumType;
           } else if (expr.typeArgs.length > 0) {
-            checker.error(
-              `enum '${baseEnum.name}' is not generic but was called with ${expr.typeArgs.length} type argument(s)`,
-              expr.span
-            );
+            checker.genericArgMismatch({
+              span: expr.span,
+              message: `enum '${baseEnum.name}' is not generic but was called with ${expr.typeArgs.length} type argument(s)`,
+              name: baseEnum.name,
+              expected: null,
+              got: expr.typeArgs.length,
+            });
             return ERROR_TYPE;
           }
           const concreteVariant =
             enumType.variants.find((v) => v.name === memberExpr.property) ?? variant;
 
           if (concreteVariant.fields.length === 0) {
+            // Misuse of unit variant (`Enum.Variant` used with call
+            // syntax) — wording specific to variant construction, kept
+            // on `untriaged` per "don't widen scope".
             checker.error(
               `enum variant '${enumType.name}.${concreteVariant.name}' has no fields — use '${enumType.name}.${concreteVariant.name}' without call syntax`,
               expr.span
@@ -255,13 +299,20 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
           }
           // Check argument count
           if (expr.args.length !== concreteVariant.fields.length) {
-            checker.error(
-              `enum variant '${enumType.name}.${concreteVariant.name}' expects ${concreteVariant.fields.length} argument(s), got ${expr.args.length}`,
-              expr.span
-            );
+            checker.arityMismatch({
+              expected: concreteVariant.fields.length,
+              got: expr.args.length,
+              span: expr.span,
+              message: `enum variant '${enumType.name}.${concreteVariant.name}' expects ${concreteVariant.fields.length} argument(s), got ${expr.args.length}`,
+            });
             return ERROR_TYPE;
           }
-          // Check argument types
+          // Check argument types. Enum-variant payload mismatches use
+          // a field-name-prefixed wording (`argument 'name':`) that
+          // differs from the call-site `argument N:` form, so they
+          // stay on `untriaged` rather than `argumentTypeMismatch` —
+          // changing the wording would violate the "Don't rephrase
+          // messages" forbidden shortcut in the migration brief.
           for (let i = 0; i < expr.args.length; i++) {
             const arg = expr.args[i];
             if (!arg) continue;
@@ -306,7 +357,9 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
             return resolveOverloadedCall(checker, exportedSym.overloads, expr);
           }
           checker.setExprType(expr.callee, exportedSym.type);
-          return checkFunctionCallArgs(checker, exportedSym.type, expr.args, expr, false);
+          return checkFunctionCallArgs(checker, exportedSym.type, expr.args, expr, false, {
+            paramSpans: exportedSym.declaration?.params.map((p) => p.span),
+          });
         }
         if (
           exportedSym &&
@@ -369,10 +422,13 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
           let resolvedMethod = method;
           if (expr.typeArgs.length > 0 && structType.genericParams.length > 0) {
             if (expr.typeArgs.length !== structType.genericParams.length) {
-              checker.error(
-                `type '${structType.name}' expects ${structType.genericParams.length} type argument(s), got ${expr.typeArgs.length}`,
-                expr.span
-              );
+              checker.genericArgMismatch({
+                span: expr.span,
+                message: `type '${structType.name}' expects ${structType.genericParams.length} type argument(s), got ${expr.typeArgs.length}`,
+                name: structType.name,
+                expected: structType.genericParams.length,
+                got: expr.typeArgs.length,
+              });
               return ERROR_TYPE;
             }
             const subs = new Map<string, Type>();
@@ -404,12 +460,23 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
           // MemberExpr so KIR lowering can match args against param types
           // and apply the auto-reference rule (T → ref T at the boundary).
           checker.setExprType(expr.callee, resolvedMethod);
-          return checkFunctionCallArgs(checker, resolvedMethod, expr.args, expr, false);
+          // Recover the method's parameter declaration spans (if the
+          // struct came from a user declaration) so
+          // `argumentTypeMismatch` can point at the parameter site.
+          const methodDecl =
+            typeSym.declaration?.kind === "StructDecl" ||
+            typeSym.declaration?.kind === "UnsafeStructDecl"
+              ? typeSym.declaration.methods.find((m) => m.name === memberExpr.property)
+              : undefined;
+          return checkFunctionCallArgs(checker, resolvedMethod, expr.args, expr, false, {
+            paramSpans: methodDecl?.params.map((p) => p.span),
+          });
         }
-        checker.error(
-          `type '${structType.name}' has no method '${memberExpr.property}'`,
-          expr.span
-        );
+        checker.methodNotFound({
+          typeName: structType.name,
+          methodName: memberExpr.property,
+          span: expr.span,
+        });
         return ERROR_TYPE;
       }
     }
@@ -429,6 +496,14 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
       return ERROR_TYPE;
     }
 
+    // For a direct identifier callee we can recover the user
+    // function's parameter declaration spans (via the symbol's
+    // `FunctionDecl`) so `argumentTypeMismatch` carries the
+    // declaration secondary span. Instance-method and indirect /
+    // expression calls don't currently track the decl here; they emit
+    // the diagnostic without a secondary span.
+    const paramSpans = lookupDirectCalleeParamSpans(checker, expr);
+
     // For instance method calls, skip the self parameter
     if (isInstanceMethodCall && calleeType.params.length > 0) {
       const firstParam = calleeType.params[0];
@@ -437,10 +512,10 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
       }
     }
 
-    return checkFunctionCallArgs(checker, calleeType, expr.args, expr, false);
+    return checkFunctionCallArgs(checker, calleeType, expr.args, expr, false, { paramSpans });
   }
 
-  checker.error(`expression of type '${typeToString(calleeType)}' is not callable`, expr.span);
+  checker.notCallable({ calleeType: typeToString(calleeType), span: expr.span });
   return ERROR_TYPE;
 }
 
@@ -559,20 +634,37 @@ function applyMoveParams(checker: Checker, expr: CallExpr, _funcType: FunctionTy
   }
 }
 
+/**
+ * Optional auxiliary info that the typed-method emission path needs
+ * but the `FunctionType` itself doesn't carry — currently just the
+ * parameter declaration spans for the `argumentTypeMismatch` secondary
+ * span. Recovered from the `FunctionDecl` at the call site when
+ * available; left undefined otherwise (the diagnostic falls back to
+ * primary-span only).
+ */
+interface CallSiteAux {
+  /** Spans of parameter declarations, aligned with `funcType.params`. */
+  paramSpans?: Span[];
+}
+
 function checkFunctionCallArgs(
   checker: Checker,
   funcType: FunctionType,
   args: Expression[],
   expr: CallExpr,
-  isMethod: boolean
+  isMethod: boolean,
+  aux: CallSiteAux = {}
 ): Type {
   // For instance methods, skip the self parameter
   const paramOffset = isMethod ? 1 : 0;
   const expectedParams = funcType.params.slice(paramOffset);
   const expectedCount = expectedParams.length;
+  // The parameter-span array (when supplied) is aligned with
+  // `funcType.params`, so the same offset applies.
+  const expectedParamSpans = aux.paramSpans?.slice(paramOffset);
 
   if (args.length !== expectedCount) {
-    checker.error(`expected ${expectedCount} argument(s), got ${args.length}`, expr.span);
+    checker.arityMismatch({ expected: expectedCount, got: args.length, span: expr.span });
     return ERROR_TYPE;
   }
 
@@ -592,10 +684,13 @@ function checkFunctionCallArgs(
       const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, paramType);
       // Skip type param checks (generic functions)
       if (!isLiteralOk && paramType.kind !== TypeKind.TypeParam) {
-        checker.error(
-          `argument ${i + 1}: expected '${typeToString(paramType)}', got '${typeToString(argType)}'`,
-          currentArg.span
-        );
+        checker.argumentTypeMismatch({
+          paramIndex: i,
+          expected: typeToString(paramType),
+          got: typeToString(argType),
+          span: currentArg.span,
+          paramDeclSpan: expectedParamSpans?.[i],
+        });
       }
     }
 
@@ -653,19 +748,25 @@ function checkGenericFunctionCall(checker: Checker, expr: CallExpr): Type {
   // Find the generic overload
   const genericOverload = sym.overloads.find((o) => o.type.genericParams.length > 0);
   if (!genericOverload) {
-    checker.error(
-      `function '${name}' is not generic but was called with ${expr.typeArgs.length} type argument(s)`,
-      expr.span
-    );
+    checker.genericArgMismatch({
+      span: expr.span,
+      message: `function '${name}' is not generic but was called with ${expr.typeArgs.length} type argument(s)`,
+      name,
+      expected: null,
+      got: expr.typeArgs.length,
+    });
     return ERROR_TYPE;
   }
 
   const funcType = genericOverload.type;
   if (expr.typeArgs.length !== funcType.genericParams.length) {
-    checker.error(
-      `function '${name}' expects ${funcType.genericParams.length} type argument(s) <${funcType.genericParams.join(", ")}>, got ${expr.typeArgs.length}`,
-      expr.span
-    );
+    checker.genericArgMismatch({
+      span: expr.span,
+      message: `function '${name}' expects ${funcType.genericParams.length} type argument(s) <${funcType.genericParams.join(", ")}>, got ${expr.typeArgs.length}`,
+      name,
+      expected: funcType.genericParams.length,
+      got: expr.typeArgs.length,
+    });
     return ERROR_TYPE;
   }
 
@@ -696,7 +797,9 @@ function checkGenericFunctionCall(checker: Checker, expr: CallExpr): Type {
     genericOverload.declaration ?? undefined
   );
 
-  return checkFunctionCallArgs(checker, concreteType, expr.args, expr, false);
+  return checkFunctionCallArgs(checker, concreteType, expr.args, expr, false, {
+    paramSpans: genericOverload.declaration?.params.map((p) => p.span),
+  });
 }
 
 /** Handle generic function call with inferred type args: max(10, 20) → infer T=i32 */
@@ -716,10 +819,11 @@ function checkGenericFunctionCallInferred(
   const paramOffset = 0;
   const expectedParams = funcType.params.slice(paramOffset);
   if (argTypes.length !== expectedParams.length) {
-    checker.error(
-      `expected ${expectedParams.length} argument(s), got ${argTypes.length}`,
-      expr.span
-    );
+    checker.arityMismatch({
+      expected: expectedParams.length,
+      got: argTypes.length,
+      span: expr.span,
+    });
     return ERROR_TYPE;
   }
 
@@ -753,7 +857,10 @@ function checkGenericFunctionCallInferred(
 
   cacheMonomorphizedFunction(checker, expr, name, mangledName, resolvedTypeArgs, concreteType);
 
-  // Validate args against concrete param types
+  // Validate args against concrete param types. We don't carry the
+  // generic overload's declaration here (caller didn't thread it
+  // through `checkGenericFunctionCallInferred`); the diagnostic falls
+  // back to a primary span only.
   for (let i = 0; i < argTypes.length; i++) {
     // biome-ignore lint/style/noNonNullAssertion: loop bounded by argTypes.length
     const argType = argTypes[i]!;
@@ -764,11 +871,13 @@ function checkGenericFunctionCallInferred(
       const litInfo = extractLiteralInfo(expr.args[i]!);
       const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, paramType);
       if (!isLiteralOk) {
-        checker.error(
-          `argument ${i + 1}: expected '${typeToString(paramType)}', got '${typeToString(argType)}'`,
+        checker.argumentTypeMismatch({
+          paramIndex: i,
+          expected: typeToString(paramType),
+          got: typeToString(argType),
           // biome-ignore lint/style/noNonNullAssertion: loop bounded by argTypes.length
-          expr.args[i]!.span
-        );
+          span: expr.args[i]!.span,
+        });
       }
     }
   }
@@ -779,6 +888,25 @@ function checkGenericFunctionCallInferred(
   }
 
   return concreteType.returnType;
+}
+
+/**
+ * Recover parameter declaration spans for a direct-identifier callee.
+ * Used so `argumentTypeMismatch` can carry a secondary span at the
+ * parameter's declaration. Returns `undefined` when the callee isn't
+ * a direct identifier, when it doesn't resolve to a function symbol,
+ * or when the function has no AST declaration (extern / builtin).
+ *
+ * Member-expression callees (`obj.method`, `Type.method`) are handled
+ * inline at their respective call sites where the method's owning
+ * `StructDecl` is in scope; this helper only covers the
+ * "regular function call" path through `checkExpression(expr.callee)`.
+ */
+function lookupDirectCalleeParamSpans(checker: Checker, expr: CallExpr): Span[] | undefined {
+  if (expr.callee.kind !== "Identifier") return undefined;
+  const sym = checker.currentScope.lookup(expr.callee.name);
+  if (!sym || sym.kind !== SymbolKind.Function) return undefined;
+  return sym.declaration?.params.map((p) => p.span);
 }
 
 /**
