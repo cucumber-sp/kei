@@ -14,6 +14,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import type { ImportDecl, Program } from "../ast/nodes";
+import { createDiagnostics, type Diagnostic as ModuleDiagnostic } from "../diagnostics";
+import type { Span as DiagSpan } from "../diagnostics/types";
 import type { Diagnostic } from "../errors/diagnostic";
 import { Lexer } from "../lexer";
 import { Parser } from "../parser";
@@ -70,6 +72,17 @@ export interface ResolverResult {
   modules: ModuleInfo[];
   /** Errors encountered during resolution (collected, not thrown) */
   errors: string[];
+  /**
+   * Structured diagnostics emitted during resolution. Module-level
+   * resolver-pass errors carry specific `E7xxx` variants
+   * (`cyclicImport`, `moduleNotFound`, …). Lexer/parse stage errors
+   * encountered while reading dependent modules surface as
+   * `untriaged` for now; PRs 4a–4f own those categories.
+   *
+   * Kept alongside `errors: string[]` so legacy console-error printing
+   * continues to work unchanged while typed consumers can opt in.
+   */
+  diagnostics: readonly ModuleDiagnostic[];
 }
 
 // ─── Resolver ─────────────────────────────────────────────────────────────────
@@ -90,6 +103,12 @@ export class ModuleResolver {
   private depsRoot: string | null;
   private modules: Map<string, ModuleInfo> = new Map();
   private errors: string[] = [];
+  /**
+   * Typed diagnostics accumulator. Populated in parallel with `errors`
+   * so the surfacing step stamps the right `E7xxx` kind without
+   * disturbing the legacy `string[]` API consumers rely on.
+   */
+  private diag = createDiagnostics({});
 
   /**
    * @param mainFilePath - Path to the project's main .kei file.
@@ -163,13 +182,13 @@ export class ModuleResolver {
     const absPath = resolve(mainFilePath);
     const mainModuleName = this.filePathToModuleName(absPath);
 
-    this.discoverModule(mainModuleName, absPath);
+    this.discoverModule(mainModuleName, absPath, null);
 
     // Even if there are discovery errors, attempt topological sort
     // to report as many issues as possible
     const sorted = this.topologicalSort();
 
-    return { modules: sorted, errors: this.errors };
+    return { modules: sorted, errors: this.errors, diagnostics: this.diag.diagnostics() };
   }
 
   /**
@@ -177,9 +196,17 @@ export class ModuleResolver {
    *
    * Errors during file reading, lexing, or parsing are collected (not thrown)
    * so that the resolver can continue discovering other modules and report
-   * multiple errors at once.
+   * multiple errors at once. `importedFrom` carries the importer's source +
+   * import-decl byte span so `moduleNotFound` diagnostics can point at the
+   * `import` statement that triggered the lookup. The entry-point module
+   * has no importer; in that case `importedFrom` is `null` and the
+   * diagnostic falls back to a synthetic span at the start of the file.
    */
-  private discoverModule(moduleName: string, filePath: string): void {
+  private discoverModule(
+    moduleName: string,
+    filePath: string,
+    importedFrom: { source: SourceFile; importSpan: { start: number; end: number } } | null
+  ): void {
     if (this.modules.has(moduleName)) return;
 
     // Read and parse the file
@@ -188,6 +215,11 @@ export class ModuleResolver {
       const hint = this.suggestSimilarModules(moduleName);
       const msg = `module '${moduleName}' not found: no file at '${filePath}'`;
       this.errors.push(hint ? `${msg}\n  hint: did you mean '${hint}'?` : msg);
+      this.diag.moduleNotFound({
+        span: this.spanForImport(importedFrom, filePath),
+        importPath: moduleName,
+        notes: hint ? [`did you mean '${hint}'?`] : undefined,
+      });
       return;
     }
 
@@ -232,15 +264,23 @@ export class ModuleResolver {
     this.modules.set(moduleName, moduleInfo);
 
     // Recursively discover imported modules
-    for (const importPath of importNames) {
+    for (const decl of importDecls) {
+      const importPath = decl.path;
       const resolvedPath = this.resolveImportPath(importPath);
       if (resolvedPath) {
-        this.discoverModule(importPath, resolvedPath);
+        this.discoverModule(importPath, resolvedPath, { source, importSpan: decl.span });
       } else {
-        const searched = this.describeSearchPaths(importPath);
+        const searchedPaths = this.describeSearchPathList(importPath);
+        const searched = searchedPaths.map((p) => `    ${p}`).join("\n");
         this.errors.push(
           `module '${moduleName}': cannot resolve import '${importPath}'\n  searched:\n${searched}`
         );
+        this.diag.moduleNotFound({
+          span: this.locationFromSource(source, decl.span.start),
+          importPath,
+          importerModule: moduleName,
+          searched: searchedPaths,
+        });
       }
     }
   }
@@ -315,6 +355,10 @@ export class ModuleResolver {
         const cycleStart = path.indexOf(name);
         const cycle = path.slice(cycleStart).concat(name);
         this.errors.push(`Circular dependency detected: ${cycle.join(" \u2192 ")}`);
+        this.diag.cyclicImport({
+          span: this.spanForCycle(cycle),
+          path: cycle,
+        });
         return false;
       }
 
@@ -345,30 +389,76 @@ export class ModuleResolver {
 
   /**
    * Describe the paths that were searched when an import could not be resolved.
-   * Used to produce helpful "searched:" output in error messages.
+   * Returns the list of attempted absolute paths so both the legacy
+   * string-error formatting and the typed-diagnostic envelope can share
+   * one source of truth.
    */
-  private describeSearchPaths(importPath: string): string {
+  private describeSearchPathList(importPath: string): string[] {
     const parts = importPath.split(".");
     const relPath = `${parts.join("/")}.kei`;
     const paths: string[] = [];
 
-    paths.push(`    ${join(this.sourceRoot, relPath)}`);
+    paths.push(join(this.sourceRoot, relPath));
 
     if (this.depsRoot) {
-      paths.push(`    ${join(this.depsRoot, relPath)}`);
+      paths.push(join(this.depsRoot, relPath));
       if (parts.length === 1) {
         const packageName = parts[0];
         if (packageName) {
-          paths.push(`    ${join(this.depsRoot, packageName, "mod.kei")}`);
+          paths.push(join(this.depsRoot, packageName, "mod.kei"));
         }
       }
     }
 
     if (this.stdRoot) {
-      paths.push(`    ${join(this.stdRoot, relPath)}`);
+      paths.push(join(this.stdRoot, relPath));
     }
 
-    return paths.join("\n");
+    return paths;
+  }
+
+  /**
+   * Build a `Span` (SourceLocation) for the importer's `import` statement
+   * when known, or fall back to a synthetic location at the start of
+   * the missing file. The latter is the only sane fallback for the
+   * entry-point module: there is no importer, so we have nothing to
+   * point at.
+   */
+  private spanForImport(
+    importedFrom: { source: SourceFile; importSpan: { start: number; end: number } } | null,
+    fallbackFile: string
+  ): DiagSpan {
+    if (importedFrom) {
+      return this.locationFromSource(importedFrom.source, importedFrom.importSpan.start);
+    }
+    return { file: fallbackFile, line: 1, column: 1, offset: 0 };
+  }
+
+  /**
+   * Best-effort span for a cyclic-import diagnostic. The cycle has no
+   * single natural anchor; we point at the first `import` statement in
+   * the first module of the cycle that references the next module in
+   * the chain. If the lookup fails (shouldn't, but defensive), we fall
+   * back to the start of the first module's source.
+   */
+  private spanForCycle(cycle: string[]): DiagSpan {
+    const first = cycle[0];
+    const next = cycle[1];
+    if (first && next) {
+      const mod = this.modules.get(first);
+      if (mod) {
+        const decl = mod.importDecls.find((d) => d.path === next);
+        if (decl) return this.locationFromSource(mod.source, decl.span.start);
+        return this.locationFromSource(mod.source, 0);
+      }
+    }
+    return { file: first ?? "<unknown>", line: 1, column: 1, offset: 0 };
+  }
+
+  /** Convert a byte-offset into a `SourceLocation` rooted at `source`. */
+  private locationFromSource(source: SourceFile, offset: number): DiagSpan {
+    const lc = source.lineCol(offset);
+    return { file: source.filename, line: lc.line, column: lc.column, offset };
   }
 
   /**

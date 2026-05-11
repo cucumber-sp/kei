@@ -452,6 +452,72 @@ export interface UnsafeStructFieldRuleDiagnostic extends DiagnosticEnvelope {
   message: string;
 }
 
+// ─── Modules (PR 4g) ─────────────────────────────────────────────────────────
+//
+// Module-level resolver-pass errors. The boundary with 4b's
+// `unresolvedImport` is *which-pass-emits-it*: errors that fire while
+// the resolver is still discovering / topologically-sorting modules
+// live here; symbol-level errors that fire later during the checker
+// pass live in 4b. See `docs/design/diagnostics-module.md` §9, PR 4g.
+
+/**
+ * The import graph contains a cycle. `path` carries the cycle ordered
+ * from entry to closing edge (e.g. `["a", "b", "a"]` for `A → B → A`).
+ * The formatter renders the chain joined by `→`.
+ */
+export interface CyclicImportDiagnostic extends DiagnosticEnvelope {
+  kind: "cyclicImport";
+  code: "E7001";
+  path: readonly string[];
+}
+
+/**
+ * An `import` references a module path that does not resolve to any
+ * `.kei` file in the search roots.
+ */
+export interface ModuleNotFoundDiagnostic extends DiagnosticEnvelope {
+  kind: "moduleNotFound";
+  code: "E7002";
+  /** The dotted import path that failed to resolve. */
+  importPath: string;
+  /** Optional context — the importer module's dotted name, when known. */
+  importerModule?: string;
+  /** Optional human-readable list of paths the resolver tried. */
+  searched?: readonly string[];
+}
+
+/**
+ * A selective import names a symbol the target module does not export.
+ *
+ * Intentionally overlaps with 4b's `unresolvedImport`; the split is
+ * *which-pass-emits-it*. 4g owns the resolver-pass surfacing (e.g. if
+ * the resolver ever inspects exports during discovery); 4b owns the
+ * checker-pass surfacing where today's `decl-checker.ts` "X is not
+ * exported by Y" lives. PR 4b will migrate the checker site; this
+ * variant exists so resolver-pass instances have a typed kind to land
+ * on without re-using `untriaged`.
+ */
+export interface ImportedSymbolNotExportedDiagnostic extends DiagnosticEnvelope {
+  kind: "importedSymbolNotExported";
+  code: "E7003";
+  /** Dotted module path the symbol was imported from. */
+  modulePath: string;
+  /** Name of the symbol that wasn't exported. */
+  symbolName: string;
+}
+
+/**
+ * The import graph mixes module styles (e.g. selective vs whole-module)
+ * in a way the resolver disallows. Reserved for the rule the resolver
+ * enforces; no migration site fires today, but the catalog carries the
+ * variant so the rule's eventual surfacing has a kind to land on.
+ */
+export interface MixedModuleStylesDiagnostic extends DiagnosticEnvelope {
+  kind: "mixedModuleStyles";
+  code: "E7004";
+  message: string;
+}
+
 /**
  * The discriminated union of all diagnostics the compiler can emit.
  *
@@ -486,4 +552,8 @@ export type Diagnostic =
   | UnsafeStructMissingDestroyDiagnostic
   | UnsafeStructMissingOncopyDiagnostic
   | LifecycleHookSelfMismatchDiagnostic
-  | LifecycleReturnTypeWrongDiagnostic;
+  | LifecycleReturnTypeWrongDiagnostic
+  | CyclicImportDiagnostic
+  | ModuleNotFoundDiagnostic
+  | ImportedSymbolNotExportedDiagnostic
+  | MixedModuleStylesDiagnostic;

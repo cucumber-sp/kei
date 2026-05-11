@@ -108,6 +108,20 @@ export function messageOf(diag: Diagnostic): string {
       return `lifecycle hook '${diag.hookName}' must take 'self: ref ${diag.structName}'`;
     case "lifecycleReturnTypeWrong":
       return `lifecycle hook '${diag.hookName}' must return void`;
+    case "cyclicImport":
+      return `cyclic import: ${diag.path.join(" → ")}`;
+    case "moduleNotFound": {
+      const importer = diag.importerModule ? `module '${diag.importerModule}': ` : "";
+      const searched =
+        diag.searched && diag.searched.length > 0
+          ? `\n  searched:\n${diag.searched.map((p) => `    ${p}`).join("\n")}`
+          : "";
+      return `${importer}module '${diag.importPath}' not found${searched}`;
+    }
+    case "importedSymbolNotExported":
+      return `'${diag.symbolName}' is not exported by module '${diag.modulePath}'`;
+    case "mixedModuleStyles":
+      return diag.message;
   }
 }
 
