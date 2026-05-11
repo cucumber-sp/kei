@@ -37,8 +37,8 @@ export type {
   LifecycleHookSelfMismatchDiagnostic,
   LifecycleReturnTypeWrongDiagnostic,
   MethodNotFoundDiagnostic,
-  NoOperatorOverloadDiagnostic,
   NonOptionalAccessDiagnostic,
+  NoOperatorOverloadDiagnostic,
   NotCallableDiagnostic,
   Severity,
   Span,
@@ -202,6 +202,11 @@ export function createDiagnostics(config: LintConfig = {}): Diagnostics {
     code: Extract<Diagnostic, { kind: K }>["code"],
     payload: Omit<Extract<Diagnostic, { kind: K }>, "kind" | "code" | "severity">
   ): void {
+    // TODO(#61): the `as unknown as Diagnostic` cast is a known
+    // escape hatch — TS can't structurally narrow the generic
+    // `emit<K>` payload to a specific union arm. Issue #61
+    // tracks refactoring this helper into per-variant explicit
+    // constructors (no generic, no cast).
     collector.emit({
       kind,
       code,
