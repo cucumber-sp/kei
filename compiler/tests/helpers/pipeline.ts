@@ -9,6 +9,7 @@
 import type { Program } from "../../src/ast/nodes";
 import type { CheckResult as CheckerCheckResult } from "../../src/checker/checker";
 import { Checker } from "../../src/checker/checker";
+import { createDiagnostics } from "../../src/diagnostics";
 import type { Diagnostic } from "../../src/errors/diagnostic";
 import { Severity } from "../../src/errors/diagnostic";
 import type { KirModule } from "../../src/kir/kir-types";
@@ -98,7 +99,9 @@ export function checkSource(content: string, filename = DEFAULT_FILENAME): Check
   if (parseErrors.length > 0) {
     throw new Error(`Parser errors: ${parseErrors.map((d) => d.message).join(", ")}`);
   }
-  const checker = new Checker(parsed.program, parsed.source);
+  const checker = new Checker(parsed.program, parsed.source, "", {
+    diag: createDiagnostics({}),
+  });
   const result = checker.check();
   return {
     source: parsed.source,
