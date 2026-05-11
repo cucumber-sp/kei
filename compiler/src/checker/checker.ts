@@ -94,12 +94,21 @@ export interface CheckLifecycle {
  * Mirrors the constructed-and-threaded pattern from ADR-0001's concept
  * modules. Multi-module builds construct a single `Monomorphization` per
  * module today (each Checker still owns its own instance, then the
- * orchestrator routes adoptions across them); future migrations will
- * thread a shared `Lifecycle` and Diagnostics `Collector` through here
- * too.
+ * orchestrator routes adoptions across them); the Diagnostics
+ * `Collector` is constructed and threaded the same way per
+ * `docs/design/diagnostics-module.md` §5. A future migration will
+ * thread a shared `Lifecycle` through here too.
  */
 export interface CheckerOptions {
   monomorphization?: Monomorphization;
+  /**
+   * Diagnostics sink for this Checker. The CLI driver / orchestrator
+   * constructs the value via `createDiagnostics(config)` and passes it
+   * in; tests get a fresh sink per compile. Omit to default to a
+   * fresh empty sink (convenient for the multi-module orchestrator
+   * which creates one per per-module Checker).
+   */
+  diag?: Diagnostics;
 }
 
 export interface CheckResult {
@@ -138,13 +147,14 @@ export class Checker {
   private program: Program;
   private source: SourceFile;
   /**
-   * Diagnostics accumulator. Internally constructed for now; PR 3
-   * externalises it (passed in via the `Checker` constructor so the
-   * CLI driver owns the collector). The `error / warning` helpers
-   * route here via `diag.untriaged({...})`. See
-   * `docs/design/diagnostics-module.md` §5, §9 PR 2/3.
+   * Diagnostics sink. Constructed and threaded per
+   * `docs/design/diagnostics-module.md` §5: the CLI driver /
+   * orchestrator owns the sink and passes it in via `CheckerOptions`.
+   * The `error / warning` helpers route here via
+   * `diag.untriaged({...})`. Defaults to a fresh sink when no caller
+   * supplied one (test convenience).
    */
-  private diag: Diagnostics = createDiagnostics({});
+  private diag: Diagnostics;
   private typeMap: Map<Expression, Type> = new Map();
   private scopeStack: Scope[] = [];
   private typeResolver: TypeResolver;
@@ -213,6 +223,7 @@ export class Checker {
     this.typeResolver = new TypeResolver();
     this.lifecycle = createLifecycle();
     this.monomorphization = options.monomorphization ?? createMonomorphization();
+    this.diag = options.diag ?? createDiagnostics({});
     this.exprChecker = new ExpressionChecker(this);
     this.stmtChecker = new StatementChecker(this);
     this.declChecker = new DeclarationChecker(this, this.lifecycle);
@@ -603,7 +614,9 @@ export class Checker {
     const preResults = new Map<string, CheckResult>();
     for (const mod of modules) {
       const moduleName = mod === mainModule ? "" : mod.name;
-      const checker = new Checker(mod.program, mod.source, moduleName);
+      const checker = new Checker(mod.program, mod.source, moduleName, {
+        diag: createDiagnostics({}),
+      });
       checker.setModuleExports(moduleExports);
       checker.deferMonomorphizedBodyChecks = true;
       const result = checker.check();
