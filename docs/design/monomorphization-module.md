@@ -114,63 +114,98 @@ The kei codebase stores `resolvedType` for every expression in a
 **side-map keyed by expression identity** on the `Checker`
 (`typeMap: Map<Expression, Type>`, plus `genericResolutions:
 Map<Expression, string>`). AST expression nodes themselves don't carry
-the resolved type; pre-monomorphization, the per-instantiation overrides
-on `LoweringCtx` mirror this side-map for the body of each instantiation
-(this is the override stack PR 5 deletes).
+the resolved type. Additionally, **kei does not body-check generic
+templates in pass 2** — the global `typeMap` has no entries for any
+expression inside a generic body until pass 3 walks an instantiation.
 
-To produce a "fresh AST decl" where each expression's resolved type is
-concrete under the substitution, the bake walker **deep-clones every
-AST node** in the template's body and emits a new side-map keyed by
-the clones. Each baked product owns:
+So the bake operation has two cooperating halves:
 
-- A fresh `Declaration` AST node (struct / function / enum) with cloned
-  body — every nested `Expression`, `Statement`, and `Type` node has a
-  new identity.
-- A fresh side-map `Map<Expression, Type>` (and matching
-  `genericResolutions`) keyed by the cloned expression nodes. Each entry
-  is the template's resolved type with the substitution applied via
-  `substituteType`.
+**1. AST clone (`bake.ts`, register-time-or-checkBodies-time).** A
+pure walker over the template `Declaration` produces a fresh AST
+subtree — every nested `Expression`, `Statement`, and `Type` node has
+a new identity. Type-node substitution is applied inline via the
+existing `substituteType` helper. Struct-literal / call-expr nodes
+that reference nested generic types get their target name mangled via
+`mangleGenericName`. The walker writes **no** type-side-map entries
+— it produces pure AST.
 
-**Walker scope.** The cloner recurses over the AST's discriminated
-unions defined in `src/ast/nodes/`:
+**2. Body type-check (`checker.checkBody`, checkBodies-time).** The
+checker re-walks the cloned AST with `typeResolver.setSubstitutions`
+set and a fresh `currentBodyTypeMap` (and `currentBodyGenericResolutions`).
+The checker's normal `setExprType` calls populate the fresh maps,
+keyed by the cloned expression nodes — substitution happens
+*during* type-resolution, not as a post-hoc transform on a
+pre-existing map. This mirrors today's pass-3 re-walk but writes to
+maps keyed by the clones, not the template.
 
-- 24 expression kinds (literal, identifier, binary, unary, call,
-  member, index, struct-literal, array-literal, cast, if-expr,
-  block-expr, match-expr, move, …)
-- 17 statement kinds (let, assign, return, if, while, for, switch,
-  break, continue, defer, expr-stmt, block, unsafe-block,
-  panic-stmt, throw-stmt, …)
-- Type nodes (passed to the existing `substituteType` helper from
-  `src/monomorphization/substitute.ts`)
-
-Most kinds have trivial substitution: recurse on children, clone the
-record. A small number have non-trivial work (struct-literal /
-call-expr resolve mangled names for nested generic references via
-`mangleGenericName`).
-
-**Side-map population.** For every cloned `Expression` node `eClone`
-created from template `eTemplate`, the walker writes
-`bakedTypeMap.set(eClone, substituteType(templateTypeMap.get(eTemplate), substitutionMap))`.
-Same shape for `genericResolutions`.
-
-**Spans on cloned nodes** point at the template (per §9's recommendation
-— template span primary, instantiation site goes into diagnostic
-`secondarySpans` at error-emission time, not onto the AST node).
-
-**The baked product** is a record like:
+**The baked product** packages both halves:
 
 ```ts
 type BakedDecl = {
-  decl: Declaration;                       // synthesised AST
-  typeMap: Map<Expression, Type>;          // keyed by `decl`'s nodes
+  decl: Declaration;                       // pure AST clone (from bake)
+  typeMap: Map<Expression, Type>;          // populated by checker re-walk
   genericResolutions: Map<Expression, string>;
 };
 ```
 
 `Monomorphization.products()` returns `BakedDecl[]`. Downstream
-consumers (checker pass-3 body-check, KIR lowering) read from the
-baked decl's own `typeMap`, not from the Checker's global map — that
-global map only contains template entries, untouched by bake.
+consumers (KIR lowering) read from the baked decl's own `typeMap` —
+keyed by the clone identities. The Checker's global `typeMap` stays
+template-keyed and is irrelevant to baked-decl consumers.
+
+**Walker scope (bake-time, AST clone only).** The cloner recurses
+over the AST discriminated unions in `src/ast/nodes/`:
+
+- All `Expression` arms in `expressions.ts` (literal, identifier,
+  binary, unary, call, member, index, struct-literal, array-literal,
+  cast, if-expr, block-expr, match-expr, move, …)
+- All `Statement` arms in `statements.ts` (let, assign, return, if,
+  while, for, switch, break, continue, defer, expr-stmt, block,
+  unsafe-block, panic-stmt, throw-stmt, …)
+- Type AST nodes — call `substituteType` from
+  `src/monomorphization/substitute.ts` inline
+
+Most kinds have trivial substitution: recurse on children, return a
+new record. Non-trivial cases: struct-literal `typeArgs` are
+substituted; call-expr `typeArgs` are substituted; `mangleGenericName`
+is used for nested-generic struct names so a `Bar<T>` reference under
+`{T: i32}` produces a clone whose name is `Bar_i32` (matching the
+mangled struct registered separately by Monomorphization).
+
+**Spans on cloned nodes** point at the template (template span
+primary; instantiation site goes into diagnostic `secondarySpans`
+at error-emission time, not onto the AST node — see §9).
+
+**The check-bodies side** is the existing `Monomorphization.checkBodies`
+driver (introduced in PR 3) — its callback now invokes
+`checker.checkBody` against the cloned AST instead of the template.
+The checker's per-instantiation maps (`currentBodyTypeMap`,
+`currentBodyGenericResolutions`) become the bake's typeMap once the
+walk completes; they're hauled out of the Checker by Monomorphization
+and stored on the `BakedDecl`.
+
+### Why Path A and not a pure post-hoc substitution
+
+The original Y-a sketch envisioned the walker writing
+`bakedTypeMap.set(eClone, substituteType(templateTypeMap.get(eTemplate), subs))`
+— assuming the template `typeMap` was already populated with
+TypeParam-typed entries. **Kei doesn't work that way**: generic
+templates aren't body-checked until pass 3, and the type-checker
+doesn't accept TypeParam-typed expressions in its full pipeline.
+Substitution-via-recheck (Path A above) is the kei-faithful
+realisation. The cost shift is small — the recheck is the same work
+pass 3 does today, just keyed by clones instead of writing into the
+override on `LoweringCtx`.
+
+### PR 5's payoff under Path A
+
+PR 5 still deletes the `LoweringCtx.currentBodyTypeMap` and
+`currentBodyGenericResolutions` fields and every push/pop site on
+the lowering side. Lowering reads from `BakedDecl.typeMap` directly
+when iterating products. The *Checker's* internal
+`currentBodyTypeMap` field (used during pass-3 re-walks) stays as
+an implementation detail of `checker.checkBody` — different scope
+from PR 5.
 
 ### Three downstream consequences
 
