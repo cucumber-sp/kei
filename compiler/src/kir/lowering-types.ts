@@ -48,6 +48,7 @@ export function lowerCheckerType(ctx: LoweringCtx, t: Type): KirType {
       return {
         kind: "struct",
         name: t.name,
+        ...(t.modulePrefix ? { modulePrefix: t.modulePrefix } : {}),
         fields: Array.from(t.fields.entries()).map(([name, fieldType]) => ({
           name,
           type: lowerCheckerType(ctx, fieldType),

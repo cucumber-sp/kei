@@ -14,11 +14,7 @@
  * - PR 4a — `mark_scope_exit` rewrites into per-scope destroys in
  *   reverse declaration order, skipping moved-out vars. String slots
  *   lower to `call_extern_void("kei_string_destroy")`; struct slots
- *   lower to `destroy`. The marker carries only a `scopeId`; vars come
- *   from a transitional `KirFunction.lifecycleScopeExits` side-table
- *   populated by lowering. Sibling PR 4e migrates `mark_track` into the
- *   IR proper, after which the pass reconstructs the same info from
- *   the marker stream and the side-table is removed.
+ *   lower to `destroy`.
  * - PR 4b — `mark_assign` rewrites into load/destroy/store/oncopy
  *   (the slot's pointee KIR type drives the dispatch).
  * - PR 4c — `mark_param` rewrites into per-exit destroys.
@@ -26,9 +22,12 @@
  *   per-function moved-set (walked in source order). The set is
  *   consulted when emitting destroys at `mark_scope_exit` and the
  *   per-exit param destroys, skipping any moved var.
- *
- * Other markers (`mark_scope_enter`, `mark_track`) remain stripped
- * without effect; their cut-over lands in sibling PR 4e.
+ * - PR 4e — `mark_track` + `mark_scope_enter` are the source of
+ *   truth for scope → tracked vars: the pass walks each function's
+ *   marker stream pre-rewrite to build `Map<scopeId, TrackedVar[]>`,
+ *   then reads it back at every `mark_scope_exit`. The skip-set still
+ *   comes from the transitional `KirFunction.lifecycleScopeExits`
+ *   side-table for early-return retained-name skips.
  *
  * After the pass, no `mark_*` instruction survives and no
  * `lifecycleScopeExits` side-table survives — mem2reg, de-SSA, and the
@@ -48,6 +47,7 @@ import type {
   KirScopeExitInfo,
   KirTerminator,
   KirType,
+  ScopeId,
   VarId,
 } from "../kir/kir-types";
 import type { LifecycleDecision } from "./types";
@@ -65,6 +65,15 @@ interface StructHookSets {
   oncopies: Set<string>;
 }
 
+/** A var tracked by `mark_track`, expanded with the type info needed to destroy it. */
+interface TrackedVar {
+  name: string;
+  varId: VarId;
+  /** Mangled struct name for `destroy`; empty when `isString`. */
+  structName: string;
+  isString: boolean;
+}
+
 /**
  * Run the Lifecycle pass over a KIR module. Returns a new module with
  * markers rewritten (or stripped for not-yet-cut-over markers). The
@@ -74,10 +83,10 @@ interface StructHookSets {
  * decision map, because both auto-generated and user-written hooks
  * share the same mangling.
  *
- * `mark_scope_exit` is rewritten into reverse-order destroys for the
- * scope's tracked vars (read from the function's transitional
- * `lifecycleScopeExits` side-table, skipping any var named in the
- * matching `skipNames` set).
+ * `mark_scope_exit scope_id` is rewritten into reverse-order destroys
+ * for the tracked vars in that scope (read from a pre-pass over
+ * `mark_track` markers in the same function), skipping any var named in
+ * the matching `skipNames` set from the transitional side-table.
  *
  * Returns a new module — input is not mutated.
  */
@@ -118,9 +127,14 @@ function rewriteFunction(fn: KirFunction, hooks: StructHookSets): KirFunction {
   const paramDestroys = collectParamDestroys(fn);
 
   // Pre-pass: pointee KIR types for pointer-producing instructions.
-  // `mark_assign slot, _, _` recovers the slot's pointee at rewrite time
-  // from this map (markers don't carry types — see design doc §3).
+  // Drives both the `mark_assign` rewrite (slot's pointee type) and the
+  // `mark_track` rewrite (var's pointee tells us string vs. struct).
   const pointees = collectPointeeTypes(fn);
+
+  // Pre-pass: build `scopeId → TrackedVar[]` from `mark_track` markers,
+  // in source/declaration order. The `mark_scope_exit` rewrite reads
+  // this back and emits destroys in reverse.
+  const scopeVars = collectScopeTrackedVars(fn, pointees);
 
   // The mark_assign rewrite may inject `load` instructions. Those need
   // fresh VarIds; start numbering at `fn.localCount` so they don't
@@ -135,7 +149,7 @@ function rewriteFunction(fn: KirFunction, hooks: StructHookSets): KirFunction {
   const moved = new Set<string>();
 
   const blocks = fn.blocks.map((block) =>
-    rewriteBlock(block, hooks, pointees, counter, paramDestroys, scopeExits, moved)
+    rewriteBlock(block, hooks, pointees, counter, paramDestroys, scopeExits, scopeVars, moved)
   );
   // The side-table is consumed here; downstream passes (mem2reg, de-SSA,
   // C emitter) never see it.
@@ -167,7 +181,7 @@ function collectParamDestroys(fn: KirFunction): ParamDestroyCandidate[] {
   for (const p of fn.params) {
     if (p.type.kind !== "ptr") continue;
     if (p.type.pointee.kind !== "struct") continue;
-    paramByVarId.set(`%${p.name}`, { name: p.name, structName: p.type.pointee.name });
+    paramByVarId.set(`%${p.name}`, { name: p.name, structName: mangledStructName(p.type.pointee) });
   }
 
   const destroys: ParamDestroyCandidate[] = [];
@@ -189,7 +203,7 @@ function collectParamDestroys(fn: KirFunction): ParamDestroyCandidate[] {
  * Walk every instruction in `fn` and collect the pointee KIR type for
  * each pointer-producing instruction (`stack_alloc`, `field_ptr`,
  * `index_ptr`). The pass uses this to recover the slot's pointee type
- * when rewriting a `mark_assign` marker.
+ * when rewriting a `mark_assign` or `mark_track` marker.
  */
 function collectPointeeTypes(fn: KirFunction): Map<VarId, KirType> {
   const pointees = new Map<VarId, KirType>();
@@ -207,13 +221,70 @@ function collectPointeeTypes(fn: KirFunction): Map<VarId, KirType> {
   return pointees;
 }
 
+/**
+ * Walk `mark_track` markers across every block and bucket them by
+ * `scopeId`. Each marker contributes a `TrackedVar` whose
+ * `structName` / `isString` is read from the var's pointee type
+ * (collected by `collectPointeeTypes`).
+ *
+ * A marker with no resolvable pointee (or one that doesn't point to
+ * a managed type) is silently dropped — lowering only emits
+ * `mark_track` for managed locals, but defending here means a
+ * malformed marker can't synthesise a phantom destroy.
+ */
+function collectScopeTrackedVars(
+  fn: KirFunction,
+  pointees: Map<VarId, KirType>
+): Map<ScopeId, TrackedVar[]> {
+  const scopeVars = new Map<ScopeId, TrackedVar[]>();
+  for (const block of fn.blocks) {
+    for (const inst of block.instructions) {
+      if (inst.kind !== "mark_track") continue;
+      const pointee = pointees.get(inst.varId);
+      if (!pointee) continue;
+      const tracked = trackedVarFromPointee(inst.varId, inst.name, pointee);
+      if (!tracked) continue;
+      const list = scopeVars.get(inst.scopeId);
+      if (list) {
+        list.push(tracked);
+      } else {
+        scopeVars.set(inst.scopeId, [tracked]);
+      }
+    }
+  }
+  return scopeVars;
+}
+
+/** Map a `mark_track`'s pointee KIR type to a `TrackedVar`, or `null` for unmanaged types. */
+function trackedVarFromPointee(varId: VarId, name: string, pointee: KirType): TrackedVar | null {
+  if (pointee.kind === "string") {
+    return { name, varId, structName: "", isString: true };
+  }
+  if (pointee.kind === "struct") {
+    return { name, varId, structName: mangledStructName(pointee), isString: false };
+  }
+  return null;
+}
+
+/**
+ * Reconstruct the destroy/oncopy symbol prefix for a `KirStructType`:
+ * `<modulePrefix>_<name>` for cross-module structs, bare `<name>` for
+ * main-module or generic-monomorphized structs. Matches the convention
+ * used by `lowering-scope.mangledLifecycleStructName` and the
+ * synthesised hook bodies.
+ */
+function mangledStructName(t: { name: string; modulePrefix?: string }): string {
+  return t.modulePrefix ? `${t.modulePrefix}_${t.name}` : t.name;
+}
+
 function rewriteBlock(
   block: KirBlock,
   hooks: StructHookSets,
   pointees: Map<VarId, KirType>,
   counter: { next: number },
   paramDestroys: ParamDestroyCandidate[],
-  scopeExits: ReadonlyMap<number, KirScopeExitInfo> | undefined,
+  scopeExits: ReadonlyMap<ScopeId, KirScopeExitInfo> | undefined,
+  scopeVars: ReadonlyMap<ScopeId, TrackedVar[]>,
   moved: Set<string>
 ): KirBlock {
   const out: KirInst[] = [];
@@ -227,8 +298,9 @@ function rewriteBlock(
       continue;
     }
     if (inst.kind === "mark_scope_exit") {
-      const info = scopeExits?.get(inst.scopeId);
-      if (info) emitScopeExitDestroys(out, info, moved);
+      const vars = scopeVars.get(inst.scopeId);
+      const skipNames = scopeExits?.get(inst.scopeId)?.skipNames;
+      if (vars) emitScopeExitDestroys(out, vars, skipNames, moved);
       continue;
     }
     if (isOtherMarker(inst)) continue;
@@ -251,21 +323,22 @@ function isExitTerminator(t: KirTerminator): boolean {
 }
 
 /**
- * Emit destroys for `info.vars` in reverse declaration order, skipping
- * any var whose name appears in `info.skipNames` (the early-return case
- * — the named local being returned) or in the per-function `moved`
- * set (vars moved out by `mark_moved`). String vars rewrite to
+ * Emit destroys for `vars` in reverse declaration order, skipping any
+ * var whose name appears in `skipNames` (the early-return case — the
+ * named local being returned) or in the per-function `moved` set
+ * (vars moved out by `mark_moved`). String vars rewrite to
  * `kei_string_destroy`; struct vars rewrite to `destroy`.
  */
 function emitScopeExitDestroys(
   out: KirInst[],
-  info: KirScopeExitInfo,
+  vars: readonly TrackedVar[],
+  skipNames: ReadonlySet<string> | undefined,
   moved: ReadonlySet<string>
 ): void {
-  for (let i = info.vars.length - 1; i >= 0; i--) {
-    const v = info.vars[i];
+  for (let i = vars.length - 1; i >= 0; i--) {
+    const v = vars[i];
     if (!v) continue;
-    if (info.skipNames.has(v.name)) continue;
+    if (skipNames?.has(v.name)) continue;
     if (moved.has(v.name)) continue;
     if (v.isString) {
       out.push({ kind: "call_extern_void", func: "kei_string_destroy", args: [v.varId] });
@@ -313,7 +386,7 @@ function rewriteMarkAssign(
   const pointee = pointees.get(inst.slot);
 
   if (pointee?.kind === "struct") {
-    const structName = pointee.name;
+    const structName = mangledStructName(pointee);
     const hasDestroy = hooks.destroys.has(structName);
     const hasOncopy = hooks.oncopies.has(structName);
     if (hasDestroy) {

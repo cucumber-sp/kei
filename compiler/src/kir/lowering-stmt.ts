@@ -63,7 +63,7 @@ export function lowerScopedBlock(ctx: LoweringCtx, block: BlockStmt): void {
     lowerStatement(ctx, stmt);
   }
   if (isBlockTerminated(ctx)) {
-    ctx.scopeStack.pop();
+    ctx.openScopes.pop();
     ctx.deferStack.pop();
   } else {
     popScopeWithDestroy(ctx);
@@ -338,16 +338,16 @@ export function lowerWhileStmt(ctx: LoweringCtx, stmt: WhileStmt): void {
 
   const prevBreak = ctx.loopBreakTarget;
   const prevContinue = ctx.loopContinueTarget;
-  const prevScopeDepth = ctx.loopScopeDepth;
+  const prevScopeBase = ctx.loopOpenScopeBase;
   ctx.loopBreakTarget = endLabel;
   ctx.loopContinueTarget = headerLabel;
-  ctx.loopScopeDepth = ctx.scopeStack.length;
+  ctx.loopOpenScopeBase = ctx.openScopes.length;
 
   lowerBlock(ctx, stmt.body);
 
   ctx.loopBreakTarget = prevBreak;
   ctx.loopContinueTarget = prevContinue;
-  ctx.loopScopeDepth = prevScopeDepth;
+  ctx.loopOpenScopeBase = prevScopeBase;
 
   if (!isBlockTerminated(ctx)) {
     setTerminator(ctx, { kind: "jump", target: headerLabel });
@@ -423,16 +423,16 @@ export function lowerForStmt(ctx: LoweringCtx, stmt: ForStmt): void {
 
     const prevBreak = ctx.loopBreakTarget;
     const prevContinue = ctx.loopContinueTarget;
-    const prevScopeDepth = ctx.loopScopeDepth;
+    const prevScopeBase = ctx.loopOpenScopeBase;
     ctx.loopBreakTarget = endLabel;
     ctx.loopContinueTarget = latchLabel;
-    ctx.loopScopeDepth = ctx.scopeStack.length;
+    ctx.loopOpenScopeBase = ctx.openScopes.length;
 
     lowerBlock(ctx, stmt.body);
 
     ctx.loopBreakTarget = prevBreak;
     ctx.loopContinueTarget = prevContinue;
-    ctx.loopScopeDepth = prevScopeDepth;
+    ctx.loopOpenScopeBase = prevScopeBase;
 
     if (!isBlockTerminated(ctx)) {
       setTerminator(ctx, { kind: "jump", target: latchLabel });
@@ -497,16 +497,16 @@ export function lowerCForStmt(ctx: LoweringCtx, stmt: CForStmt): void {
 
   const prevBreak = ctx.loopBreakTarget;
   const prevContinue = ctx.loopContinueTarget;
-  const prevScopeDepth = ctx.loopScopeDepth;
+  const prevScopeBase = ctx.loopOpenScopeBase;
   ctx.loopBreakTarget = endLabel;
   ctx.loopContinueTarget = latchLabel;
-  ctx.loopScopeDepth = ctx.scopeStack.length;
+  ctx.loopOpenScopeBase = ctx.openScopes.length;
 
   lowerBlock(ctx, stmt.body);
 
   ctx.loopBreakTarget = prevBreak;
   ctx.loopContinueTarget = prevContinue;
-  ctx.loopScopeDepth = prevScopeDepth;
+  ctx.loopOpenScopeBase = prevScopeBase;
 
   if (!isBlockTerminated(ctx)) {
     setTerminator(ctx, { kind: "jump", target: latchLabel });

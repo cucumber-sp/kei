@@ -102,9 +102,10 @@ export function resetFunctionState(ctx: LoweringCtx): void {
   ctx.currentBlockId = "entry";
   ctx.loopBreakTarget = null;
   ctx.loopContinueTarget = null;
-  ctx.scopeStack = [];
+  ctx.loopOpenScopeBase = 0;
+  ctx.openScopes = [];
   ctx.deferStack = [];
-  ctx.scopeIdCounter = 0;
+  ctx.nextScopeId = 0;
   ctx.scopeExitData = new Map();
 }
 
@@ -116,7 +117,7 @@ export function finalizeFunctionBody(
 ): void {
   // Emit destroy for function-scope variables before implicit return
   if (isBlockTerminated(ctx)) {
-    ctx.scopeStack.pop(); // discard without emitting (already returned)
+    ctx.openScopes.pop(); // discard without emitting (already returned)
     ctx.deferStack.pop();
   } else {
     popScopeWithDestroy(ctx);
@@ -195,9 +196,8 @@ export function lowerFunction(ctx: LoweringCtx, decl: FunctionDecl): KirFunction
   // every function exit point (every `ret`/`ret_void` terminator).
   //
   // String params are values (not stack pointers), so they are not
-  // destroyed at exit — matching the prior `trackScopeVarByType`
-  // exclusion. They are filtered here by the `kind === "struct"` guard:
-  // `Lifecycle.getDecision` is only populated for structs.
+  // destroyed at exit. They are filtered here by the `kind === "struct"`
+  // guard: `Lifecycle.getDecision` is only populated for structs.
   for (const p of decl.params) {
     const checkerType = resolveParamCheckerType(ctx, decl, p.name);
     if (checkerType?.kind !== "struct") continue;

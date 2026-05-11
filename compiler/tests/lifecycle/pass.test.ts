@@ -116,7 +116,7 @@ describe("runLifecyclePass — no-op rewrite (PR 3)", () => {
     const markers: { name: string; inst: KirInst }[] = [
       { name: "mark_scope_enter", inst: { kind: "mark_scope_enter", scopeId: 1 } },
       { name: "mark_scope_exit", inst: { kind: "mark_scope_exit", scopeId: 1 } },
-      { name: "mark_track", inst: { kind: "mark_track", varId: "%0", scopeId: 1 } },
+      { name: "mark_track", inst: { kind: "mark_track", varId: "%0", name: "x", scopeId: 1 } },
       { name: "mark_moved", inst: { kind: "mark_moved", var: "x" } },
       { name: "mark_param", inst: { kind: "mark_param", param: "%p" } },
     ];
@@ -149,7 +149,7 @@ describe("runLifecyclePass — no-op rewrite (PR 3)", () => {
       value: 2,
     };
     const enterScope: KirInst = { kind: "mark_scope_enter", scopeId: 7 };
-    const trackVar: KirInst = { kind: "mark_track", varId: "%0", scopeId: 7 };
+    const trackVar: KirInst = { kind: "mark_track", varId: "%0", name: "x", scopeId: 7 };
     const exitScope: KirInst = { kind: "mark_scope_exit", scopeId: 7 };
 
     const before = moduleWith(

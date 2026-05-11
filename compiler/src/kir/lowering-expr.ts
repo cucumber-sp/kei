@@ -848,7 +848,7 @@ export function lowerUnsafeExpr(ctx: LoweringCtx, expr: UnsafeExpr): VarId {
   }
 
   if (isBlockTerminated(ctx)) {
-    ctx.scopeStack.pop();
+    ctx.openScopes.pop();
     ctx.deferStack.pop();
   } else {
     popScopeWithDestroy(ctx);
