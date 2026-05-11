@@ -176,13 +176,12 @@ After the Lifecycle pass:
 Lifecycle never imports defer. Defer never imports lifecycle. The
 order is one decision at one line.
 
-The order itself (defers before auto-destroy) is a spec gap. See
-[#38](https://github.com/cucumber-sp/kei/issues/38). The
-recommendation in that issue — defer first, so user defer code can
-reference managed locals while they are still valid — matches Swift's
-`defer` semantics. Implementation of this design doc is independent
-of the spec resolution: whichever order ships, it's a single line in
-lowering.
+The order (defers before auto-destroy) is specified in
+[spec/05-control.md](../../spec/05-control.md) and
+[spec/08-memory.md](../../spec/08-memory.md). Closes
+[#38](https://github.com/cucumber-sp/kei/issues/38). User defer code
+can reference managed locals while they are still valid (matches
+Swift's `defer` semantics).
 
 ## 6. Alternatives considered
 

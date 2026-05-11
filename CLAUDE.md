@@ -58,15 +58,14 @@ out-survive any single conversation.
 
 (Add as we file them.)
 
-- #38 — Spec gap: defer vs auto-destroy ordering at scope exit
-  (blocks Lifecycle module migration, [ADR-0001](./docs/adr/0001-concept-cohesive-modules.md))
 - #39 — Architecture review: extract `src/throws/` as a
   concept-cohesive module (next ADR-0001 candidate after the three
   designed modules ship)
 - #40 — `LoweringCtx`: internal seams hygiene cleanup (after
   Lifecycle and Monomorphization migrations land)
 
-(Closed: #19 generic enums, #21 `_v1` scope-end destroy bug.)
+(Closed: #19 generic enums, #21 `_v1` scope-end destroy bug, #38
+defer-vs-destroy ordering specified.)
 
 ## Spec describes the current language, not its history
 

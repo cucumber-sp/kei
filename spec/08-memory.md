@@ -78,6 +78,12 @@ The compiler must not reorder destruction across either the struct-field
 dimension or the scope-locals dimension; reverse-declaration order is
 the contract.
 
+**Interaction with `defer`.** At scope exit, any `defer` blocks for the
+scope run **before** the scope's auto-`__destroy` sequence. Deferred
+code can therefore reference managed locals in the scope while they are
+still valid. See `spec/05-control.md` for the `defer` statement and its
+LIFO ordering.
+
 ### `__oncopy` — Called when a value is copied
 
 ```kei

@@ -218,6 +218,10 @@ fn example() {
 **Execution order:**
 - Multiple `defer` statements execute in **reverse order** (LIFO - Last In, First Out)
 - `defer` statements capture variables by value at the point of declaration
+- At scope exit, **all `defer` blocks run before** the compiler-generated
+  `__destroy` calls for that scope's managed locals (see `spec/08-memory.md`
+  for destroy order). Deferred code can therefore reference managed locals
+  in the scope while they are still valid.
 
 ```kei
 fn multipleDefer() {
