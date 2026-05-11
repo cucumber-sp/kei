@@ -108,6 +108,15 @@ export function emitInst(inst: KirInst, varTypes?: Map<VarId, KirType>): string 
       const allArgs = [...inst.args.map(varName), varName(inst.outPtr), varName(inst.errPtr)];
       return `${varName(inst.dest)} = ${emitCallTarget(inst.func)}(${allArgs.join(", ")});`;
     }
+    // Lifecycle markers are stripped by the rewrite pass that runs before
+    // mem2reg. Reaching the C emitter means the pass was skipped or buggy.
+    case "mark_scope_enter":
+    case "mark_scope_exit":
+    case "mark_track":
+    case "mark_moved":
+    case "mark_assign":
+    case "mark_param":
+      throw new Error(`internal: lifecycle marker '${inst.kind}' leaked into C emitter`);
   }
 }
 
