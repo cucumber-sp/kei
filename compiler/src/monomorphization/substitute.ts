@@ -12,6 +12,26 @@ import { arrayType, functionType, ptrType, rangeType, TypeKind } from "../checke
 import { mangleGenericName } from "./mangle";
 
 /**
+ * Pair a generic decl's `genericParams` (`["T", "U"]`) with an
+ * instantiation's concrete `typeArgs` (`[i32, bool]`) and return the
+ * resulting `name → Type` map. Shared by `check-bodies.ts` (drives the
+ * bake) and the Checker's per-decl primitives so both halves of pass 3
+ * agree on the substitution shape.
+ */
+export function buildTypeSubstitutionMap(
+  genericParams: string[],
+  typeArgs: Type[]
+): Map<string, Type> {
+  const subs = new Map<string, Type>();
+  for (let i = 0; i < genericParams.length; i++) {
+    const name = genericParams[i];
+    const arg = typeArgs[i];
+    if (name && arg) subs.set(name, arg);
+  }
+  return subs;
+}
+
+/**
  * Recursively substitute type parameters in a type using the given map.
  *
  * Walks the type structure and replaces any `TypeParam` nodes whose name appears

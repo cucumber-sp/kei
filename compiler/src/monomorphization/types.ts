@@ -24,14 +24,32 @@ export interface MonomorphizedStruct {
   typeArgs: Type[];
   /** The fully-substituted concrete struct type. */
   concrete: StructType;
-  /** Original AST declaration (needed for lowering methods). */
+  /**
+   * Original AST declaration (the generic template). Backfilled by the
+   * pass-3 body-check driver if not provided at register time. Kept for
+   * the cross-module orchestrator's "where did this come from?" routing;
+   * KIR lowering walks {@link bakedDecl} instead.
+   */
   originalDecl?: StructDecl | UnsafeStructDecl;
+  /**
+   * The fully-substituted AST clone produced by `bake.ts` (Path A,
+   * design doc §4). Created lazily by `Monomorphization.checkBodies`
+   * just before invoking the body-check callback. KIR lowering walks
+   * this clone (not {@link originalDecl}); the global `Checker.typeMap`
+   * carries entries keyed by the cloned expression identities, populated
+   * by the pass-3 body-check re-walk.
+   */
+  bakedDecl?: StructDecl | UnsafeStructDecl;
   /**
    * Per-method body type maps populated during the pass-3 body-check sweep.
    * Keyed by method name; each map records the concrete types of every
-   * expression node in that method's body for this instantiation. KIR
-   * lowering uses these to emit signatures and field accesses with
-   * concrete types instead of the unsubstituted TypeParams.
+   * expression node in that method's body for this instantiation.
+   *
+   * Retained as a transition shim — KIR lowering reads from the global
+   * `Checker.typeMap` by clone identity now that bodies are checked
+   * against the bake clone. The override stack on `LoweringCtx` (which
+   * this map feeds) becomes a no-op for synthesised decls in PR 4 and
+   * gets deleted entirely in PR 5.
    */
   methodBodyTypeMaps?: Map<string, Map<Expression, Type>>;
 }
@@ -52,10 +70,30 @@ export interface MonomorphizedFunction {
   concrete: FunctionType;
   /** The mangled name for this instantiation (e.g. `"identity_i32"`). */
   mangledName: string;
-  /** Original AST declaration (needed for lowering the body). */
+  /**
+   * Original AST declaration (the generic template). Backfilled by the
+   * pass-3 body-check driver if not provided at register time. Kept so
+   * the cross-module orchestrator can route adoptions by defining
+   * module; KIR lowering walks {@link bakedDecl} instead.
+   */
   declaration?: FunctionDecl;
-  /** Per-instantiation type map for body expressions (avoids shared-AST conflicts). */
+  /**
+   * The fully-substituted AST clone produced by `bake.ts` (Path A,
+   * design doc §4). Created lazily by `Monomorphization.checkBodies`
+   * just before invoking the body-check callback. KIR lowering walks
+   * this clone (not {@link declaration}); the global `Checker.typeMap`
+   * carries entries keyed by the cloned expression identities, populated
+   * by the pass-3 body-check re-walk.
+   */
+  bakedDecl?: FunctionDecl;
+  /**
+   * Per-instantiation type map for body expressions. Retained as a
+   * transition shim — KIR lowering reads from the global
+   * `Checker.typeMap` by clone identity now. The override stack on
+   * `LoweringCtx` (which this map feeds) becomes a no-op for synthesised
+   * decls in PR 4 and gets deleted entirely in PR 5.
+   */
   bodyTypeMap?: Map<Expression, Type>;
-  /** Per-instantiation generic resolutions for body expressions. */
+  /** Per-instantiation generic resolutions for body expressions. Same transition-shim note as {@link bodyTypeMap}. */
   bodyGenericResolutions?: Map<Expression, string>;
 }

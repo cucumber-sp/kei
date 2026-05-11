@@ -15,6 +15,7 @@
  */
 
 import type { EnumType } from "../checker/types";
+import type { Lifecycle } from "../lifecycle";
 import { adoptEnum, adoptFunction, adoptStruct } from "./adopt";
 import { type CheckBodyCallback, checkBodies as runCheckBodies } from "./check-bodies";
 import {
@@ -25,9 +26,14 @@ import {
 } from "./register";
 import type { MonomorphizedFunction, MonomorphizedStruct } from "./types";
 
+export { bake } from "./bake";
 export type { CheckBodyCallback, MonomorphizedProduct } from "./check-bodies";
 export { mangleGenericName } from "./mangle";
-export { substituteFunctionType, substituteType } from "./substitute";
+export {
+  buildTypeSubstitutionMap,
+  substituteFunctionType,
+  substituteType,
+} from "./substitute";
 export type { MonomorphizedFunction, MonomorphizedStruct } from "./types";
 
 /** Read-only view of all registered instantiations, grouped by kind. */
@@ -100,15 +106,30 @@ export interface Monomorphization {
 }
 
 /**
+ * Optional dependencies threaded into the Monomorphization factory.
+ *
+ * `lifecycle` is the integration seam from design doc §5: each struct
+ * instantiation registered here gets a `lifecycle.register(info.concrete)`
+ * call so the new concrete struct gets its own destroy/oncopy decision.
+ * Omitted in tests and in the multi-module orchestrator's combined view
+ * (lifecycle integration runs per-module).
+ */
+export interface MonomorphizationOptions {
+  lifecycle?: Lifecycle;
+}
+
+/**
  * Construct a fresh `Monomorphization` instance. Each compile run gets
  * its own; the three maps are private to the closure.
  */
-export function createMonomorphization(): Monomorphization {
+export function createMonomorphization(options: MonomorphizationOptions = {}): Monomorphization {
   const stores: MonomorphizationStores = {
     structs: new Map(),
     functions: new Map(),
     enums: new Map(),
   };
+
+  const lifecycle = options.lifecycle;
 
   const products: MonomorphizationProducts = {
     structs: stores.structs,
@@ -118,7 +139,16 @@ export function createMonomorphization(): Monomorphization {
 
   const instance: Monomorphization = {
     registerStruct(mangledName, info) {
+      const wasNew = !stores.structs.has(mangledName);
       registerStruct(stores, mangledName, info);
+      // Lifecycle integration (design doc §5): each baked struct gets a
+      // `lifecycle.register(concrete)` call so the new instance gets its
+      // own destroy/oncopy decision. Only fires on the *first* registration
+      // of a mangled name — re-registrations (e.g. literal-checker hitting
+      // the same `Box_i32` twice) shouldn't double-register.
+      if (wasNew && lifecycle) {
+        lifecycle.register(info.concrete);
+      }
     },
     registerFunction(mangledName, info) {
       registerFunction(stores, mangledName, info);
@@ -139,7 +169,15 @@ export function createMonomorphization(): Monomorphization {
       return products;
     },
     adoptStruct(mangledName, info) {
+      const wasNew = !stores.structs.has(mangledName);
       adoptStruct(stores, mangledName, info);
+      // Mirror registerStruct's lifecycle hook for cross-module adoptions
+      // so the adopting module's Lifecycle has the concrete struct in its
+      // registry. Adoption is dedup-by-mangled-name; the call only fires
+      // when this instance didn't already hold the entry.
+      if (wasNew && lifecycle) {
+        lifecycle.register(info.concrete);
+      }
     },
     adoptFunction(mangledName, info) {
       adoptFunction(stores, mangledName, info);
