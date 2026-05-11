@@ -943,6 +943,86 @@ export class Checker {
     });
   }
 
+  // ─── PR 4c — typed methods for the calls slice ─────────────────────────
+  //
+  // Sub-checkers (`call-checker.ts`, `expr-checker.ts`) call these
+  // rather than `error(...)` so the resulting diagnostic carries
+  // structured payload (`paramIndex`, generic-arg counts, …) and the
+  // `E3xxx` advisory code. Each method converts the lexer-token `Span`
+  // to a `SourceLocation` so the call-site signature stays consistent
+  // with `error / warning`.
+
+  /** Emit an arity-mismatch diagnostic. See `diagnostics/types.ts`. */
+  arityMismatch(payload: { expected: number; got: number; span: Span; message?: string }): void {
+    this.diag.arityMismatch({
+      span: this.spanToLocation(payload.span),
+      expected: payload.expected,
+      got: payload.got,
+      message: payload.message,
+    });
+  }
+
+  /**
+   * Emit an argument-type-mismatch diagnostic. `paramIndex` is 0-based;
+   * the formatter renders `paramIndex + 1`. If the caller has a
+   * parameter-declaration span (`paramDeclSpan`) the diagnostic carries
+   * a secondary span pointing at the declaration; otherwise it omits it.
+   */
+  argumentTypeMismatch(payload: {
+    paramIndex: number;
+    expected: string;
+    got: string;
+    span: Span;
+    paramDeclSpan?: Span;
+  }): void {
+    this.diag.argumentTypeMismatch({
+      span: this.spanToLocation(payload.span),
+      paramIndex: payload.paramIndex,
+      expected: payload.expected,
+      got: payload.got,
+      paramDeclSpan: payload.paramDeclSpan ? this.spanToLocation(payload.paramDeclSpan) : undefined,
+    });
+  }
+
+  /** Emit a not-callable diagnostic. */
+  notCallable(payload: { calleeType: string; span: Span }): void {
+    this.diag.notCallable({
+      span: this.spanToLocation(payload.span),
+      calleeType: payload.calleeType,
+    });
+  }
+
+  /**
+   * Emit a generic-arg-mismatch diagnostic. Pre-built `message` because
+   * the wording varies across call sites (function / enum / struct;
+   * generic vs. non-generic-but-called-with-args); the structured
+   * fields stay for tooling.
+   */
+  genericArgMismatch(payload: {
+    span: Span;
+    message: string;
+    name: string;
+    expected: number | null;
+    got: number;
+  }): void {
+    this.diag.genericArgMismatch({
+      span: this.spanToLocation(payload.span),
+      message: payload.message,
+      name: payload.name,
+      expected: payload.expected,
+      got: payload.got,
+    });
+  }
+
+  /** Emit a method-not-found diagnostic. */
+  methodNotFound(payload: { typeName: string; methodName: string; span: Span }): void {
+    this.diag.methodNotFound({
+      span: this.spanToLocation(payload.span),
+      typeName: payload.typeName,
+      methodName: payload.methodName,
+    });
+  }
+
   private spanToLocation(span: Span): SourceLocation {
     const lc = this.source.lineCol(span.start);
     return {
@@ -957,9 +1037,11 @@ export class Checker {
    * Snapshot the current diagnostics as the legacy
    * `{ severity, message, location }` shape that `CheckResult` and the
    * rest of the pipeline still consume. PR 4+ migrates consumers onto
-   * the new union shape; until then we adapt at the boundary. The
-   * `untriaged` variant is the only kind emitted in PR 2, so the adapter
-   * is one branch wide.
+   * the new union shape; until then we adapt at the boundary. Every
+   * variant carries a pre-built `.message` so this adapter stays one
+   * branch wide as new variants land (PR 4c adds the calls slice with
+   * `E3xxx` codes; the structured payload fields stay invisible to
+   * legacy consumers).
    */
   private collectDiagnostics(): Diagnostic[] {
     return this.diag.diagnostics().map((d) => ({

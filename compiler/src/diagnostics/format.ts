@@ -10,6 +10,25 @@
 
 import type { Diagnostic } from "./types";
 
+/** Render the secondary-span / notes / help envelope tail, if any. */
+function renderEnvelopeTail(diag: Diagnostic): string {
+  // `untriaged` doesn't carry envelope fields in practice; bail fast to
+  // keep its byte-identical `<severity>: <message>` output.
+  if (diag.kind === "untriaged") return "";
+
+  const parts: string[] = [];
+  if (diag.secondarySpans) {
+    for (const sec of diag.secondarySpans) {
+      parts.push(`note: ${sec.label}\n  --> ${sec.span.file}:${sec.span.line}:${sec.span.column}`);
+    }
+  }
+  if (diag.notes) {
+    for (const note of diag.notes) parts.push(`note: ${note}`);
+  }
+  if (diag.help) parts.push(`help: ${diag.help}`);
+  return parts.length === 0 ? "" : `\n${parts.join("\n")}`;
+}
+
 /** Format a single diagnostic as a one-message text string. */
 export function formatDiagnostic(diag: Diagnostic): string {
   switch (diag.kind) {
@@ -18,6 +37,18 @@ export function formatDiagnostic(diag: Diagnostic): string {
       // codes (`error[E0042]: …`) only appear once specific variants
       // are carved out in PRs 4a–4g.
       return `${diag.severity}: ${diag.message}`;
+
+    case "arityMismatch":
+    case "argumentTypeMismatch":
+    case "notCallable":
+    case "genericArgMismatch":
+    case "methodNotFound": {
+      // PR 4c (calls) — advisory `E3xxx` codes prefix the message; the
+      // semantic message text is preserved byte-for-byte from the
+      // pre-migration wording so existing substring tests keep passing.
+      const head = `${diag.severity}[${diag.code}]: ${diag.message}`;
+      return `${head}${renderEnvelopeTail(diag)}`;
+    }
   }
 }
 

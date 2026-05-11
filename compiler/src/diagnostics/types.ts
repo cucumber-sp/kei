@@ -7,6 +7,15 @@
  * disturbing the ~80 sub-checker call sites. PRs 4a–4g carve specific
  * variants out of `untriaged`. See
  * `docs/design/diagnostics-module.md` §3, §9 PR 2.
+ *
+ * PR 4c (calls) — adds five call-site variants in the `E3xxx` range:
+ * `arityMismatch`, `argumentTypeMismatch` (carries `paramIndex` plus an
+ * optional secondary-span pointer at the parameter declaration),
+ * `notCallable`, `genericArgMismatch`, `methodNotFound`. Each variant
+ * stores a pre-built `message` field so the legacy
+ * `{ severity, message, location }` adapter in `Checker.collectDiagnostics`
+ * keeps working unchanged through the migration; the structured payload
+ * fields exist for the formatter and future tooling consumers.
  */
 
 import type { SourceLocation } from "../errors/diagnostic";
@@ -46,10 +55,117 @@ export interface UntriagedDiagnostic extends DiagnosticEnvelope {
   message: string;
 }
 
+// ─── PR 4c — Calls (E3xxx) ───────────────────────────────────────────────────
+
+/**
+ * A call expression was passed the wrong number of arguments.
+ *
+ * Covers regular function calls, builtin special-cases (`sizeof`,
+ * `alloc`, `free`, `onCopy` / `onDestroy`), enum-variant construction,
+ * and the generic-function arity-after-substitution path. The
+ * `expected`/`got` fields carry the numeric counts so future tooling
+ * (LSP, JSON formatter) can present them structurally; the
+ * `message` field is the pre-built user-facing wording the legacy
+ * substring tests still match against.
+ */
+export interface ArityMismatchDiagnostic extends DiagnosticEnvelope {
+  kind: "arityMismatch";
+  code: "E3001";
+  expected: number;
+  got: number;
+  message: string;
+}
+
+/**
+ * A call expression's argument at position `paramIndex` (0-based) does
+ * not satisfy the parameter type.
+ *
+ * Distinct from the assignment / return `typeMismatch` (PR 4a) because
+ * call-site context — the parameter's index and its declaration span —
+ * is part of the diagnostic's identity. The optional `secondarySpans`
+ * envelope field carries the parameter-declaration pointer when the
+ * caller can recover it (regular function / module-qualified / generic-
+ * explicit calls thread the `FunctionDecl`'s params through); for
+ * paths that don't currently track the decl (instance / static methods)
+ * we emit the diagnostic without a secondary span.
+ */
+export interface ArgumentTypeMismatchDiagnostic extends DiagnosticEnvelope {
+  kind: "argumentTypeMismatch";
+  code: "E3002";
+  /** 0-based parameter index (user-visible message renders `paramIndex + 1`). */
+  paramIndex: number;
+  /** Pretty-printed expected parameter type. */
+  expected: string;
+  /** Pretty-printed actual argument type. */
+  got: string;
+  message: string;
+}
+
+/**
+ * A call expression was applied to a value whose type is not callable.
+ *
+ * The callee was already bound (name resolution succeeded) — this is
+ * the post-resolution variant.  Pre-resolution `undeclaredName` errors
+ * remain PR 4b's territory.
+ */
+export interface NotCallableDiagnostic extends DiagnosticEnvelope {
+  kind: "notCallable";
+  code: "E3003";
+  /** Pretty-printed type of the non-callable expression. */
+  calleeType: string;
+  message: string;
+}
+
+/**
+ * Explicit type-argument count (or, prospectively, kind) doesn't match
+ * the generic's parameters.
+ *
+ * Covers `foo<i32, str>(x)` where `foo` is `<T>` (function generics),
+ * `Type<...>` on non-generic / wrongly-arity'd structs and enums for
+ * static method calls and variant construction, and the
+ * "function is not generic but was called with N type argument(s)"
+ * shape.
+ */
+export interface GenericArgMismatchDiagnostic extends DiagnosticEnvelope {
+  kind: "genericArgMismatch";
+  code: "E3004";
+  /** Name of the generic entity (function / struct / enum). */
+  name: string;
+  /** Expected number of type arguments; `null` if the entity isn't generic. */
+  expected: number | null;
+  /** Number of type arguments the caller actually supplied. */
+  got: number;
+  message: string;
+}
+
+/**
+ * A method-call dispatch couldn't find a method of that name on the
+ * receiver type.
+ *
+ * Emitted by static method-call dispatch in `call-checker.ts` and (when
+ * the receiver is a struct in instance position) by member-access
+ * lookup in `expr-checker.ts`. The receiver type name is in
+ * `typeName`; the missing method name is in `methodName`.
+ */
+export interface MethodNotFoundDiagnostic extends DiagnosticEnvelope {
+  kind: "methodNotFound";
+  code: "E3005";
+  typeName: string;
+  methodName: string;
+  message: string;
+}
+
 /**
  * The discriminated union of all diagnostics the compiler can emit.
  *
- * PR 2 introduces the `untriaged` catch-all; PR 4+ add specific variants
- * (typeMismatch, undeclaredName, …) alongside.
+ * PR 2 introduces the `untriaged` catch-all; PR 4c adds the calls slice
+ * (`E3xxx`). Sibling categories remain on `untriaged` until their PRs
+ * land.
  */
-export type Diagnostic = UntriagedDiagnostic;
+export type Diagnostic =
+  | UntriagedDiagnostic
+  | ArityMismatchDiagnostic
+  | ArgumentTypeMismatchDiagnostic
+  | NotCallableDiagnostic
+  | GenericArgMismatchDiagnostic
+  | MethodNotFoundDiagnostic;
