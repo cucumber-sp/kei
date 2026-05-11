@@ -9,6 +9,7 @@ import { describe, expect, test } from "bun:test";
 import { emitC } from "../../src/backend/c-emitter";
 import { runDeSsa } from "../../src/backend/de-ssa";
 import { Checker } from "../../src/checker/checker";
+import { createDiagnostics } from "../../src/diagnostics";
 import type { Diagnostic } from "../../src/errors/diagnostic";
 import { lowerToKir } from "../../src/kir/lowering";
 import { runMem2Reg } from "../../src/kir/mem2reg";
@@ -30,7 +31,7 @@ function compileFull(source: string): string {
     throw new Error(`Parser errors: ${msgs}`);
   }
 
-  const checker = new Checker(program, file);
+  const checker = new Checker(program, file, "", { diag: createDiagnostics({}) });
   const result = checker.check();
 
   const errors = result.diagnostics.filter((d) => d.severity === "error");
@@ -75,7 +76,7 @@ function checkOnly(source: string): Diagnostic[] {
     throw new Error(`Parser errors: ${msgs}`);
   }
 
-  const checker = new Checker(program, file);
+  const checker = new Checker(program, file, "", { diag: createDiagnostics({}) });
   const result = checker.check();
   return result.diagnostics;
 }

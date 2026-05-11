@@ -16,6 +16,7 @@ import { emitC } from "../backend/c-emitter";
 import { runDeSsa } from "../backend/de-ssa";
 import type { ModuleCheckInfo } from "../checker/checker";
 import { Checker } from "../checker/checker";
+import { createDiagnostics } from "../diagnostics";
 import type { Diagnostic } from "../errors";
 import type { KirModule } from "../kir/kir-types";
 import { lowerModulesToKir, lowerToKir } from "../kir/lowering";
@@ -155,7 +156,8 @@ function hasImports(program: Program): boolean {
  */
 function runChecker(filePath: string, program: Program, source: SourceFile): CheckOutcome | null {
   if (!hasImports(program)) {
-    const result = new Checker(program, source).check();
+    const diag = createDiagnostics({});
+    const result = new Checker(program, source, "", { diag }).check();
     return {
       mode: "single",
       diagnostics: result.diagnostics,
