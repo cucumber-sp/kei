@@ -29,25 +29,14 @@ export function mangledLifecycleStructName(t: { name: string; modulePrefix?: str
 
 /** Check if a checker Type is a struct that has __destroy or __oncopy methods */
 export function getStructLifecycle(
-  ctx: LoweringCtx,
   checkerType: Type | undefined
 ): { hasDestroy: boolean; hasOncopy: boolean; structName: string } | null {
   if (!checkerType) return null;
   if (checkerType.kind !== "struct") return null;
-
-  // Key the cache by the mangled name so two structs with the same bare name
-  // from different modules don't collide.
-  const mangled = mangledLifecycleStructName(checkerType);
-  const cached = ctx.structLifecycleCache.get(mangled);
-  if (cached) return { ...cached, structName: mangled };
-
   const hasDestroy = checkerType.methods.has("__destroy");
   const hasOncopy = checkerType.methods.has("__oncopy");
-
-  ctx.structLifecycleCache.set(mangled, { hasDestroy, hasOncopy });
-
   if (!hasDestroy && !hasOncopy) return null;
-  return { hasDestroy, hasOncopy, structName: mangled };
+  return { hasDestroy, hasOncopy, structName: mangledLifecycleStructName(checkerType) };
 }
 
 /** Open a new lexical scope: mint a fresh id, emit `mark_scope_enter`. */
@@ -141,7 +130,7 @@ export function trackScopeVar(
     emit(ctx, { kind: "mark_track", varId, name, scopeId });
     return;
   }
-  const lifecycle = getStructLifecycle(ctx, checkerType);
+  const lifecycle = getStructLifecycle(checkerType);
   if (lifecycle?.hasDestroy) {
     emit(ctx, { kind: "mark_track", varId, name, scopeId });
   }

@@ -167,7 +167,7 @@ export function lowerLetStmt(ctx: LoweringCtx, stmt: LetStmt): void {
       initKind === "CastExpr";
     if (!isRValue) {
       const checkerType = ctx.checkResult.types.typeMap.get(stmt.initializer);
-      const lifecycle = getStructLifecycle(ctx, checkerType);
+      const lifecycle = getStructLifecycle(checkerType);
       if (lifecycle?.hasOncopy) {
         emit(ctx, { kind: "oncopy", value: valueId, structName: lifecycle.structName });
       }
@@ -216,7 +216,7 @@ export function lowerConstStmt(ctx: LoweringCtx, stmt: ConstStmt): void {
     initKind === "CastExpr";
   if (!isRValue) {
     const checkerType = ctx.checkResult.types.typeMap.get(stmt.initializer);
-    const lifecycle = getStructLifecycle(ctx, checkerType);
+    const lifecycle = getStructLifecycle(checkerType);
     if (lifecycle?.hasOncopy) {
       emit(ctx, { kind: "oncopy", value: valueId, structName: lifecycle.structName });
     }
@@ -657,7 +657,7 @@ export function lowerExprStmt(ctx: LoweringCtx, stmt: ExprStmt): void {
     return;
   }
 
-  const lifecycle = getStructLifecycle(ctx, checkerType);
+  const lifecycle = getStructLifecycle(checkerType);
   if (!lifecycle?.hasDestroy) return;
   if (checkerType.kind !== "struct") return;
 
