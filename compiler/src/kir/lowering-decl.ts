@@ -105,6 +105,8 @@ export function resetFunctionState(ctx: LoweringCtx): void {
   ctx.scopeStack = [];
   ctx.deferStack = [];
   ctx.movedVars = new Set();
+  ctx.scopeIdCounter = 0;
+  ctx.scopeExitData = new Map();
 }
 
 /** Finalize function body: pop scope, add terminator, seal last block. */
@@ -236,6 +238,7 @@ export function lowerFunction(ctx: LoweringCtx, decl: FunctionDecl): KirFunction
     blocks: ctx.blocks,
     localCount: ctx.varCounter,
     throwsTypes: isThrows ? throwsKirTypes : undefined,
+    lifecycleScopeExits: ctx.scopeExitData.size > 0 ? ctx.scopeExitData : undefined,
   };
 }
 
@@ -335,6 +338,7 @@ export function lowerMonomorphizedFunction(
     blocks: ctx.blocks,
     localCount: ctx.varCounter,
     throwsTypes: isThrows ? throwsKirTypes : undefined,
+    lifecycleScopeExits: ctx.scopeExitData.size > 0 ? ctx.scopeExitData : undefined,
   };
 }
 

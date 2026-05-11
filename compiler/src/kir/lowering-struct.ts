@@ -94,6 +94,7 @@ export function lowerMethod(
     returnType,
     blocks: ctx.blocks,
     localCount: ctx.varCounter,
+    lifecycleScopeExits: ctx.scopeExitData.size > 0 ? ctx.scopeExitData : undefined,
   };
 }
 
@@ -153,5 +154,6 @@ export function lowerMonomorphizedMethod(
     returnType,
     blocks: ctx.blocks,
     localCount: ctx.varCounter,
+    lifecycleScopeExits: ctx.scopeExitData.size > 0 ? ctx.scopeExitData : undefined,
   };
 }
