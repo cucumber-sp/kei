@@ -44,8 +44,8 @@ describe("printKir — lifecycle markers", () => {
   });
 
   test("mark_track", () => {
-    const out = printKir(modWithInst({ kind: "mark_track", varId: "%x", scopeId: 2 }));
-    expect(out).toContain("mark_track %x, 2");
+    const out = printKir(modWithInst({ kind: "mark_track", varId: "%x", name: "x", scopeId: 2 }));
+    expect(out).toContain("mark_track %x (x), 2");
   });
 
   test("mark_moved", () => {

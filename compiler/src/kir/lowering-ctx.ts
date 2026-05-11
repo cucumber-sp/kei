@@ -29,16 +29,6 @@ import type {
   VarId,
 } from "./kir-types";
 
-/** A live variable inside a lowering scope — for lifecycle (`__destroy`) tracking. */
-export interface ScopeVar {
-  name: string;
-  varId: VarId;
-  /** Struct type name, used to find `__destroy` / `__oncopy`. */
-  structName: string;
-  /** True for string variables (use `kei_string_destroy` instead of generic destroy). */
-  isString?: boolean;
-}
-
 export interface LoweringCtx {
   // ─── Inputs (effectively readonly during lowering) ────────────────────
   program: Program;
@@ -59,29 +49,37 @@ export interface LoweringCtx {
   /** Break / continue targets for the innermost loop (null outside loops). */
   loopBreakTarget: BlockId | null;
   loopContinueTarget: BlockId | null;
-  /** Scope-stack depth captured at loop entry; break/continue destroy from this depth onward. */
-  loopScopeDepth: number;
+  /** `openScopes.length` captured at loop entry; break/continue unwind from this depth onward. */
+  loopOpenScopeBase: number;
 
-  /** Lifecycle tracking — one frame per scope, each holding the vars that need `__destroy`. */
-  scopeStack: ScopeVar[][];
+  /**
+   * Stack of scope ids currently open in the function being lowered. Each
+   * `pushScope` mints a fresh id, pushes it here, and emits
+   * `mark_scope_enter`. Each `popScopeWithDestroy` pops one and emits
+   * `mark_scope_exit`. `mark_track` names the innermost (i.e. last)
+   * entry. This is bookkeeping only — no tracked-var data lives here;
+   * the Lifecycle pass reconstructs `scope → tracked vars` from the
+   * marker stream.
+   */
+  openScopes: ScopeId[];
   /** Deferred instruction sequences — one frame per scope, each holding captured insts in push order (emitted LIFO at scope exit). */
   deferStack: KirInst[][][];
 
   /** Cache of `(structName) → { hasDestroy, hasOncopy }` to avoid repeated lookups. */
   structLifecycleCache: Map<string, { hasDestroy: boolean; hasOncopy: boolean }>;
 
-  /** Monotonic allocator for `mark_scope_exit` scope ids — fresh per function. */
-  scopeIdCounter: ScopeId;
+  /** Monotonic allocator for scope ids — fresh per function. */
+  nextScopeId: ScopeId;
   /**
-   * Per-marker scope-exit snapshots indexed by the scope id baked into
-   * the matching `mark_scope_exit` instruction. Populated by
-   * `emitScopeExit` and attached to the returned `KirFunction` so the
-   * Lifecycle pass can rewrite each marker into its destroys without
-   * threading lowering state through the pass call.
+   * Scope-exit skip-set snapshots indexed by the scope id baked into the
+   * matching `mark_scope_exit` instruction. Populated by `emitScopeExit`
+   * from any per-exit returned-name skip so the Lifecycle pass can honour
+   * those when rewriting destroys.
    *
-   * Transitional bridge while sibling PR 4e still owns `scopeStack`.
-   * After it migrates `mark_track` into the IR, the pass reconstructs
-   * the same info from the marker stream and this side-table goes away.
+   * After PR 4d + 4e, both the moved-set and the live tracked-vars are
+   * reconstructed by the pass from the marker stream. This side-table
+   * survives only to carry returned-name skips; once those migrate too
+   * it goes away entirely.
    */
   scopeExitData: Map<ScopeId, KirScopeExitInfo>;
 
@@ -142,14 +140,14 @@ export function createLoweringCtx(
 
     loopBreakTarget: null,
     loopContinueTarget: null,
-    loopScopeDepth: 0,
+    loopOpenScopeBase: 0,
 
-    scopeStack: [],
+    openScopes: [],
     deferStack: [],
 
     structLifecycleCache: new Map(),
 
-    scopeIdCounter: 0,
+    nextScopeId: 0,
     scopeExitData: new Map(),
 
     functions: [],

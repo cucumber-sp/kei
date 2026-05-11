@@ -53,10 +53,19 @@ export interface KirField {
   type: KirType;
 }
 
-/** Struct type in KIR — laid out as a flat sequence of named fields. */
+/**
+ * Struct type in KIR — laid out as a flat sequence of named fields.
+ *
+ * `name` is the bare struct name. `modulePrefix` is the defining module's
+ * prefix (`"arena"` for `std/arena.kei`; empty for the main module or for
+ * generic-monomorphized instances whose name already encodes everything).
+ * Lifecycle hook lookups must compose them as `<prefix>_<name>___destroy`
+ * so cross-module call sites resolve to the right symbol.
+ */
 export interface KirStructType {
   kind: "struct";
   name: string;
+  modulePrefix?: string;
   fields: KirField[];
 }
 

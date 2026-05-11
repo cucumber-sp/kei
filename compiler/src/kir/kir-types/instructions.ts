@@ -321,10 +321,15 @@ export interface KirMarkScopeExit {
   scopeId: ScopeId;
 }
 
-/** Register `varId` as a managed local in `scopeId`'s frame. */
+/**
+ * Register `varId` as a managed local in `scopeId`'s frame. `name` is the
+ * source-level binding name — the Lifecycle pass uses it to honour the
+ * `mark_scope_exit` skip-set (moved-out vars and the returned local).
+ */
 export interface KirMarkTrack {
   kind: "mark_track";
   varId: VarId;
+  name: string;
   scopeId: ScopeId;
 }
 

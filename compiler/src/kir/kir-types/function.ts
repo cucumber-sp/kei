@@ -6,25 +6,17 @@ import type { KirType } from "./types";
 // ─── Function ────────────────────────────────────────────────────────────────
 
 /**
- * Snapshot accompanying a `mark_scope_exit` marker: the live vars in
- * declaration order, plus the set of var names to skip when emitting
- * destroys (the named local being returned, where the var must survive
- * past the destroy sequence).
+ * Snapshot accompanying a `mark_scope_exit` marker: the set of source-level
+ * var names to skip when emitting destroys (the named local being returned,
+ * where the var must survive past the destroy sequence).
  *
- * Transitional side-channel for Lifecycle PR 4a — lowering still owns
- * the scope stack, so it captures the relevant slice here at
- * marker-emission time and the pass reads it back. Sibling PR 4e
- * migrates `mark_track` into the IR proper, after which the pass
- * reconstructs the same info from the marker stream and this field is
- * removed.
+ * After PR 4d + 4e, both the live-vars set and the moved-set are
+ * reconstructed by the Lifecycle pass from the `mark_track` and
+ * `mark_moved` marker streams. This side-channel survives only to carry
+ * the returned-name skip that lowering still owns; once that is migrated
+ * the field disappears entirely.
  */
 export interface KirScopeExitInfo {
-  vars: ReadonlyArray<{
-    name: string;
-    varId: VarId;
-    structName: string;
-    isString?: boolean;
-  }>;
   skipNames: ReadonlySet<string>;
 }
 

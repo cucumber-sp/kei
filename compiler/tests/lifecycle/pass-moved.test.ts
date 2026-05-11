@@ -14,6 +14,10 @@
  * The marker itself is consumed (stripped) by the rewriter; it leaves
  * no instruction behind.
  *
+ * After PR 4e the tracked vars come from `mark_track` markers in the
+ * function body (with `stack_alloc` planting the pointee struct/string
+ * type); these tests build the var stream that way.
+ *
  * Cases:
  *
  *   1. move a tracked local, then scope-exit → that var's destroy is
@@ -39,7 +43,9 @@ import type {
   KirParam,
   KirScopeExitInfo,
   KirTerminator,
+  KirType,
   ScopeId,
+  VarId,
 } from "../../src/kir/kir-types";
 import { runLifecyclePass } from "../../src/lifecycle";
 
@@ -82,6 +88,19 @@ function structParam(name: string, structName: string): KirParam {
   };
 }
 
+/** Helper: `stack_alloc <varId>: <type>` to plant a pointee for `mark_track` resolution. */
+function alloc(varId: VarId, type: KirType): KirInst {
+  return { kind: "stack_alloc", dest: varId, type };
+}
+
+/** Helper: struct stack-alloc + `mark_track`. */
+function trackStruct(name: string, varId: VarId, structName: string, scopeId: ScopeId): KirInst[] {
+  return [
+    alloc(varId, { kind: "struct", name: structName, fields: [] }),
+    { kind: "mark_track", varId, name, scopeId },
+  ];
+}
+
 describe("runLifecyclePass — mark_moved rewrite (PR 4d)", () => {
   test("moved local at scope-exit → its destroy is skipped; siblings still destroy", () => {
     // Source-order analogue:
@@ -90,25 +109,16 @@ describe("runLifecyclePass — mark_moved rewrite (PR 4d)", () => {
     //   let c = S.make()
     //   _ = move b
     //   // scope exit → destroy c, destroy a   (b suppressed by mark_moved)
-    const scopeExits = new Map<ScopeId, KirScopeExitInfo>([
-      [
-        0,
-        {
-          vars: [
-            { name: "a", varId: "%a", structName: "S" },
-            { name: "b", varId: "%b", structName: "S" },
-            { name: "c", varId: "%c", structName: "S" },
-          ],
-          skipNames: new Set(),
-        },
-      ],
-    ]);
+    const scopeExits = new Map<ScopeId, KirScopeExitInfo>([[0, { skipNames: new Set() }]]);
     const before = moduleWith(
       fn(
         "f",
         [],
         [
           block("entry", [
+            ...trackStruct("a", "%a", "S", 0),
+            ...trackStruct("b", "%b", "S", 0),
+            ...trackStruct("c", "%c", "S", 0),
             { kind: "mark_moved", var: "b" },
             { kind: "mark_scope_exit", scopeId: 0 },
           ]),
@@ -118,7 +128,10 @@ describe("runLifecyclePass — mark_moved rewrite (PR 4d)", () => {
     );
     const after = runLifecyclePass(before, noDecisions);
 
-    expect(after.functions[0]?.blocks[0]?.instructions).toEqual([
+    const insts = after.functions[0]?.blocks[0]?.instructions ?? [];
+    // Filter out the stack_alloc plumbing — we only care about the destroys.
+    const destroys = insts.filter((i) => i.kind === "destroy");
+    expect(destroys).toEqual([
       { kind: "destroy", value: "%c", structName: "S" },
       { kind: "destroy", value: "%a", structName: "S" },
     ]);
@@ -157,23 +170,8 @@ describe("runLifecyclePass — mark_moved rewrite (PR 4d)", () => {
     //     mark_moved x       (no further moves)
     //     mark_scope_exit    mark_scope_exit
     const scopeExits = new Map<ScopeId, KirScopeExitInfo>([
-      [
-        0,
-        {
-          vars: [{ name: "x", varId: "%x0", structName: "S" }],
-          skipNames: new Set(),
-        },
-      ],
-      [
-        1,
-        {
-          vars: [
-            { name: "x", varId: "%x1", structName: "S" },
-            { name: "y", varId: "%y", structName: "S" },
-          ],
-          skipNames: new Set(),
-        },
-      ],
+      [0, { skipNames: new Set() }],
+      [1, { skipNames: new Set() }],
     ]);
     const before = moduleWith(
       fn(
@@ -181,6 +179,9 @@ describe("runLifecyclePass — mark_moved rewrite (PR 4d)", () => {
         [],
         [
           block("entry", [
+            ...trackStruct("x", "%x0", "S", 0),
+            ...trackStruct("x", "%x1", "S", 1),
+            ...trackStruct("y", "%y", "S", 1),
             { kind: "mark_moved", var: "x" },
             { kind: "mark_scope_exit", scopeId: 0 },
             { kind: "mark_scope_exit", scopeId: 1 },
@@ -194,54 +195,53 @@ describe("runLifecyclePass — mark_moved rewrite (PR 4d)", () => {
     // Scope 0: `x` moved → nothing emitted.
     // Scope 1: `x` still moved → only `y` destroyed (reverse order
     //   would be y then x; `x` is suppressed).
-    expect(after.functions[0]?.blocks[0]?.instructions).toEqual([
-      { kind: "destroy", value: "%y", structName: "S" },
-    ]);
+    const insts = after.functions[0]?.blocks[0]?.instructions ?? [];
+    const destroys = insts.filter((i) => i.kind === "destroy");
+    expect(destroys).toEqual([{ kind: "destroy", value: "%y", structName: "S" }]);
   });
 
   test("moved-sets are independent across functions", () => {
     // Function `f` moves `x`; function `g` also has a tracked `x` and
     // no move. `f`'s marker must not bleed into `g`'s rewrite.
-    const fScope = new Map<ScopeId, KirScopeExitInfo>([
-      [
-        0,
-        {
-          vars: [{ name: "x", varId: "%fx", structName: "S" }],
-          skipNames: new Set(),
-        },
-      ],
-    ]);
-    const gScope = new Map<ScopeId, KirScopeExitInfo>([
-      [
-        0,
-        {
-          vars: [{ name: "x", varId: "%gx", structName: "S" }],
-          skipNames: new Set(),
-        },
-      ],
-    ]);
+    const fScope = new Map<ScopeId, KirScopeExitInfo>([[0, { skipNames: new Set() }]]);
+    const gScope = new Map<ScopeId, KirScopeExitInfo>([[0, { skipNames: new Set() }]]);
     const before = moduleWith(
       fn(
         "f",
         [],
         [
           block("entry", [
+            ...trackStruct("x", "%fx", "S", 0),
             { kind: "mark_moved", var: "x" },
             { kind: "mark_scope_exit", scopeId: 0 },
           ]),
         ],
         fScope
       ),
-      fn("g", [], [block("entry", [{ kind: "mark_scope_exit", scopeId: 0 }])], gScope)
+      fn(
+        "g",
+        [],
+        [
+          block("entry", [
+            ...trackStruct("x", "%gx", "S", 0),
+            { kind: "mark_scope_exit", scopeId: 0 },
+          ]),
+        ],
+        gScope
+      )
     );
     const after = runLifecyclePass(before, noDecisions);
 
     // `f`: move suppresses destroy.
-    expect(after.functions[0]?.blocks[0]?.instructions).toEqual([]);
+    const fDestroys = (after.functions[0]?.blocks[0]?.instructions ?? []).filter(
+      (i) => i.kind === "destroy"
+    );
+    expect(fDestroys).toEqual([]);
     // `g`: no move → destroy fires normally.
-    expect(after.functions[1]?.blocks[0]?.instructions).toEqual([
-      { kind: "destroy", value: "%gx", structName: "S" },
-    ]);
+    const gDestroys = (after.functions[1]?.blocks[0]?.instructions ?? []).filter(
+      (i) => i.kind === "destroy"
+    );
+    expect(gDestroys).toEqual([{ kind: "destroy", value: "%gx", structName: "S" }]);
   });
 
   test("`mark_moved` marker leaves no instruction behind", () => {
@@ -257,21 +257,16 @@ describe("runLifecyclePass — mark_moved rewrite (PR 4d)", () => {
     // `mark_moved x` in `entry`, `mark_scope_exit` in a successor
     // block. The moved-set lives at the function level, so the
     // suppression must carry across blocks.
-    const scopeExits = new Map<ScopeId, KirScopeExitInfo>([
-      [
-        0,
-        {
-          vars: [{ name: "x", varId: "%x", structName: "S" }],
-          skipNames: new Set(),
-        },
-      ],
-    ]);
+    const scopeExits = new Map<ScopeId, KirScopeExitInfo>([[0, { skipNames: new Set() }]]);
     const before = moduleWith(
       fn(
         "f",
         [],
         [
-          block("entry", [{ kind: "mark_moved", var: "x" }], { kind: "jump", target: "exit" }),
+          block("entry", [...trackStruct("x", "%x", "S", 0), { kind: "mark_moved", var: "x" }], {
+            kind: "jump",
+            target: "exit",
+          }),
           block("exit", [{ kind: "mark_scope_exit", scopeId: 0 }]),
         ],
         scopeExits
@@ -279,8 +274,11 @@ describe("runLifecyclePass — mark_moved rewrite (PR 4d)", () => {
     );
     const after = runLifecyclePass(before, noDecisions);
 
-    // entry: `mark_moved` stripped, no other insts.
-    expect(after.functions[0]?.blocks[0]?.instructions).toEqual([]);
+    // entry: `mark_moved` stripped, stack_alloc + mark_track remain (mark_track stripped).
+    const entryDestroys = (after.functions[0]?.blocks[0]?.instructions ?? []).filter(
+      (i) => i.kind === "destroy"
+    );
+    expect(entryDestroys).toEqual([]);
     // exit: scope-exit consults the function-level moved-set; `x` skipped.
     expect(after.functions[0]?.blocks[1]?.instructions).toEqual([]);
   });
