@@ -116,7 +116,10 @@ function checkLifecycleHookBuiltin(checker: Checker, expr: CallExpr): Type | nul
     return ERROR_TYPE;
   }
   const hookName = name === "onCopy" ? "__oncopy" : "__destroy";
-  if (!pointee.methods.has(hookName)) {
+  const hasHook =
+    pointee.methods.has(hookName) ||
+    (hookName === "__destroy" ? pointee.autoDestroy === true : pointee.autoOncopy === true);
+  if (!hasHook) {
     checker.error(
       `type '${pointee.name}' has no '${hookName}' hook for '${name}' to call`,
       expr.span

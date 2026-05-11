@@ -65,9 +65,6 @@ export interface LoweringCtx {
   /** Deferred instruction sequences — one frame per scope, each holding captured insts in push order (emitted LIFO at scope exit). */
   deferStack: KirInst[][][];
 
-  /** Cache of `(structName) → { hasDestroy, hasOncopy }` to avoid repeated lookups. */
-  structLifecycleCache: Map<string, { hasDestroy: boolean; hasOncopy: boolean }>;
-
   /** Monotonic allocator for scope ids — fresh per function. */
   nextScopeId: ScopeId;
   /**
@@ -144,8 +141,6 @@ export function createLoweringCtx(
 
     openScopes: [],
     deferStack: [],
-
-    structLifecycleCache: new Map(),
 
     nextScopeId: 0,
     scopeExitData: new Map(),
