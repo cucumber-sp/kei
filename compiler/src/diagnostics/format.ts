@@ -71,6 +71,25 @@ export function messageOf(diag: Diagnostic): string {
       // PR 4c (calls) — semantic message text preserved byte-for-byte
       // from the pre-migration wording.
       return diag.message;
+    case "unknownField":
+      // Two access forms produce two slightly different wordings,
+      // preserved verbatim from the pre-migration call sites:
+      // struct-literal lookups only see fields, while `MemberExpr`
+      // lookups span both fields and methods.
+      return diag.access === "member"
+        ? `type '${diag.structName}' has no field or method '${diag.fieldName}'`
+        : `struct '${diag.structName}' has no field '${diag.fieldName}'`;
+    case "missingField":
+      return `missing field '${diag.fieldName}' in struct literal '${diag.structName}'`;
+    case "invalidFieldAccess":
+      return `type '${diag.typeName}' has no property '${diag.property}'`;
+    case "cannotConstructStruct":
+      return `'${diag.name}' is not a struct type`;
+    case "unsafeStructFieldRule":
+      // The structName/fieldName fields enrich the payload for
+      // programmatic consumers; the rendered text matches the
+      // pre-migration wording verbatim via `message`.
+      return diag.message;
     case "noOperatorOverload":
     case "invalidOperand":
     case "binaryTypeMismatch":

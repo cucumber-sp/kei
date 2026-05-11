@@ -381,12 +381,84 @@ export interface LifecycleReturnTypeWrongDiagnostic extends DiagnosticEnvelope {
 }
 
 /**
+ * Struct field-access references a field name the struct doesn't have.
+ * Fires from struct-literal field assignments (`access: "literal"`,
+ * fields only) and from `MemberExpr` when the object is a struct type
+ * but the property name isn't in `fields`/`methods` (`access:
+ * "member"`, fields and methods). PR 4d. See
+ * `docs/migrations/diagnostics/pr-4d.md`.
+ */
+export interface UnknownFieldDiagnostic extends DiagnosticEnvelope {
+  kind: "unknownField";
+  code: "E4001";
+  structName: string;
+  fieldName: string;
+  /**
+   * Which access form raised the diagnostic. `"literal"` for
+   * struct-literal field initialisers (field-only lookup); `"member"`
+   * for `.field` access on a struct value (lookup spans both fields
+   * and methods, so the user-facing wording reflects that). The
+   * formatter dispatches on this so the two sites preserve their
+   * existing wording — no rephrasing on migration.
+   */
+  access: "literal" | "member";
+}
+
+/**
+ * Struct literal omits a required field. Fires once per missing field
+ * at the literal's span. PR 4d.
+ */
+export interface MissingFieldDiagnostic extends DiagnosticEnvelope {
+  kind: "missingField";
+  code: "E4002";
+  structName: string;
+  fieldName: string;
+}
+
+/**
+ * `.field` access on a value whose type has no field/method concept
+ * (non-struct, non-module, non-enum). PR 4d. The companion "struct has
+ * no field X" case is `unknownField`; this variant covers "this type
+ * cannot have fields at all".
+ */
+export interface InvalidFieldAccessDiagnostic extends DiagnosticEnvelope {
+  kind: "invalidFieldAccess";
+  code: "E4003";
+  typeName: string;
+  property: string;
+}
+
+/**
+ * Struct-literal expression for a name that doesn't resolve to a struct
+ * type (e.g. trying to construct a primitive or an enum). PR 4d.
+ */
+export interface CannotConstructStructDiagnostic extends DiagnosticEnvelope {
+  kind: "cannotConstructStruct";
+  code: "E4004";
+  name: string;
+}
+
+/**
+ * Struct field declaration violates the safe/unsafe field-shape rule
+ * (today: a plain `struct` carrying a `ptr<T>` field, which is only
+ * allowed on `unsafe struct`). PR 4d. Lifecycle-hook signature rules
+ * are out of scope for this variant — those route through 4e.
+ */
+export interface UnsafeStructFieldRuleDiagnostic extends DiagnosticEnvelope {
+  kind: "unsafeStructFieldRule";
+  code: "E4005";
+  structName: string;
+  fieldName: string;
+  message: string;
+}
+
+/**
  * The discriminated union of all diagnostics the compiler can emit.
  *
  * PR 2 introduced the `untriaged` catch-all; PRs 4a–4g carve specific
- * categories out (this PR adds the E1xxx type-errors slice; siblings
- * have already added E3xxx calls, E5xxx lifecycle, E6xxx operators).
- * The catch-all is removed once every category is carved.
+ * categories out by category (E1xxx type errors, E3xxx calls, E4xxx
+ * structs, E5xxx lifecycle, E6xxx operators). The catch-all is removed
+ * once every category is carved.
  */
 export type Diagnostic =
   | UntriagedDiagnostic
@@ -401,6 +473,11 @@ export type Diagnostic =
   | NotCallableDiagnostic
   | GenericArgMismatchDiagnostic
   | MethodNotFoundDiagnostic
+  | UnknownFieldDiagnostic
+  | MissingFieldDiagnostic
+  | InvalidFieldAccessDiagnostic
+  | CannotConstructStructDiagnostic
+  | UnsafeStructFieldRuleDiagnostic
   | NoOperatorOverloadDiagnostic
   | InvalidOperandDiagnostic
   | BinaryTypeMismatchDiagnostic
