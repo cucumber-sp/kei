@@ -2,11 +2,9 @@
  * Tests for the ref-redesign §4 invariants.
  *
  * These tests pin down the position restrictions on `ref T`, the auto-deref
- * rules, the new `addr(...)` and `init` operators, and the `readonly` modifier.
- * The cases here mirror `docs/design/ref-redesign.md` §4 one-for-one.
- *
- * The whole suite is currently `.skip`'d — the compiler PRs that implement
- * each piece will flip the relevant block back on.
+ * rules, unsafe pointer operations, construction invariants, and the
+ * `readonly` modifier. The cases here mirror `docs/design/ref-redesign.md`
+ * §4 one-for-one.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -263,9 +261,6 @@ describe("§4.10 — `Shared<T>` does not auto-deref recursively", () => {
 
 describe("§4.11 — `readonly` semantics", () => {
   test("`readonly T` field rejects reassignment", () => {
-    // Use a plain assignment (not Shared::wrap) since we don't yet support
-    // qualified static method calls. `c.online = otherShared` exercises the
-    // readonly-field check just as well.
     checkError(
       `
       unsafe struct Shared<T> {
@@ -379,9 +374,9 @@ describe("`slice<T>` is removed", () => {
   });
 });
 
-// ─── `Shared<T>` end-to-end (semantics) ──────────────────────────────────────
+// ─── `Shared<T>` checker smoke ───────────────────────────────────────────────
 
-describe("Shared<T> stdlib semantics — checker only (KIR/codegen pending)", () => {
+describe("Shared<T> stdlib semantics — checker smoke", () => {
   test("`Shared<T>.wrap(item)` typechecks (parser + static method dispatch)", () => {
     checkOk(`
       extern fn malloc(size: usize) -> *u8;
@@ -406,46 +401,6 @@ describe("Shared<T> stdlib semantics — checker only (KIR/codegen pending)", ()
         let s = Shared<i32>.wrap(n);
         return 0;
       }
-    `);
-  });
-});
-
-describe.skip("Shared<T> stdlib semantics — original placeholder (e2e + monomorphization pending)", () => {
-  test("Shared<T>::wrap takes `ref T` and returns `Shared<T>`", () => {
-    checkOk(`
-      unsafe struct Shared<T> {
-        refcount: ref i64;
-        value: ref T;
-        fn wrap(item: ref T) -> Shared<T> {
-          let s = Shared<T>{};
-          return s;
-        }
-        fn __oncopy(self: ref Shared<T>) { self.refcount += 1; }
-        fn __destroy(self: ref Shared<T>) { self.refcount -= 1; }
-      }
-      fn main() -> int {
-        let n: i32 = 42;
-        let s = Shared<i32>::wrap(n);
-        return 0;
-      }
-    `);
-  });
-
-  test("Shared<T> field can be replaced via wrap (handle replacement)", () => {
-    checkOk(`
-      unsafe struct Shared<T> {
-        refcount: ref i64;
-        value: ref T;
-        fn wrap(item: ref T) -> Shared<T> { return Shared<T>{}; }
-        fn __oncopy(self: ref Shared<T>) {}
-        fn __destroy(self: ref Shared<T>) {}
-      }
-      struct Cfg { online: Shared<bool> }
-      fn f(c: ref Cfg) {
-        let v: bool = false;
-        c.online = Shared<bool>::wrap(v);
-      }
-      fn main() -> int { return 0; }
     `);
   });
 });
@@ -543,8 +498,7 @@ describe("reverse-declaration-order destruction (§6.9)", () => {
 describe.skip("future: equality + sameHandle for `Shared<T>` (§6.5)", () => {
   // `==` on Shared<T> recursively compares fields (matches plain struct
   // equality). `sameHandle(a, b)` is a separate identity primitive that
-  // pointer-compares the underlying allocation. Neither is implemented
-  // yet — both depend on having a working Shared<T> end-to-end first.
+  // pointer-compares the underlying allocation. Neither is implemented yet.
   test("Shared<T> == Shared<T> compares by value", () => {
     // Marker test.
   });
@@ -563,26 +517,9 @@ describe.skip("future: auto-last-use elision (§3.5)", () => {
   });
 });
 
-describe.skip("future: `copy(x)` builtin (§6.3) — depends on §3.5 first", () => {
-  // `copy(x)` is the de-optimizer for auto-last-use elision (§3.5).
-  // Without elision it's redundant: `let temp = a; takeOwnership(move
-  // temp);` already does an explicit oncopy + move. With elision the
-  // compiler can convert `takeOwnership(a)` into `takeOwnership(move
-  // a)` when `a` isn't used after the call — at which point the user
-  // needs a way to say "no, I want the oncopy, keep `a` alive":
-  //
-  //   takeOwnership(copy(a));  // bumps refcount; `a` survives
-  //
-  // Until §3.5 lands `copy()` is a no-op in user-visible behaviour, so
-  // this stays a skipped marker.
-  test("`copy(x)` keeps the source alive across an otherwise-eliding call", () => {
-    // Marker test.
-  });
-});
-
 describe.skip("future: `weak<T>` companion type (§6.8)", () => {
   // Non-owning reference-counted pointer for breaking cycles. Out of
-  // scope for v1; depends on Shared<T> being real first.
+  // scope for v1.
   test("Weak<T> upgrade returns Shared<T>? (None when count == 0)", () => {
     // Marker test.
   });
@@ -597,31 +534,6 @@ describe("SliceType cleanup", () => {
     const types = require("../../src/checker/types") as Record<string, unknown>;
     expect(types.sliceType).toBeUndefined();
     expect((types.TypeKind as Record<string, unknown>).Slice).toBeUndefined();
-  });
-});
-
-describe.skip("future: std `Shared<T>` runs end-to-end", () => {
-  // The cross-module monomorphization scaffolding landed plus the
-  // KIR-level Shared<T> path is now sound:
-  //
-  //  - Body checks are routed to the defining module's checker so
-  //    `alloc`, `dealloc` resolve correctly (see PR #20).
-  //  - Monomorphized lifecycle hooks are emitted once per
-  //    instantiation in the defining module (see PR #20 and
-  //    `tests/modules/lowering.test.ts`).
-  //  - `addr(field) = expr` lowers to a real `field_ptr + store`
-  //    pair, so the alloca is correctly address-taken and mem2reg
-  //    bails on it (see PR #21).
-  //  - Generic-method bodies resolve free identifiers via the
-  //    defining module's import scope (verified in
-  //    `tests/modules/lowering.test.ts`).
-  //
-  // The remaining blocker before this test (and `tests/e2e/shared
-  // .test.ts`) flip back on is a C-emitter integration bug —
-  // `let b = Struct.make()` lowers correctly but the scope-end
-  // destroy references an undeclared `_v1`. Filed as #21.
-  test("std `Shared<T>::wrap(item)` runs end-to-end through the C output", () => {
-    // Marker test.
   });
 });
 

@@ -108,7 +108,7 @@ The std library can wrap the common pattern as one helper:
 // std/mem.kei
 pub fn placeAt<T>(dest: *T, src: ref T) {
     unsafe {
-        memcpy(dest as *void, &(*src) as *void, sizeof<T>());
+        memcpy(dest as *u8, src as *u8, sizeof(T));
         onCopy(dest);
     }
 }
@@ -155,7 +155,7 @@ pub unsafe struct Shared<T> {
 
             // 2. Seed the refcount and place the user's value.
             *countPtr = 1;
-            placeAt(valuePtr, item);    // memcpy + onCopy
+            placeAt<T>(valuePtr, item); // memcpy + onCopy
 
             // 3. Construct via struct literal — seats both bindings
             //    in one step.
@@ -171,8 +171,8 @@ pub unsafe struct Shared<T> {
         self.refcount -= 1;
         if self.refcount == 0 {
             unsafe {
-                onDestroy(&(*self.value));        // run T's __destroy
-                dealloc(&(*self.refcount) as *void);
+                onDestroy(self.value as *T);      // run T's __destroy
+                dealloc(self.refcount as *void);
             }
         }
     }
@@ -234,9 +234,9 @@ time without depending on the rest of this redesign.
 
 ## 8. References
 
-- `docs/design/ref-redesign.md` §2.3 (current `addr()`/`init` story)
+- `docs/design/ref-redesign.md` §2.3 (current construction vocabulary)
 - `docs/design/ref-redesign.md` §6.4 (alias-visible mutation through
   Shared<T> — unchanged by this redesign)
-- `compiler/std/shared.kei` (current implementation, to be migrated)
+- `compiler/std/shared.kei` (current implementation)
 - Issue #21 (already closed) — surfaced the lifecycle wiring this
   redesign builds on.

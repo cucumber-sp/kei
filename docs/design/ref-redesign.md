@@ -1,20 +1,18 @@
 # Ref redesign: collapsing the pointer-type vocabulary
 
 Status: **shipped** — type-system shape (`ref T` / `readonly ref T` /
-`*T`, position rules, auto-deref, `unsafe struct` lifecycle ABI,
-`Shared<T>` skeleton in stdlib) is in the compiler and covered by
-tests. The construction-time pieces of this doc (`addr()` and `init`
-in §2.3 / §2.4 / §3.4 / §6.3 etc.) have since been replaced by
-`docs/design/ref-construction-redesign.md` — read that doc for the
-current construction vocabulary (`onCopy<T>` / `onDestroy<T>`
-builtins, `*T → ref T` literal coercion, `placeAt<T>` stdlib helper,
-required-init rule for `unsafe struct` literals). The keyword-form
-addr/init described below was iterated past and is no longer in the
-compiler.
+`*T`, position rules, auto-deref, `unsafe struct` lifecycle ABI, and
+stdlib `Shared<T>`) is in the compiler and covered by tests. The
+construction-time plan was iterated in
+`docs/design/ref-construction-redesign.md`: Kei uses `onCopy<T>` /
+`onDestroy<T>` builtins, `*T → ref T` literal coercion, the
+`placeAt<T>` stdlib helper, and required initialization for `unsafe
+struct` literals. The older keyword-form `addr` / `init` design is no
+longer in the compiler.
 
 What remains specific to this doc and still applies as-is: §2.1
 position restrictions, §2.2 auto-deref rules, §3.1 `Shared<T>`
-shape, §6 decisions on the type system itself.
+shape, and §6 decisions on the type system itself.
 
 This document captures the redesign of Kei's reference / pointer / lifecycle
 story. It is the result of a long design conversation that started from
@@ -30,10 +28,10 @@ single source of truth.
 
 ## 1. Motivation
 
-The current type system carries four pointer-like things:
+Before this redesign, the type system carried four pointer-like things:
 
-- `ref T` — safe, read-only, scope-bound (planned, not implemented).
-- `mut T` — safe, read-write, scope-bound (planned, not implemented).
+- `ref T` — safe, read-only, scope-bound.
+- `mut T` — safe, read-write, scope-bound.
 - `ptr<T>` — unsafe, read-write, no scope rule.
 - `T?` — nullable wrapper that today lowers to `ptr<T>`.
 
@@ -160,79 +158,32 @@ positions it's legal in.
 
 ### 2.3 Construction operations
 
-Three distinct forms, all with explicit syntax:
+Construction uses ordinary struct literals plus a small unsafe stdlib
+surface:
 
-#### `field = value` — managed assignment
+- `field = value` remains managed assignment for already-initialized slots:
+  destroy the old value, write the new value, then run `__oncopy` on the
+  new value.
+- `Shared<T>{ refcount: countPtr, value: valuePtr }` seats every `ref T`
+  field at construction time. For `unsafe struct`s, every `ref T` field
+  must be initialized by name; empty or partial literals are rejected.
+- `placeAt<T>(dest, src)` copies `*src` into uninitialized memory at `dest`
+  and then runs `onCopy<T>(dest)`. This is the construction-time write used
+  by stdlib containers before returning an `unsafe struct` literal.
+- `onCopy<T>(p: *T)` and `onDestroy<T>(p: *T)` are unsafe lifecycle
+  builtins for stdlib/runtime code that already operates on raw storage.
 
-For already-initialized slots. Sequence:
+There is no `addr` operator and no `init` statement in the current
+language. The replacement design is detailed in
+`docs/design/ref-construction-redesign.md`.
 
-1. Read the existing T at `*field`.
-2. Run `__destroy` on it.
-3. Write the new T into the slot.
-4. Run `__oncopy` on the new T.
+### 2.4 Raw pointer operations
 
-This is the only form available in safe code. It is correct after the slot
-has been initialized; using it on uninitialized memory will run `__destroy`
-on garbage (UB).
-
-A field declared `readonly ref T` rejects this form (writes through the ref
-are forbidden). A field declared `readonly T` rejects assignment because
-the binding cannot be reassigned. Both diagnostics are produced by the
-checker.
-
-#### `init field = value` — initialization write
-
-For uninitialized slots, used during construction. Sequence:
-
-1. Skip the destroy step (slot is uninitialized garbage).
-2. Write the new T into the slot.
-3. Run `__oncopy` on the new T.
-
-`init` is a keyword. It is only valid inside `unsafe` blocks.
-
-(Struct-literal field initialization in safe code — `Foo{ name: "x" }` —
-follows the same "skip destroy, write, oncopy" sequence implicitly; the
-compiler emits init semantics for every field of a literal because the
-slots are demonstrably uninitialized.)
-
-#### `*addr(field) = value` — raw bitwise write
-
-For advanced cases (in-place moves, hand-rolled lifecycle elision). Skips
-**both** halves of lifecycle. The caller is responsible for ensuring the
-source's destroy is suppressed and that the slot's prior state was already
-torn down (or was uninitialized). Only valid inside `unsafe` blocks.
-
-### 2.4 The `addr()` operator
-
-To work with the raw pointer-value of a `ref T` field inside `unsafe`:
-
-```kei
-unsafe struct Shared<T> {
-    refcount: ref i64;
-    value: ref T;
-}
-
-unsafe {
-    addr(s.refcount) = block as *i64;     // sets WHERE refcount points
-    *addr(s.refcount) = 1;                // writes the i64 at that address
-}
-```
-
-`addr(field)` returns an lvalue of type `*T` aliasing the raw pointer slot
-underlying the `ref T` field. Assigning to `addr(field)` sets where the
-reference points; dereferencing it (`*addr(field)`) accesses the pointed-to
-memory without firing lifecycle hooks.
-
-Outside `unsafe`, `addr()` is a compile error. Inside `unsafe`, it is the
-single supported way to manipulate `ref T` fields as pointer-values.
-
-**Why a named operator instead of `&`.** `&` in C/C++ produces an rvalue
-(`&x = y` is illegal). Overloading `&` to produce an lvalue when applied
-to a `ref T` field would mean the same operator has different value
-categories depending on operand type, plus it would interact awkwardly
-with auto-deref (would `&s.value` mean address-of-the-T or address-of-the-
-slot?). A named operator sidesteps both issues: it is lvalue-by-definition,
-and it has no overlap with C's `&` reading.
+`&` and `*` are unsafe-only. Raw pointers can be used in `unsafe struct`
+implementations and extern boundaries, but safe code cannot observe the
+pointer value behind a `ref T`. For `ref T` fields, ordinary field access
+continues to auto-deref; stdlib code keeps the raw pointer it used to build
+the handle when it needs to pass it to `dealloc` or lifecycle builtins.
 
 ### 2.5 `readonly` modifier
 
@@ -267,7 +218,7 @@ struct AppConfig {
 }
 
 cfg.dbUrl = "other";                       // ERROR: readonly
-cfg.online = Shared<bool>::wrap(false);     // ERROR: readonly (replaces handle)
+cfg.online = Shared<bool>.wrap(false);     // ERROR: readonly (replaces handle)
 cfg.online.value = false;                   // OK: writes through .value
 ```
 
@@ -311,21 +262,24 @@ the only ways pointer values flow.
 Single-allocation layout, layout invariant entirely contained in stdlib:
 
 ```kei
+import { alloc, dealloc, placeAt } from mem;
+
 unsafe struct Shared<T> {
     refcount: ref i64;
     value: ref T;
 
     fn wrap(item: ref T) -> Shared<T> {
-        let s = Shared<T>{};
         unsafe {
             // ONE allocation: [count: i64 | T payload]
-            let block = alloc<u8>(sizeof(i64) + sizeof(T));
-            addr(s.refcount) = block as *i64;
-            addr(s.value)    = (block + sizeof(i64)) as *T;
-            s.refcount = 1;                  // auto-deref through ref i64 field
-            init s.value = item;             // single oncopy of *item into slot
+            let block = alloc(sizeof(i64) + sizeof(T));
+            let countPtr = block as *i64;
+            let valuePtr = ((block as usize) + sizeof(i64)) as *T;
+
+            *countPtr = 1;
+            placeAt<T>(valuePtr, item);      // memcpy + onCopy of *item
+
+            return Shared<T>{ refcount: countPtr, value: valuePtr };
         }
-        return s;
     }
 
     fn __oncopy(self: ref Shared<T>) {
@@ -335,8 +289,10 @@ unsafe struct Shared<T> {
     fn __destroy(self: ref Shared<T>) {
         self.refcount -= 1;
         if self.refcount == 0 {
-            self.value.__destroy();          // recursive destroy of T
-            unsafe { free(addr(self.refcount)); }  // frees the whole block
+            unsafe {
+                onDestroy(self.value as *T);
+                dealloc(self.refcount as *void);
+            }
         }
     }
 }
@@ -351,9 +307,9 @@ Notes:
   through the ref in place rather than returning a new value (see §2.5
   ABI note).
 - `self.refcount` is a `ref i64` field, so `self.refcount += 1` and
-  `self.refcount == 0` auto-deref naturally. `addr(self.refcount)` is only
-  needed when the *slot* itself is the target — e.g. setting where it
-  points (in `wrap`) or freeing the underlying allocation (in `__destroy`).
+  `self.refcount == 0` auto-deref naturally. Raw pointers are only used
+  inside the unsafe implementation to allocate, seed, destroy, and free
+  the underlying block.
 - The single-allocation layout is invisible to consumers; it could change to
   two allocations (or a fat handle, or a different header) without affecting
   any caller.
@@ -434,8 +390,8 @@ fn handle(cfg: ref AppConfig, cache: ref SessionCache, body: ref string) -> stri
 fn main() -> i32 {
     let cfg = AppConfig{
         dbUrl: "postgres://localhost",
-        maxConnections: Shared<i32>::wrap(100),
-        online: Shared<bool>::wrap(true),
+        maxConnections: Shared<i32>.wrap(100),
+        online: Shared<bool>.wrap(true),
     };
     let cache = SessionCache{ entries: List::empty() };
 
@@ -446,13 +402,13 @@ fn main() -> i32 {
 }
 ```
 
-### 3.4 Lifecycle trace: `Shared<T>::wrap(ref T) vs (T)`
+### 3.4 Lifecycle trace: `Shared<T>.wrap(ref T) vs (T)`
 
 Why the constructor takes `ref T`, with refcount accounting:
 
 ```kei
 const s: Item = getItem()                  // s.string refcount = 1
-const sharedS = Shared<Item>::wrap(s)
+const sharedS = Shared<Item>.wrap(s)
 // ... use s and sharedS ...
 return s
 ```
@@ -468,7 +424,7 @@ return s
 **With `wrap(item: ref T)`** (by ref):
 
 - Pass `&s` to `wrap`: no oncopy, just reference.
-- Inside `wrap`, `init s.value = item` derefs item, oncopies into slot:
+- Inside `wrap`, `placeAt<T>(valuePtr, item)` derefs item, oncopies into slot:
   refcount = 2.
 - Param is a ref, no destroy at exit.
 - Caller's `s` and heap slot share refcount 2. **One op total**, no move needed.
@@ -483,7 +439,7 @@ When the caller does not use a value after passing it:
 
 ```kei
 const s = getItem()
-const sharedS = Shared<Item>::wrap(s)
+const sharedS = Shared<Item>.wrap(s)
 // s never used again
 ```
 
@@ -542,12 +498,12 @@ fn read(p: *i32) -> i32 {
 }
 ```
 
-### 4.4 `addr()` is unsafe
+### 4.4 Safe code cannot observe a `ref T` field pointer
 
 ```kei
-// MUST FAIL: `addr()` outside unsafe.
+// MUST FAIL: `&` outside unsafe, even when the expression is a ref field.
 fn leak(s: Shared<i32>) -> *i64 {
-    return addr(s.refcount);
+    return &s.refcount;
 }
 ```
 
@@ -574,37 +530,40 @@ fn turn_off(c: ref Cfg) {
 
 Expected error: *"Cannot assign `bool` to field of type `Shared<bool>`. Use
 `c.online.value = false` to write through (alias-visible), or
-`c.online = Shared<bool>::wrap(false)` to replace the handle."*
+`c.online = Shared<bool>.wrap(false)` to replace the handle."*
 
 Note: there is no auto-deref of `Shared<T>` to `T`. The two forms above are
 the only ways to mutate.
 
-### 4.7 `init` only valid in `unsafe`
-
-```kei
-// MUST FAIL: init outside unsafe.
-fn build() -> Item {
-    let i: Item = ???;
-    init i.value = 42;
-    return i;
-}
-```
-
-### 4.8 `init` skips destroy
-
-Specified by example — the snippet below must run without UB:
+### 4.7 `unsafe struct` literals initialize every `ref T` field
 
 ```kei
 unsafe struct Box<T> {
     data: ref T;
+}
+
+// MUST FAIL: missing `data`.
+fn build<T>() -> Box<T> {
+    return Box<T>{};
+}
+```
+
+### 4.8 `placeAt<T>` handles construction-time writes
+
+Specified by example — the snippet below must run without UB:
+
+```kei
+import { alloc, placeAt } from mem;
+
+unsafe struct Box<T> {
+    data: ref T;
 
     fn make(item: ref T) -> Box<T> {
-        let b = Box<T>{};
         unsafe {
-            addr(b.data) = alloc<T>(1);
-            init b.data = item;          // must not call __destroy on garbage
+            let p = alloc(sizeof(T)) as *T;
+            placeAt<T>(p, item);         // must not call __destroy on garbage
+            return Box<T>{ data: p };
         }
-        return b;
     }
 }
 ```
@@ -635,7 +594,7 @@ let v: i32 = s.value.value;     // s.value : Shared<i32> ; .value : i32
 struct Cfg { readonly online: Shared<bool> }
 
 fn f(c: ref Cfg) {
-    c.online = Shared<bool>::wrap(false); // MUST FAIL: readonly field (replaces handle)
+    c.online = Shared<bool>.wrap(false); // MUST FAIL: readonly field (replaces handle)
     c.online.value = false;               // MUST COMPILE: writes through .value
 }
 ```
@@ -662,9 +621,9 @@ unsafe struct Container { data: *i32 }
 
 fn dangle() -> Container {
     let x: i32 = 42;
-    let c = Container{};
-    unsafe { addr(c.data) = &x; }       // unsafe block — programmer's responsibility
-    return c;                            // compiles; UB at runtime
+    unsafe {
+        return Container{ data: &x };    // unsafe block — programmer's responsibility
+    }
 }
 ```
 
@@ -719,7 +678,7 @@ What changes for existing programs after the redesign lands.
   §4.1, §4.2.)
 - `field = value` where the field is `Shared<U>` and `value` is `U` (not
   `Shared<U>`). Must use explicit `field.value = value` or
-  `field = Shared<U>::wrap(value)`. (No auto-deref of `Shared<T>`.)
+  `field = Shared<U>.wrap(value)`. (No auto-deref of `Shared<T>`.)
 - `&` or `*` outside `unsafe`.
 - `mut` keyword anywhere — completely removed. `mut` parameter form, `let
   mut`, `&mut`, and `ref mut T` all gone. Replaced by `ref T` (mutable
@@ -735,8 +694,8 @@ What changes for existing programs after the redesign lands.
   (with `string` kept as the lowercase keyword alias for `String`; see
   `docs/design/naming-conventions.md`).
   The C runtime functions become unsafe-struct method bodies.
-- `Shared<T>` (planned) becomes `Shared<T>` as a stdlib unsafe struct.
-- `array<T>` (planned) and `List<T>` (planned) follow the same pattern:
+- `Shared<T>` is implemented as a stdlib unsafe struct.
+- `Array<T>` (planned) and `List<T>` (planned) follow the same pattern:
   unsafe struct holding a `*T` field, manual `__destroy`, no `__oncopy`
   hand-written (recurse via auto-derive on a `Shared<T>`-backed buffer).
 
@@ -795,7 +754,7 @@ But there is no auto-deref shortcut — users must spell the operation out:
 - `s.value = newT` → write-through. Fires `__destroy` on the old inner T,
   bitwise write of the new T into the slot, `__oncopy` on the new T.
   Refcount unchanged. All aliases see the new value.
-- `s = Shared<T>::wrap(newT)` → handle replacement. Fires `__destroy` on
+- `s = Shared<T>.wrap(newT)` → handle replacement. Fires `__destroy` on
   the old `Shared<T>` (which decrements refcount, recursively destroys the
   inner T if last reference), bitwise write of the new handle, `__oncopy`
   on the new handle. The local `s` is rebound; other aliases keep the old
@@ -817,9 +776,8 @@ on the underlying allocation).
 - `ref T` — safe mutable reference (≈ C# `ref`).
 - `readonly ref T` — safe immutable reference (≈ C# `in`).
 - `*T` — raw pointer (unsafe-only).
-- `addr()` — field-pointer accessor (slot lvalue, unsafe-only).
-- `init` — initialization-write keyword (unsafe-only at field/struct
-  level; implicit inside struct literals).
+- `placeAt<T>` — stdlib helper for construction-time placement writes.
+- `onCopy<T>` / `onDestroy<T>` — unsafe lifecycle builtins for raw storage.
 - `readonly` — field/param modifier.
 
 Removed: `ptr<T>`, `mut T`, `ref mut T`, the `mut` keyword anywhere,
@@ -865,7 +823,7 @@ exactly once when the last `Weak` drops.
 
 | Event                | Effect                                                          |
 |----------------------|-----------------------------------------------------------------|
-| `Shared<T>::wrap(v)` | alloc block + payload; `strong = 1`, `weak = 1`                 |
+| `Shared<T>.wrap(v)` | alloc block + payload; `strong = 1`, `weak = 1`                 |
 | `Shared` clone       | `strong++`                                                      |
 | `Shared` destroy     | `strong--`; if `0`, run `__destroy(payload)` then `weak--`      |
 | `Weak<T>` clone      | `weak++`                                                        |
@@ -990,77 +948,27 @@ ships with the parser/checker work.
 
 ---
 
-## 7. Implementation sequencing
+## 7. Implementation status
 
-This doc and the companion `docs/design/naming-conventions.md` together
-define the target. The downstream sequence is:
+Shipped:
 
-### Commit: Spec updates
+- `ref T`, `readonly ref T`, `*T`, and the `readonly` modifier.
+- Position restrictions for `ref T` and auto-deref through `ref T` values.
+- `unsafe struct` lifecycle hooks with `self: ref T`.
+- `onCopy<T>` / `onDestroy<T>`, `placeAt<T>`, and required initialization of
+  `ref T` fields in `unsafe struct` literals.
+- `Shared<T>` in stdlib, with end-to-end tests for wrap, alias-visible
+  write-through, handle replacement, and readonly handle rules.
+- Removal of `ptr<T>`, `mut`, `ref mut T`, `slice<T>`, `addr`, and `init`.
 
-- `spec/03-types.md` — replace pointer-types section. Document `ref T`,
-  `readonly ref T`, `*T`, `Shared<T>`, removed types (`ptr<T>`, `mut T`,
-  `ref mut T`, `slice<T>`), `addr()`, `init`, `readonly`.
-- `spec/08-memory.md` — rewrite lifecycle section around the three write
-  forms. Document the construction protocol. Document `Shared<T>` as the
-  canonical refcount primitive. Pin reverse-declaration-order destruction.
-- `spec/13-grammar.md` — remove `mut`, `ptr<T>`, `->`, `slice<T>`. Add
-  `ref T` and `readonly ref T` (with position restrictions), `*T`,
-  `addr(...)`, `init <lvalue> = <expr>`, `readonly` modifier.
-- `spec/04-variables.md` — confirm `let` mutable / `const` immutable;
-  drop `mut` references.
-- `spec/06-functions.md` — drop `mut` parameter form; document `ref T` /
-  `readonly ref T` parameters.
-- `spec/07-structures.md` — `ref T` / `readonly ref T` field/param rules
-  for `unsafe struct`s; new `__oncopy(self: ref T)` ABI.
-- `spec/02-lexical.md` — keyword list edits (un-reserve `shared`,
-  reserve `init` / `addr`, drop `slice` / `mut` / `ref mut`).
-- `SPEC-STATUS.md` — close completed items, file new ones.
-- All examples adopt the naming-conventions doc (PascalCase types,
-  camelCase methods/fields/locals).
+Still follow-up work:
 
-### Commit: Test fixture updates
-
-Each invariant in §4 becomes a test fixture under `compiler/tests/`. Both
-positive and negative cases. Existing fixtures using `ptr<T>` parameters
-update to `ref T`; existing `->` usage updates to `.` (or `(*p).` for
-raw pointers); snake_case methods/fields rename to camelCase per the
-conventions doc; `slice<T>` references removed. New tests cover `init`,
-`addr`, `readonly` (both senses), `Shared<T>` end-to-end, auto-deref
-through `ref T` only, and the position-restriction errors for `ref T`.
-
-### Compiler work (multiple commits)
-
-Rough order:
-
-1. Grammar: parse `ref T` and `readonly ref T` (with position restrictions),
-   `*T`, `addr(...)`, `init`, `readonly` modifier. Remove `mut` keyword
-   everywhere (`let mut`, `mut` parameter, `&mut`, `ref mut T`), `ptr<T>`,
-   `->`.
-2. Lexer: un-reserve `shared`. Reserve `init`, `readonly`, `addr` as
-   keywords.
-3. Checker: position validation for `ref T`. Auto-deref insertion for
-   `ref T` values (most complex single piece). `addr()` resolution.
-   `init` checking. `readonly` enforcement (block reassignment for plain
-   types; block write-through for `ref T`).
-4. KIR lowering: `ref T` becomes a pointer in the IR (no semantic
-   distinction from `*T` at the IR level — only the source language
-   surface differs). Lifecycle hook ABI changes: `__oncopy` /
-   `__destroy` lowered with `self: ref T` and void return (in-place
-   mutation), replacing today's `__oncopy(self: T) -> T`. Auto-deref
-   insertion happens before lowering.
-5. Stdlib: implement `Shared<T>` as `unsafe struct` in stdlib.
-6. Optimization passes that the redesign enables: lifecycle elision via
-   peephole on `__oncopy` / `__destroy` of inlined refcount primitives.
-7. **(Deferred to a follow-up phase)** Rewrite `kei_string` runtime as a
-   Kei `struct` using `Shared<U8Buffer>`. The C runtime stays in place
-   during the initial compiler work to keep the migration scope bounded;
-   string layout is a separate, sequenced project once `Shared<T>` is
-   real and the lifecycle-elision pass is in.
-
-The compiler work is comfortably multi-week and likely 5–10 PRs. The doc /
-spec / fixture commits should be airtight before any of it begins, because
-shifting decisions mid-implementation costs significantly more than
-shifting them mid-doc.
+- Auto-generated lifecycle hooks should consistently use the `self: ref T`
+  ABI.
+- Auto-last-use lifecycle elision and any explicit de-optimization surface.
+- `Weak<T>` for cycles and a later `Shared<T>` control-block layout update.
+- Reimplement the C string runtime as Kei `String` backed by
+  `Shared<U8Buffer>`.
 
 ---
 

@@ -3,9 +3,7 @@
  * landing as a stdlib `unsafe struct`).
  *
  * Mirrors the lifecycle trace in `docs/design/ref-redesign.md` §3.4 and
- * the `__oncopy(self: ref T)` ABI from §3.1. Currently `.skip`'d — the
- * compiler PR that lands the new lifecycle ABI plus the stdlib
- * implementation will flip the remaining semantic cases back on.
+ * the `__oncopy(self: ref T)` ABI from §3.1.
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
