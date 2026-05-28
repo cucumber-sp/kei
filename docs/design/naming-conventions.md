@@ -1,8 +1,9 @@
 # Naming conventions
 
-Status: **decisions captured** — design pinned via review pass; spec/tests/
-compiler not yet updated to reflect them. This doc is the single source of
-truth for identifier-shape decisions across Kei.
+Status: **partially shipped** — the ref/pointer redesign and stdlib
+examples now use this shape. Broad cosmetic lint enforcement is still a
+future cleanup. This doc is the single source of truth for
+identifier-shape decisions across Kei.
 
 This document is a companion to `docs/design/ref-redesign.md`. It captures
 how Kei spells the things it has, not what those things mean. The goal is
@@ -72,7 +73,7 @@ Notes:
   struct (no `Inline<T, N>` to alias to).
 
 - The `shared` keyword is dropped from the lexer's reserved list (see
-  `docs/design/ref-redesign.md` §6.10). The stdlib type is `Shared<T>`;
+  `docs/design/ref-redesign.md` §6.6). The stdlib type is `Shared<T>`;
   users write that name directly.
 
 ---
@@ -137,20 +138,23 @@ struct Session {
     createdAt: i64;
 }
 
+import { alloc, dealloc, placeAt } from mem;
+
 unsafe struct Shared<T> {
     refcount: ref i64;
     value: ref T;
 
     fn wrap(item: ref T) -> Shared<T> {     // method: camelCase
-        let s = Shared<T>{};
         unsafe {
-            let block = alloc<u8>(sizeof(i64) + sizeof(T));
-            addr(s.refcount) = block as *i64;
-            addr(s.value)    = (block + sizeof(i64)) as *T;
-            s.refcount = 1;
-            init s.value = item;
+            let block = alloc(sizeof(i64) + sizeof(T));
+            let countPtr = block as *i64;
+            let valuePtr = ((block as usize) + sizeof(i64)) as *T;
+
+            *countPtr = 1;
+            placeAt<T>(valuePtr, item);
+
+            return Shared<T>{ refcount: countPtr, value: valuePtr };
         }
-        return s;
     }
 
     fn __oncopy(self: ref Shared<T>) {       // lifecycle hook: __name
@@ -160,13 +164,11 @@ unsafe struct Shared<T> {
     fn __destroy(self: ref Shared<T>) {
         self.refcount -= 1;
         if self.refcount == 0 {
-            self.value.__destroy();
-            unsafe { free(addr(self.refcount)); }
+            unsafe {
+                onDestroy(self.value as *T);
+                dealloc(self.refcount as *void);
+            }
         }
-    }
-
-    fn sameHandle(self: ref Shared<T>, other: ref Shared<T>) -> bool {
-        return addr(self.refcount) == addr(other.refcount);
     }
 }
 
@@ -197,11 +199,10 @@ conventions in passing during the ref-redesign rollout:
 - **Stdlib** — `std/arena.kei` and `std/mem.kei` rename their public
   surfaces (`arena_make` → `arenaMake`, `arena_alloc` → `arenaAlloc`,
   etc.).
-- **Compiler** — checker enforces the new conventions cosmetically
-  (lints, not hard errors) only after the test sweep is in. The
-  language-level rules (`mut` removal, `ref T`, `addr`, `init`,
-  `readonly`, `slice<T>` removal) are hard errors per the ref-redesign
-  doc.
+- **Compiler** — checker enforcement for naming remains a future linting
+  layer. The language-level rules (`mut` removal, `ref T`, `readonly`,
+  `slice<T>` removal, raw `*T`, and required `unsafe struct` ref-field
+  initialization) are hard errors per the ref-redesign doc.
 
 The expected compatibility break is large — every existing test fixture
 that uses snake_case methods or fields will need one mechanical
