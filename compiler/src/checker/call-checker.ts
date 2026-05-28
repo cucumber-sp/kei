@@ -396,21 +396,10 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
             expr.typeArgs.length > 0 &&
             structType.genericParams.length === expr.typeArgs.length
           ) {
-            const argSuffixes = expr.typeArgs
-              .map((t) => checker.resolveType(t))
-              .map((t) => {
-                if (t.kind === "struct") return t.name;
-                if (t.kind === "int") return `${t.signed ? "i" : "u"}${t.bits}`;
-                if (t.kind === "float") return `f${t.bits}`;
-                if (t.kind === "bool") return "bool";
-                if (t.kind === "string") return "string";
-                return "T";
-              });
             mangledStructName = mangleGenericName(
               baseName,
               expr.typeArgs.map((t) => checker.resolveType(t))
             );
-            void argSuffixes;
           }
           checker.staticMethodCalls.set(expr, {
             structName: baseName,

@@ -472,20 +472,6 @@ describe.skip("future: auto-generated lifecycle hooks use `self: ref T` ABI", ()
   });
 });
 
-describe.skip("future: parser supports `Type<T>.method(args)` on generic types", () => {
-  // The parser parses `Identifier<TypeArgs>` followed by `(args)` (call)
-  // or `{ ... }` (struct literal), but NOT `.method(args)`. Static method
-  // calls on generic types like `Shared<i32>.wrap(n)` therefore don't
-  // parse — the user's only options today are non-generic dispatch
-  // (`Shared.wrap(n)`, which fails to bind T) or a workaround. Once
-  // postfix-parser handles `.member` after a closing `>`, the
-  // `Shared<T> stdlib semantics` describe and the e2e shared.test.ts
-  // skeleton can be flipped on.
-  test("Shared<i32>.wrap(n) parses and binds T = i32", () => {
-    // Marker test.
-  });
-});
-
 describe("`ptr<T>` source form is rejected", () => {
   test("`ptr<T>` parameter is a compile error pointing at `*T`", () => {
     checkError(
