@@ -69,17 +69,11 @@ describe("Shared<T> end-to-end semantics", () => {
     expect(r.exitCode).toBe(42);
   });
 
-  test.skip("alias-visible mutation through .value", () => {
+  test("alias-visible mutation through .value", () => {
     const r = run(
       "shared_value_writethrough",
       `
-      unsafe struct Shared<T> {
-        refcount: ref i64;
-        value: ref T;
-        fn wrap(item: ref T) -> Shared<T> { return Shared<T>{}; }
-        fn __oncopy(self: ref Shared<T>) { self.refcount += 1; }
-        fn __destroy(self: ref Shared<T>) { self.refcount -= 1; }
-      }
+      import { Shared } from shared;
 
       fn main() -> int {
         let init: i32 = 10;
@@ -90,20 +84,15 @@ describe("Shared<T> end-to-end semantics", () => {
       }
       `
     );
+    expect(r.stderr).toBe("");
     expect(r.exitCode).toBe(32);
   });
 
-  test.skip("handle replacement destroys the old shared and constructs the new", () => {
+  test("handle replacement destroys the old shared and constructs the new", () => {
     const r = run(
       "shared_handle_replacement",
       `
-      unsafe struct Shared<T> {
-        refcount: ref i64;
-        value: ref T;
-        fn wrap(item: ref T) -> Shared<T> { return Shared<T>{}; }
-        fn __oncopy(self: ref Shared<T>) { self.refcount += 1; }
-        fn __destroy(self: ref Shared<T>) { self.refcount -= 1; }
-      }
+      import { Shared } from shared;
 
       struct Cfg {
         online: Shared<bool>;
@@ -122,24 +111,17 @@ describe("Shared<T> end-to-end semantics", () => {
       }
       `
     );
+    expect(r.stderr).toBe("");
     expect(r.exitCode).toBe(0);
   });
 
-  test.skip("readonly Shared<T> field permits write-through but not handle replacement", () => {
-    // This test is a NEGATIVE — the compile must FAIL on the readonly
-    // assignment. Bringing it up to date with how the harness reports
-    // build failures is the unskipping commit's job.
+  test("readonly Shared<T> field rejects handle replacement", () => {
     const r = run(
       "shared_readonly_replacement_rejected",
       `
-      unsafe struct Shared<T> {
-        refcount: ref i64;
-        value: ref T;
-        fn wrap(item: ref T) -> Shared<T> { return Shared<T>{}; }
-        fn __oncopy(self: ref Shared<T>) {}
-        fn __destroy(self: ref Shared<T>) {}
-      }
-      struct Cfg { readonly online: Shared<bool> }
+      import { Shared } from shared;
+
+      struct Cfg { readonly online: Shared<bool>; }
       fn flip(c: ref Cfg) {
         let v: bool = false;
         c.online = Shared<bool>.wrap(v);   // ERROR: readonly
@@ -147,6 +129,30 @@ describe("Shared<T> end-to-end semantics", () => {
       fn main() -> int { return 0; }
       `
     );
+    expect(r.stderr).toContain("readonly");
     expect(r.exitCode).not.toBe(0);
+  });
+
+  test("readonly Shared<T> field permits write-through", () => {
+    const r = run(
+      "shared_readonly_writethrough",
+      `
+      import { Shared } from shared;
+
+      struct Cfg { readonly online: Shared<bool>; }
+      fn flip(c: ref Cfg) {
+        c.online.value = false;
+      }
+
+      fn main() -> int {
+        let yes: bool = true;
+        let cfg = Cfg{ online: Shared<bool>.wrap(yes) };
+        flip(cfg);
+        return if cfg.online.value { 1 } else { 0 };
+      }
+      `
+    );
+    expect(r.stderr).toBe("");
+    expect(r.exitCode).toBe(0);
   });
 });

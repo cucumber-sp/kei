@@ -44,6 +44,7 @@ import {
   isNumericType,
   isPtrType,
   rangeType,
+  readType,
   STRING_TYPE,
   TypeKind,
   typesEqual,
@@ -309,7 +310,7 @@ export class ExpressionChecker {
   }
 
   private checkIfExpression(expr: IfExpr): Type {
-    const condType = this.checkExpression(expr.condition);
+    const condType = readType(this.checkExpression(expr.condition));
     if (!isErrorType(condType) && condType.kind !== TypeKind.Bool) {
       this.checker.diagnostics.expectedType({
         span: this.checker.spanToLocation(expr.condition.span),

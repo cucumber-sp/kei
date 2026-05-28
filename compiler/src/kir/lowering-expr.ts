@@ -493,8 +493,8 @@ export function lowerMemberExpr(ctx: LoweringCtx, expr: MemberExpr): VarId {
     // (*p).field — the inner operand is already the struct pointer; skip the load.
     baseId = lowerExpr(ctx, expr.object.operand);
   } else if (expr.object.kind === "MemberExpr") {
-    // Nested member access: first get the outer field as a pointer
-    baseId = lowerExpr(ctx, expr.object);
+    // Nested member access needs an addressable base for field_ptr.
+    baseId = lowerExprAsPtr(ctx, expr.object);
   } else {
     baseId = lowerExpr(ctx, expr.object);
   }
@@ -677,7 +677,10 @@ export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
         baseId = lowerExprAsPtr(ctx, expr.target.object);
       }
     } else {
-      baseId = lowerExpr(ctx, expr.target.object);
+      baseId =
+        expr.target.object.kind === "MemberExpr"
+          ? lowerExprAsPtr(ctx, expr.target.object)
+          : lowerExpr(ctx, expr.target.object);
     }
     const ptrDest = freshVar(ctx);
     const fieldType = getExprKirType(ctx, expr.target);
