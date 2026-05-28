@@ -8,12 +8,12 @@
  *
  * Cases per `docs/design/lifecycle-module.md` §9:
  *   1. non-managed slot                → bare `store`
- *   2. managed-struct slot, non-move RHS → load / destroy / store / oncopy
- *   3. managed-struct slot, move RHS    → load / destroy / store (no oncopy)
+ *   2. managed-struct slot, non-move RHS → destroy / store / oncopy
+ *   3. managed-struct slot, move RHS    → destroy / store (no oncopy)
  *   4. string slot                      → `kei_string_destroy` / store
  *   5. managed-field slot via `field_ptr` → same as (2), reached through
  *      a struct field
- *   6. managed-struct with `destroy` but no `oncopy`             → load / destroy / store
+ *   6. managed-struct with `destroy` but no `oncopy`             → destroy / store
  *   7. managed-struct with `oncopy` but no `destroy`             → store / oncopy
  *   8. unknown slot type (no producing instruction)              → bare `store`
  *
@@ -99,7 +99,7 @@ describe("Lifecycle pass — mark_assign rewrite (PR 4b)", () => {
     ]);
   });
 
-  test("managed-struct slot, non-move RHS → load / destroy / store / oncopy", () => {
+  test("managed-struct slot, non-move RHS → destroy / store / oncopy", () => {
     const Bag = structType("Bag");
     const before = moduleWith([
       lifecycleStub("Bag___destroy"),
@@ -118,14 +118,13 @@ describe("Lifecycle pass — mark_assign rewrite (PR 4b)", () => {
 
     expect(entryInsts(after, "f")).toEqual([
       { kind: "stack_alloc", dest: "%slot", type: Bag },
-      { kind: "load", dest: "%1", ptr: "%slot", type: Bag },
-      { kind: "destroy", value: "%1", structName: "Bag" },
+      { kind: "destroy", value: "%slot", structName: "Bag" },
       { kind: "store", ptr: "%slot", value: "%new" },
       { kind: "oncopy", value: "%new", structName: "Bag" },
     ]);
   });
 
-  test("managed-struct slot, move RHS → load / destroy / store (no oncopy)", () => {
+  test("managed-struct slot, move RHS → destroy / store (no oncopy)", () => {
     const Bag = structType("Bag");
     const before = moduleWith([
       lifecycleStub("Bag___destroy"),
@@ -144,8 +143,7 @@ describe("Lifecycle pass — mark_assign rewrite (PR 4b)", () => {
 
     expect(entryInsts(after, "f")).toEqual([
       { kind: "stack_alloc", dest: "%slot", type: Bag },
-      { kind: "load", dest: "%1", ptr: "%slot", type: Bag },
-      { kind: "destroy", value: "%1", structName: "Bag" },
+      { kind: "destroy", value: "%slot", structName: "Bag" },
       { kind: "store", ptr: "%slot", value: "%new" },
     ]);
   });
@@ -195,7 +193,7 @@ describe("Lifecycle pass — mark_assign rewrite (PR 4b)", () => {
     ]);
   });
 
-  test("managed field via field_ptr → load / destroy / store / oncopy", () => {
+  test("managed field via field_ptr → destroy / store / oncopy", () => {
     const Outer = structType("Outer");
     const Inner = structType("Inner");
     const before = moduleWith([
@@ -217,14 +215,13 @@ describe("Lifecycle pass — mark_assign rewrite (PR 4b)", () => {
     expect(entryInsts(after, "f")).toEqual([
       { kind: "stack_alloc", dest: "%outer", type: Outer },
       { kind: "field_ptr", dest: "%slot", base: "%outer", field: "inner", type: Inner },
-      { kind: "load", dest: "%2", ptr: "%slot", type: Inner },
-      { kind: "destroy", value: "%2", structName: "Inner" },
+      { kind: "destroy", value: "%slot", structName: "Inner" },
       { kind: "store", ptr: "%slot", value: "%new" },
       { kind: "oncopy", value: "%new", structName: "Inner" },
     ]);
   });
 
-  test("managed element via index_ptr → load / destroy / store / oncopy", () => {
+  test("managed element via index_ptr → destroy / store / oncopy", () => {
     const Bag = structType("Bag");
     const before = moduleWith([
       lifecycleStub("Bag___destroy"),
@@ -245,15 +242,14 @@ describe("Lifecycle pass — mark_assign rewrite (PR 4b)", () => {
 
     // Pre-marker instructions pass through; rewrite emits the lifecycle sequence.
     const insts = entryInsts(after, "f");
-    expect(insts.slice(-4)).toEqual([
-      { kind: "load", dest: "%3", ptr: "%slot", type: Bag },
-      { kind: "destroy", value: "%3", structName: "Bag" },
+    expect(insts.slice(-3)).toEqual([
+      { kind: "destroy", value: "%slot", structName: "Bag" },
       { kind: "store", ptr: "%slot", value: "%new" },
       { kind: "oncopy", value: "%new", structName: "Bag" },
     ]);
   });
 
-  test("struct with __destroy but no __oncopy → load / destroy / store", () => {
+  test("struct with __destroy but no __oncopy → destroy / store", () => {
     const Box = structType("Box");
     const before = moduleWith([
       lifecycleStub("Box___destroy"),
@@ -271,8 +267,7 @@ describe("Lifecycle pass — mark_assign rewrite (PR 4b)", () => {
 
     expect(entryInsts(after, "f")).toEqual([
       { kind: "stack_alloc", dest: "%slot", type: Box },
-      { kind: "load", dest: "%1", ptr: "%slot", type: Box },
-      { kind: "destroy", value: "%1", structName: "Box" },
+      { kind: "destroy", value: "%slot", structName: "Box" },
       { kind: "store", ptr: "%slot", value: "%new" },
     ]);
   });
@@ -335,19 +330,11 @@ describe("Lifecycle pass — mark_assign rewrite (PR 4b)", () => {
     const noMove = entryInsts(runLifecyclePass(makeMod(false), noDecisions), "f");
     const move = entryInsts(runLifecyclePass(makeMod(true), noDecisions), "f");
 
-    expect(noMove.map((i) => i.kind)).toEqual([
-      "stack_alloc",
-      "load",
-      "destroy",
-      "store",
-      "oncopy",
-    ]);
-    expect(move.map((i) => i.kind)).toEqual(["stack_alloc", "load", "destroy", "store"]);
+    expect(noMove.map((i) => i.kind)).toEqual(["stack_alloc", "destroy", "store", "oncopy"]);
+    expect(move.map((i) => i.kind)).toEqual(["stack_alloc", "destroy", "store"]);
   });
 
-  test("fresh load destinations don't collide with existing locals", () => {
-    // localCount=3 means %0, %1, %2 are taken; the rewriter must mint
-    // %3 (or higher), never reuse one of those.
+  test("destroy-through-slot does not mint temporary locals", () => {
     const Bag = structType("Bag");
     const before = moduleWith([
       lifecycleStub("Bag___destroy"),
@@ -365,9 +352,8 @@ describe("Lifecycle pass — mark_assign rewrite (PR 4b)", () => {
 
     const after = runLifecyclePass(before, noDecisions);
     const insts = entryInsts(after, "f");
-    const load = insts.find((i) => i.kind === "load");
-    if (load?.kind !== "load") throw new Error("expected load instruction");
-    expect(["%0", "%1", "%2"]).not.toContain(load.dest);
+    expect(insts.some((i) => i.kind === "load")).toBe(false);
+    expect(after.functions.find((f) => f.name === "f")?.localCount).toBe(3);
   });
 
   test("does not mutate the input module", () => {

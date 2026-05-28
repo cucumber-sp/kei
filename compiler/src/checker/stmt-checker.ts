@@ -31,6 +31,7 @@ import {
   isAssignableTo,
   isErrorType,
   isLiteralAssignableTo,
+  readType,
   TypeKind,
   typeToString,
 } from "./types";
@@ -174,7 +175,7 @@ export class StatementChecker {
   }
 
   private checkIfStatement(stmt: IfStmt): boolean {
-    const condType = this.checker.checkExpression(stmt.condition);
+    const condType = readType(this.checker.checkExpression(stmt.condition));
     if (!isErrorType(condType) && condType.kind !== TypeKind.Bool) {
       this.checker.error(
         `if condition must be bool, got '${typeToString(condType)}'`,
@@ -215,7 +216,7 @@ export class StatementChecker {
   }
 
   private checkWhileStatement(stmt: WhileStmt): boolean {
-    const condType = this.checker.checkExpression(stmt.condition);
+    const condType = readType(this.checker.checkExpression(stmt.condition));
     if (!isErrorType(condType) && condType.kind !== TypeKind.Bool) {
       this.checker.error(
         `while condition must be bool, got '${typeToString(condType)}'`,
@@ -286,7 +287,7 @@ export class StatementChecker {
     this.checkVariableDeclaration(stmt.init, true, false);
 
     // Check condition — must be bool
-    const condType = this.checker.checkExpression(stmt.condition);
+    const condType = readType(this.checker.checkExpression(stmt.condition));
     if (!isErrorType(condType) && condType.kind !== TypeKind.Bool) {
       this.checker.error(
         `for condition must be bool, got '${typeToString(condType)}'`,
@@ -467,7 +468,7 @@ export class StatementChecker {
     condition: Expression,
     message: Expression | null | undefined
   ): boolean {
-    const condType = this.checker.checkExpression(condition);
+    const condType = readType(this.checker.checkExpression(condition));
     if (!isErrorType(condType) && condType.kind !== TypeKind.Bool) {
       this.checker.error(
         `${keyword} condition must be bool, got '${typeToString(condType)}'`,

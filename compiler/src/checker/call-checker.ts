@@ -59,6 +59,7 @@ function checkSizeofCall(checker: Checker, expr: CallExpr): Type | null {
         checker.error(`undeclared type '${arg.name}'`, arg.span);
         return ERROR_TYPE;
       }
+      checker.setExprType(arg, t);
     }
   } else {
     checker.checkExpression(arg);
@@ -108,24 +109,16 @@ function checkLifecycleHookBuiltin(checker: Checker, expr: CallExpr): Type | nul
     return ERROR_TYPE;
   }
   const pointee = argType.pointee;
-  if (pointee.kind !== "struct") {
-    checker.error(
-      `'${name}' expects a pointer to a struct, got '${typeToString(argType)}'`,
-      expr.span
-    );
-    return ERROR_TYPE;
-  }
+  // Primitive and pointer-like values have no lifecycle hook to fire.
+  // Treat the builtin as a no-op so generic helpers such as
+  // `placeAt<T>` can instantiate for both managed structs and plain
+  // scalar types.
+  if (pointee.kind !== "struct") return VOID_TYPE;
   const hookName = name === "onCopy" ? "__oncopy" : "__destroy";
   const hasHook =
     pointee.methods.has(hookName) ||
     (hookName === "__destroy" ? pointee.autoDestroy === true : pointee.autoOncopy === true);
-  if (!hasHook) {
-    checker.error(
-      `type '${pointee.name}' has no '${hookName}' hook for '${name}' to call`,
-      expr.span
-    );
-    return ERROR_TYPE;
-  }
+  if (!hasHook) return VOID_TYPE;
   return VOID_TYPE;
 }
 
@@ -400,6 +393,9 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
               baseName,
               expr.typeArgs.map((t) => checker.resolveType(t))
             );
+          }
+          if (structType.modulePrefix) {
+            mangledStructName = `${structType.modulePrefix}_${mangledStructName}`;
           }
           checker.staticMethodCalls.set(expr, {
             structName: baseName,

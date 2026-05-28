@@ -136,11 +136,6 @@ function rewriteFunction(fn: KirFunction, hooks: StructHookSets): KirFunction {
   // this back and emits destroys in reverse.
   const scopeVars = collectScopeTrackedVars(fn, pointees);
 
-  // The mark_assign rewrite may inject `load` instructions. Those need
-  // fresh VarIds; start numbering at `fn.localCount` so they don't
-  // collide with names lowering already used.
-  const counter = { next: fn.localCount };
-
   const scopeExits = fn.lifecycleScopeExits;
 
   // Per-function moved-set, built incrementally as the rewriter walks
@@ -149,12 +144,12 @@ function rewriteFunction(fn: KirFunction, hooks: StructHookSets): KirFunction {
   const moved = new Set<string>();
 
   const blocks = fn.blocks.map((block) =>
-    rewriteBlock(block, hooks, pointees, counter, paramDestroys, scopeExits, scopeVars, moved)
+    rewriteBlock(block, hooks, pointees, paramDestroys, scopeExits, scopeVars, moved)
   );
   // The side-table is consumed here; downstream passes (mem2reg, de-SSA,
   // C emitter) never see it.
   const { lifecycleScopeExits: _, ...rest } = fn;
-  return { ...rest, blocks, localCount: counter.next };
+  return { ...rest, blocks };
 }
 
 /**
@@ -281,7 +276,6 @@ function rewriteBlock(
   block: KirBlock,
   hooks: StructHookSets,
   pointees: Map<VarId, KirType>,
-  counter: { next: number },
   paramDestroys: ParamDestroyCandidate[],
   scopeExits: ReadonlyMap<ScopeId, KirScopeExitInfo> | undefined,
   scopeVars: ReadonlyMap<ScopeId, TrackedVar[]>,
@@ -294,7 +288,7 @@ function rewriteBlock(
       continue;
     }
     if (inst.kind === "mark_assign") {
-      rewriteMarkAssign(out, inst, hooks, pointees, counter);
+      rewriteMarkAssign(out, inst, hooks, pointees);
       continue;
     }
     if (inst.kind === "mark_scope_exit") {
@@ -368,8 +362,8 @@ function isOtherMarker(inst: KirInst): boolean {
  * Rewrite a `mark_assign slot, newValue, isMove` into the concrete
  * lifecycle sequence appropriate for the slot's pointee type:
  *
- * - Managed-struct slot — load the old value, `destroy` it, store the
- *   new value, then (unless `isMove`) `oncopy` the new value.
+ * - Managed-struct slot — `destroy` the old value through the slot,
+ *   store the new value, then (unless `isMove`) `oncopy` the new value.
  * - String slot — `kei_string_destroy(slot)` then store the new value.
  *   The pointer is passed directly; no load needed (the runtime peeks
  *   through the slot).
@@ -380,8 +374,7 @@ function rewriteMarkAssign(
   out: KirInst[],
   inst: KirMarkAssign,
   hooks: StructHookSets,
-  pointees: Map<VarId, KirType>,
-  counter: { next: number }
+  pointees: Map<VarId, KirType>
 ): void {
   const pointee = pointees.get(inst.slot);
 
@@ -390,9 +383,7 @@ function rewriteMarkAssign(
     const hasDestroy = hooks.destroys.has(structName);
     const hasOncopy = hooks.oncopies.has(structName);
     if (hasDestroy) {
-      const oldVal = `%${counter.next++}` as VarId;
-      out.push({ kind: "load", dest: oldVal, ptr: inst.slot, type: pointee });
-      out.push({ kind: "destroy", value: oldVal, structName });
+      out.push({ kind: "destroy", value: inst.slot, structName });
     }
     out.push({ kind: "store", ptr: inst.slot, value: inst.newValue });
     if (hasOncopy && !inst.isMove) {

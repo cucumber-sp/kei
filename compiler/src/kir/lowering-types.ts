@@ -197,6 +197,7 @@ export function lowerTypeNode(ctx: LoweringCtx, typeNode: TypeNode): KirType {
             return { kind: "struct", name: mangled, fields: [] };
           }
         }
+        return { kind: "struct", name: mangled, fields: [] };
       }
       // Check if the name refers to an enum declaration
       for (const decl of ctx.program.declarations) {

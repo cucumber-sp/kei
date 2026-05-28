@@ -102,6 +102,11 @@ export function isAssignableTo(source: Type, target: Type): boolean {
   return false;
 }
 
+/** Return the user-visible read type for a `ref T`; other types are unchanged. */
+export function readType(t: Type): Type {
+  return t.kind === TypeKind.Ptr && t.isRef ? t.pointee : t;
+}
+
 /**
  * Extract literal info from an expression, handling unary negation.
  * Returns { kind, value } if the expression is a literal (or -literal), else null.
