@@ -9,8 +9,7 @@ import { describe, expect, test } from "bun:test";
 import { emitC } from "../../src/backend/c-emitter";
 import { runDeSsa } from "../../src/backend/de-ssa";
 import { Checker } from "../../src/checker/checker";
-import { createDiagnostics } from "../../src/diagnostics";
-import type { Diagnostic } from "../../src/errors/diagnostic";
+import { createDiagnostics, type LegacyDiagnostic } from "../../src/diagnostics";
 import { lowerToKir } from "../../src/kir/lowering";
 import { runMem2Reg } from "../../src/kir/mem2reg";
 import { Lexer } from "../../src/lexer";
@@ -65,7 +64,7 @@ function parseOnly(source: string): { parsed: boolean; diagnostics: string[] } {
 }
 
 /** Lex + parse + check, return diagnostics. */
-function checkOnly(source: string): Diagnostic[] {
+function checkOnly(source: string): LegacyDiagnostic[] {
   const file = new SourceFile("stress.kei", source);
   const lexer = new Lexer(file);
   const tokens = lexer.tokenize();

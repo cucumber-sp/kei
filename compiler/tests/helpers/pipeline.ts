@@ -9,9 +9,7 @@
 import type { Program } from "../../src/ast/nodes";
 import type { CheckResult as CheckerCheckResult } from "../../src/checker/checker";
 import { Checker } from "../../src/checker/checker";
-import { createDiagnostics } from "../../src/diagnostics";
-import type { Diagnostic } from "../../src/errors/diagnostic";
-import { Severity } from "../../src/errors/diagnostic";
+import { createDiagnostics, type LegacyDiagnostic, Severity } from "../../src/diagnostics";
 import type { KirModule } from "../../src/kir/kir-types";
 import { lowerToKir } from "../../src/kir/lowering";
 import type { Token } from "../../src/lexer";
@@ -30,7 +28,7 @@ export interface TokenizeResult {
   source: SourceFile;
   lexer: Lexer;
   tokens: Token[];
-  diagnostics: readonly Diagnostic[];
+  diagnostics: readonly LegacyDiagnostic[];
 }
 
 /** Run only the lexer over `content`. */
@@ -46,7 +44,7 @@ export interface ParseResult {
   tokens: Token[];
   parser: Parser;
   program: Program;
-  diagnostics: readonly Diagnostic[];
+  diagnostics: readonly LegacyDiagnostic[];
 }
 
 /**
@@ -85,7 +83,7 @@ export interface CheckResult {
   program: Program;
   checker: Checker;
   result: CheckerCheckResult;
-  diagnostics: readonly Diagnostic[];
+  diagnostics: readonly LegacyDiagnostic[];
 }
 
 /**
@@ -129,11 +127,11 @@ export function lowerSource(content: string, filename = DEFAULT_FILENAME): KirMo
 }
 
 /** Filter diagnostics to errors only. */
-export function errorsOf(diagnostics: readonly Diagnostic[]): Diagnostic[] {
+export function errorsOf(diagnostics: readonly LegacyDiagnostic[]): LegacyDiagnostic[] {
   return diagnostics.filter((d) => d.severity === Severity.Error);
 }
 
 /** Filter diagnostics to warnings only. */
-export function warningsOf(diagnostics: readonly Diagnostic[]): Diagnostic[] {
+export function warningsOf(diagnostics: readonly LegacyDiagnostic[]): LegacyDiagnostic[] {
   return diagnostics.filter((d) => d.severity === Severity.Warning);
 }

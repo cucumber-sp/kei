@@ -72,6 +72,7 @@ the same checker/backend understanding as language work.
 | type                                     | `src/checker/types/` → checker rules → KIR lowering → C emitter (size/layout/destroy)                    |
 | KIR instruction                          | `src/kir/kir-types/` → lowering pass that produces it → de-SSA pass → `src/backend/c-emitter-insts.ts`   |
 | lifecycle hook (`__destroy` / `__oncopy`) | `src/lifecycle/` — `decide.ts` (which structs need an auto hook), `synthesise.ts` (KIR body), `pass.ts` (rewrite marker insts into concrete destroy/oncopy/move at the right program points). Lowering only emits markers (`src/kir/lowering-scope.ts`); checker only kicks off `runLifecycleDecide` (`src/checker/struct-checker.ts`). |
+| diagnostic                               | `src/diagnostics/` — add the catalog variant in `types.ts`, typed emit method in `index.ts`, and formatter case in `format.ts`; stage code emits through the diagnostics module rather than `src/errors/`. |
 | stdlib API                               | `std/*.kei` (it's kei source — same rules as user code)                                                  |
 
 Skipping a layer leaves silent gaps (e.g. checker accepts something the

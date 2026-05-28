@@ -39,6 +39,7 @@ export type {
   InvalidFieldAccessDiagnostic,
   InvalidLifecycleSignatureDiagnostic,
   InvalidOperandDiagnostic,
+  LegacyDiagnostic,
   LifecycleHookSelfMismatchDiagnostic,
   LifecycleReturnTypeWrongDiagnostic,
   MethodNotFoundDiagnostic,
@@ -49,7 +50,7 @@ export type {
   NonOptionalAccessDiagnostic,
   NoOperatorOverloadDiagnostic,
   NotCallableDiagnostic,
-  Severity,
+  SourceLocation,
   Span,
   TypeMismatchDiagnostic,
   UnaryTypeMismatchDiagnostic,
@@ -62,6 +63,7 @@ export type {
   UnsafeStructMissingOncopyDiagnostic,
   UntriagedDiagnostic,
 } from "./types";
+export { Severity } from "./types";
 
 /**
  * The typed-methods object handed to checker call sites. PR 2 exposes

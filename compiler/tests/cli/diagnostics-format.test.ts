@@ -4,17 +4,16 @@ import {
   printErrorSummary,
   reportDiagnostics,
 } from "../../src/cli/diagnostics-format";
-import type { Diagnostic } from "../../src/errors/diagnostic";
-import { Severity } from "../../src/errors/diagnostic";
+import { type LegacyDiagnostic, Severity } from "../../src/diagnostics";
 import { SourceFile } from "../../src/utils/source";
 
 function diagnostic(
   line: number,
   column: number,
   message: string,
-  severity = Severity.Error,
+  severity: LegacyDiagnostic["severity"] = Severity.Error,
   file = "test.kei"
-): Diagnostic {
+): LegacyDiagnostic {
   return {
     severity,
     message,
@@ -47,7 +46,7 @@ describe("formatDiagnostic", () => {
   });
 
   test("uses '<unknown>' when location.file is empty", () => {
-    const diag: Diagnostic = {
+    const diag: LegacyDiagnostic = {
       severity: Severity.Warning,
       message: "watch out",
       location: { file: "", line: 1, column: 1, offset: 0 },

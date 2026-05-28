@@ -3,11 +3,11 @@
  */
 
 import type { Type } from "../../src/checker/types";
-import type { Diagnostic } from "../../src/errors/diagnostic";
+import type { LegacyDiagnostic } from "../../src/diagnostics";
 import { checkSource, errorsOf, warningsOf } from "../helpers/pipeline";
 
 /** Parse + check source code, return all diagnostics. */
-export function check(source: string): readonly Diagnostic[] {
+export function check(source: string): readonly LegacyDiagnostic[] {
   return checkSource(source).diagnostics;
 }
 

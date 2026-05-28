@@ -12,7 +12,7 @@
  * first argument. Mirrors the parser/checker convention.
  */
 
-import { type Diagnostic, Severity } from "../errors";
+import { type LegacyDiagnostic, Severity } from "../diagnostics";
 import type { SourceFile } from "../utils/source";
 import { readNumber } from "./lexer-numbers";
 import { readString } from "./lexer-strings";
@@ -83,7 +83,7 @@ export function isOctalDigit(ch: string): boolean {
 export class Lexer {
   readonly source: SourceFile;
   pos: number;
-  private diagnostics: Diagnostic[];
+  private diagnostics: LegacyDiagnostic[];
 
   constructor(source: SourceFile) {
     this.source = source;
@@ -92,7 +92,7 @@ export class Lexer {
   }
 
   /** Returns all diagnostics accumulated during the most recent tokenization. */
-  getDiagnostics(): ReadonlyArray<Diagnostic> {
+  getDiagnostics(): ReadonlyArray<LegacyDiagnostic> {
     return this.diagnostics;
   }
 

@@ -14,9 +14,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import type { ImportDecl, Program } from "../ast/nodes";
-import { createDiagnostics, type Diagnostic as ModuleDiagnostic } from "../diagnostics";
+import {
+  createDiagnostics,
+  type LegacyDiagnostic,
+  type Diagnostic as ModuleDiagnostic,
+} from "../diagnostics";
 import type { Span as DiagSpan } from "../diagnostics/types";
-import type { Diagnostic } from "../errors/diagnostic";
 import { Lexer } from "../lexer";
 import { Parser } from "../parser";
 import { SourceFile } from "../utils/source";
@@ -29,7 +32,7 @@ const MAX_RENDERED_DIAGS = 3;
  * resolver error string. Returns null if there are no errors.
  */
 function formatStageErrors(
-  diags: readonly Diagnostic[],
+  diags: readonly LegacyDiagnostic[],
   moduleName: string,
   filePath: string,
   stage: "lexer" | "parse"

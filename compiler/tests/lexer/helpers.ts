@@ -3,13 +3,13 @@
  * need to repeat the `new SourceFile / new Lexer / lexer.tokenize` boilerplate.
  */
 
-import type { Diagnostic } from "../../src/errors/diagnostic";
+import type { LegacyDiagnostic } from "../../src/diagnostics";
 import type { Lexer, Token } from "../../src/lexer";
 import { tokenize as tokenizeSource } from "../helpers/pipeline";
 
 export interface LexResult {
   tokens: Token[];
-  diagnostics: readonly Diagnostic[];
+  diagnostics: readonly LegacyDiagnostic[];
   lexer: Lexer;
 }
 

@@ -2,11 +2,11 @@
  * Diagnostic formatting for the CLI: source-line context with caret markers.
  */
 
-import type { Diagnostic } from "../errors";
+import type { LegacyDiagnostic } from "../diagnostics";
 import type { SourceFile } from "../utils/source";
 
 /** Format a diagnostic with source context: file:line:col, message, source line, caret. */
-export function formatDiagnostic(diag: Diagnostic, source?: SourceFile): string {
+export function formatDiagnostic(diag: LegacyDiagnostic, source?: SourceFile): string {
   const loc = diag.location;
   const file = loc.file || "<unknown>";
   const header = `${file}:${loc.line}:${loc.column}: ${diag.severity}: ${diag.message}`;
@@ -24,7 +24,7 @@ export function formatDiagnostic(diag: Diagnostic, source?: SourceFile): string 
 
 /** Print all diagnostics with source context. Returns the error count. */
 export function reportDiagnostics(
-  diagnostics: readonly Diagnostic[],
+  diagnostics: readonly LegacyDiagnostic[],
   source?: SourceFile,
   sourceMap?: Map<string, SourceFile>
 ): number {

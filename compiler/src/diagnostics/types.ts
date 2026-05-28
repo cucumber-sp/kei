@@ -27,10 +27,38 @@
  * stability promise; renumbering is allowed pre-1.0.
  */
 
-import type { SourceLocation } from "../errors/diagnostic";
+/**
+ * Source-position point used by both the typed diagnostics union and the
+ * legacy CLI/checker presentation shape.
+ */
+export interface SourceLocation {
+  file: string;
+  line: number;
+  column: number;
+  offset: number;
+}
+
+/** Severity constants kept in the diagnostics module for legacy callers. */
+export const Severity = {
+  Error: "error",
+  Warning: "warning",
+  Info: "info",
+  Note: "note",
+} as const;
 
 /** Severity level recorded on every emitted diagnostic. */
-export type Severity = "error" | "warning" | "note";
+export type Severity = (typeof Severity)[keyof typeof Severity];
+
+/**
+ * Legacy presentation diagnostic used by lexer/parser/checker results and
+ * the CLI source-context formatter while those callers still consume
+ * `{ severity, message, location }`.
+ */
+export interface LegacyDiagnostic {
+  severity: Severity;
+  message: string;
+  location: SourceLocation;
+}
 
 /**
  * Source-position span. PR 1 reuses the existing checker `SourceLocation`

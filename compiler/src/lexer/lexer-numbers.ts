@@ -3,7 +3,7 @@
  * first argument — the same convention as the parser's per-domain modules.
  */
 
-import { Severity } from "../errors";
+import { Severity } from "../diagnostics";
 import type { Lexer } from "./lexer";
 import { isAlphaNumeric, isBinaryDigit, isDigit, isHexDigit, isOctalDigit } from "./lexer";
 import type { Token } from "./token";

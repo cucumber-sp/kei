@@ -14,8 +14,7 @@ import type {
   Statement,
   TypeNode,
 } from "../ast/nodes";
-import type { Diagnostic } from "../errors/diagnostic";
-import { Severity } from "../errors/diagnostic";
+import { type LegacyDiagnostic, Severity } from "../diagnostics";
 import type { Token } from "../lexer/token";
 import { TokenKind } from "../lexer/token";
 import { parseDeclaration } from "./decl-parser";
@@ -123,7 +122,7 @@ export interface ParserContext {
 export class Parser implements ParserContext {
   private tokens: Token[];
   private pos: number;
-  private diagnostics: Diagnostic[];
+  private diagnostics: LegacyDiagnostic[];
 
   constructor(tokens: Token[]) {
     this.tokens = tokens;
@@ -131,7 +130,7 @@ export class Parser implements ParserContext {
     this.diagnostics = [];
   }
 
-  getDiagnostics(): ReadonlyArray<Diagnostic> {
+  getDiagnostics(): ReadonlyArray<LegacyDiagnostic> {
     return this.diagnostics;
   }
 

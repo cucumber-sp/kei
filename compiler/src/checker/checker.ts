@@ -16,10 +16,8 @@ import type {
   TypeNode,
   UnsafeStructDecl,
 } from "../ast/nodes";
-import type { Diagnostics } from "../diagnostics";
-import { createDiagnostics, messageOf } from "../diagnostics";
-import type { Diagnostic, SourceLocation } from "../errors/diagnostic";
-import { Severity } from "../errors/diagnostic";
+import type { Diagnostics, LegacyDiagnostic, SourceLocation } from "../diagnostics";
+import { createDiagnostics, messageOf, Severity } from "../diagnostics";
 import type { Span } from "../lexer/token";
 import type { Lifecycle, LifecycleDecision } from "../lifecycle";
 import { createLifecycle } from "../lifecycle";
@@ -121,7 +119,7 @@ export interface CheckerOptions {
 }
 
 export interface CheckResult {
-  diagnostics: Diagnostic[];
+  diagnostics: LegacyDiagnostic[];
   types: CheckTypes;
   generics: CheckGenerics;
   lifecycle: CheckLifecycle;
@@ -144,7 +142,7 @@ export interface ModuleCheckInfo {
  */
 export interface MultiModuleCheckResult {
   results: Map<string, CheckResult>;
-  diagnostics: Diagnostic[];
+  diagnostics: LegacyDiagnostic[];
   /** Public symbols exported by each module. */
   moduleExports: Map<string, Map<string, ScopeSymbol>>;
   types: CheckTypes;
@@ -629,7 +627,7 @@ export class Checker {
   static checkModules(modules: ModuleCheckInfo[]): MultiModuleCheckResult {
     const moduleExports = new Map<string, Map<string, ScopeSymbol>>();
     const allResults = new Map<string, CheckResult>();
-    const combinedDiags: Diagnostic[] = [];
+    const combinedDiags: LegacyDiagnostic[] = [];
 
     const types: CheckTypes = {
       typeMap: new Map(),
@@ -1192,7 +1190,7 @@ export class Checker {
    * without the new `error[Exxxx]:` prefix — the legacy CLI formatter
    * already adds the severity prefix on top.
    */
-  private collectDiagnostics(): Diagnostic[] {
+  private collectDiagnostics(): LegacyDiagnostic[] {
     return this.diag.diagnostics().map((d) => ({
       severity: d.severity === "warning" ? Severity.Warning : Severity.Error,
       message: messageOf(d),

@@ -16,8 +16,7 @@ import { emitC } from "../backend/c-emitter";
 import { runDeSsa } from "../backend/de-ssa";
 import type { ModuleCheckInfo } from "../checker/checker";
 import { Checker } from "../checker/checker";
-import { createDiagnostics } from "../diagnostics";
-import type { Diagnostic } from "../errors";
+import { createDiagnostics, type LegacyDiagnostic } from "../diagnostics";
 import type { KirModule } from "../kir/kir-types";
 import { lowerModulesToKir, lowerToKir } from "../kir/lowering";
 import { runMem2Reg } from "../kir/mem2reg";
@@ -38,7 +37,7 @@ export async function runDriver(flags: CliFlags): Promise<number> {
 
   const lexer = new Lexer(source);
   const tokens = lexer.tokenize();
-  const lexDiagnostics: Diagnostic[] = [...lexer.getDiagnostics()];
+  const lexDiagnostics: LegacyDiagnostic[] = [...lexer.getDiagnostics()];
 
   if (!needsParse(flags)) {
     if (lexDiagnostics.length > 0) reportDiagnostics(lexDiagnostics, source);
@@ -50,7 +49,7 @@ export async function runDriver(flags: CliFlags): Promise<number> {
 
   const parser = new Parser(tokens);
   const program = parser.parse();
-  const parseDiagnostics: Diagnostic[] = [...lexDiagnostics, ...parser.getDiagnostics()];
+  const parseDiagnostics: LegacyDiagnostic[] = [...lexDiagnostics, ...parser.getDiagnostics()];
 
   // Lex/parse errors are fatal — bail before checking
   const earlyErrors = parseDiagnostics.filter((d) => d.severity === "error");
@@ -136,13 +135,13 @@ function needsParse(flags: CliFlags): boolean {
 type CheckOutcome =
   | {
       mode: "single";
-      diagnostics: Diagnostic[];
+      diagnostics: LegacyDiagnostic[];
       sourceMap: Map<string, SourceFile>;
       result: ReturnType<Checker["check"]>;
     }
   | {
       mode: "multi";
-      diagnostics: Diagnostic[];
+      diagnostics: LegacyDiagnostic[];
       sourceMap: Map<string, SourceFile>;
       modules: ModuleCheckInfo[];
       result: ReturnType<typeof Checker.checkModules>;
@@ -210,7 +209,7 @@ function compileToKir(
   filePath: string,
   program: Program,
   source: SourceFile,
-  parseDiagnostics: Diagnostic[]
+  parseDiagnostics: LegacyDiagnostic[]
 ): CompiledKir | null {
   const outcome = runChecker(filePath, program, source);
   if (outcome === null) return null;

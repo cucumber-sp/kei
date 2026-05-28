@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { Severity } from "../../src/errors";
+import { Severity } from "../../src/diagnostics";
 import {
   isAlpha,
   isAlphaNumeric,
