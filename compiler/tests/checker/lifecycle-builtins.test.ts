@@ -123,28 +123,26 @@ describe("onCopy / onDestroy compiler builtins", () => {
     );
   });
 
-  test("`onCopy(ptr)` where ptr's pointee has no __oncopy is rejected", () => {
-    checkError(
+  test("`onCopy(ptr)` where ptr's pointee has no __oncopy is a no-op", () => {
+    checkOk(
       `
         struct Plain { n: i32; }
         fn caller(p: *Plain) {
           unsafe { onCopy(p); }
         }
         fn main() -> i32 { return 0; }
-      `,
-      "no '__oncopy' hook"
+      `
     );
   });
 
-  test("`onCopy(ptr)` on a non-struct pointer is rejected", () => {
-    checkError(
+  test("`onCopy(ptr)` on a non-struct pointer is a no-op", () => {
+    checkOk(
       `
         fn caller(p: *i32) {
           unsafe { onCopy(p); }
         }
         fn main() -> i32 { return 0; }
-      `,
-      "expects a pointer to a struct"
+      `
     );
   });
 

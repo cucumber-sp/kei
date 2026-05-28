@@ -1,0 +1,7 @@
+import { Shared } from shared;
+
+fn main() -> i32 {
+    let one: i32 = 7;
+    let s = Shared<i32>.wrap(one);
+    return s.value;
+}

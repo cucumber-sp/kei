@@ -5,66 +5,71 @@
  * Mirrors the lifecycle trace in `docs/design/ref-redesign.md` §3.4 and
  * the `__oncopy(self: ref T)` ABI from §3.1. Currently `.skip`'d — the
  * compiler PR that lands the new lifecycle ABI plus the stdlib
- * implementation will flip this back on.
+ * implementation will flip the remaining semantic cases back on.
  */
 
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { spawnSync } from "bun";
 
-// When unskipping, replace this stub with the real `run` helper from
-// `run.test.ts` — either by extracting it into a shared module or by
-// duplicating its body here. Keeping a local stub for now lets the file
-// load cleanly under `describe.skip` without touching the existing e2e
-// file's structure.
-function run(_name: string, _source: string): { stdout: string; stderr: string; exitCode: number } {
-  return { stdout: "", stderr: "", exitCode: 0 };
+const CLI = join(import.meta.dir, "../../src/cli.ts");
+let tmpDir: string;
+
+beforeAll(() => {
+  tmpDir = mkdtempSync(join(tmpdir(), "kei-e2e-"));
+});
+
+afterAll(() => {
+  try {
+    rmSync(tmpDir, { recursive: true });
+  } catch {
+    // ignore
+  }
+});
+
+function run(name: string, source: string): { stdout: string; stderr: string; exitCode: number } {
+  const filePath = join(tmpDir, `${name}.kei`);
+  writeFileSync(filePath, source);
+  const result = spawnSync({
+    cmd: ["bun", "run", CLI, filePath, "--run"],
+    stdout: "pipe",
+    stderr: "pipe",
+    env: { ...process.env },
+  });
+  try {
+    unlinkSync(filePath.replace(/\.kei$/, ".c"));
+  } catch {}
+  try {
+    unlinkSync(filePath.replace(/\.kei$/, ""));
+  } catch {}
+  return {
+    stdout: new TextDecoder().decode(result.stdout),
+    stderr: new TextDecoder().decode(result.stderr),
+    exitCode: result.exitCode ?? -1,
+  };
 }
 
-describe.skip("Shared<T> end-to-end semantics", () => {
+describe("Shared<T> end-to-end semantics", () => {
   test("wrap + last-use elision: caller's value moves into the slot, refcount stays 1", () => {
-    // Pattern from §3.5: caller does not use `s` after `wrap(s)`; compiler
-    // elides oncopy and destroys, leaving exactly one refcount on the heap
-    // slot.
     const r = run(
       "shared_wrap_last_use",
       `
-      // Inline mini-Shared<T> for the test (real impl lives in stdlib once
-      // it lands).
-      unsafe struct Shared<T> {
-        refcount: ref i64;
-        value: ref T;
-
-        fn wrap(item: ref T) -> Shared<T> {
-          let s = Shared<T>{};
-          unsafe {
-            let block = alloc<u8>(sizeof(i64) + sizeof(T));
-            addr(s.refcount) = block as *i64;
-            addr(s.value)    = (block + sizeof(i64)) as *T;
-            s.refcount = 1;
-            init s.value = item;
-          }
-          return s;
-        }
-
-        fn __oncopy(self: ref Shared<T>) { self.refcount += 1; }
-        fn __destroy(self: ref Shared<T>) {
-          self.refcount -= 1;
-          if self.refcount == 0 {
-            unsafe { free(addr(self.refcount)); }
-          }
-        }
-      }
+      import { Shared } from shared;
 
       fn main() -> int {
         let n: i32 = 42;
-        let s = Shared<i32>::wrap(n);
+        let s = Shared<i32>.wrap(n);
         return s.value;
       }
       `
     );
+    expect(r.stderr).toBe("");
     expect(r.exitCode).toBe(42);
   });
 
-  test("alias-visible mutation through .value", () => {
+  test.skip("alias-visible mutation through .value", () => {
     const r = run(
       "shared_value_writethrough",
       `
@@ -78,7 +83,7 @@ describe.skip("Shared<T> end-to-end semantics", () => {
 
       fn main() -> int {
         let init: i32 = 10;
-        let a = Shared<i32>::wrap(init);
+        let a = Shared<i32>.wrap(init);
         let b = a;          // refcount becomes 2
         b.value = 32;       // alias-visible: a.value also sees 32
         return a.value;
@@ -88,7 +93,7 @@ describe.skip("Shared<T> end-to-end semantics", () => {
     expect(r.exitCode).toBe(32);
   });
 
-  test("handle replacement destroys the old shared and constructs the new", () => {
+  test.skip("handle replacement destroys the old shared and constructs the new", () => {
     const r = run(
       "shared_handle_replacement",
       `
@@ -106,12 +111,12 @@ describe.skip("Shared<T> end-to-end semantics", () => {
 
       fn flip(c: ref Cfg) {
         let v: bool = false;
-        c.online = Shared<bool>::wrap(v);   // replaces the handle
+        c.online = Shared<bool>.wrap(v);   // replaces the handle
       }
 
       fn main() -> int {
         let yes: bool = true;
-        let cfg = Cfg{ online: Shared<bool>::wrap(yes) };
+        let cfg = Cfg{ online: Shared<bool>.wrap(yes) };
         flip(cfg);
         return if cfg.online.value { 1 } else { 0 };
       }
@@ -120,7 +125,7 @@ describe.skip("Shared<T> end-to-end semantics", () => {
     expect(r.exitCode).toBe(0);
   });
 
-  test("readonly Shared<T> field permits write-through but not handle replacement", () => {
+  test.skip("readonly Shared<T> field permits write-through but not handle replacement", () => {
     // This test is a NEGATIVE — the compile must FAIL on the readonly
     // assignment. Bringing it up to date with how the harness reports
     // build failures is the unskipping commit's job.
@@ -137,7 +142,7 @@ describe.skip("Shared<T> end-to-end semantics", () => {
       struct Cfg { readonly online: Shared<bool> }
       fn flip(c: ref Cfg) {
         let v: bool = false;
-        c.online = Shared<bool>::wrap(v);   // ERROR: readonly
+        c.online = Shared<bool>.wrap(v);   // ERROR: readonly
       }
       fn main() -> int { return 0; }
       `

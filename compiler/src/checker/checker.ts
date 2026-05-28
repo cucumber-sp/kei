@@ -690,31 +690,57 @@ export class Checker {
     }
 
     // Wave 2: route each monomorphization to its defining module's checker
-    // and run its body-check pass there. The defining module's scope has
-    // its imports in place, so a generic struct method that uses
-    // `import { alloc } from mem` resolves correctly.
-    for (const [, checker] of checkers) {
-      // Adopt monomorphizations registered in OTHER modules but whose
-      // original struct/function lives in THIS module.
-      for (const [otherModName, otherChecker] of checkers) {
-        if (otherChecker === checker) continue;
-        const otherResult = preResults.get(otherModName);
-        if (!otherResult) continue;
-        const otherProducts = otherResult.generics.monomorphization.products();
-        for (const [name, mono] of otherProducts.structs) {
-          const definingPrefix = mono.original.modulePrefix ?? "";
-          if (definingPrefix === checker.modulePrefix) {
-            checker.getMonomorphization().adoptStruct(name, mono);
+    // and run its body-check pass there. Body checks can themselves
+    // discover new cross-module instantiations (e.g. `Shared<T>.wrap`
+    // instantiating `mem.placeAt<T>`), so run a small fixed point until
+    // the per-module product sets stop changing.
+    let previousMonoSignature = "";
+    for (let iteration = 0; iteration < 8; iteration++) {
+      for (const [, checker] of checkers) {
+        // Adopt monomorphizations registered in OTHER modules but whose
+        // original struct/function lives in THIS module.
+        for (const [otherModName, otherChecker] of checkers) {
+          if (otherChecker === checker) continue;
+          const otherResult = preResults.get(otherModName);
+          if (!otherResult) continue;
+          const otherProducts = otherResult.generics.monomorphization.products();
+          for (const [name, mono] of otherProducts.structs) {
+            const definingPrefix = mono.original.modulePrefix ?? "";
+            if (definingPrefix === checker.modulePrefix) {
+              checker.getMonomorphization().adoptStruct(name, mono);
+            }
+          }
+          for (const [name, mono] of otherProducts.functions) {
+            if (
+              mono.declaration &&
+              checker.program.declarations.some((decl) => decl === mono.declaration)
+            ) {
+              checker.getMonomorphization().adoptFunction(name, mono);
+            }
+          }
+          for (const [name, mono] of otherProducts.enums) {
+            const definingPrefix = mono.modulePrefix ?? "";
+            if (definingPrefix === checker.modulePrefix) {
+              checker.adoptMonomorphizedEnumInScope(name, mono);
+            }
           }
         }
-        for (const [name, mono] of otherProducts.enums) {
-          const definingPrefix = mono.modulePrefix ?? "";
-          if (definingPrefix === checker.modulePrefix) {
-            checker.adoptMonomorphizedEnumInScope(name, mono);
-          }
-        }
+        checker.runMonomorphizedBodyChecks();
       }
-      checker.runMonomorphizedBodyChecks();
+
+      const nextSignature = Array.from(checkers.entries())
+        .map(([name, checker]) => {
+          const products = checker.getMonomorphization().products();
+          return [
+            name,
+            Array.from(products.structs.keys()).sort().join(","),
+            Array.from(products.functions.keys()).sort().join(","),
+            Array.from(products.enums.keys()).sort().join(","),
+          ].join(":");
+        })
+        .join("|");
+      if (nextSignature === previousMonoSignature) break;
+      previousMonoSignature = nextSignature;
     }
 
     // Wave 3: merge results. Pull from each checker (which now has any

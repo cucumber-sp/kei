@@ -149,6 +149,53 @@ describe("Multi-module monomorphized method body resolution", () => {
     expect(destroyCalls.some((c) => c === "std_mem_dealloc")).toBe(true);
     expect(destroyCalls.some((c) => c === "dealloc")).toBe(false);
   });
+
+  test("imported generic static calls and helper calls keep their defining module prefix", () => {
+    const kirModule = lowerMultiModule("main_uses_real_shared.kei");
+    const fnNames = kirModule.functions.map((f) => f.name);
+
+    expect(fnNames).toContain("shared_Shared_i32_wrap");
+    expect(fnNames).not.toContain("Shared_i32_wrap");
+    expect(fnNames).toContain("mem_placeAt_i32");
+    expect(fnNames).not.toContain("shared_placeAt_i32");
+
+    const mainFn = kirModule.functions.find((f) => f.name === "main");
+    const mainCalls = (mainFn?.blocks ?? []).flatMap((block) =>
+      block.instructions.flatMap((inst) =>
+        (inst.kind === "call" || inst.kind === "call_void") && "func" in inst ? [inst.func] : []
+      )
+    );
+    expect(mainCalls).toContain("shared_Shared_i32_wrap");
+    expect(mainCalls).not.toContain("Shared_i32_wrap");
+
+    const wrapFn = kirModule.functions.find((f) => f.name === "shared_Shared_i32_wrap");
+    const wrapCalls = (wrapFn?.blocks ?? []).flatMap((block) =>
+      block.instructions.flatMap((inst) =>
+        (inst.kind === "call" || inst.kind === "call_void") && "func" in inst ? [inst.func] : []
+      )
+    );
+    expect(wrapCalls).toContain("mem_placeAt_i32");
+    expect(wrapCalls).not.toContain("shared_placeAt_i32");
+  });
+
+  test("imported generic helper bodies are checked under concrete type arguments", () => {
+    const kirModule = lowerMultiModule("main_uses_real_shared.kei");
+    const placeAtFn = kirModule.functions.find((f) => f.name === "mem_placeAt_i32");
+    expect(placeAtFn).toBeTruthy();
+
+    const sizeofInsts = (placeAtFn?.blocks ?? []).flatMap((block) =>
+      block.instructions.filter((inst) => inst.kind === "sizeof")
+    );
+    expect(sizeofInsts).toHaveLength(1);
+    expect(sizeofInsts[0]?.type).toEqual({ kind: "int", bits: 32, signed: true });
+
+    const calls = (placeAtFn?.blocks ?? []).flatMap((block) =>
+      block.instructions.flatMap((inst) =>
+        (inst.kind === "call" || inst.kind === "call_void") && "func" in inst ? [inst.func] : []
+      )
+    );
+    expect(calls.some((name) => name === "onCopy")).toBe(false);
+  });
 });
 
 describe("Multi-module Optional<T> stdlib import", () => {

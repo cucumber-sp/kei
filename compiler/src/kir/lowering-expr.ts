@@ -238,7 +238,10 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
   ) {
     const arg = expr.args[0];
     let kirType: KirType;
-    if (arg && arg.kind === "Identifier") {
+    const checkerType = arg ? ctx.checkResult.types.typeMap.get(arg) : undefined;
+    if (checkerType) {
+      kirType = lowerCheckerType(ctx, checkerType);
+    } else if (arg && arg.kind === "Identifier") {
       const namedType: TypeNode = { kind: "NamedType", name: arg.name, span: arg.span };
       kirType = lowerTypeNode(ctx, namedType);
     } else {
@@ -261,15 +264,26 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
     const arg = expr.args[0];
     if (arg) {
       const argType = ctx.checkResult.types.typeMap.get(arg);
-      if (argType?.kind === "ptr" && argType.pointee.kind === "struct") {
-        const ptrId = lowerExpr(ctx, arg);
-        const structName = mangledLifecycleStructName(argType.pointee);
-        emit(ctx, {
-          kind: "call_void",
-          func: `${structName}_${hookName}`,
-          args: [ptrId],
-        });
-        return emitConstInt(ctx, 0); // void; dummy
+      if (argType?.kind === "ptr") {
+        if (argType.pointee.kind === "struct") {
+          const hasHook =
+            argType.pointee.methods.has(hookName) ||
+            (hookName === "__destroy"
+              ? argType.pointee.autoDestroy === true
+              : argType.pointee.autoOncopy === true);
+          if (hasHook) {
+            const ptrId = lowerExpr(ctx, arg);
+            const structName = mangledLifecycleStructName(argType.pointee);
+            emit(ctx, {
+              kind: "call_void",
+              func: `${structName}_${hookName}`,
+              args: [ptrId],
+            });
+          }
+          return emitConstInt(ctx, 0); // void; dummy
+        }
+        lowerExpr(ctx, arg);
+        return emitConstInt(ctx, 0); // no lifecycle hook for scalar pointees
       }
     }
   }
@@ -319,7 +333,16 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
   // Check for generic call resolution (e.g. max<i32>(a, b) → max_i32)
   const genericName = ctx.checkResult.generics.resolutions.get(expr);
   if (genericName) {
-    funcName = ctx.modulePrefix ? `${ctx.modulePrefix}_${genericName}` : genericName;
+    if (expr.callee.kind === "Identifier") {
+      const importedBase = ctx.importedNames.get(expr.callee.name);
+      if (importedBase && genericName.startsWith(expr.callee.name)) {
+        funcName = `${importedBase}${genericName.slice(expr.callee.name.length)}`;
+      } else {
+        funcName = ctx.modulePrefix ? `${ctx.modulePrefix}_${genericName}` : genericName;
+      }
+    } else {
+      funcName = ctx.modulePrefix ? `${ctx.modulePrefix}_${genericName}` : genericName;
+    }
   } else if (expr.callee.kind === "Identifier") {
     const baseName = expr.callee.name;
     // Check if this is an imported function that needs module-prefixed name
@@ -867,11 +890,60 @@ export function lowerMoveExpr(ctx: LoweringCtx, expr: MoveExpr): VarId {
 }
 
 export function lowerCastExpr(ctx: LoweringCtx, expr: CastExpr): VarId {
-  const value = lowerExpr(ctx, expr.operand);
   const targetType = getExprKirType(ctx, expr);
+  const sourceType = ctx.checkResult.types.typeMap.get(expr.operand);
+  const value =
+    targetType.kind === "ptr" &&
+    sourceType?.kind === "ptr" &&
+    (sourceType as { isRef?: boolean }).isRef === true
+      ? (lowerRefExprAsBoundPtr(ctx, expr.operand) ?? lowerExpr(ctx, expr.operand))
+      : lowerExpr(ctx, expr.operand);
   const dest = freshVar(ctx);
   emit(ctx, { kind: "cast", dest, value, targetType });
   return dest;
+}
+
+function lowerRefExprAsBoundPtr(ctx: LoweringCtx, expr: Expression): VarId | null {
+  switch (expr.kind) {
+    case "Identifier": {
+      return ctx.varMap.get(expr.name) ?? null;
+    }
+    case "MemberExpr": {
+      const objectType = ctx.checkResult.types.typeMap.get(expr.object);
+      const isRefStructObj =
+        expr.object.kind === "Identifier" &&
+        objectType?.kind === "ptr" &&
+        (objectType as { isRef?: boolean }).isRef === true &&
+        objectType.pointee.kind === "struct";
+
+      let baseId: VarId;
+      if (expr.object.kind === "Identifier" && (objectType?.kind === "struct" || isRefStructObj)) {
+        const varId = ctx.varMap.get(expr.object.name);
+        baseId = varId ?? lowerExprAsPtr(ctx, expr.object);
+      } else if (expr.object.kind === "DerefExpr") {
+        baseId = lowerExpr(ctx, expr.object.operand);
+      } else {
+        baseId = lowerExpr(ctx, expr.object);
+      }
+
+      const fieldType = getExprKirType(ctx, expr);
+      const slotPtr = freshVar(ctx);
+      emit(ctx, {
+        kind: "field_ptr",
+        dest: slotPtr,
+        base: baseId,
+        field: expr.property,
+        type: fieldType,
+      });
+      const boundPtr = freshVar(ctx);
+      emit(ctx, { kind: "load", dest: boundPtr, ptr: slotPtr, type: fieldType });
+      return boundPtr;
+    }
+    case "GroupExpr":
+      return lowerRefExprAsBoundPtr(ctx, expr.expression);
+    default:
+      return null;
+  }
 }
 
 // lowerSwitchExpr and findConstIntInst are in lowering-switch.ts

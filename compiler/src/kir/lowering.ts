@@ -141,6 +141,12 @@ export function runLowering(ctx: LoweringCtx): KirModule {
   // back to the template's `declaration` means pre-PR-4 callers /
   // orchestration paths that haven't body-checked yet still get lowered.
   for (const [_mangledName, monoFunc] of products.functions) {
+    if (
+      monoFunc.declaration &&
+      !ctx.program.declarations.some((decl) => decl === monoFunc.declaration)
+    ) {
+      continue;
+    }
     if (monoFunc.bakedDecl || monoFunc.declaration) {
       ctx.functions.push(lowerMonomorphizedFunction(ctx, monoFunc));
     }
