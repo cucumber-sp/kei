@@ -170,7 +170,10 @@ function emitDestroyField(
     insts.push({ kind: "call_extern_void", func: "kei_string_destroy", args: [fieldPtr] });
     return;
   }
-  if (fieldType.kind === TypeKind.Struct && fieldType.methods.has("__destroy")) {
+  if (
+    fieldType.kind === TypeKind.Struct &&
+    (fieldType.methods.has("__destroy") || fieldType.autoDestroy === true)
+  ) {
     const fieldPtr = freshVar();
     const kirFieldType: KirType = { kind: "struct", name: fieldType.name, fields: [] };
     insts.push({
@@ -223,7 +226,10 @@ function emitOncopyField(
     insts.push({ kind: "store", ptr: fieldPtr, value: copied });
     return;
   }
-  if (fieldType.kind === TypeKind.Struct && fieldType.methods.has("__oncopy")) {
+  if (
+    fieldType.kind === TypeKind.Struct &&
+    (fieldType.methods.has("__oncopy") || fieldType.autoOncopy === true)
+  ) {
     // The C emit for `oncopy val` becomes `X___oncopy(&val)` (void
     // return), which mutates `val` in place via the pointer.  The
     // surrounding load/store pair propagates the mutation back to the

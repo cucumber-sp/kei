@@ -1,5 +1,6 @@
 # Auto Claude data directory
 .auto-claude/
+.claude/worktrees/
 
 # Auto Claude generated files
 .auto-claude-security.json

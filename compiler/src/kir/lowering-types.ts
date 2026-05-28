@@ -17,11 +17,6 @@ function typeNodeName(node: TypeNode): string {
 }
 
 export function getExprKirType(ctx: LoweringCtx, expr: Expression): KirType {
-  // Prefer per-instantiation type map (for monomorphized function bodies)
-  const bodyType = ctx.currentBodyTypeMap?.get(expr);
-  if (bodyType) {
-    return lowerCheckerType(ctx, bodyType);
-  }
   const checkerType = ctx.checkResult.types.typeMap.get(expr);
   if (checkerType) {
     return lowerCheckerType(ctx, checkerType);

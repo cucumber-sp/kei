@@ -102,18 +102,16 @@ export function lowerMethod(
  * Lower a generic struct method for a specific monomorphization.
  *
  * Same shape as {@link lowerMethod} but uses the *substituted* FunctionType
- * (param + return) from the monomorphized struct, plus the per-method body
- * type map populated during `checkMonomorphizedStructMethodBodies`. Without
- * this, signatures and field accesses inside the body would be emitted with
- * the unsubstituted TypeParam (e.g. `struct T*` instead of `int32_t*`).
+ * (param + return) from the monomorphized struct. Body expressions resolve
+ * concretely because pass 3 records their types in the global
+ * `Checker.typeMap` keyed by the bake clone's expression identities.
  */
 export function lowerMonomorphizedMethod(
   ctx: LoweringCtx,
   decl: FunctionDecl,
   mangledName: string,
   _structName: string,
-  concrete: import("../checker/types").FunctionType,
-  bodyTypeMap?: Map<import("../ast/nodes").Expression, import("../checker/types").Type>
+  concrete: import("../checker/types").FunctionType
 ): KirFunction {
   resetFunctionState(ctx);
   pushScope(ctx);
@@ -139,13 +137,8 @@ export function lowerMonomorphizedMethod(
   const returnType = lowerCheckerType(ctx, concrete.returnType);
   ctx.currentFunctionOrigReturnType = returnType;
 
-  // Per-instantiation override so getExprKirType / lowerCheckerType see
-  // concrete types for every body expression.
-  if (bodyTypeMap) ctx.currentBodyTypeMap = bodyTypeMap;
-
   lowerBlock(ctx, decl.body);
 
-  ctx.currentBodyTypeMap = null;
   finalizeFunctionBody(ctx, false, returnType);
 
   return {

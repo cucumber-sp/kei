@@ -11,9 +11,8 @@
  * `importedNames`, …).
  */
 
-import type { Expression, Program } from "../ast/nodes";
+import type { Program } from "../ast/nodes";
 import type { CheckResult } from "../checker/checker";
-import type { Type } from "../checker/types";
 import type {
   BlockId,
   KirBlock,
@@ -65,9 +64,6 @@ export interface LoweringCtx {
   /** Deferred instruction sequences — one frame per scope, each holding captured insts in push order (emitted LIFO at scope exit). */
   deferStack: KirInst[][][];
 
-  /** Cache of `(structName) → { hasDestroy, hasOncopy }` to avoid repeated lookups. */
-  structLifecycleCache: Map<string, { hasDestroy: boolean; hasOncopy: boolean }>;
-
   /** Monotonic allocator for scope ids — fresh per function. */
   nextScopeId: ScopeId;
   /**
@@ -106,12 +102,6 @@ export interface LoweringCtx {
   currentFunctionOrigReturnType: KirType;
   /** All functions known to use the throws protocol — populated in the pre-pass. */
   throwsFunctions: Map<string, { throwsTypes: KirType[]; returnType: KirType }>;
-
-  // ─── Per-monomorphization overrides ───────────────────────────────────
-  /** Per-instantiation type map override for monomorphized function bodies. */
-  currentBodyTypeMap: Map<Expression, Type> | null;
-  /** Per-instantiation generic resolutions override for monomorphized function bodies. */
-  currentBodyGenericResolutions: Map<Expression, string> | null;
 }
 
 /**
@@ -145,8 +135,6 @@ export function createLoweringCtx(
     openScopes: [],
     deferStack: [],
 
-    structLifecycleCache: new Map(),
-
     nextScopeId: 0,
     scopeExitData: new Map(),
 
@@ -163,8 +151,5 @@ export function createLoweringCtx(
     currentFunctionThrowsTypes: [],
     currentFunctionOrigReturnType: { kind: "void" },
     throwsFunctions: new Map(),
-
-    currentBodyTypeMap: null,
-    currentBodyGenericResolutions: null,
   };
 }
