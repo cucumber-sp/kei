@@ -167,7 +167,9 @@ export function lowerFunction(ctx: LoweringCtx, decl: FunctionDecl): KirFunction
   const isThrows = decl.throwsTypes.length > 0;
   const throwsKirTypes = isThrows ? decl.throwsTypes.map((t) => lowerTypeNode(ctx, t)) : [];
 
-  const originalReturnType = lowerCheckerType(ctx, getFunctionReturnType(ctx, decl));
+  const originalReturnType = decl.returnType
+    ? lowerTypeNode(ctx, decl.returnType)
+    : lowerCheckerType(ctx, getFunctionReturnType(ctx, decl));
 
   // Set current function throws state
   ctx.currentFunctionThrowsTypes = throwsKirTypes;

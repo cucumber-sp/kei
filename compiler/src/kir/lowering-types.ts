@@ -5,7 +5,7 @@
 
 import type { Expression, FunctionDecl, TypeNode } from "../ast/nodes";
 import type { FunctionType, Type } from "../checker/types";
-import type { KirIntType, KirType, KirVariant } from "./kir-types";
+import type { KirType, KirVariant } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
 import { lowerEnumDecl } from "./lowering-enum-decl";
 
@@ -14,6 +14,19 @@ function typeNodeName(node: TypeNode): string {
   if (node.kind === "RefType") return "ptr";
   if (node.kind === "RawPtrType") return "ptr";
   return node.name;
+}
+
+function substituteTypeNode(node: TypeNode, subs: Map<string, TypeNode>): TypeNode {
+  if (node.kind === "NamedType") {
+    return subs.get(node.name) ?? node;
+  }
+  if (node.kind === "RefType") {
+    return { ...node, pointee: substituteTypeNode(node.pointee, subs) };
+  }
+  if (node.kind === "RawPtrType") {
+    return { ...node, pointee: substituteTypeNode(node.pointee, subs) };
+  }
+  return { ...node, typeArgs: node.typeArgs.map((arg) => substituteTypeNode(arg, subs)) };
 }
 
 export function getExprKirType(ctx: LoweringCtx, expr: Expression): KirType {
@@ -171,20 +184,17 @@ export function lowerTypeNode(ctx: LoweringCtx, typeNode: TypeNode): KirType {
         const mangled = `${name}_${argSuffix}`;
         for (const decl of ctx.program.declarations) {
           if (decl.kind === "EnumDecl" && decl.name === name) {
-            // Carry one variant per declared variant so the C emitter can
-            // tell whether this enum is a tagged union (data variants) or
-            // a plain enum. Field types are placeholders here — the
-            // canonical declaration is emitted by the monomorphization
-            // pass, which sees the substituted variant fields. The
-            // reference site only needs the right C-level form (`struct`
-            // typedef vs `enum`) to render `enum Optional_i32` vs
-            // `Optional_i32`.
-            const placeholder: KirIntType = { kind: "int", bits: 32, signed: true };
+            const typeArgSubs = new Map<string, TypeNode>();
+            for (let i = 0; i < decl.genericParams.length; i++) {
+              const param = decl.genericParams[i];
+              const arg = typeNode.typeArgs[i];
+              if (param && arg) typeArgSubs.set(param, arg);
+            }
             const variants: KirVariant[] = decl.variants.map((v, i) => ({
               name: v.name,
               fields: v.fields.map((f) => ({
                 name: f.name,
-                type: placeholder,
+                type: lowerTypeNode(ctx, substituteTypeNode(f.typeAnnotation, typeArgSubs)),
               })),
               value: i,
             }));

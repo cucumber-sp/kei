@@ -78,7 +78,9 @@ export function lowerMethod(
     return { name: p.name, type: paramType };
   });
 
-  const returnType = lowerCheckerType(ctx, getFunctionReturnType(ctx, decl));
+  const returnType = decl.returnType
+    ? lowerTypeNode(ctx, decl.returnType)
+    : lowerCheckerType(ctx, getFunctionReturnType(ctx, decl));
 
   // Set current function return type so lowerReturnStmt can add struct loads
   ctx.currentFunctionOrigReturnType = returnType;

@@ -95,6 +95,33 @@ describe("switch-case destructuring on enums", () => {
     expect(r.exitCode).toBe(7);
   });
 
+  test("destructures Optional raw-pointer Some and routes None through null niche", () => {
+    const r = run(
+      "match_optional_ptr_niche",
+      `
+      enum Optional<T> {
+        Some(value: T),
+        None
+      }
+      fn read(opt: Optional<*i32>) -> i32 {
+        switch opt {
+          case Some(p):
+            return unsafe { *p };
+          case None:
+            return 7;
+        }
+        return 0;
+      }
+      fn main() -> i32 {
+        let x: i32 = 35;
+        let p: *i32 = unsafe { &x };
+        return read(Optional<*i32>.Some(p)) + read(Optional<*i32>.None);
+      }
+      `
+    );
+    expect(r.exitCode).toBe(42);
+  });
+
   test("multi-field variant destructures all fields", () => {
     const r = run(
       "match_pair",

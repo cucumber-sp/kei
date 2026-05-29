@@ -929,6 +929,10 @@ The user spelling is uniform; the compiler picks the cheapest legal
 layout per instantiation. This is the "niche" optimization Rust ships
 for `Option<&T>`, `Option<Box<T>>`, etc.
 
+The compiler currently implements this for raw pointers (`Optional<*T>`).
+`Optional<Shared<T>>` and `Optional<Weak<T>>` are still design targets
+until those stdlib handles use a one-word control-block representation.
+
 **No `null` literal at the source level.** Constructing absence is
 `Optional<T>.None` (or just `None` when the type is inferred). At the C
 ABI boundary an `Optional<*T>` value with `None` is a zero pointer;

@@ -105,6 +105,39 @@ describe("KIR — Enum variant construction", () => {
     const hPtr = fieldPtrs.find((i) => i.kind === "field_ptr" && i.field === "data.Rect.h");
     expect(hPtr).toBeDefined();
   });
+
+  test("Optional raw-pointer variants use the pointer null niche", () => {
+    const some = lowerFunction(
+      `
+      enum Optional<T> { Some(value: T), None }
+      fn some(p: *i32) -> Optional<*i32> {
+        return Optional<*i32>.Some(p);
+      }
+      fn main() -> int { return 0; }
+      `,
+      "some"
+    );
+    const someEnumAllocs = getInstructions(some, "stack_alloc").filter(
+      (i) => i.kind === "stack_alloc" && i.type.kind === "enum"
+    );
+    expect(someEnumAllocs.length).toBe(0);
+
+    const none = lowerFunction(
+      `
+      enum Optional<T> { Some(value: T), None }
+      fn none() -> Optional<*i32> {
+        return Optional<*i32>.None;
+      }
+      fn main() -> int { return 0; }
+      `,
+      "none"
+    );
+    expect(getInstructions(none, "const_null").length).toBe(1);
+    const noneEnumAllocs = getInstructions(none, "stack_alloc").filter(
+      (i) => i.kind === "stack_alloc" && i.type.kind === "enum"
+    );
+    expect(noneEnumAllocs.length).toBe(0);
+  });
 });
 
 describe("KIR — Switch on data variant enum tags", () => {
@@ -294,5 +327,38 @@ describe("KIR — Enum variant destructuring in switch", () => {
       (i) => i.kind === "field_ptr" && i.field === "data.Circle.radius"
     );
     expect(dataRadiusPtrs.length).toBe(1); // Only from construction
+  });
+
+  test("Optional raw-pointer switch compares against null and binds Some directly", () => {
+    const fn = lowerFunction(
+      `
+      enum Optional<T> { Some(value: T), None }
+      fn read(opt: Optional<*i32>) -> i32 {
+        switch opt {
+          case Some(p):
+            return unsafe { *p };
+          case None:
+            return 7;
+        }
+        return 0;
+      }
+      fn main() -> int { return 0; }
+      `,
+      "read"
+    );
+
+    const fieldPtrs = getInstructions(fn, "field_ptr");
+    expect(fieldPtrs.some((i) => i.kind === "field_ptr" && i.field === "tag")).toBe(false);
+    expect(fieldPtrs.some((i) => i.kind === "field_ptr" && i.field.startsWith("data."))).toBe(
+      false
+    );
+    expect(getInstructions(fn, "const_null").length).toBe(1);
+
+    const switches = getTerminators(fn, "switch");
+    expect(switches.length).toBe(1);
+    const sw = switches[0]!;
+    if (sw.kind === "switch") {
+      expect(sw.cases.length).toBe(1);
+    }
   });
 });

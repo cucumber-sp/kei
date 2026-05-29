@@ -17,7 +17,7 @@ and covered by tests.
 
 | Item                                                          | Status   | Notes                                              |
 |---------------------------------------------------------------|----------|----------------------------------------------------|
-| `Optional<T>` niche layout for pointer-shaped types           | PLANNED  | One-word representation when `T` is `*T`, `Shared<T>`, `Weak<T>`, or other pointer-niched types; `None` reuses the zero/null bit pattern. Today every instantiation pays a tag byte. |
+| `Optional<T>` niche layout for pointer-shaped types           | WIP      | Shipped for raw pointers: `Optional<*T>` lowers to a plain pointer and `None` is `NULL`. `Shared<T>` / `Weak<T>` niches wait on one-word handle/control-block layout. |
 | Traits / trait objects                                        | PLANNED  | Fat-pointer layout `(data, vtable)` with size + destroy slot. |
 | `String` / `Array<T>` / `List<T>` as stdlib types             | PLANNED  | `String` migration deferred — runtime currently in C (`runtime.h`). `Array<T>` and `List<T>` build on the shipped `Shared<T>` foundation. |
 

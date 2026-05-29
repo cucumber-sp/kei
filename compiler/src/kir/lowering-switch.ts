@@ -20,6 +20,7 @@ import {
   setTerminator,
   startBlock,
 } from "./lowering-utils";
+import { optionalNichePayloadType } from "./optional-niche";
 
 export function lowerSwitchExpr(ctx: LoweringCtx, expr: SwitchExpr): VarId {
   const subjectId = lowerExpr(ctx, expr.subject);
@@ -28,8 +29,14 @@ export function lowerSwitchExpr(ctx: LoweringCtx, expr: SwitchExpr): VarId {
 
   // Check if this is a switch on a data-variant (tagged union) enum
   const subjectType = ctx.checkResult.types.typeMap.get(expr.subject);
+  const optionalPayload =
+    subjectType?.kind === "enum"
+      ? optionalNichePayloadType(lowerCheckerType(ctx, subjectType))
+      : null;
   const isTaggedUnionEnum =
-    subjectType?.kind === "enum" && subjectType.variants.some((v) => v.fields.length > 0);
+    optionalPayload === null &&
+    subjectType?.kind === "enum" &&
+    subjectType.variants.some((v) => v.fields.length > 0);
 
   // For tagged union enums, compare on the .tag field
   let switchValue: VarId;
@@ -45,6 +52,9 @@ export function lowerSwitchExpr(ctx: LoweringCtx, expr: SwitchExpr): VarId {
 
   const caseLabels: { value: VarId; target: string }[] = [];
   let defaultLabel = endLabel;
+  let explicitDefaultLabel: string | null = null;
+  let optionalSomeLabel: string | null = null;
+  let optionalNoneSeen = false;
   const caseBlocks: { label: string; stmts: Statement[]; astCase: SwitchCase }[] = [];
 
   for (const c of expr.cases) {
@@ -54,9 +64,24 @@ export function lowerSwitchExpr(ctx: LoweringCtx, expr: SwitchExpr): VarId {
 
     if (c.isDefault) {
       defaultLabel = label;
+      explicitDefaultLabel = label;
     }
 
     for (const val of c.values) {
+      if (optionalPayload && val.kind === "Identifier") {
+        if (val.name === "None") {
+          const nullId = freshVar(ctx);
+          emit(ctx, { kind: "const_null", dest: nullId, type: optionalPayload });
+          caseLabels.push({ value: nullId, target: label });
+          optionalNoneSeen = true;
+          continue;
+        }
+        if (val.name === "Some") {
+          optionalSomeLabel = label;
+          continue;
+        }
+      }
+
       // For tagged union enums, case values are variant names — emit const_int tag
       if (isTaggedUnionEnum && subjectType?.kind === "enum" && val.kind === "Identifier") {
         const variantIndex = subjectType.variants.findIndex((v) => v.name === val.name);
@@ -82,6 +107,15 @@ export function lowerSwitchExpr(ctx: LoweringCtx, expr: SwitchExpr): VarId {
     caseBlocks.push({ label, stmts: c.body, astCase: c });
   }
 
+  if (optionalPayload && optionalSomeLabel) {
+    if (explicitDefaultLabel && !optionalNoneSeen) {
+      const nullId = freshVar(ctx);
+      emit(ctx, { kind: "const_null", dest: nullId, type: optionalPayload });
+      caseLabels.push({ value: nullId, target: explicitDefaultLabel });
+    }
+    defaultLabel = optionalSomeLabel;
+  }
+
   setTerminator(ctx, {
     kind: "switch",
     value: switchValue,
@@ -102,6 +136,10 @@ export function lowerSwitchExpr(ctx: LoweringCtx, expr: SwitchExpr): VarId {
         const fieldName = bindingInfo.fieldNames[i];
         const fieldTypeInfo = bindingInfo.fieldTypes[i];
         if (!bindingName || !fieldName || !fieldTypeInfo) continue;
+        if (optionalPayload && bindingInfo.variantName === "Some") {
+          ctx.varMap.set(bindingName, subjectId);
+          continue;
+        }
         const fieldPath = `data.${bindingInfo.variantName}.${fieldName}`;
         const fieldType = lowerCheckerType(ctx, fieldTypeInfo);
         const loadedVal = emitFieldLoad(ctx, subjectId, fieldPath, fieldType);

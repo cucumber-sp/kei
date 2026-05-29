@@ -235,4 +235,39 @@ describe("c-emitter", () => {
     // Should produce if/else if chain comparing tag values
     expect(c).toMatch(/if \(/);
   });
+
+  test("emits Optional raw-pointer enum as a nullable pointer niche", () => {
+    const c = compileToC(`
+      enum Optional<T> { Some(value: T), None }
+      fn some(p: *i32) -> Optional<*i32> {
+        return Optional<*i32>.Some(p);
+      }
+      fn none() -> Optional<*i32> {
+        return Optional<*i32>.None;
+      }
+      fn read(opt: Optional<*i32>) -> i32 {
+        switch opt {
+          case Some(p):
+            return unsafe { *p };
+          case None:
+            return 7;
+        }
+        return 0;
+      }
+      fn main() -> int { return 0; }
+    `);
+
+    expect(c).toContain(
+      "/* Optional_ptr_i32: niche Optional represented as int32_t*; None = NULL */"
+    );
+    expect(c).toContain("int32_t* some(int32_t* _vp)");
+    expect(c).toContain("int32_t* none(void)");
+    expect(c).toContain("int32_t read(int32_t* _vopt)");
+    expect(c).toContain("= NULL;");
+    expect(c).toMatch(/if \([^)]* == [^)]*\) goto/);
+    expect(c).not.toContain("Optional_ptr _v");
+    expect(c).not.toContain("Optional_ptr*");
+    expect(c).not.toContain("->tag");
+    expect(c).not.toContain("->data.Some.value");
+  });
 });
