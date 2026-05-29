@@ -19,10 +19,8 @@ and covered by tests.
 |---------------------------------------------------------------|----------|----------------------------------------------------|
 | `Optional<T>` niche layout for pointer-shaped types           | PLANNED  | One-word representation when `T` is `*T`, `Shared<T>`, `Weak<T>`, or other pointer-niched types; `None` reuses the zero/null bit pattern. Today every instantiation pays a tag byte. |
 | `&field` desugar for `ref T` values                           | PLANNED  | Optional ergonomic patch from `docs/design/ref-construction-redesign.md` §6 stage 5: `&field` returns `&(*field)` (the bound `*T`) for `ref T` parameters / fields instead of today's C-style `**T`. Self-contained, additive. |
-| `readonly` modifier on fields/params                          | PLANNED  | Two senses: blocks reassignment for plain types; blocks write-through for `ref T`. |
-| `Shared<T>` stdlib end-to-end                                 | WIP      | Type-checks and lowers; runtime path needs auto-deref-on-read corner cases for `ref T` fields plus the `__destroy` ABI flip above. |
 | Traits / trait objects                                        | PLANNED  | Fat-pointer layout `(data, vtable)` with size + destroy slot. |
-| `String` / `Array<T>` / `List<T>` as stdlib types             | PLANNED  | `String` migration deferred — runtime currently in C (`runtime.h`). `Array<T>` and `List<T>` follow once `Shared<T>` is real. |
+| `String` / `Array<T>` / `List<T>` as stdlib types             | PLANNED  | `String` migration deferred — runtime currently in C (`runtime.h`). `Array<T>` and `List<T>` build on the shipped `Shared<T>` foundation. |
 
 ## Memory model
 
@@ -50,7 +48,6 @@ and covered by tests.
 | Function-pointer type syntax `fn(…) -> …` | PLANNED  | Lexer has `fn`; parser doesn't accept it in type position. Plain 8-byte C pointer at runtime. |
 | Variadic extern (`...`)                   | PLANNED  | Known parser limitation; `printf` cannot be spelled today. |
 | No-nested-fn checker rule                 | PLANNED  | The parser only allows `fn` at module/struct level; an explicit error message would help diagnostics. |
-| Migrate methods from `self: ptr<T>` → `self: ref T` | BLOCKED | Needs `ref T` first. `self: ptr<T>` is the only mutable-receiver form today. |
 
 ## Error handling
 

@@ -19,9 +19,9 @@ and lets the stdlib evolve without breaking the frontend.
 | `Optional<T>`                        | compiler intrinsic / stdlib | generic enum carrying `Some(value: T)` or `None`; see **Optional and the absence of nulls** |
 | `inline<T, N>`                       | compiler         | fixed-size value-type bag of N elements                         |
 | `string`                             | stdlib           | CoW refcounted byte string. Lowercase keyword alias for stdlib `String`.   |
+| `Shared<T>`                          | stdlib           | refcounted handle                                               |
 | `Array<T>` / `array<T>` alias        | stdlib (planned) | heap array, CoW. `array<T>` is the lowercase keyword alias.     |
 | `List<T>`                            | stdlib (planned) | growable, deep-copy                                             |
-| `Shared<T>`                          | stdlib (planned) | refcounted handle                                               |
 
 Naming conventions for stdlib types and member identifiers are pinned in
 [`docs/design/naming-conventions.md`](../docs/design/naming-conventions.md);
@@ -249,7 +249,7 @@ unsafe struct Shared<T> {
             let valuePtr = ((block as usize) + sizeof(i64)) as *T;
 
             *countPtr = 1;
-            placeAt(valuePtr, item);    // memcpy + onCopy
+            placeAt<T>(valuePtr, item); // memcpy + onCopy
 
             return Shared<T>{ refcount: countPtr, value: valuePtr };
         }
@@ -404,8 +404,8 @@ unsafe struct Shared<T> {
         self.refcount -= 1;
         if self.refcount == 0 {
             unsafe {
-                onDestroy(&(*self.value));
-                dealloc(&(*self.refcount) as *void);
+                onDestroy(self.value as *T);
+                dealloc(self.refcount as *void);
             }
         }
     }
@@ -525,6 +525,7 @@ the CoW invariants the implementation is required to uphold.
 | `unsafe struct`             | Stack                       | Manual      | User-defined (required with `*T`)  | Yes              |
 | `inline<T,N>`               | Inline (stack or in-struct) | N/A         | Per-element                        | No               |
 | `string`                    | Stack + Heap                | Yes (CoW)   | Built-in                           | No               |
+| `Shared<T>`                 | Stack + Heap                | Yes         | User-defined                       | No               |
 | `Array<T>` (planned stdlib) | Stack + Heap                | Yes (CoW)   | User-defined                       | No               |
 | `List<T>` (planned stdlib)  | Stack + Heap                | Yes         | User-defined                       | No               |
 

@@ -80,7 +80,7 @@ let len2 = p.lengthSquared();   // implicit &p; readonly forbids writes
 ```
 
 `ref T` parameters compile to `T*` and `readonly ref T` to `const T*`.
-The C-level ABI is identical to today's `ptr<T>` — only the source
+The C-level ABI is identical to the old `ptr<T>` receiver style — only the source
 spelling and the safety rules differ.
 
 ### Parameter passing

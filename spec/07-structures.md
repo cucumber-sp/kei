@@ -226,11 +226,15 @@ A struct literal of an `unsafe struct` is the binding ceremony for its
 argument for each `ref T` field and seats the binding in one step:
 
 ```kei
+unsafe struct Box<T> {
+    value: ref T;
+}
+
 unsafe {
     let block = alloc(sizeof(T));
     let valuePtr = block as *T;
-    placeAt(valuePtr, item);   // memcpy + onCopy from std/mem.kei
-    let s = Shared<T>{ value: valuePtr };
+    placeAt<T>(valuePtr, item); // memcpy + onCopy from std/mem.kei
+    let b = Box<T>{ value: valuePtr };
 }
 ```
 
@@ -269,8 +273,8 @@ unsafe struct Shared<T> {
         self.refcount -= 1;
         if self.refcount == 0 {
             unsafe {
-                onDestroy(&(*self.value));
-                dealloc(&(*self.refcount) as *void);
+                onDestroy(self.value as *T);
+                dealloc(self.refcount as *void);
             }
         }
     }

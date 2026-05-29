@@ -359,8 +359,9 @@ describes the intended progression; only v1 is implemented today.
 
 ### v1 — Single-threaded (current)
 
-The runtime model is strictly single-threaded. Stdlib types (`string`, `array<T>`,
-`List<T>`, `Shared<T>`) use **non-atomic** refcounts — fast, but not safe to
+The runtime model is strictly single-threaded. Refcounted stdlib values
+(`string`, shipped `Shared<T>`, and planned `Array<T>` / `List<T>`) use
+**non-atomic** refcounts — fast, but not safe to
 share across threads. Programs that want concurrency in v1 must use OS-level
 processes or extern FFI to a C threading library, and must not share Kei
 stdlib values across thread boundaries.
@@ -471,7 +472,8 @@ and a refcount bump.
 The following types are designed as `unsafe struct`s using lifecycle
 hooks for automatic resource management. `String` is currently
 implemented in the C runtime (`runtime.h`) with the same user-facing
-semantics; the rest are roadmap (see
+semantics; `Shared<T>` is implemented in stdlib; `Array<T>` and `List<T>`
+remain roadmap items (see
 [SPEC-STATUS.md](../SPEC-STATUS.md)).
 
 ### CoW invariants (contract for stdlib authors)
@@ -508,9 +510,9 @@ unsafe struct Shared<T> {
     refcount: ref i64;
     value: ref T;
 
-    fn wrap(item: ref T) -> Shared<T> { /* ... */ }
+    fn wrap(item: ref T) -> Shared<T> { /* alloc + placeAt<T> + literal */ }
     fn __oncopy(self: ref Shared<T>) { self.refcount += 1; }
-    fn __destroy(self: ref Shared<T>) { /* dec; free on zero */ }
+    fn __destroy(self: ref Shared<T>) { /* dec; onDestroy + dealloc on zero */ }
 }
 ```
 
