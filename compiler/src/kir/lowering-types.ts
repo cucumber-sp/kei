@@ -182,6 +182,21 @@ export function lowerTypeNode(ctx: LoweringCtx, typeNode: TypeNode): KirType {
       if (typeNode.kind === "GenericType") {
         const argSuffix = typeNode.typeArgs.map((a) => kirTypeNodeSuffix(ctx, a)).join("_");
         const mangled = `${name}_${argSuffix}`;
+        const monoStruct = ctx.checkResult.generics.monomorphization
+          .products()
+          .structs.get(mangled);
+        if (monoStruct) {
+          return {
+            kind: "struct",
+            name: mangled,
+            fields: Array.from(monoStruct.concrete.fields.entries()).map(
+              ([fieldName, fieldType]) => ({
+                name: fieldName,
+                type: lowerCheckerType(ctx, fieldType),
+              })
+            ),
+          };
+        }
         for (const decl of ctx.program.declarations) {
           if (decl.kind === "EnumDecl" && decl.name === name) {
             const typeArgSubs = new Map<string, TypeNode>();
@@ -213,6 +228,19 @@ export function lowerTypeNode(ctx: LoweringCtx, typeNode: TypeNode): KirType {
       for (const decl of ctx.program.declarations) {
         if (decl.kind === "EnumDecl" && decl.name === name) {
           return lowerEnumDecl(ctx, decl).type;
+        }
+        if (
+          (decl.kind === "StructDecl" || decl.kind === "UnsafeStructDecl") &&
+          decl.name === name
+        ) {
+          return {
+            kind: "struct",
+            name,
+            fields: decl.fields.map((f) => ({
+              name: f.name,
+              type: lowerTypeNode(ctx, f.typeAnnotation),
+            })),
+          };
         }
       }
       return { kind: "struct", name, fields: [] };

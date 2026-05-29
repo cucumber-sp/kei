@@ -50,6 +50,72 @@ function run(name: string, source: string): { stdout: string; stderr: string; ex
 }
 
 describe("Shared<T> end-to-end semantics", () => {
+  test("Optional<Shared<T>> matches Some and None through the shared handle niche", () => {
+    const r = run(
+      "shared_optional_niche",
+      `
+      import { Shared } from shared;
+
+      enum Optional<T> {
+        Some(value: T),
+        None
+      }
+
+      fn read(opt: Optional<Shared<i32>>) -> i32 {
+        switch opt {
+          case Some(s):
+            return s.value;
+          case None:
+            return 7;
+        }
+        return 0;
+      }
+
+      fn main() -> i32 {
+        let x: i32 = 35;
+        let some = read(Optional<Shared<i32>>.Some(Shared<i32>.wrap(x)));
+        let none = read(Optional<Shared<i32>>.None);
+        return some + none;
+      }
+      `
+    );
+    expect(r.stderr).toBe("");
+    expect(r.exitCode).toBe(42);
+  });
+
+  test("Optional<Shared<T>> switch expression unwraps through the shared handle niche", () => {
+    const r = run(
+      "shared_optional_niche_switch_expr",
+      `
+      import { Shared } from shared;
+
+      enum Optional<T> {
+        Some(value: T),
+        None
+      }
+
+      fn read_value(value: i32) -> i32 {
+        return value;
+      }
+
+      fn read(opt: Optional<Shared<i32>>) -> i32 {
+        return switch opt {
+          case Some(s): read_value(s.value);
+          case None: 7;
+        };
+      }
+
+      fn main() -> i32 {
+        let x: i32 = 35;
+        return read(Optional<Shared<i32>>.Some(Shared<i32>.wrap(x)))
+          + read(Optional<Shared<i32>>.None);
+      }
+      `
+    );
+    expect(r.stderr).toBe("");
+    expect(r.exitCode).toBe(42);
+  });
+
   test("wrap + last-use elision: caller's value moves into the slot, refcount stays 1", () => {
     const r = run(
       "shared_wrap_last_use",
