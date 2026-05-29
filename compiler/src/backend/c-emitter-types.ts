@@ -3,6 +3,7 @@
  */
 
 import type { KirType, VarId } from "../kir/kir-types";
+import { optionalNichePayloadType } from "../kir/optional-niche";
 import { I32_MAX, I32_MIN } from "../utils/constants";
 
 export { I32_MAX, I32_MIN };
@@ -26,6 +27,8 @@ export function emitCType(t: KirType): string {
     case "struct":
       return `struct ${sanitizeName(t.name)}`;
     case "enum": {
+      const nichePayload = optionalNichePayloadType(t);
+      if (nichePayload) return emitCType(nichePayload);
       const hasData = t.variants.some((v) => v.fields.length > 0);
       return hasData ? sanitizeName(t.name) : `enum ${sanitizeName(t.name)}`;
     }

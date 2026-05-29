@@ -352,6 +352,10 @@ The user spelling is uniform; the compiler picks the cheapest legal
 layout per instantiation. This matches Rust's "niche" optimization for
 `Option<&T>`, `Option<Box<T>>`, etc.
 
+Implementation status: the compiler currently ships this representation
+for `Optional<*T>`. `Optional<Shared<T>>` and `Optional<Weak<T>>` become
+niche-backed once those handle types are one-word control-block pointers.
+
 ### The rules
 
 - `Optional<T>` is the only way to express absence at the source level.
@@ -359,9 +363,9 @@ layout per instantiation. This matches Rust's "niche" optimization for
   read a "missing" `string` or `i32`.
 - Accessing the inner value of an `Optional<T>` requires `match`/`if let`
   destructuring. There is no implicit unwrap.
-- `Optional<*T>` and `Optional<Shared<T>>` are zero-overhead at runtime
-  thanks to niche layout; you pay for absence only when there's no niche
-  to claim.
+- `Optional<*T>` is zero-overhead at runtime thanks to niche layout.
+  Other pointer-shaped optionals use the same rule once their payload
+  type has a zero/null niche to claim.
 
 ## Generics
 

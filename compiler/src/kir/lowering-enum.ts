@@ -13,6 +13,7 @@ import type { LoweringCtx } from "./lowering-ctx";
 import { lowerExpr } from "./lowering-expr";
 import { lowerCheckerType } from "./lowering-types";
 import { emit, emitStackAlloc, freshVar } from "./lowering-utils";
+import { optionalNichePayloadType } from "./optional-niche";
 
 /**
  * Lower an enum data variant construction call: Shape.Circle(3.14)
@@ -33,6 +34,11 @@ export function lowerEnumVariantConstruction(ctx: LoweringCtx, expr: CallExpr): 
   if (!variant) return null;
   const tagValue = variant.value ?? variantIndex;
   const kirEnumType = lowerCheckerType(ctx, enumType);
+  const nichePayload = optionalNichePayloadType(kirEnumType);
+  if (nichePayload && variant.name === "Some") {
+    const arg = expr.args[0];
+    return arg ? lowerExpr(ctx, arg) : null;
+  }
 
   // stack_alloc the tagged union struct
   const ptrId = emitStackAlloc(ctx, kirEnumType);
@@ -92,10 +98,17 @@ export function lowerEnumVariantAccess(ctx: LoweringCtx, expr: MemberExpr): VarI
   if (!variant) return null;
   const value = variant.value ?? variantIndex;
   const hasDataVariants = objectType.variants.some((v) => v.fields.length > 0);
+  const kirEnumType = lowerCheckerType(ctx, objectType);
+  const nichePayload = optionalNichePayloadType(kirEnumType);
+
+  if (nichePayload && variant.name === "None") {
+    const dest = freshVar(ctx);
+    emit(ctx, { kind: "const_null", dest, type: nichePayload });
+    return dest;
+  }
 
   if (hasDataVariants) {
     // Tagged union enum: construct full struct with tag set (no data fields for fieldless variant)
-    const kirEnumType = lowerCheckerType(ctx, objectType);
     const ptrId = emitStackAlloc(ctx, kirEnumType);
 
     const tagPtrId = freshVar(ctx);
