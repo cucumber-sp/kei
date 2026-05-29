@@ -18,7 +18,6 @@ and covered by tests.
 | Item                                                          | Status   | Notes                                              |
 |---------------------------------------------------------------|----------|----------------------------------------------------|
 | `Optional<T>` niche layout for pointer-shaped types           | PLANNED  | One-word representation when `T` is `*T`, `Shared<T>`, `Weak<T>`, or other pointer-niched types; `None` reuses the zero/null bit pattern. Today every instantiation pays a tag byte. |
-| `&field` desugar for `ref T` values                           | PLANNED  | Optional ergonomic patch from `docs/design/ref-construction-redesign.md` §6 stage 5: `&field` returns `&(*field)` (the bound `*T`) for `ref T` parameters / fields instead of today's C-style `**T`. Self-contained, additive. |
 | Traits / trait objects                                        | PLANNED  | Fat-pointer layout `(data, vtable)` with size + destroy slot. |
 | `String` / `Array<T>` / `List<T>` as stdlib types             | PLANNED  | `String` migration deferred — runtime currently in C (`runtime.h`). `Array<T>` and `List<T>` build on the shipped `Shared<T>` foundation. |
 

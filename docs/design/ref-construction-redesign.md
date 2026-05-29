@@ -40,29 +40,21 @@ loosening it.
 
 ## 2. Replacement vocabulary
 
-### 2.1 Read the bound pointer — already works as `&(*field)`
+### 2.1 Read the bound pointer — `&field`
 
 For `param: ref T` (or `self.field` of type `ref T`):
 
 ```kei
 unsafe {
-    let p: *T = &(*self.refcount);     // bound pointer
+    let p: *T = &self.refcount;        // bound pointer
     dealloc(p as *void);
 }
 ```
 
-`*self.refcount` auto-derefs to T (i64 in the Shared<T> case). `&` of
-that auto-derefed value is `*T`. At runtime it's just the pointer bits
-already stored in the slot — no extra load or store.
-
-`&(*field)` reads cleanly as "address of the value behind the ref."
-That's exactly what we want.
-
-A separate ergonomic patch (stage 5 in §6) can let `&field` desugar
-to `&(*field)` for `ref T` values; today `&field` returns `**T` (the
-slot's address) because of the C-style "address of variable"
-interpretation. The desugar is **additive** and self-contained — this
-redesign does NOT depend on it.
+For `ref T` values, `&field` desugars to `&(*field)`: address-of the
+value behind the ref. At runtime it returns the pointer bits already
+stored in the slot, not the slot's own address. This gives stdlib code
+the bound `*T` without exposing a safe-code pointer path.
 
 ### 2.2 Write the bound pointer — struct literal
 
@@ -86,7 +78,7 @@ There is no "empty struct then patch up later" path.
 
 ```kei
 unsafe {
-    memcpy(valuePtr as *void, &item as *void, sizeof<T>());
+    memcpy(valuePtr as *u8, item as *u8, sizeof(T));
     onCopy(valuePtr);
 }
 ```
@@ -95,8 +87,7 @@ Three primitives, all with vocabulary that already exists or fits the
 existing extern-fn / builtin shape:
 
 - `memcpy` is a stdlib extern, not new.
-- `&item` for `item: ref T` is `&(*item)` per §2.1, returning the source's
-  bound pointer.
+- `item as *u8` for `item: ref T` uses the source's bound pointer.
 - `onCopy<T>(p: *T)` is a new compiler builtin that calls `T`'s
   `__oncopy(self: ref T)` on the value at `p`. Sibling builtin
   `onDestroy<T>(p: *T)` for symmetry — used by stdlib helpers and
@@ -187,7 +178,7 @@ code: callers see `s.refcount` as i64, `s.value` as T.
 
 | Topic                           | Old                                | New                                |
 |---------------------------------|------------------------------------|------------------------------------|
-| Read bound pointer              | `addr(field) as *void` (special)   | `&(*field) as *void` (ordinary)    |
+| Read bound pointer              | `addr(field) as *void` (special)   | `&field as *void` (ordinary)       |
 | Write bound pointer             | `addr(field) = ptr;` (special)     | Struct literal field initializer   |
 | Place value through binding     | `init field = value;` (special)    | `placeAt(ptr, value)` (stdlib)     |
 | Empty `unsafe struct{}` literal | Allowed                            | Rejected if struct has `ref T`     |
@@ -211,9 +202,7 @@ Each stage shipped as its own PR.
 | 3 | #27 | Checker rule — every field of an `unsafe struct` literal must be initialized by name. Empty / partial literals are a compile error. |
 | 4 | #28 | Cleanup — `addr` and `init` removed from the lexer, parser, AST, checker, and KIR. |
 
-**Not done:** the `&field → &(*field)` sugar for `ref T` values stays
-as an additive ergonomic patch. It's self-contained and can land any
-time without depending on the rest of this redesign.
+Stage 5's `&field → &(*field)` sugar for `ref T` values has also shipped.
 
 ## 7. Open questions
 

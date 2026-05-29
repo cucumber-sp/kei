@@ -110,4 +110,38 @@ describe("ref T field auto-deref end-to-end", () => {
     );
     expect(r.exitCode).toBe(99);
   });
+
+  test("address-of on a `ref i32` field returns the bound pointer", () => {
+    const r = run(
+      "ref_field_address_of",
+      `
+      extern fn malloc(size: usize) -> *u8;
+
+      unsafe struct Bag {
+        value: ref i32;
+        fn __destroy(self: ref Bag) {}
+        fn __oncopy(self: ref Bag) {}
+      }
+
+      fn build(item: ref i32) -> Bag {
+        unsafe {
+          let raw = malloc(sizeof(i32)) as *i32;
+          *raw = item;
+          return Bag{ value: raw };
+        }
+      }
+
+      fn main() -> i32 {
+        let n: i32 = 7;
+        let b = build(n);
+        unsafe {
+          let p: *i32 = &b.value;
+          *p = 88;
+        }
+        return b.value;
+      }
+      `
+    );
+    expect(r.exitCode).toBe(88);
+  });
 });
