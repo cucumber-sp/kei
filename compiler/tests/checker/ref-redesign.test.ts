@@ -405,27 +405,54 @@ describe("Shared<T> stdlib semantics — checker smoke", () => {
   });
 });
 
+describe("auto-generated lifecycle hooks use `self: ref T` ABI", () => {
+  test("auto-generated __destroy takes pointer self", () => {
+    const fn = lowerFunctionLocal(
+      `
+      struct Holder {
+        name: string;
+      }
+      fn main() -> int { return 0; }
+    `,
+      "Holder___destroy"
+    );
+
+    expect(fn.params).toEqual([
+      {
+        name: "self",
+        type: { kind: "ptr", pointee: { kind: "struct", name: "Holder", fields: [] } },
+      },
+    ]);
+    expect(fn.returnType).toEqual({ kind: "void" });
+  });
+
+  test("auto-generated __oncopy takes pointer self", () => {
+    const fn = lowerFunctionLocal(
+      `
+      struct Holder {
+        name: string;
+      }
+      fn main() -> int { return 0; }
+    `,
+      "Holder___oncopy"
+    );
+
+    expect(fn.params).toEqual([
+      {
+        name: "self",
+        type: { kind: "ptr", pointee: { kind: "struct", name: "Holder", fields: [] } },
+      },
+    ]);
+    expect(fn.returnType).toEqual({ kind: "void" });
+  });
+});
+
 // ─── Documented future work ──────────────────────────────────────────────────
 //
 // Each describe.skip / test.skip below pins a known limitation that the
 // initial ref-redesign rollout deliberately deferred. Future PRs should
 // flip these back on as the underlying feature lands. They exist so the
 // remaining work is a checklist, not tribal knowledge.
-
-describe.skip("future: auto-generated lifecycle hooks use `self: ref T` ABI", () => {
-  // Auto-derived __destroy / __oncopy on a `struct` with managed fields
-  // (e.g. `string`) currently emit `fn __destroy(self: ref T)` (by-value).
-  // Per §3.1 / §07-structures the canonical ABI is `fn __destroy(self:
-  // ref T)` returning void. User-defined hooks already accept the new
-  // form; this is about flipping the COMPILER-generated ones too. Once
-  // KIR's auto-destroy/oncopy emit the ref-self form, this test can
-  // assert (against KIR or against the emitted C signature) that the
-  // synthetic hook signature reads `Foo* self` rather than `Foo self`
-  // followed by an implicit pointer wrap.
-  test("auto-generated __destroy emits `self: ref T`", () => {
-    // Marker test — fill in once the KIR auto-gen is flipped.
-  });
-});
 
 describe("`ptr<T>` source form is rejected", () => {
   test("`ptr<T>` parameter is a compile error pointing at `*T`", () => {
