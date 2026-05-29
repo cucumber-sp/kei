@@ -361,4 +361,43 @@ describe("KIR — Enum variant destructuring in switch", () => {
       expect(sw.cases.length).toBe(1);
     }
   });
+
+  test("Optional Shared handle switch compares carrier against null and rebuilds Some binding", () => {
+    const fn = lowerFunction(
+      `
+      pub unsafe struct Shared_i32 {
+        value: ref i32;
+        fn __oncopy(self: ref Shared_i32) {}
+        fn __destroy(self: ref Shared_i32) {}
+      }
+      enum Optional<T> { Some(value: T), None }
+      fn read(opt: Optional<Shared_i32>) -> i32 {
+        switch opt {
+          case Some(s):
+            return s.value;
+          case None:
+            return 7;
+        }
+        return 0;
+      }
+      fn main() -> int { return 0; }
+      `,
+      "read"
+    );
+
+    const fieldPtrs = getInstructions(fn, "field_ptr");
+    expect(fieldPtrs.some((i) => i.kind === "field_ptr" && i.field === "tag")).toBe(false);
+    expect(fieldPtrs.some((i) => i.kind === "field_ptr" && i.field.startsWith("data."))).toBe(
+      false
+    );
+    expect(fieldPtrs.some((i) => i.kind === "field_ptr" && i.field === "value")).toBe(true);
+    expect(getInstructions(fn, "const_null").length).toBe(1);
+
+    const switches = getTerminators(fn, "switch");
+    expect(switches.length).toBe(1);
+    const sw = switches[0]!;
+    if (sw.kind === "switch") {
+      expect(sw.cases.length).toBe(1);
+    }
+  });
 });

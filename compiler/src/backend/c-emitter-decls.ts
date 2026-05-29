@@ -3,7 +3,7 @@
  */
 
 import type { KirExtern, KirFunction, KirGlobal, KirTypeDecl } from "../kir/kir-types";
-import { optionalNichePayloadType } from "../kir/optional-niche";
+import { optionalNicheCarrierType } from "../kir/optional-niche";
 import { emitCType, emitCTypeForDecl, sanitizeName, varName } from "./c-emitter-types";
 
 // ─── Type declarations ──────────────────────────────────────────────────────
@@ -17,9 +17,9 @@ export function emitTypeDecl(td: KirTypeDecl): string {
   }
   if (td.type.kind === "enum") {
     const sName = sanitizeName(td.name);
-    const nichePayload = optionalNichePayloadType(td.type);
-    if (nichePayload) {
-      return `/* ${sName}: niche Optional represented as ${emitCType(nichePayload)}; None = NULL */`;
+    const nicheCarrier = optionalNicheCarrierType(td.type);
+    if (nicheCarrier) {
+      return `/* ${sName}: niche Optional represented as ${emitCType(nicheCarrier)}; None = NULL */`;
     }
 
     const hasDataVariants = td.type.variants.some((v) => v.fields.length > 0);

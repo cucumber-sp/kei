@@ -20,7 +20,7 @@ import {
   setTerminator,
   startBlock,
 } from "./lowering-utils";
-import { optionalNichePayloadType } from "./optional-niche";
+import { optionalNiche } from "./optional-niche";
 
 export function lowerSwitchExpr(ctx: LoweringCtx, expr: SwitchExpr): VarId {
   const subjectId = lowerExpr(ctx, expr.subject);
@@ -29,12 +29,10 @@ export function lowerSwitchExpr(ctx: LoweringCtx, expr: SwitchExpr): VarId {
 
   // Check if this is a switch on a data-variant (tagged union) enum
   const subjectType = ctx.checkResult.types.typeMap.get(expr.subject);
-  const optionalPayload =
-    subjectType?.kind === "enum"
-      ? optionalNichePayloadType(lowerCheckerType(ctx, subjectType))
-      : null;
+  const optional =
+    subjectType?.kind === "enum" ? optionalNiche(lowerCheckerType(ctx, subjectType)) : null;
   const isTaggedUnionEnum =
-    optionalPayload === null &&
+    optional === null &&
     subjectType?.kind === "enum" &&
     subjectType.variants.some((v) => v.fields.length > 0);
 
@@ -68,10 +66,10 @@ export function lowerSwitchExpr(ctx: LoweringCtx, expr: SwitchExpr): VarId {
     }
 
     for (const val of c.values) {
-      if (optionalPayload && val.kind === "Identifier") {
+      if (optional && val.kind === "Identifier") {
         if (val.name === "None") {
           const nullId = freshVar(ctx);
-          emit(ctx, { kind: "const_null", dest: nullId, type: optionalPayload });
+          emit(ctx, { kind: "const_null", dest: nullId, type: optional.carrierType });
           caseLabels.push({ value: nullId, target: label });
           optionalNoneSeen = true;
           continue;
@@ -107,10 +105,10 @@ export function lowerSwitchExpr(ctx: LoweringCtx, expr: SwitchExpr): VarId {
     caseBlocks.push({ label, stmts: c.body, astCase: c });
   }
 
-  if (optionalPayload && optionalSomeLabel) {
+  if (optional && optionalSomeLabel) {
     if (explicitDefaultLabel && !optionalNoneSeen) {
       const nullId = freshVar(ctx);
-      emit(ctx, { kind: "const_null", dest: nullId, type: optionalPayload });
+      emit(ctx, { kind: "const_null", dest: nullId, type: optional.carrierType });
       caseLabels.push({ value: nullId, target: explicitDefaultLabel });
     }
     defaultLabel = optionalSomeLabel;
@@ -136,8 +134,22 @@ export function lowerSwitchExpr(ctx: LoweringCtx, expr: SwitchExpr): VarId {
         const fieldName = bindingInfo.fieldNames[i];
         const fieldTypeInfo = bindingInfo.fieldTypes[i];
         if (!bindingName || !fieldName || !fieldTypeInfo) continue;
-        if (optionalPayload && bindingInfo.variantName === "Some") {
-          ctx.varMap.set(bindingName, subjectId);
+        if (optional && bindingInfo.variantName === "Some") {
+          if (optional.payloadField) {
+            const payloadPtr = emitStackAlloc(ctx, optional.payloadType);
+            const fieldPtr = freshVar(ctx);
+            emit(ctx, {
+              kind: "field_ptr",
+              dest: fieldPtr,
+              base: payloadPtr,
+              field: optional.payloadField,
+              type: optional.carrierType,
+            });
+            emit(ctx, { kind: "store", ptr: fieldPtr, value: subjectId });
+            ctx.varMap.set(bindingName, payloadPtr);
+          } else {
+            ctx.varMap.set(bindingName, subjectId);
+          }
           continue;
         }
         const fieldPath = `data.${bindingInfo.variantName}.${fieldName}`;

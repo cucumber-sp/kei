@@ -270,4 +270,43 @@ describe("c-emitter", () => {
     expect(c).not.toContain("->tag");
     expect(c).not.toContain("->data.Some.value");
   });
+
+  test("emits Optional Shared handle enum as the handle pointer niche", () => {
+    const c = compileToC(`
+      pub unsafe struct Shared_i32 {
+        value: ref i32;
+        fn __oncopy(self: ref Shared_i32) {}
+        fn __destroy(self: ref Shared_i32) {}
+      }
+      enum Optional<T> { Some(value: T), None }
+      fn some(s: Shared_i32) -> Optional<Shared_i32> {
+        return Optional<Shared_i32>.Some(s);
+      }
+      fn none() -> Optional<Shared_i32> {
+        return Optional<Shared_i32>.None;
+      }
+      fn read(opt: Optional<Shared_i32>) -> i32 {
+        switch opt {
+          case Some(s):
+            return s.value;
+          case None:
+            return 7;
+        }
+        return 0;
+      }
+      fn main() -> int { return 0; }
+    `);
+
+    expect(c).toContain(
+      "/* Optional_Shared_i32: niche Optional represented as int32_t*; None = NULL */"
+    );
+    expect(c).toContain("int32_t* some(struct Shared_i32* _vs)");
+    expect(c).toContain("int32_t* none(void)");
+    expect(c).toContain("int32_t read(int32_t* _vopt)");
+    expect(c).toContain("= NULL;");
+    expect(c).not.toContain("Optional_Shared_i32 _v");
+    expect(c).not.toContain("Optional_Shared_i32*");
+    expect(c).not.toContain("->tag");
+    expect(c).not.toContain("->data.Some.value");
+  });
 });

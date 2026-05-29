@@ -10,10 +10,10 @@
 import type { CallExpr, MemberExpr } from "../ast/nodes";
 import type { VarId } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
-import { lowerExpr } from "./lowering-expr";
+import { lowerExpr, lowerExprAsPtr } from "./lowering-expr";
 import { lowerCheckerType } from "./lowering-types";
-import { emit, emitStackAlloc, freshVar } from "./lowering-utils";
-import { optionalNichePayloadType } from "./optional-niche";
+import { emit, emitFieldLoad, emitStackAlloc, freshVar } from "./lowering-utils";
+import { optionalNiche } from "./optional-niche";
 
 /**
  * Lower an enum data variant construction call: Shape.Circle(3.14)
@@ -34,10 +34,15 @@ export function lowerEnumVariantConstruction(ctx: LoweringCtx, expr: CallExpr): 
   if (!variant) return null;
   const tagValue = variant.value ?? variantIndex;
   const kirEnumType = lowerCheckerType(ctx, enumType);
-  const nichePayload = optionalNichePayloadType(kirEnumType);
-  if (nichePayload && variant.name === "Some") {
+  const niche = optionalNiche(kirEnumType);
+  if (niche && variant.name === "Some") {
     const arg = expr.args[0];
-    return arg ? lowerExpr(ctx, arg) : null;
+    if (!arg) return null;
+    if (niche.payloadField) {
+      const argPtr = lowerExprAsPtr(ctx, arg);
+      return emitFieldLoad(ctx, argPtr, niche.payloadField, niche.carrierType);
+    }
+    return lowerExpr(ctx, arg);
   }
 
   // stack_alloc the tagged union struct
@@ -99,11 +104,11 @@ export function lowerEnumVariantAccess(ctx: LoweringCtx, expr: MemberExpr): VarI
   const value = variant.value ?? variantIndex;
   const hasDataVariants = objectType.variants.some((v) => v.fields.length > 0);
   const kirEnumType = lowerCheckerType(ctx, objectType);
-  const nichePayload = optionalNichePayloadType(kirEnumType);
+  const niche = optionalNiche(kirEnumType);
 
-  if (nichePayload && variant.name === "None") {
+  if (niche && variant.name === "None") {
     const dest = freshVar(ctx);
-    emit(ctx, { kind: "const_null", dest, type: nichePayload });
+    emit(ctx, { kind: "const_null", dest, type: niche.carrierType });
     return dest;
   }
 
