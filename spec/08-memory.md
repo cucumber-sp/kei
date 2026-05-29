@@ -498,20 +498,20 @@ can, in a future pass, elide balanced retain/release pairs:
 `Shared<T>` is the canonical refcount primitive in stdlib. Every other
 refcounted stdlib type (`String`, `Array<T>`) composes it.
 
-Single-allocation layout: one `alloc` for `[count: i64 | T payload]`,
-with `refcount` and `value` as `ref` fields pointing into the same
-block. Copying a `Shared<T>` bumps the count; destroying drops it and
-frees the block on zero. See
+Single-allocation, one-word-handle layout: one `alloc` for
+`[count: i64 | T payload]`, with the public handle storing only
+`value: ref T`. The refcount pointer is derived from the payload address
+by subtracting the count header size. Copying a `Shared<T>` bumps the
+count; destroying drops it and frees the block on zero. See
 [`docs/design/ref-redesign.md`](../docs/design/ref-redesign.md) §3.1
 for the full implementation:
 
 ```kei
 unsafe struct Shared<T> {
-    refcount: ref i64;
     value: ref T;
 
     fn wrap(item: ref T) -> Shared<T> { /* alloc + placeAt<T> + literal */ }
-    fn __oncopy(self: ref Shared<T>) { self.refcount += 1; }
+    fn __oncopy(self: ref Shared<T>) { /* derive count pointer; increment */ }
     fn __destroy(self: ref Shared<T>) { /* dec; onDestroy + dealloc on zero */ }
 }
 ```

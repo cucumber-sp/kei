@@ -148,13 +148,23 @@ fn main() -> int {
 }
 ```
 
-The `null` literal can be assigned to any nullable raw pointer:
+Absence is represented with `Optional<T>`, not a source-level `null`
+literal. For nullable raw pointers, use `Optional<*T>`:
 
 ```kei
+enum Optional<T> {
+    Some(value: T),
+    None
+}
+
 unsafe {
-    let p: *int? = null;
+    let p: Optional<*int> = Optional<*int>.None;
 }
 ```
+
+`Optional<*T>` and `Optional<Shared<T>>` use a null pointer carrier
+internally, so `None` stays one word at runtime while source code still
+matches on `Some(...)` / `None`.
 
 ### Inline arrays
 
