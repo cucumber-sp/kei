@@ -262,19 +262,22 @@ let b = move a;     // no __oncopy, a becomes invalid
 
 ```kei
 unsafe struct Shared<T> {
-    refcount: ref i64;
     value: ref T;
 
     fn __oncopy(self: ref Shared<T>) {
-        self.refcount += 1;
+        unsafe {
+            let countPtr = ((self.value as usize) - sizeof(i64)) as *i64;
+            *countPtr = *countPtr + 1;
+        }
     }
 
     fn __destroy(self: ref Shared<T>) {
-        self.refcount -= 1;
-        if self.refcount == 0 {
-            unsafe {
+        unsafe {
+            let countPtr = ((self.value as usize) - sizeof(i64)) as *i64;
+            *countPtr = *countPtr - 1;
+            if *countPtr == 0 {
                 onDestroy(self.value as *T);
-                dealloc(self.refcount as *void);
+                dealloc(countPtr as *void);
             }
         }
     }

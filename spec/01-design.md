@@ -169,9 +169,9 @@ fn openDatabase(path: string) -> Database throws DatabaseError {
         if result != SQLITE_OK {
             throw DatabaseError{ message: "Failed to open database" };
         }
-        match db {
-            Some(handle) => return Database{ handle: handle },
-            None         => throw DatabaseError{ message: "C call returned a missing handle" },
+        switch db {
+            case Some(handle): return Database{ handle: handle };
+            case None: throw DatabaseError{ message: "C call returned a missing handle" };
         }
     }
 }

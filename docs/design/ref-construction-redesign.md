@@ -46,7 +46,7 @@ For `param: ref T` (or `self.field` of type `ref T`):
 
 ```kei
 unsafe {
-    let p: *T = &self.refcount;        // bound pointer
+    let p: *T = &self.value;           // bound pointer
     dealloc(p as *void);
 }
 ```
@@ -134,7 +134,6 @@ way to observe a partially-initialized `unsafe struct`.
 
 ```kei
 pub unsafe struct Shared<T> {
-    refcount: ref i64;
     value: ref T;
 
     fn wrap(item: ref T) -> Shared<T> {
@@ -148,22 +147,26 @@ pub unsafe struct Shared<T> {
             *countPtr = 1;
             placeAt<T>(valuePtr, item); // memcpy + onCopy
 
-            // 3. Construct via struct literal — seats both bindings
-            //    in one step.
-            return Shared<T>{ refcount: countPtr, value: valuePtr };
+            // 3. Construct via struct literal — seats the payload binding.
+            //    The count pointer is derived from value when hooks run.
+            return Shared<T>{ value: valuePtr };
         }
     }
 
     fn __oncopy(self: ref Shared<T>) {
-        self.refcount += 1;
+        unsafe {
+            let countPtr = ((self.value as usize) - sizeof(i64)) as *i64;
+            *countPtr = *countPtr + 1;
+        }
     }
 
     fn __destroy(self: ref Shared<T>) {
-        self.refcount -= 1;
-        if self.refcount == 0 {
-            unsafe {
+        unsafe {
+            let countPtr = ((self.value as usize) - sizeof(i64)) as *i64;
+            *countPtr = *countPtr - 1;
+            if *countPtr == 0 {
                 onDestroy(self.value as *T);      // run T's __destroy
-                dealloc(self.refcount as *void);
+                dealloc(countPtr as *void);
             }
         }
     }

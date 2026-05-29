@@ -264,8 +264,7 @@ Single-allocation layout, layout invariant entirely contained in stdlib:
 ```kei
 import { alloc, dealloc, placeAt } from mem;
 
-unsafe struct Shared<T> {
-    refcount: ref i64;
+pub unsafe struct Shared<T> {
     value: ref T;
 
     fn wrap(item: ref T) -> Shared<T> {
@@ -278,20 +277,24 @@ unsafe struct Shared<T> {
             *countPtr = 1;
             placeAt<T>(valuePtr, item);      // memcpy + onCopy of *item
 
-            return Shared<T>{ refcount: countPtr, value: valuePtr };
+            return Shared<T>{ value: valuePtr };
         }
     }
 
     fn __oncopy(self: ref Shared<T>) {
-        self.refcount += 1;                  // auto-deref through ref i64 field
+        unsafe {
+            let countPtr = ((self.value as usize) - sizeof(i64)) as *i64;
+            *countPtr = *countPtr + 1;
+        }
     }
 
     fn __destroy(self: ref Shared<T>) {
-        self.refcount -= 1;
-        if self.refcount == 0 {
-            unsafe {
+        unsafe {
+            let countPtr = ((self.value as usize) - sizeof(i64)) as *i64;
+            *countPtr = *countPtr - 1;
+            if *countPtr == 0 {
                 onDestroy(self.value as *T);
-                dealloc(self.refcount as *void);
+                dealloc(countPtr as *void);
             }
         }
     }
@@ -306,13 +309,13 @@ Notes:
   without bumping its own count. Both return void; lifecycle hooks mutate
   through the ref in place rather than returning a new value (see §2.5
   ABI note).
-- `self.refcount` is a `ref i64` field, so `self.refcount += 1` and
-  `self.refcount == 0` auto-deref naturally. Raw pointers are only used
-  inside the unsafe implementation to allocate, seed, destroy, and free
-  the underlying block.
-- The single-allocation layout is invisible to consumers; it could change to
-  two allocations (or a fat handle, or a different header) without affecting
-  any caller.
+- The public handle is one word: only `value: ref T` is stored. The refcount
+  pointer is derived from the payload address by subtracting the `i64`
+  header size. Raw pointers are only used inside the unsafe implementation to
+  allocate, seed, destroy, and free the underlying block.
+- The one-word handle layout is visible only through ABI and niche layout.
+  Consumers still use `s.value` for explicit write-through and never observe
+  the hidden header directly.
 
 ### 3.2 String, post-redesign
 
@@ -839,9 +842,9 @@ struct User {
 
 fn talk(child: ref User) {
     if child.parent.exists() {
-        match child.parent.value() {
-            Some(p) => print("hello " + p.name),
-            None    => {}    // raced with destruction
+        switch child.parent.value() {
+            case Some(p): print("hello " + p.name);
+            case None: {}    // raced with destruction
         }
     }
 }
@@ -907,9 +910,9 @@ Used wherever absence is a possible outcome — `map.get(k)`, `parse(s)`,
 way to extract the inner value:
 
 ```kei
-match maybeName {
-    Some(name) => print("hi " + name),
-    None       => print("anonymous"),
+switch maybeName {
+    case Some(name): print("hi " + name);
+    case None: print("anonymous");
 }
 ```
 
@@ -920,7 +923,7 @@ word* whenever `T` has an unused bit pattern that can stand in for
 | Type               | `Optional<T>` representation                      |
 |--------------------|---------------------------------------------------|
 | `Optional<*T>`     | plain C pointer; null = `None` *(unsafe-only)*    |
-| `Optional<Shared<T>>` | pointer to control block; null = `None`        |
+| `Optional<Shared<T>>` | Shared handle's payload pointer carrier; null = `None` |
 | `Optional<Weak<T>>` | pointer to control block; null = `None`          |
 | `Optional<bool>`   | one byte; non-`{0,1}` pattern = `None`            |
 | `Optional<i32>` etc. | tag byte + `T` (no niche available)             |
@@ -929,15 +932,19 @@ The user spelling is uniform; the compiler picks the cheapest legal
 layout per instantiation. This is the "niche" optimization Rust ships
 for `Option<&T>`, `Option<Box<T>>`, etc.
 
-The compiler currently implements this for raw pointers (`Optional<*T>`).
-`Optional<Shared<T>>` and `Optional<Weak<T>>` are still design targets
-until those stdlib handles use a one-word control-block representation.
+The compiler currently implements this for raw pointers (`Optional<*T>`)
+and one-word `Shared<T>` handles (`Optional<Shared<T>>`). `Some(shared)`
+stores the handle's single pointer field as the carrier; `None` stores
+`NULL`; switch destructuring reconstructs the `Shared<T>` handle for the
+`Some(s)` binding. `Optional<Weak<T>>` remains a design target until
+`Weak<T>` itself lands.
 
 **No `null` literal at the source level.** Constructing absence is
 `Optional<T>.None` (or just `None` when the type is inferred). At the C
-ABI boundary an `Optional<*T>` value with `None` is a zero pointer;
-`extern fn` signatures that interop with C take `Optional<*T>` for
-nullable pointers and bare `*T` for non-null.
+ABI boundary an `Optional<*T>` value with `None` is a zero pointer.
+`Optional<Shared<T>>` uses the same null carrier internally for the
+one-word Shared handle. `extern fn` signatures that interop with C take
+`Optional<*T>` for nullable pointers and bare `*T` for non-null.
 
 The KIR retains `const_null` and `null_check` instructions — those
 operate at lowering level on the byte representation. Source-level Kei
@@ -963,6 +970,8 @@ Shipped:
   `ref T` fields in `unsafe struct` literals.
 - `Shared<T>` in stdlib, with end-to-end tests for wrap, alias-visible
   write-through, handle replacement, and readonly handle rules.
+- `Optional<*T>` and `Optional<Shared<T>>` niche layout, with `None` as a
+  null pointer carrier and `Some` destructuring through switches.
 - Removal of `ptr<T>`, `mut`, `ref mut T`, `slice<T>`, `addr`, and `init`.
 
 Still follow-up work:
@@ -970,7 +979,7 @@ Still follow-up work:
 - Auto-generated lifecycle hooks should consistently use the `self: ref T`
   ABI.
 - Auto-last-use lifecycle elision and any explicit de-optimization surface.
-- `Weak<T>` for cycles and a later `Shared<T>` control-block layout update.
+- `Weak<T>` for cycles and its matching optional niche layout.
 - Reimplement the C string runtime as Kei `String` backed by
   `Shared<U8Buffer>`.
 
@@ -985,8 +994,8 @@ story. The following are explicitly out of scope:
 - Async / coroutines (planned post-traits).
 - Threading model (v2 spec; refcounts here remain non-atomic until then).
 - Optimizer passes beyond lifecycle elision (separate roadmap item).
-- `T?` representation (separate item; current placeholder lowering
-  unaffected).
+- Additional `Optional<T>` niches beyond raw pointers and one-word
+  `Shared<T>` handles.
 
 These items remain at their current spec status and are not blocked by or
 blocking this redesign.

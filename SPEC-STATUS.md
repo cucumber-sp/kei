@@ -17,7 +17,7 @@ and covered by tests.
 
 | Item                                                          | Status   | Notes                                              |
 |---------------------------------------------------------------|----------|----------------------------------------------------|
-| `Optional<T>` niche layout for pointer-shaped types           | WIP      | Shipped for raw pointers: `Optional<*T>` lowers to a plain pointer and `None` is `NULL`. `Shared<T>` / `Weak<T>` niches wait on one-word handle/control-block layout. |
+| `Optional<T>` niche layout for pointer-shaped types           | WIP      | Shipped for raw pointers and one-word `Shared<T>` handles: `Optional<*T>` and `Optional<Shared<T>>` lower to a plain pointer carrier and `None` is `NULL`. `Weak<T>` remains planned. |
 | Traits / trait objects                                        | PLANNED  | Fat-pointer layout `(data, vtable)` with size + destroy slot. |
 | `String` / `Array<T>` / `List<T>` as stdlib types             | PLANNED  | `String` migration deferred — runtime currently in C (`runtime.h`). `Array<T>` and `List<T>` build on the shipped `Shared<T>` foundation. |
 

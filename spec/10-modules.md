@@ -198,9 +198,9 @@ unsafe struct Database {
             if rc != 0 {
                 throw DbError{ code: rc, message: "Failed to open database" };
             }
-            match raw {
-                Some(handle) => return Database{ handle: handle },
-                None         => throw DbError{ code: -1, message: "C call returned a missing handle" },
+            switch raw {
+                case Some(handle): return Database{ handle: handle };
+                case None: throw DbError{ code: -1, message: "C call returned a missing handle" };
             }
         }
     }
@@ -313,9 +313,9 @@ unsafe struct File {
         unsafe {
             let cPath = path.toCString();
             let cMode = mode.toCString();
-            match fopen(cPath, cMode) {
-                Some(handle) => return File{ handle: handle },
-                None         => throw IoError{ message: "Failed to open file" },
+            switch fopen(cPath, cMode) {
+                case Some(handle): return File{ handle: handle };
+                case None: throw IoError{ message: "Failed to open file" };
             }
         }
     }

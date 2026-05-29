@@ -292,11 +292,12 @@ new layout.
   call from `Foo<string>`). Today's code already handles this via the
   registered-structs map; preserving that. Will be resolved properly
   when candidate #3 (monomorphization deepening) is grilled.
-- **Generic enums + `Optional<T>` ([#19](https://github.com/cucumber-sp/kei/issues/19)).**
-  Once generic enums land and `Optional<T>` is a real type, the
-  Lifecycle pass needs to handle `Optional<ManagedT>` correctly. The
-  marker design is type-agnostic, so this should be additive — but
-  worth checking when #19 is in flight.
+- **Managed enum payloads + `Optional<T>`.** Generic enums and the
+  `Optional<*T>` / `Optional<Shared<T>>` niche layouts have landed, but
+  lifecycle destruction for managed enum payloads is still a broader enum
+  ownership concern. The marker design is type-agnostic, so conditional
+  optional destroys should be additive rather than a reason to special-case
+  `Shared<T>` in the niche lowering path.
 
 ## 9. Tests that come with the migration
 

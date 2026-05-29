@@ -239,7 +239,6 @@ value for each `ref T` field and seats the binding in one step:
 
 ```kei
 unsafe struct Shared<T> {
-    refcount: ref i64;
     value: ref T;
 
     fn wrap(item: ref T) -> Shared<T> {
@@ -251,7 +250,7 @@ unsafe struct Shared<T> {
             *countPtr = 1;
             placeAt<T>(valuePtr, item); // memcpy + onCopy
 
-            return Shared<T>{ refcount: countPtr, value: valuePtr };
+            return Shared<T>{ value: valuePtr };
         }
     }
 }
@@ -320,9 +319,9 @@ Used wherever a value may be absent — failed lookups, parse failures,
 ```kei
 let name: Optional<string> = maybeLookup(id);
 
-match name {
-    Some(s) => print("hi " + s),
-    None    => print("anonymous"),
+switch name {
+    case Some(s): print("hi " + s);
+    case None: print("anonymous");
 }
 ```
 
@@ -341,7 +340,7 @@ byte:
 | Type                  | `Optional<T>` representation                     |
 |-----------------------|--------------------------------------------------|
 | `Optional<*T>`        | plain C pointer; null pointer = `None` *(unsafe-only)* |
-| `Optional<Shared<T>>` | pointer to control block; null = `None`         |
+| `Optional<Shared<T>>` | Shared handle's payload pointer carrier; null = `None` |
 | `Optional<Weak<T>>`   | pointer to control block; null = `None`         |
 | `Optional<string>`    | inherits string layout; `len = usize::MAX` = `None` |
 | `Optional<bool>`      | one byte; non-`{0,1}` pattern = `None`          |
@@ -353,19 +352,21 @@ layout per instantiation. This matches Rust's "niche" optimization for
 `Option<&T>`, `Option<Box<T>>`, etc.
 
 Implementation status: the compiler currently ships this representation
-for `Optional<*T>`. `Optional<Shared<T>>` and `Optional<Weak<T>>` become
-niche-backed once those handle types are one-word control-block pointers.
+for `Optional<*T>` and `Optional<Shared<T>>`. `Optional<Shared<T>>` stores
+the one-word handle's pointer carrier directly and reconstructs the handle
+when `Some(s)` is destructured. `Optional<Weak<T>>` becomes niche-backed
+once `Weak<T>` itself lands.
 
 ### The rules
 
 - `Optional<T>` is the only way to express absence at the source level.
 - Bare types are never absent — the type system enforces that you can't
   read a "missing" `string` or `i32`.
-- Accessing the inner value of an `Optional<T>` requires `match`/`if let`
+- Accessing the inner value of an `Optional<T>` requires `switch`
   destructuring. There is no implicit unwrap.
-- `Optional<*T>` is zero-overhead at runtime thanks to niche layout.
-  Other pointer-shaped optionals use the same rule once their payload
-  type has a zero/null niche to claim.
+- `Optional<*T>` and `Optional<Shared<T>>` are zero-overhead at runtime
+  thanks to niche layout. Other pointer-shaped optionals use the same rule
+  once their payload type has a zero/null niche to claim.
 
 ## Generics
 
@@ -397,19 +398,22 @@ let p = Pair<int, string>{ first: 42, second: "hello" };
 
 ```kei
 unsafe struct Shared<T> {
-    refcount: ref i64;
     value: ref T;
 
     fn __oncopy(self: ref Shared<T>) {
-        self.refcount += 1;
+        unsafe {
+            let countPtr = ((self.value as usize) - sizeof(i64)) as *i64;
+            *countPtr = *countPtr + 1;
+        }
     }
 
     fn __destroy(self: ref Shared<T>) {
-        self.refcount -= 1;
-        if self.refcount == 0 {
-            unsafe {
+        unsafe {
+            let countPtr = ((self.value as usize) - sizeof(i64)) as *i64;
+            *countPtr = *countPtr - 1;
+            if *countPtr == 0 {
                 onDestroy(self.value as *T);
-                dealloc(self.refcount as *void);
+                dealloc(countPtr as *void);
             }
         }
     }
@@ -556,9 +560,9 @@ Absence is constructed with `Optional<T>.None`:
 ```kei
 unsafe {
     let p: Optional<*int> = Optional<*int>.None;
-    match p {
-        Some(raw) => *raw = 42,    // raw is *int, safe to deref
-        None      => {}
+    switch p {
+        case Some(raw): *raw = 42; // raw is *int, safe to deref
+        case None: {}
     }
 }
 ```
