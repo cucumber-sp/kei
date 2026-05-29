@@ -134,6 +134,10 @@ export function lowerUnaryExpr(ctx: LoweringCtx, expr: UnaryExpr): VarId {
     return lowerOperatorMethodCall(ctx, expr.operand, opMethod.methodName, opMethod.structType, []);
   }
 
+  if (expr.operator === "&") {
+    return lowerAddressOfExpr(ctx, expr.operand);
+  }
+
   const operand = lowerExpr(ctx, expr.operand);
   const dest = freshVar(ctx);
 
@@ -151,8 +155,6 @@ export function lowerUnaryExpr(ctx: LoweringCtx, expr: UnaryExpr): VarId {
       emit(ctx, { kind: "bit_not", dest, operand, type });
       return dest;
     }
-    case "&":
-      return lowerAddressOfExpr(ctx, expr.operand);
     default:
       return operand;
   }

@@ -269,10 +269,10 @@ Three rules tie the construction story together:
   coercion is not available, so safe code can only construct
   `unsafe struct`s through their public `fn` factories.
 
-- **Reading the bound pointer uses `&(*field)`.** For a `ref T` field
-  or parameter, `*field` auto-derefs to T; `&` of that value is the
-  field's bound `*T`. Used inside lifecycle hooks to get the underlying
-  pointer for `dealloc`, raw byte work, etc.
+- **Reading the bound pointer uses `&field`.** For a `ref T` field
+  or parameter, `&field` desugars to `&(*field)` and returns the bound
+  `*T`, not the slot's own address. Used inside lifecycle hooks to get
+  the underlying pointer for `dealloc`, raw byte work, etc.
 
 ### Placing values through a binding
 
