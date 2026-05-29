@@ -23,7 +23,7 @@
 
 import { describe, expect, test } from "bun:test";
 import type { StructType, Type } from "../../src/checker/types";
-import { functionType, STRING_TYPE, TypeKind, VOID_TYPE } from "../../src/checker/types";
+import { functionType, refType, STRING_TYPE, TypeKind, VOID_TYPE } from "../../src/checker/types";
 import type { KirFieldPtr, KirFunction } from "../../src/kir/kir-types";
 import type { LifecycleDecision } from "../../src/lifecycle";
 import { synthesise } from "../../src/lifecycle";
@@ -48,7 +48,13 @@ function makeStruct(name: string, fields: Array<[string, Type]> = []): StructTyp
 function withDestroyHook(struct: StructType): StructType {
   struct.methods.set(
     "__destroy",
-    functionType([{ name: "self", type: struct, isReadonly: false }], VOID_TYPE, [], [], false)
+    functionType(
+      [{ name: "self", type: refType(struct), isReadonly: false }],
+      VOID_TYPE,
+      [],
+      [],
+      false
+    )
   );
   return struct;
 }
@@ -56,7 +62,13 @@ function withDestroyHook(struct: StructType): StructType {
 function withOncopyHook(struct: StructType): StructType {
   struct.methods.set(
     "__oncopy",
-    functionType([{ name: "self", type: struct, isReadonly: false }], struct, [], [], false)
+    functionType(
+      [{ name: "self", type: refType(struct), isReadonly: false }],
+      VOID_TYPE,
+      [],
+      [],
+      false
+    )
   );
   return struct;
 }
@@ -84,6 +96,12 @@ describe("Lifecycle.synthesise — table-driven", () => {
     const destroy = findArm(fns, "___destroy");
     expect(destroy).toBeDefined();
     expect(destroy?.name).toBe("Greeting___destroy");
+    expect(destroy?.params).toEqual([
+      {
+        name: "self",
+        type: { kind: "ptr", pointee: { kind: "struct", name: "Greeting", fields: [] } },
+      },
+    ]);
     // Body destroys the `text` field via kei_string_destroy.
     const insts = destroy!.blocks[0]!.instructions;
     expect(insts).toEqual([
@@ -109,6 +127,12 @@ describe("Lifecycle.synthesise — table-driven", () => {
     const oncopy = findArm(fns, "___oncopy");
     expect(oncopy).toBeDefined();
     expect(oncopy?.name).toBe("Greeting___oncopy");
+    expect(oncopy?.params).toEqual([
+      {
+        name: "self",
+        type: { kind: "ptr", pointee: { kind: "struct", name: "Greeting", fields: [] } },
+      },
+    ]);
     const insts = oncopy!.blocks[0]!.instructions;
     // field_ptr → load → kei_string_copy → store back
     expect(insts).toEqual([

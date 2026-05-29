@@ -98,6 +98,20 @@ describe("c-emitter", () => {
     expect(prototypes.length).toBeGreaterThan(0);
   });
 
+  test("auto-generated lifecycle hooks use pointer self ABI", () => {
+    const c = compileToC(`
+      struct Holder {
+        name: string;
+      }
+      fn main() -> int { return 0; }
+    `);
+
+    expect(c).toContain("void Holder___destroy(struct Holder* _vself)");
+    expect(c).toContain("void Holder___oncopy(struct Holder* _vself)");
+    expect(c).not.toContain("void Holder___destroy(struct Holder _vself)");
+    expect(c).not.toContain("void Holder___oncopy(struct Holder _vself)");
+  });
+
   test("emits negation", () => {
     const c = compileToC(`
       fn neg(x: int) -> int { return -x; }
