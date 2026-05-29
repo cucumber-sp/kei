@@ -1,8 +1,9 @@
 // std/shared.kei — Reference-counted shared owner.
 //
-// Canonical pattern from `docs/design/ref-redesign.md` §3.1: a small
-// `unsafe struct` with two `ref` fields (refcount + value) that point
-// into a single heap allocation `[count: i64 | T payload]`.
+// One-word handle: the public handle stores only a `ref T` to the
+// payload inside one heap allocation `[count: i64 | T payload]`. The
+// refcount pointer is derived from the payload address by subtracting
+// the count header size.
 //
 // Mutation is alias-visible and explicit:
 //   `s.value = newT`        — write-through (destroy old + oncopy new)
@@ -16,7 +17,6 @@
 import { alloc, dealloc, placeAt } from mem;
 
 pub unsafe struct Shared<T> {
-    refcount: ref i64;
     value: ref T;
 
     fn wrap(item: ref T) -> Shared<T> {
@@ -29,20 +29,24 @@ pub unsafe struct Shared<T> {
             *countPtr = 1;
             placeAt<T>(valuePtr, item);
 
-            return Shared<T>{ refcount: countPtr, value: valuePtr };
+            return Shared<T>{ value: valuePtr };
         }
     }
 
     fn __oncopy(self: ref Shared<T>) {
-        self.refcount += 1;                  // auto-deref through ref i64 field
+        unsafe {
+            let countPtr = ((self.value as usize) - sizeof(i64)) as *i64;
+            *countPtr = *countPtr + 1;
+        }
     }
 
     fn __destroy(self: ref Shared<T>) {
-        self.refcount -= 1;
-        if self.refcount == 0 {
-            unsafe {
+        unsafe {
+            let countPtr = ((self.value as usize) - sizeof(i64)) as *i64;
+            *countPtr = *countPtr - 1;
+            if *countPtr == 0 {
                 onDestroy(self.value as *T);
-                dealloc(self.refcount as *void);
+                dealloc(countPtr as *void);
             }
         }
     }

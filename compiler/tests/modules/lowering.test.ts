@@ -178,6 +178,23 @@ describe("Multi-module monomorphized method body resolution", () => {
     expect(wrapCalls).not.toContain("shared_placeAt_i32");
   });
 
+  test("real stdlib Shared<T> lowers to one pointer field", () => {
+    const kirModule = lowerMultiModule("main_uses_real_shared.kei");
+    const shared = kirModule.types.find((t) => t.name === "Shared_i32");
+    expect(shared?.type.kind).toBe("struct");
+    if (shared?.type.kind !== "struct") return;
+
+    expect(shared.type.fields).toEqual([
+      {
+        name: "value",
+        type: {
+          kind: "ptr",
+          pointee: { kind: "int", bits: 32, signed: true },
+        },
+      },
+    ]);
+  });
+
   test("imported generic helper bodies are checked under concrete type arguments", () => {
     const kirModule = lowerMultiModule("main_uses_real_shared.kei");
     const placeAtFn = kirModule.functions.find((f) => f.name === "mem_placeAt_i32");
