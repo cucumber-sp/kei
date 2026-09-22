@@ -249,16 +249,16 @@ export interface Diagnostics {
   diagnostics(): readonly Diagnostic[];
 }
 
+function maybeSecondary(
+  span: Span | undefined,
+  label: string
+): { span: Span; label: string }[] | undefined {
+  return span === undefined ? undefined : [{ span, label }];
+}
+
 /** Construct a fresh diagnostics object. */
 export function createDiagnostics(config: LintConfig = {}): Diagnostics {
   const collector = createCollector(config);
-
-  function maybeSecondary(
-    span: Span | undefined,
-    label: string
-  ): { span: Span; label: string }[] | undefined {
-    return span === undefined ? undefined : [{ span, label }];
-  }
 
   // Stamp kind / code / catalog-default severity onto a variant-specific
   // payload. Centralises the three-field boilerplate that every typed

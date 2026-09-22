@@ -273,12 +273,12 @@ function instantiateGenericStruct(
   const resolvedTypeArgs: Type[] = [];
   const typeMap = new Map<string, Type>();
   for (let i = 0; i < expr.typeArgs.length; i++) {
-    // biome-ignore lint/style/noNonNullAssertion: i is within bounds of expr.typeArgs (loop guard)
+    // i is within bounds of expr.typeArgs (loop guard)
     const typeArg = expr.typeArgs[i]!;
     const resolved = checker.resolveType(typeArg);
     if (isErrorType(resolved)) return ERROR_TYPE;
     resolvedTypeArgs.push(resolved);
-    // biome-ignore lint/style/noNonNullAssertion: i is within bounds of genericParams (length equality asserted above)
+    // i is within bounds of genericParams (length equality asserted above)
     typeMap.set(baseStruct.genericParams[i]!, resolved);
   }
 
@@ -368,7 +368,7 @@ function checkGenericStructLiteralInferred(
   }
 
   // Build resolved type args from inferred subs
-  // biome-ignore lint/style/noNonNullAssertion: allInferred check below guards against undefined entries
+  // allInferred check below guards against undefined entries
   const resolvedTypeArgs = structType.genericParams.map((gp) => subs.get(gp)!);
   const allInferred = resolvedTypeArgs.every((t) => t !== undefined);
 

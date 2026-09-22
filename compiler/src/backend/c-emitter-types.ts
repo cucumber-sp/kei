@@ -33,27 +33,27 @@ export function emitCType(t: KirType): string {
       return hasData ? sanitizeName(t.name) : `enum ${sanitizeName(t.name)}`;
     }
     case "array":
-      return `${emitCType(t.element)}`;
+      return emitCType(t.element);
     case "function":
       return "void*";
   }
 }
 
-export function emitCTypeForDecl(t: KirType, varName: string): string {
+export function emitCTypeForDecl(t: KirType, identifier: string): string {
   if (t.kind === "array") {
     // `inline<T, N>` lowers to a fixed-size C array. With no known length
     // (legacy `array<T>` placeholder), decay to `T*` since `T name[0]` is
     // not valid C.
     if (t.length && t.length > 0) {
-      return `${emitCType(t.element)} ${varName}[${t.length}]`;
+      return `${emitCType(t.element)} ${identifier}[${t.length}]`;
     }
-    return `${emitCType(t.element)}* ${varName}`;
+    return `${emitCType(t.element)}* ${identifier}`;
   }
   if (t.kind === "struct" && t.name.startsWith("__err_union_")) {
     const members = t.fields.map((f) => `${emitCType(f.type)} ${sanitizeName(f.name)};`).join(" ");
-    return `union { ${members} } ${varName}`;
+    return `union { ${members} } ${identifier}`;
   }
-  return `${emitCType(t)} ${varName}`;
+  return `${emitCType(t)} ${identifier}`;
 }
 
 // ─── Name helpers ───────────────────────────────────────────────────────────

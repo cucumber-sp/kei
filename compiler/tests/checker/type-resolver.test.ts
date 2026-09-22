@@ -3,7 +3,7 @@ import type { TypeNode } from "../../src/ast/nodes";
 import { Scope } from "../../src/checker/scope";
 import { typeSymbol } from "../../src/checker/symbols";
 import { TypeResolver } from "../../src/checker/type-resolver";
-import type { StructType } from "../../src/checker/types";
+import type { FunctionType, StructType, Type } from "../../src/checker/types";
 import {
   arrayType,
   BOOL_TYPE,
@@ -25,19 +25,19 @@ import type { Span } from "../../src/lexer/token";
 const span: Span = { start: 0, end: 0 };
 
 function namedType(name: string): TypeNode {
-  return { kind: "NamedType", name, span } as TypeNode;
+  return { kind: "NamedType", name, span };
 }
 
 function genericType(name: string, typeArgs: TypeNode[]): TypeNode {
-  return { kind: "GenericType", name, typeArgs, span } as TypeNode;
+  return { kind: "GenericType", name, typeArgs, span };
 }
 
 function makeStructType(
   name: string,
-  fields: [string, import("../../src/checker/types").Type][],
+  fields: [string, Type][],
   opts: {
     genericParams?: string[];
-    methods?: [string, import("../../src/checker/types").FunctionType][];
+    methods?: [string, FunctionType][];
   } = {}
 ): StructType {
   return {
@@ -169,7 +169,7 @@ describe("TypeResolver", () => {
       const resolver = new TypeResolver();
       const scope = new Scope();
       const customSpan: Span = { start: 10, end: 20 };
-      resolver.resolve({ kind: "NamedType", name: "Missing", span: customSpan } as TypeNode, scope);
+      resolver.resolve({ kind: "NamedType", name: "Missing", span: customSpan }, scope);
 
       expect(resolver.getDiagnostics()[0]!.span).toEqual(customSpan);
     });

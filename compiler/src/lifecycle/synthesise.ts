@@ -80,13 +80,13 @@ function synthesiseDestroy(
 
   const insts: KirInst[] = [];
   let varCounter = 0;
-  const freshVar = (): VarId => `%_v${varCounter++}` as VarId;
-  const selfVar: VarId = "%self" as VarId;
+  const freshVar = (): VarId => `%_v${varCounter++}`;
+  const selfVar: VarId = "%self";
 
   // Spec §6.9: reverse declaration order so a later-declared field that
   // borrows into an earlier-declared one is torn down first.  The
   // decision carries fields in declaration order; we reverse here.
-  for (const field of [...fields].reverse()) {
+  for (const field of fields.toReversed()) {
     const fieldType = struct.fields.get(field.name);
     if (!fieldType) continue;
     emitDestroyField(insts, freshVar, selfVar, field.name, fieldType);
@@ -120,8 +120,8 @@ function synthesiseOncopy(
 
   const insts: KirInst[] = [];
   let varCounter = 0;
-  const freshVar = (): VarId => `%_v${varCounter++}` as VarId;
-  const selfVar: VarId = "%self" as VarId;
+  const freshVar = (): VarId => `%_v${varCounter++}`;
+  const selfVar: VarId = "%self";
 
   for (const field of fields) {
     const fieldType = struct.fields.get(field.name);

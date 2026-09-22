@@ -13,7 +13,7 @@ import {
 import { lookupPrimitiveType } from "./builtins";
 import type { Scope } from "./scope";
 import { SymbolKind } from "./symbols";
-import type { FunctionType, Type } from "./types";
+import type { EnumType, FunctionType, StructType, Type } from "./types";
 import { arrayType, ERROR_TYPE, isStructType, ptrType, refType, TypeKind } from "./types";
 
 interface TypeResolverDiagnostic {
@@ -181,11 +181,7 @@ export class TypeResolver {
   }
 
   /** Instantiate a generic struct with concrete type arguments. */
-  private instantiateStructType(
-    base: import("./types/index.ts").StructType,
-    typeArgs: TypeNode[],
-    scope: Scope
-  ): Type {
+  private instantiateStructType(base: StructType, typeArgs: TypeNode[], scope: Scope): Type {
     const subs = new Map<string, Type>();
     const resolvedTypeArgs: Type[] = [];
     for (let i = 0; i < base.genericParams.length; i++) {
@@ -226,11 +222,7 @@ export class TypeResolver {
   }
 
   /** Instantiate a generic enum with concrete type arguments. */
-  private instantiateEnumType(
-    base: import("./types/index.ts").EnumType,
-    typeArgs: TypeNode[],
-    scope: Scope
-  ): Type {
+  private instantiateEnumType(base: EnumType, typeArgs: TypeNode[], scope: Scope): Type {
     const subs = new Map<string, Type>();
     const resolvedTypeArgs: Type[] = [];
     for (let i = 0; i < base.genericParams.length; i++) {

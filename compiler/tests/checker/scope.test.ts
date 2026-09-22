@@ -1,13 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { Scope } from "../../src/checker/scope";
 import { functionSymbol, SymbolKind, typeSymbol, variableSymbol } from "../../src/checker/symbols";
-import type { FunctionType } from "../../src/checker/types";
+import type { FunctionType, Type } from "../../src/checker/types";
 import { BOOL_TYPE, F64_TYPE, functionType, I32_TYPE, VOID_TYPE } from "../../src/checker/types";
 
-function makeFnType(
-  paramTypes: import("../../src/checker/types").Type[],
-  ret: import("../../src/checker/types").Type
-): FunctionType {
+function makeFnType(paramTypes: Type[], ret: Type): FunctionType {
   return functionType(
     paramTypes.map((t, i) => ({ name: `p${i}`, type: t, isReadonly: false })),
     ret

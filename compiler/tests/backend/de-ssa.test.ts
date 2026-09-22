@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { runDeSsa } from "../../src/backend/de-ssa";
-import type { KirFunction, KirModule, KirType, VarId } from "../../src/kir/kir-types";
+import type { KirFunction, KirModule, KirType } from "../../src/kir/kir-types";
 import { runMem2Reg } from "../../src/kir/mem2reg";
 import { lower } from "../kir/helpers";
 
@@ -228,27 +228,27 @@ describe("de-ssa: lost-copy regression", () => {
               id: "merge",
               phis: [
                 {
-                  dest: "%2" as VarId,
+                  dest: "%2",
                   type: i32,
-                  incoming: [{ value: "%0" as VarId, from: "entry" }],
+                  incoming: [{ value: "%0", from: "entry" }],
                 },
                 {
-                  dest: "%3" as VarId,
+                  dest: "%3",
                   type: i32,
-                  incoming: [{ value: "%2" as VarId, from: "entry" }],
+                  incoming: [{ value: "%2", from: "entry" }],
                 },
               ],
               instructions: [
                 {
                   kind: "bin_op",
                   op: "add" as const,
-                  dest: "%4" as VarId,
-                  lhs: "%2" as VarId,
-                  rhs: "%3" as VarId,
+                  dest: "%4",
+                  lhs: "%2",
+                  rhs: "%3",
                   type: i32,
                 },
               ],
-              terminator: { kind: "ret", value: "%4" as VarId },
+              terminator: { kind: "ret", value: "%4" },
             },
           ],
         },
@@ -309,27 +309,27 @@ describe("de-ssa: lost-copy regression", () => {
               id: "merge",
               phis: [
                 {
-                  dest: "%2" as VarId,
+                  dest: "%2",
                   type: i32,
-                  incoming: [{ value: "%0" as VarId, from: "entry" }],
+                  incoming: [{ value: "%0", from: "entry" }],
                 },
                 {
-                  dest: "%3" as VarId,
+                  dest: "%3",
                   type: i32,
-                  incoming: [{ value: "%1" as VarId, from: "entry" }],
+                  incoming: [{ value: "%1", from: "entry" }],
                 },
               ],
               instructions: [
                 {
                   kind: "bin_op",
                   op: "add" as const,
-                  dest: "%4" as VarId,
-                  lhs: "%2" as VarId,
-                  rhs: "%3" as VarId,
+                  dest: "%4",
+                  lhs: "%2",
+                  rhs: "%3",
                   type: i32,
                 },
               ],
-              terminator: { kind: "ret", value: "%4" as VarId },
+              terminator: { kind: "ret", value: "%4" },
             },
           ],
         },

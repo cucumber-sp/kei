@@ -43,7 +43,7 @@ function compileFull(source: string): string {
   }
 
   let mod = lowerToKir(program, result);
-  mod = runLifecyclePass(mod, result.lifecycle.getDecision);
+  mod = runLifecyclePass(mod, (struct) => result.lifecycle.getDecision(struct));
   mod = runMem2Reg(mod);
   mod = runDeSsa(mod);
   return emitC(mod);
@@ -198,9 +198,9 @@ describe("stress: deeply nested expressions", () => {
 
 describe("stress: many function overloads", () => {
   test("12 overloads of the same function name", () => {
-    const overloads = Array.from({ length: 12 }, (_, i) => {
-      const params = Array.from({ length: i + 1 }, (_, j) => `p${j}: i32`).join(", ");
-      const sum = Array.from({ length: i + 1 }, (_, j) => `p${j}`).join(" + ");
+    const overloads = Array.from({ length: 12 }, (_outer, i) => {
+      const params = Array.from({ length: i + 1 }, (_param, j) => `p${j}: i32`).join(", ");
+      const sum = Array.from({ length: i + 1 }, (_term, j) => `p${j}`).join(" + ");
       return `fn compute(${params}) -> i32 { return ${sum}; }`;
     }).join("\n");
 
@@ -521,8 +521,10 @@ describe("stress: large arrays", () => {
 
 describe("stress: combined scenarios", () => {
   test("many functions each with many local variables", () => {
-    const fns = Array.from({ length: 50 }, (_, fi) => {
-      const vars = Array.from({ length: 20 }, (_, vi) => `  let v${vi}: i32 = ${vi};`).join("\n");
+    const fns = Array.from({ length: 50 }, (_function, fi) => {
+      const vars = Array.from({ length: 20 }, (_variable, vi) => `  let v${vi}: i32 = ${vi};`).join(
+        "\n"
+      );
       return `fn func${fi}() -> i32 {\n${vars}\n  return v19;\n}`;
     }).join("\n");
     const source = `${fns}\nfn main() -> i32 { return func0(); }`;

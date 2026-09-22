@@ -24,7 +24,7 @@ import type {
   TypeNode,
   UnsafeExpr,
 } from "../ast/nodes";
-import type { FunctionType } from "../checker/types";
+import type { Type } from "../checker/types";
 import type { KirType, VarId } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
 import { lowerEnumVariantAccess, lowerEnumVariantConstruction } from "./lowering-enum";
@@ -294,7 +294,7 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
   //   - T arg → `ref T` param (auto-reference at call site; emits &arg).
   const calleeFnType = (() => {
     const t = ctx.checkResult.types.typeMap.get(expr.callee);
-    return t && t.kind === "function" ? (t as FunctionType) : null;
+    return t && t.kind === "function" ? t : null;
   })();
   const args = expr.args.map((a, i) => {
     const argType = ctx.checkResult.types.typeMap.get(a);
@@ -353,7 +353,7 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
     if (ctx.overloadedNames.has(baseName)) {
       const calleeType = ctx.checkResult.types.typeMap.get(expr.callee);
       if (calleeType && calleeType.kind === "function") {
-        funcName = mangleFunctionNameFromType(ctx, resolvedBase, calleeType as FunctionType);
+        funcName = mangleFunctionNameFromType(ctx, resolvedBase, calleeType);
       } else {
         funcName = resolvedBase;
       }
@@ -374,11 +374,7 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
       const calleeResolvedType = ctx.checkResult.types.typeMap.get(expr.callee);
       if (calleeResolvedType && calleeResolvedType.kind === "function") {
         if (ctx.overloadedNames.has(callName)) {
-          funcName = mangleFunctionNameFromType(
-            ctx,
-            baseMangledName,
-            calleeResolvedType as FunctionType
-          );
+          funcName = mangleFunctionNameFromType(ctx, baseMangledName, calleeResolvedType);
         } else {
           funcName = baseMangledName;
         }
@@ -509,7 +505,7 @@ export function lowerMemberExpr(ctx: LoweringCtx, expr: MemberExpr): VarId {
   // checker keeps the `ref T` spelling there — `getExprKirType`
   // already collapses it to `*T`, which is the slot type we need
   // to pass to field_ptr / the first load.
-  let structFieldType: import("../checker/types").Type | undefined;
+  let structFieldType: Type | undefined;
   if (objectType?.kind === "struct") {
     structFieldType = objectType.fields.get(expr.property);
   } else if (

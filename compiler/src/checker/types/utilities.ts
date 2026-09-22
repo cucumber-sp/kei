@@ -117,17 +117,17 @@ export function extractLiteralInfo(
   if (expr.kind === "IntLiteral" || expr.kind === "FloatLiteral") {
     // Suffixed literals have an explicit type — don't allow implicit conversion
     if (expr.suffix) return null;
-    return { kind: expr.kind, value: expr.value as number };
+    return { kind: expr.kind, value: expr.value };
   }
   // Handle unary minus: -(IntLiteral) or -(FloatLiteral)
   if (expr.kind === "UnaryExpr" && expr.operator === "-" && expr.operand) {
     if (expr.operand.kind === "IntLiteral") {
       if (expr.operand.suffix) return null;
-      return { kind: "IntLiteral", value: -(expr.operand.value as number) };
+      return { kind: "IntLiteral", value: -expr.operand.value };
     }
     if (expr.operand.kind === "FloatLiteral") {
       if (expr.operand.suffix) return null;
-      return { kind: "FloatLiteral", value: -(expr.operand.value as number) };
+      return { kind: "FloatLiteral", value: -expr.operand.value };
     }
   }
   return null;

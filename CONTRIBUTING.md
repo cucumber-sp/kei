@@ -6,7 +6,10 @@ The compiler is written in TypeScript for Bun. Run commands from `compiler/`:
 bun install
 bun test
 bun test tests/checker/arrays.test.ts
-bunx biome check src/ tests/
+bun run format:check
+bun run lint
+bun run typecheck
+bun run deadcode
 bun src/cli.ts path/to/program.kei --run
 ```
 
@@ -25,4 +28,6 @@ Tests under `compiler/tests/` follow the source tree. Parser, checker, and KIR t
 - `docs/design/` and `docs/adr/` preserve architectural decisions.
 - GitHub issues track actionable work. [Remaining work](docs/roadmap.md) records cleanup left by the module migrations.
 
-Keep these in sync when behavior changes. Avoid putting rollout history into the specification or leaving completed PR plans in the current docs. Branch from `main`, describe what changed and why, and include `bun test` and Biome results in the PR.
+Keep these in sync when behavior changes. Avoid putting rollout history into the specification or leaving completed PR plans in the current docs. Branch from `main`, describe what changed and why, and include test, format, lint, and typecheck results in the PR.
+
+`bun run format` applies Oxfmt; `bun run lint:fix` applies safe Oxlint fixes. `bun run deadcode` reports unused files, exports, types, and dependencies with a nonzero exit code so it can be used as a cleanup gate. CI runs `deadcode:report` to show existing findings without blocking unrelated changes. `bun run cycles` reports import cycles separately.

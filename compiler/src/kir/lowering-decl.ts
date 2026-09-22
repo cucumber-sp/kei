@@ -266,7 +266,7 @@ export function lowerMonomorphizedFunction(
   // body returns a concrete type. Falls back to the template when no
   // clone is attached (defensive — pre-PR-4 callers, or the
   // multi-module orchestrator's deferred body-check path).
-  // biome-ignore lint/style/noNonNullAssertion: monomorphized functions always have a declaration set before lowering
+  // monomorphized functions always have a declaration set before lowering
   const decl = monoFunc.bakedDecl ?? monoFunc.declaration!;
   const concreteType = monoFunc.concrete;
 

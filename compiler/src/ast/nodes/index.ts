@@ -66,11 +66,5 @@ export type {
   WhileStmt,
 } from "./statements";
 export { StmtKind } from "./statements";
-export type {
-  GenericType,
-  NamedType,
-  RawPtrType,
-  RefType,
-  TypeNode,
-} from "./types";
+export type { GenericType, NamedType, RawPtrType, RefType, TypeNode } from "./types";
 export { TypeNodeKind } from "./types";

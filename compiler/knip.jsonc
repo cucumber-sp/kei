@@ -1,0 +1,7 @@
+{
+  "entry": ["src/cli.ts", "tests/**/*.test.ts"],
+  "project": ["src/**/*.ts", "tests/**/*.ts"],
+  "includeEntryExports": true,
+  // Loaded by Oxlint's type-aware mode, not imported from project sources.
+  "ignoreDependencies": ["oxlint-tsgolint"],
+}

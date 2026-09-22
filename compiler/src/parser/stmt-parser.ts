@@ -240,7 +240,7 @@ export function parseSwitchCase(ctx: ParserContext): SwitchCase {
       kind: "Identifier",
       name: identToken.lexeme,
       span: identToken.span,
-    } as Expression);
+    });
     ctx.expect(TokenKind.LeftParen);
     bindings = [];
     while (!ctx.check(TokenKind.RightParen) && !ctx.isAtEnd()) {

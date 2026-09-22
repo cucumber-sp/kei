@@ -263,7 +263,7 @@ export function resolveParamCheckerType(
 ): Type | undefined {
   const param = decl.params.find((p) => p.name === paramName);
   if (param) {
-    return nameToCheckerType(ctx, typeNodeName(param.typeAnnotation)) as Type;
+    return nameToCheckerType(ctx, typeNodeName(param.typeAnnotation));
   }
   return undefined;
 }

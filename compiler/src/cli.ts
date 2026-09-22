@@ -16,7 +16,7 @@ import { runDriver } from "./cli/driver";
 
 // Wrapped in an async IIFE so the entry has no top-level `await` — required
 // for `bun build --compile --bytecode`, which forces a CJS module format.
-(async () => {
+void (async () => {
   const result = parseArgs(process.argv.slice(2));
 
   if (result.kind === "help") {

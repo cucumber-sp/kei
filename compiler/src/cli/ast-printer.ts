@@ -41,7 +41,11 @@ export function printAst(node: Record<string, unknown>, indent: number): void {
     } else if (Array.isArray(value)) {
       simpleFields.push(`${key}=[${value.join(", ")}]`);
     } else {
-      simpleFields.push(`${key}=${String(value)}`);
+      const displayValue =
+        typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+          ? String(value)
+          : JSON.stringify(value);
+      simpleFields.push(`${key}=${displayValue}`);
     }
   }
 

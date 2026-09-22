@@ -26,6 +26,7 @@ import type {
   Param,
   Program,
   StaticDecl,
+  Statement,
   StructDecl,
   TypeNode,
   UnsafeStructDecl,
@@ -179,10 +180,7 @@ function visitTypeForNested(node: TypeNode, diags: RefPositionError[]): void {
 /**
  * Walk statements in a function body to find `let x: ref T` and reject.
  */
-function visitStatementForRef(
-  stmt: import("../ast/nodes").Statement,
-  diags: RefPositionError[]
-): void {
+function visitStatementForRef(stmt: Statement, diags: RefPositionError[]): void {
   switch (stmt.kind) {
     case "LetStmt":
     case "ConstStmt":

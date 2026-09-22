@@ -65,8 +65,7 @@ export function checkCatchExpression(checker: Checker, expr: CatchExpr): Type {
         checker.pushScope({});
         if (clause.varName) {
           // Default clause var — type is the union of unhandled error types (use first for now)
-          const unhandledTypes = throwsInfo.filter((t) => !handledTypes.has(typeToString(t)));
-          const firstUnhandled = unhandledTypes[0];
+          const firstUnhandled = throwsInfo.find((t) => !handledTypes.has(typeToString(t)));
           if (firstUnhandled) {
             checker.defineVariable(clause.varName, firstUnhandled, false, false, clause.span);
           }

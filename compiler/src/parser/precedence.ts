@@ -131,5 +131,5 @@ export function isAssignmentOperator(kind: TokenKind): boolean {
  * operator continues recursing (`a = b = c` → `a = (b = c)`).
  */
 export function nextMinPrecedence(prec: Precedence, assoc: Associativity): Precedence {
-  return assoc === Associativity.Right ? ((prec - 1) as Precedence) : prec;
+  return assoc === Associativity.Right ? prec - 1 : prec;
 }

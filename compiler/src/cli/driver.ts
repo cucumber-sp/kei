@@ -226,7 +226,7 @@ function compileToKir(
     outcome.mode === "multi"
       ? lowerModulesToKir(outcome.modules, outcome.result)
       : lowerToKir(program, outcome.result);
-  return { kir, getDecision: outcome.result.lifecycle.getDecision };
+  return { kir, getDecision: (struct) => outcome.result.lifecycle.getDecision(struct) };
 }
 
 /** --check: type-check only. Returns exit code. */

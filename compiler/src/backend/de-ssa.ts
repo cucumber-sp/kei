@@ -65,7 +65,7 @@ function deSsaFunction(fn: KirFunction): KirFunction {
         if (!copiesPerPred.has(from)) {
           copiesPerPred.set(from, []);
         }
-        // biome-ignore lint/style/noNonNullAssertion: entry was just initialized above
+        // entry was just initialized above
         copiesPerPred.get(from)!.push({
           dest: phi.dest,
           src: value,
@@ -95,9 +95,9 @@ function deSsaFunction(fn: KirFunction): KirFunction {
     // Phase 1: save interfering sources to temporaries
     const tempMap = new Map<VarId, VarId>();
     for (const src of needsTemp) {
-      // biome-ignore lint/style/noNonNullAssertion: src is in needsTemp only if it is also a dest, so find is guaranteed to succeed
+      // src is in needsTemp only if it is also a dest, so find is guaranteed to succeed
       const copy = copies.find((c) => c.dest === src)!;
-      const tempName = `%${tempCounter++}` as VarId;
+      const tempName = `%${tempCounter++}`;
       tempMap.set(src, tempName);
       const saveInst: KirInst = {
         kind: "cast",
@@ -124,7 +124,7 @@ function deSsaFunction(fn: KirFunction): KirFunction {
 
   // Clear all phi nodes
   for (const block of fn.blocks) {
-    // biome-ignore lint/style/noNonNullAssertion: all blocks were added to blockMap at the start of this function
+    // all blocks were added to blockMap at the start of this function
     const newBlock = blockMap.get(block.id)!;
     newBlock.phis = [];
   }
@@ -132,7 +132,7 @@ function deSsaFunction(fn: KirFunction): KirFunction {
   return {
     ...fn,
     localCount: tempCounter,
-    // biome-ignore lint/style/noNonNullAssertion: all blocks were added to blockMap at the start of this function
+    // all blocks were added to blockMap at the start of this function
     blocks: fn.blocks.map((b) => blockMap.get(b.id)!),
   };
 }

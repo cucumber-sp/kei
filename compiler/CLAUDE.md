@@ -6,7 +6,10 @@ Run commands from `compiler/`. This project uses Bun and a system C compiler, no
 bun install
 bun test
 bun test tests/checker/arrays.test.ts
-bunx biome check src/ tests/
+bun run format:check
+bun run lint
+bun run typecheck
+bun run deadcode
 bun src/cli.ts program.kei --run
 bun src/cli.ts program.kei --check
 bun src/cli.ts program.kei --emit-c
@@ -29,4 +32,4 @@ bun run build
 | Diagnostic | `src/diagnostics/types.ts`, `index.ts`, `format.ts`, and emitting stage |
 | Standard library API | `std/*.kei` and end-to-end tests |
 
-The [architecture overview](../docs/architecture.md) traces the pipeline. Tests use `bun:test` in `tests/` and should cover the changed layer plus an end-to-end path when behavior crosses stages. Biome enforces formatting and linting; relative imports omit `.ts` extensions. Project-wide documentation rules live in [the root guidance](../CLAUDE.md).
+The [architecture overview](../docs/architecture.md) traces the pipeline. Tests use `bun:test` in `tests/` and should cover the changed layer plus an end-to-end path when behavior crosses stages. Oxfmt formats code, Oxlint checks it, and Knip reports unused code. Use `bun run format` and `bun run lint:fix` for automatic changes. Relative imports omit `.ts` extensions. Project-wide documentation rules live in [the root guidance](../CLAUDE.md).

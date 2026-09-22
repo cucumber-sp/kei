@@ -8,7 +8,7 @@ function captureLog(fn: () => void): string {
   const lines: string[] = [];
   const original = console.log;
   console.log = (msg?: unknown) => {
-    lines.push(String(msg ?? ""));
+    lines.push(typeof msg === "string" ? msg : (JSON.stringify(msg ?? "") ?? ""));
   };
   try {
     fn();

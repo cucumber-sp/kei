@@ -8,6 +8,7 @@
  */
 
 import type { FunctionDecl, StructDecl, UnsafeStructDecl } from "../ast/nodes";
+import type { FunctionType } from "../checker/types";
 import type { MonomorphizedStruct } from "../monomorphization";
 import type { KirFunction, KirParam, KirType, KirTypeDecl, VarId } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
@@ -113,7 +114,7 @@ export function lowerMonomorphizedMethod(
   decl: FunctionDecl,
   mangledName: string,
   _structName: string,
-  concrete: import("../checker/types").FunctionType
+  concrete: FunctionType
 ): KirFunction {
   resetFunctionState(ctx);
   pushScope(ctx);

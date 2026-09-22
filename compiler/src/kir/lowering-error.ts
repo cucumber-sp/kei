@@ -4,7 +4,6 @@
  */
 
 import type { CatchExpr, Expression, ThrowExpr } from "../ast/nodes";
-import type { FunctionType } from "../checker/types";
 import type { KirType, VarId } from "./kir-types";
 import type { LoweringCtx } from "./lowering-ctx";
 import { lowerExpr } from "./lowering-expr";
@@ -29,7 +28,7 @@ import {
 export function lowerThrowExpr(ctx: LoweringCtx, expr: ThrowExpr): VarId {
   // throw ErrorType{} → cast __err to typed pointer, store error value, return error tag
   const valueId = lowerExpr(ctx, expr.value);
-  // biome-ignore lint/style/noNonNullAssertion: __err is always present in a throws function context
+  // __err is always present in a throws function context
   const errPtr = ctx.varMap.get("__err")!;
 
   // Determine the error type for casting
@@ -134,7 +133,7 @@ export function lowerCatchExpr(ctx: LoweringCtx, expr: CatchExpr): VarId {
     // Remove the previous call_throws (it was the last emitted instruction)
     ctx.currentInsts.pop(); // remove the call_throws we just emitted
 
-    // biome-ignore lint/style/noNonNullAssertion: __err is always present when inside a throws function (catch throw requires it)
+    // __err is always present when inside a throws function (catch throw requires it)
     const callerErrPtr = ctx.varMap.get("__err")!;
     emit(ctx, {
       kind: "call_throws",
@@ -319,7 +318,7 @@ export function resolveCallThrowsInfo(
     if (ctx.overloadedNames.has(baseName)) {
       const calleeType = ctx.checkResult.types.typeMap.get(callExpr.callee);
       if (calleeType && calleeType.kind === "function") {
-        funcName = mangleFunctionNameFromType(ctx, resolvedBase, calleeType as FunctionType);
+        funcName = mangleFunctionNameFromType(ctx, resolvedBase, calleeType);
       } else {
         funcName = resolvedBase;
       }
@@ -351,12 +350,8 @@ export function resolveCallThrowsInfo(
 
   // Fallback: try to get from checker's type info
   const calleeType = ctx.checkResult.types.typeMap.get(callExpr.callee);
-  if (
-    calleeType &&
-    calleeType.kind === "function" &&
-    (calleeType as FunctionType).throwsTypes.length > 0
-  ) {
-    const ft = calleeType as FunctionType;
+  if (calleeType && calleeType.kind === "function" && calleeType.throwsTypes.length > 0) {
+    const ft = calleeType;
     return {
       funcName,
       args,

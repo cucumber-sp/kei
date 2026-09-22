@@ -69,8 +69,8 @@ function moduleWith(...fns: KirFunction[]): KirModule {
 }
 
 /** Collect instruction kinds per block, flattened. Useful for "no destroy emitted" assertions. */
-function instKindsByBlock(fn: KirFunction): string[][] {
-  return fn.blocks.map((b) => b.instructions.map((i) => i.kind));
+function instKindsByBlock(func: KirFunction): string[][] {
+  return func.blocks.map((b) => b.instructions.map((i) => i.kind));
 }
 
 describe("runLifecyclePass — mark_param rewrite (PR 4c)", () => {

@@ -70,19 +70,19 @@ function makeEnum(name: string): EnumType {
 }
 
 function intLiteral(value: number, suffix?: string): Expression {
-  return { kind: "IntLiteral", value, suffix, span: DUMMY_SPAN } as Expression;
+  return { kind: "IntLiteral", value, suffix, span: DUMMY_SPAN };
 }
 
 function floatLiteral(value: number, suffix?: string): Expression {
-  return { kind: "FloatLiteral", value, suffix, span: DUMMY_SPAN } as Expression;
+  return { kind: "FloatLiteral", value, suffix, span: DUMMY_SPAN };
 }
 
 function unaryMinus(operand: Expression): Expression {
-  return { kind: "UnaryExpr", operator: "-", operand, span: DUMMY_SPAN } as Expression;
+  return { kind: "UnaryExpr", operator: "-", operand, span: DUMMY_SPAN };
 }
 
 function identifier(name: string): Expression {
-  return { kind: "Identifier", name, span: DUMMY_SPAN } as Expression;
+  return { kind: "Identifier", name, span: DUMMY_SPAN };
 }
 
 // ─── typesEqual ───────────────────────────────────────────────────────────────
@@ -779,7 +779,7 @@ describe("extractLiteralInfo", () => {
         operator: "+",
         right: intLiteral(2),
         span: DUMMY_SPAN,
-      } as Expression;
+      };
       expect(extractLiteralInfo(expr)).toBeNull();
     });
   });

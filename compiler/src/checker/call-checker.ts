@@ -4,7 +4,13 @@
  * calls, static method calls, and instance method calls.
  */
 
-import type { CallExpr, Expression, FunctionDecl } from "../ast/nodes";
+import type {
+  CallExpr,
+  Expression,
+  FunctionDecl,
+  StructDecl,
+  UnsafeStructDecl,
+} from "../ast/nodes";
 import type { Span } from "../lexer/token";
 import {
   mangleGenericName,
@@ -15,7 +21,7 @@ import type { Checker } from "./checker";
 import { extractTypeParamSubs } from "./literal-checker";
 import type { FunctionOverload } from "./symbols";
 import { SymbolKind } from "./symbols";
-import type { EnumType, FunctionType, Type } from "./types";
+import type { EnumType, FunctionType, StructType, Type } from "./types";
 import {
   ERROR_TYPE,
   extractLiteralInfo,
@@ -541,7 +547,7 @@ function resolveOverloadedCall(
   }
 
   if (matches.length === 1) {
-    // biome-ignore lint/style/noNonNullAssertion: length === 1 check just above
+    // length === 1 check just above
     const matched = matches[0]!;
     checker.setExprType(expr.callee, matched.type);
     applyMoveParams(checker, expr, matched.type);
@@ -586,7 +592,7 @@ function resolveOverloadedCall(
   }
 
   if (wideMatches.length === 1) {
-    // biome-ignore lint/style/noNonNullAssertion: length === 1 check just above
+    // length === 1 check just above
     const matched = wideMatches[0]!;
     checker.setExprType(expr.callee, matched.type);
     applyMoveParams(checker, expr, matched.type);
@@ -762,12 +768,12 @@ function checkGenericFunctionCall(checker: Checker, expr: CallExpr): Type {
   const resolvedTypeArgs: Type[] = [];
   const typeMap = new Map<string, Type>();
   for (let i = 0; i < expr.typeArgs.length; i++) {
-    // biome-ignore lint/style/noNonNullAssertion: loop bounded by typeArgs.length
+    // loop bounded by typeArgs.length
     const typeArg = expr.typeArgs[i]!;
     const resolved = checker.resolveType(typeArg);
     if (isErrorType(resolved)) return ERROR_TYPE;
     resolvedTypeArgs.push(resolved);
-    // biome-ignore lint/style/noNonNullAssertion: loop bounded by typeArgs.length
+    // loop bounded by typeArgs.length
     typeMap.set(funcType.genericParams[i]!, resolved);
   }
 
@@ -818,9 +824,9 @@ function checkGenericFunctionCallInferred(
   // Infer type params from arguments
   const subs = new Map<string, Type>();
   for (let i = 0; i < expectedParams.length; i++) {
-    // biome-ignore lint/style/noNonNullAssertion: loop bounded by expectedParams.length
+    // loop bounded by expectedParams.length
     const paramType = expectedParams[i]!.type;
-    // biome-ignore lint/style/noNonNullAssertion: loop bounded by expectedParams.length
+    // loop bounded by expectedParams.length
     const argType = argTypes[i]!;
     extractTypeParamSubs(paramType, argType, subs);
   }
@@ -838,7 +844,7 @@ function checkGenericFunctionCallInferred(
 
   // Create concrete function type
   const concreteType = substituteFunctionType(funcType, subs);
-  // biome-ignore lint/style/noNonNullAssertion: all generic params guaranteed to be in subs map
+  // all generic params guaranteed to be in subs map
   const resolvedTypeArgs = funcType.genericParams.map((gp) => subs.get(gp)!);
   const name = (expr.callee as { name: string }).name;
   const mangledName = mangleGenericName(name, resolvedTypeArgs);
@@ -850,12 +856,12 @@ function checkGenericFunctionCallInferred(
   // through `checkGenericFunctionCallInferred`); the diagnostic falls
   // back to a primary span only.
   for (let i = 0; i < argTypes.length; i++) {
-    // biome-ignore lint/style/noNonNullAssertion: loop bounded by argTypes.length
+    // loop bounded by argTypes.length
     const argType = argTypes[i]!;
-    // biome-ignore lint/style/noNonNullAssertion: loop bounded by argTypes.length
+    // loop bounded by argTypes.length
     const paramType = concreteType.params[i]!.type;
     if (!isAssignableTo(argType, paramType)) {
-      // biome-ignore lint/style/noNonNullAssertion: loop bounded by argTypes.length
+      // loop bounded by argTypes.length
       const litInfo = extractLiteralInfo(expr.args[i]!);
       const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, paramType);
       if (!isLiteralOk) {
@@ -863,7 +869,7 @@ function checkGenericFunctionCallInferred(
           paramIndex: i,
           expected: typeToString(paramType),
           got: typeToString(argType),
-          // biome-ignore lint/style/noNonNullAssertion: loop bounded by argTypes.length
+          // loop bounded by argTypes.length
           span: expr.args[i]!.span,
         });
       }
@@ -905,10 +911,10 @@ function lookupDirectCalleeParamSpans(checker: Checker, expr: CallExpr): Span[] 
  */
 function registerStaticCallMonomorphization(
   checker: Checker,
-  baseStruct: import("./types").StructType,
+  baseStruct: StructType,
   resolvedTypeArgs: Type[],
   subs: Map<string, Type>,
-  originalDecl?: import("../ast/nodes").StructDecl | import("../ast/nodes").UnsafeStructDecl
+  originalDecl?: StructDecl | UnsafeStructDecl
 ): void {
   const mangledName = mangleGenericName(baseStruct.name, resolvedTypeArgs);
   if (checker.getMonomorphizedStruct(mangledName)) return;
@@ -921,7 +927,7 @@ function registerStaticCallMonomorphization(
   for (const [methodName, methodType] of baseStruct.methods) {
     concreteMethods.set(methodName, substituteFunctionType(methodType, subs));
   }
-  const concrete: import("./types").StructType = {
+  const concrete: StructType = {
     kind: TypeKind.Struct,
     name: mangledName,
     fields: concreteFields,

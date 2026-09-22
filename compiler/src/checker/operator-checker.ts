@@ -306,7 +306,7 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
             return ERROR_TYPE;
           }
           const indexType = checker.getExprType(indexExpr.index);
-          // biome-ignore lint/style/noNonNullAssertion: params.length === 3 is checked above, so index 1 is guaranteed
+          // params.length === 3 is checked above, so index 1 is guaranteed
           const indexParam = method.params[1]!;
           if (indexType && !isAssignableTo(indexType, indexParam.type)) {
             checker.errorBinaryTypeMismatch(
@@ -316,7 +316,7 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
             );
             return ERROR_TYPE;
           }
-          // biome-ignore lint/style/noNonNullAssertion: params.length === 3 is checked above, so index 2 is guaranteed
+          // params.length === 3 is checked above, so index 2 is guaranteed
           const valueParam = method.params[2]!;
           if (!isAssignableTo(valueType, valueParam.type)) {
             checker.errorBinaryTypeMismatch(
@@ -505,7 +505,7 @@ function resolveOperatorMethod(
     return ERROR_TYPE;
   }
 
-  // biome-ignore lint/style/noNonNullAssertion: params.length === 2 is checked above, so index 1 is guaranteed
+  // params.length === 2 is checked above, so index 1 is guaranteed
   const rhsParam = method.params[1]!;
   if (!isAssignableTo(rightType, rhsParam.type)) {
     checker.errorBinaryTypeMismatch(

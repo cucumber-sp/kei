@@ -178,9 +178,9 @@ describe("Lifecycle.synthesise — table-driven", () => {
     // Plain fields (i32, f64) are not in the decision; synthesise must
     // not emit field_ptrs for them.
     const struct = makeStruct("Mixed", [
-      ["counter", { kind: TypeKind.Int, bits: 32, signed: true } as Type],
+      ["counter", { kind: TypeKind.Int, bits: 32, signed: true }],
       ["name", STRING_TYPE],
-      ["weight", { kind: TypeKind.Float, bits: 64 } as Type],
+      ["weight", { kind: TypeKind.Float, bits: 64 }],
     ]);
     const decision: LifecycleDecision = { destroy: { fields: [{ name: "name" }] } };
 

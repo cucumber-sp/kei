@@ -237,7 +237,7 @@ export function lowerReturnStmt(ctx: LoweringCtx, stmt: ReturnStmt): void {
       emitAllScopeDestroysExceptNamed(ctx, returnedVarName);
       // Store success value through __out pointer
       if (ctx.currentFunctionOrigReturnType.kind !== "void") {
-        // biome-ignore lint/style/noNonNullAssertion: __out is always present in a throws function when the return type is non-void
+        // __out is always present in a throws function when the return type is non-void
         const outPtr = ctx.varMap.get("__out")!;
         emit(ctx, { kind: "store", ptr: outPtr, value: valueId });
       }
@@ -447,7 +447,7 @@ export function lowerForStmt(ctx: LoweringCtx, stmt: ForStmt): void {
 
     // Increment index if present
     if (stmt.index) {
-      // biome-ignore lint/style/noNonNullAssertion: stmt.index is a declared loop variable guaranteed to be in varMap
+      // stmt.index is a declared loop variable guaranteed to be in varMap
       const indexPtr = ctx.varMap.get(stmt.index)!;
       const oneId2 = emitConstInt(ctx, 1);
       emitLoadModifyStore(ctx, indexPtr, "add", oneId2, loopVarType);

@@ -4,7 +4,6 @@
  */
 
 import type {
-  ArrayLiteral,
   AssignExpr,
   BlockStmt,
   Expression,
@@ -349,7 +348,7 @@ function parsePrimaryExpression(ctx: ParserContext): Expression {
       kind: "ArrayLiteral",
       elements,
       span: { start: token.span.start, end: end.span.end },
-    } as ArrayLiteral;
+    };
   }
 
   ctx.addError(`Unexpected token '${token.kind}' in expression`, token);

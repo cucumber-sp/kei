@@ -514,9 +514,9 @@ export class Checker {
     this.pushScope({ functionContext: concreteType });
 
     for (let i = 0; i < decl.params.length; i++) {
-      // biome-ignore lint/style/noNonNullAssertion: index is bounded by decl.params.length
+      // index is bounded by decl.params.length
       const param = decl.params[i]!;
-      const paramType = concreteType.params[i]?.type ?? ({ kind: TypeKind.Void } as Type);
+      const paramType = concreteType.params[i]?.type ?? { kind: TypeKind.Void };
       this.defineVariable(param.name, paramType, !param.isReadonly, false, param.span);
     }
 
@@ -733,9 +733,9 @@ export class Checker {
           const products = checker.getMonomorphization().products();
           return [
             name,
-            Array.from(products.structs.keys()).sort().join(","),
-            Array.from(products.functions.keys()).sort().join(","),
-            Array.from(products.enums.keys()).sort().join(","),
+            Array.from(products.structs.keys()).toSorted().join(","),
+            Array.from(products.functions.keys()).toSorted().join(","),
+            Array.from(products.enums.keys()).toSorted().join(","),
           ].join(":");
         })
         .join("|");
@@ -774,7 +774,7 @@ export class Checker {
       for (const [name, st] of result.lifecycle.autoOncopyStructs) {
         lifecycle.autoOncopyStructs.set(name, st);
       }
-      decisionLookups.push(result.lifecycle.getDecision);
+      decisionLookups.push((struct) => result.lifecycle.getDecision(struct));
       combinedDiags.push(...result.diagnostics);
     }
     void moduleNameForPrefix;
@@ -939,19 +939,19 @@ export class Checker {
    * `checkCallExpression` for `Optional<i32>.Some(...)` and by
    * `resolveType` for type references like `Optional<i32>` in fn params.
    */
-  instantiateGenericEnum(base: EnumType, typeArgNodes: import("../ast/nodes").TypeNode[]): Type {
+  instantiateGenericEnum(base: EnumType, typeArgNodes: TypeNode[]): Type {
     if (typeArgNodes.length !== base.genericParams.length) {
       return ERROR_TYPE;
     }
     const typeArgs: Type[] = [];
     const subs = new Map<string, Type>();
     for (let i = 0; i < typeArgNodes.length; i++) {
-      // biome-ignore lint/style/noNonNullAssertion: typeArgNodes.length checked above
+      // typeArgNodes.length checked above
       const node = typeArgNodes[i]!;
       const t = this.resolveType(node);
       if (t.kind === TypeKind.Error) return ERROR_TYPE;
       typeArgs.push(t);
-      // biome-ignore lint/style/noNonNullAssertion: same length as typeArgNodes
+      // same length as typeArgNodes
       subs.set(base.genericParams[i]!, t);
     }
     const mangledName = mangleGenericName(base.name, typeArgs);

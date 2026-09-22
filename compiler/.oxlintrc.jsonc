@@ -1,0 +1,46 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "options": {
+    "typeAware": true,
+    "maxWarnings": 0,
+  },
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "error",
+    "pedantic": "off",
+    "style": "off",
+    "restriction": "off",
+  },
+  "plugins": ["oxc", "typescript", "unicorn", "import", "promise"],
+  "rules": {
+    "no-console": "error",
+    "eqeqeq": ["error", "always", { "null": "ignore" }],
+    "typescript/no-explicit-any": "error",
+    "typescript/consistent-type-imports": "error",
+    // These switches intentionally handle selected IR variants. TypeScript's
+    // discriminated-union checking remains part of the separate tsc gate.
+    "typescript/switch-exhaustiveness-check": "off",
+    "typescript/consistent-return": "off",
+    // The current lexer/parser/KIR layering contains import cycles. Track
+    // them with Knip's separate cycle report before enforcing this rule.
+    "import/no-cycle": "off",
+    // Underscore-prefixed compiler internals and recursion parameters are
+    // deliberate naming/implementation choices in the existing code.
+    "no-underscore-dangle": "off",
+    "oxc/only-used-in-recursion": "off",
+    // The compiler casts between AST and resolved semantic types at explicit
+    // boundaries; the generic assertion rule reports those as unsafe.
+    "typescript/no-unsafe-type-assertion": "off",
+  },
+  "overrides": [
+    {
+      "files": ["src/cli.ts", "src/cli/**"],
+      "rules": { "no-console": "off" },
+    },
+    {
+      "files": ["tests/**"],
+      "rules": { "no-console": "off" },
+    },
+  ],
+}

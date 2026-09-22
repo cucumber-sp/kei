@@ -39,19 +39,20 @@ export function computeDominators(cfg: CFG): Map<BlockId, BlockId> {
   const idom = new Map<BlockId, BlockId>();
   idom.set(entryBlock, entryBlock);
 
+  const getRpoIndex = (blockId: BlockId): number => {
+    const index = rpoIndex.get(blockId);
+    if (index === undefined) {
+      throw new Error(`invariant: missing RPO index for block '${blockId}'`);
+    }
+    return index;
+  };
+
   /**
    * Walk up the dominator tree from two blocks to find their nearest
    * common dominator (NCD). Uses RPO indices — the block with the
    * higher index is farther from the entry, so we step it upward.
    */
   function intersect(b1: BlockId, b2: BlockId): BlockId {
-    const getRpoIndex = (blockId: BlockId): number => {
-      const index = rpoIndex.get(blockId);
-      if (index === undefined) {
-        throw new Error(`invariant: missing RPO index for block '${blockId}'`);
-      }
-      return index;
-    };
     const getBlockAt = (index: number): BlockId => {
       const blockId = blockOrder[index];
       if (blockId === undefined) {
@@ -158,7 +159,7 @@ export function computeDomFrontiers(
       while (runner !== idom.get(blockId) && runner !== undefined) {
         domFrontiers.get(runner)?.add(blockId);
         if (runner === idom.get(runner)) break; // entry node
-        // biome-ignore lint/style/noNonNullAssertion: runner is always in idom here — it was confirmed present before entering the loop and the entry-node break prevents going past it
+        // runner is always in idom here — it was confirmed present before entering the loop and the entry-node break prevents going past it
         runner = idom.get(runner)!;
       }
     }

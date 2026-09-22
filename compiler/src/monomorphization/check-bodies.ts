@@ -30,7 +30,6 @@
  * See `docs/design/monomorphization-module.md` §3 (`check-bodies.ts`) and §4 (Y-a-clone).
  */
 
-import type { Declaration } from "../ast/nodes";
 import { bake } from "./bake";
 import type { MonomorphizationProducts } from "./index";
 import { buildTypeSubstitutionMap } from "./substitute";
@@ -76,7 +75,7 @@ function bakeFunctionIfNeeded(monoFunc: MonomorphizedFunction): void {
   if (monoFunc.bakedDecl !== undefined) return;
   if (!monoFunc.declaration) return;
   const subs = buildTypeSubstitutionMap(monoFunc.declaration.genericParams, monoFunc.typeArgs);
-  const cloned = bake(monoFunc.declaration as Declaration, subs);
+  const cloned = bake(monoFunc.declaration, subs);
   // `bake` preserves the declaration kind; narrow back to FunctionDecl.
   if (cloned.kind === "FunctionDecl") monoFunc.bakedDecl = cloned;
 }
@@ -85,7 +84,7 @@ function bakeStructIfNeeded(monoStruct: MonomorphizedStruct): void {
   if (monoStruct.bakedDecl !== undefined) return;
   if (!monoStruct.originalDecl) return;
   const subs = buildTypeSubstitutionMap(monoStruct.originalDecl.genericParams, monoStruct.typeArgs);
-  const cloned = bake(monoStruct.originalDecl as Declaration, subs);
+  const cloned = bake(monoStruct.originalDecl, subs);
   if (cloned.kind === "StructDecl" || cloned.kind === "UnsafeStructDecl") {
     monoStruct.bakedDecl = cloned;
   }

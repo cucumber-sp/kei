@@ -96,10 +96,10 @@ function splitFlag(arg: string): [string, string | null] {
 export function parseArgs(argv: readonly string[]): ParseResult {
   // Short-circuit on meta flags before any validation, matching prior behaviour.
   const rawFlagArgs = argv.filter((a) => a.startsWith("-")).map(normalizeFlag);
-  const bareFlagKeys = rawFlagArgs.map((a) => splitFlag(a)[0]);
+  const bareFlagKeys = new Set(rawFlagArgs.map((a) => splitFlag(a)[0]));
 
-  if (bareFlagKeys.includes("--help")) return { kind: "help" };
-  if (bareFlagKeys.includes("--version")) return { kind: "version" };
+  if (bareFlagKeys.has("--help")) return { kind: "help" };
+  if (bareFlagKeys.has("--version")) return { kind: "version" };
 
   const compiled: CliFlags = {
     filePath: "",

@@ -25,7 +25,7 @@ import {
 } from "../../src/monomorphization";
 
 function typeParam(name: string): Type {
-  return { kind: TypeKind.TypeParam, name } as Type;
+  return { kind: TypeKind.TypeParam, name };
 }
 
 function makeStructType(
