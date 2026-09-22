@@ -27,8 +27,7 @@
  * hit the clone-keyed entries naturally — no per-instantiation
  * override needed.
  *
- * See `docs/design/monomorphization-module.md` §3 (`check-bodies.ts`),
- * §4 (Y-a-clone), §8 PR 3 and PR 4.
+ * See `docs/design/monomorphization-module.md` §3 (`check-bodies.ts`) and §4 (Y-a-clone).
  */
 
 import type { Declaration } from "../ast/nodes";

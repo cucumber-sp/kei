@@ -1,7 +1,7 @@
 /**
  * Lifecycle pass — `mark_param` rewrite (PR 4c).
  *
- * Per `docs/design/lifecycle-module.md` §9, these tests exercise the
+ * Per `docs/design/lifecycle-module.md`, these tests exercise the
  * `mark_param` → per-exit-destroy rewrite on synthetic KIR (no parser,
  * no checker, no lowering driver). Cases:
  *

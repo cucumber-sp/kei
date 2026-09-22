@@ -10,8 +10,8 @@ Status tags:
 - **PLANNED** — specified, no compiler work yet.
 - **BLOCKED** — depends on another item that isn't done.
 
-Anything not listed here is implemented end-to-end (source → KIR → C → binary)
-and covered by tests.
+This is a curated list of known gaps, not a guarantee that every other spec
+feature is complete. Check the compiler tests before depending on a feature.
 
 ## Type system
 
@@ -26,6 +26,7 @@ and covered by tests.
 | Item                                      | Status   | Notes                                              |
 |-------------------------------------------|----------|----------------------------------------------------|
 | Arena POD-only checker rule               | WIP      | `std/arena.kei` exists with bump-allocate API; the checker does not yet reject arena-allocating types with non-trivial `__destroy`. |
+| Auto-last-use move elision                 | PLANNED  | Explicit `move` works; the checker does not yet infer a move from the last use. A skipped regression test records the target behavior. |
 | String layout w/ offset (zero-copy substring) | PLANNED | Runtime `kei_string` is `{data, len, cap, ref}`; substring deep-copies. Spec target is `{ptr, offset, len, cap, count}` for refcount-only sub-ranges. |
 | Optimization passes beyond mem2reg        | PLANNED  | Today only mem2reg + de-SSA run. No const fold, copy prop, CSE, inlining, or LICM. |
 

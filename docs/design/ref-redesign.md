@@ -636,73 +636,9 @@ is enforced by 4.1–4.4.
 
 ---
 
-## 5. Behaviour-preserving expected diff
+## 5. Migration history
 
-What changes for existing programs after the redesign lands.
-
-### 5.1 Programs that keep working unchanged
-
-- Anything using only `T` value types and primitives.
-- Method calls of the form `obj.method()` where `obj` is a value.
-- `string` operations (immutable from outside, semantics unchanged).
-- Arithmetic, control flow, struct literals, enums, generics, throws/catch.
-- `unsafe { ... }` blocks doing `alloc`/`free` internally.
-
-### 5.2 Programs that need a one-line edit
-
-- `self: ptr<T>` method receivers → `self: ref T`. The C-level signature
-  is identical; the source spelling changes.
-- `self->field` access (when the receiver migrates to `ref T`) →
-  `self.field`. Auto-deref handles it.
-- Raw-pointer `p->field` access (in `unsafe` code where `p: *T`) →
-  `(*p).field`. The `->` operator is gone; raw deref is explicit.
-- Most `unsafe` blocks that exist today purely to call `ptr<T>` operations
-  on `self` are no longer needed.
-- `mut x: T` parameter form → drop the `mut` (parameters are mutable
-  bindings by default; `readonly` opts out).
-- `let mut x = …` → `let x = …` (`let` is mutable; `const` is immutable
-  binding).
-
-### 5.3 Programs that need real rework
-
-- Code that explicitly takes raw addresses with `&x` outside unsafe — must
-  move into an `unsafe` block, or be refactored to pass `ref T`.
-- Code that returns `ptr<T>` from safe functions — must return `T` or
-  `Shared<T>` instead. Lookup-by-reference patterns are the most common
-  example; they become copy-out (cheap for refcounted T) or shared-element
-  (`List<Shared<Item>>`).
-- Hand-rolled `__oncopy` / `__destroy` for refcounted types — replaced by
-  composing `Shared<T>` as a field.
-
-### 5.4 Programs that become hard errors
-
-- `ref T` (or `mut T` / `ptr<T>`) in return position, struct field outside
-  `unsafe struct`, array element type, generic argument, static type. (See
-  §4.1, §4.2.)
-- `field = value` where the field is `Shared<U>` and `value` is `U` (not
-  `Shared<U>`). Must use explicit `field.value = value` or
-  `field = Shared<U>.wrap(value)`. (No auto-deref of `Shared<T>`.)
-- `&` or `*` outside `unsafe`.
-- `mut` keyword anywhere — completely removed. `mut` parameter form, `let
-  mut`, `&mut`, and `ref mut T` all gone. Replaced by `ref T` (mutable
-  through ref by default), `readonly ref T` (immutable through ref),
-  `readonly` modifier on plain fields/params.
-- `ref T` in a local binding (e.g. `let r: ref T = …`) — there are no `ref`
-  locals.
-
-### 5.5 Stdlib changes
-
-- `kei_string` runtime (currently in `runtime.h`) reimplemented as a Kei
-  `struct String { buffer: Shared<U8Buffer>; offset: usize; len: usize; }`
-  (with `string` kept as the lowercase keyword alias for `String`; see
-  `docs/design/naming-conventions.md`).
-  The C runtime functions become unsafe-struct method bodies.
-- `Shared<T>` is implemented as a stdlib unsafe struct.
-- `Array<T>` (planned) and `List<T>` (planned) follow the same pattern:
-  unsafe struct holding a `*T` field, manual `__destroy`, no `__oncopy`
-  hand-written (recurse via auto-derive on a `Shared<T>`-backed buffer).
-
----
+The one-time source and stdlib edits are recorded in Git history. The following decisions remain relevant to the current reference model.
 
 ## 6. Decisions
 
@@ -976,8 +912,6 @@ Shipped:
 
 Still follow-up work:
 
-- Auto-generated lifecycle hooks should consistently use the `self: ref T`
-  ABI.
 - Auto-last-use lifecycle elision and any explicit de-optimization surface.
 - `Weak<T>` for cycles and its matching optional niche layout.
 - Reimplement the C string runtime as Kei `String` backed by

@@ -1,8 +1,6 @@
 # Diagnostics module — concept-cohesive consolidation
 
-**Status.** Designed, not yet implemented. Second concrete instance of
-[ADR-0001](../adr/0001-concept-cohesive-modules.md). Migration is
-staged across PRs (§9).
+**Status.** Partially implemented. Sections 1–8 record the original design and describe the pre-migration code in historical present tense. The current `untriaged` path is tracked in [remaining work](../roadmap.md) and summarized in §9.
 
 ## 1. Why
 
@@ -46,7 +44,7 @@ A new top-level directory `compiler/src/diagnostics/`. Owns:
 - Severity resolution — applies any future lint config at emit time.
 - Formatting — pluggable: text (default) and JSON (for tooling).
 
-`src/errors/diagnostic.ts` goes away in §9's final PR.
+The old `src/errors/diagnostic.ts` was removed after the module took over.
 
 ## 3. The discriminated-union shape
 
@@ -181,7 +179,7 @@ reasons in §6.5.
 
 ## 6.5 (Alternatives considered for this section)
 
-(See §10 for full alternatives. Quick local notes on §3–6 choices.)
+(Quick notes on the choices in §3–6.)
 
 - **β envelope vs α per-variant fields.** β chosen. Per-variant
   fields would buy "type system enforces typeMismatch always carries
@@ -252,176 +250,10 @@ Distinguished from user errors at format time: ICE renders with
 also short-circuit subsequent passes — emitting an ICE marks the
 compile as fatally broken, even if other passes might continue.
 
-## 9. Migration plan
+## 9. Current implementation and remaining work
 
-Six PRs. Each behaviour-preserving against the existing test suite.
+`src/diagnostics/` now contains the typed catalog, a collector created per compilation, and a text formatter. The JSON formatter described in §7 has not been implemented. The old `src/errors/` module has been removed. Several diagnostic categories use specific variants, but the checker still routes generic `error` and `warning` calls through `untriaged`. See [remaining work](../roadmap.md) before removing that variant. Diagnostic codes are advisory before 1.0.
 
-**PR 1 — Stand up `src/diagnostics/`.** Module skeleton: `Diagnostic`
-type with empty kind union (no variants yet), `Collector` interface,
-empty text formatter. No call-site changes. Old
-`src/errors/diagnostic.ts` untouched. Tests for the new module are
-trivially empty.
+## 10. Design trade-offs
 
-**PR 2 — Untriaged catch-all + connect existing helpers.** Add a
-single variant
-`{ kind: 'untriaged'; code: 'TODO'; severity; span; message: string }`
-to the union, plus the typed-method
-`diag.untriaged({ severity, span, message })` and a formatter case.
-
-The codebase's emit surface today is **not** `new Diagnostic(...)`
-constructor calls — it's the `Checker.error(msg, span)` and
-`Checker.warning(msg, span)` helpers (~80+ sub-checker call sites
-go through them) plus 4 raw `this.diagnostics.push({ severity,
-message, location })` literal sites in `checker.ts` and
-`ref-position-checker.ts`. There is no constructor to migrate
-because `Diagnostic` is an interface (`{ severity, message,
-location }`).
-
-So PR 2 is small: re-route the existing helpers and the 4 raw
-pushes through `diag.untriaged({...})`. The ~80 sub-checker call
-sites that already call `this.checker.error(...) / .warning(...)`
-**do not change** — they keep going through the same helper, which
-now emits via the new `Diagnostic` union and `Collector`. Old
-`src/errors/diagnostic.ts` stays as a transition alias for the
-`SourceLocation` type and `Severity` enum (removed in PR N+1).
-
-Diff scope: ~80–150 lines, mostly inside `Checker` and
-`ref-position-checker.ts`. Behaviour-preserving: untriaged renders
-without a code prefix, so user-visible output is byte-identical.
-
-This is the equivalent of the Lifecycle migration's "PR 3 — pass
-slot, no-op rewrite" — introduce infrastructure first, migrate
-behaviour second.
-
-**PR 3 — Externalise the `Collector`.** PR 2 makes the helpers
-emit via an internally-constructed `Collector` on `Checker`. PR 3
-moves the `Collector` to be passed in via the `Checker`
-constructor instead of created internally — per design doc §5
-("constructed and threaded (b)"). The CLI driver constructs
-`createDiagnostics({})` and passes it in. Tests get a fresh
-collector per compile.
-
-Plumbing change, no behaviour change.
-
-**PR 4..N — Specificity, parallelizable.** Each PR carves a category
-out of `untriaged` into specific variants:
-
-  - 4a: Type errors → `typeMismatch`, `expectedType`, `cannotCast`,
-    `incompatibleAssignment`, etc.
-  - 4b: Name resolution → `undeclaredName`, `duplicateDecl`,
-    `shadowedName`, etc.
-  - 4c: Calls → `arityMismatch`, `argumentTypeMismatch`,
-    `notCallable`, etc.
-  - 4d: Structs → `unknownField`, `missingField`,
-    `invalidFieldAccess`, etc.
-  - 4e: Lifecycle (interacts with [Lifecycle module migration](./lifecycle-module.md)) →
-    `invalidLifecycleSignature`, `unsafeStructMissingDestroy`, etc.
-  - 4f: Operators → `noOperatorOverload`, `invalidOperand`, etc.
-  - 4g: Modules → `cyclicImport`, `moduleNotFound`, etc.
-
-Codes assigned per category (numbering scheme picked when the catalog
-is concrete; see §11). Each sub-PR is independently reviewable;
-they're parallelizable across contributors. Tests for each new
-variant assert the formatted-output snapshot.
-
-**PR N+1 — Remove untriaged + delete `src/errors/diagnostic.ts`.**
-Once no call site uses `untriaged`, remove the variant. Old
-`errors/diagnostic.ts` becomes dead code; delete.
-
-## 10. Alternatives considered
-
-### 10.1 Catalog of side-effecting methods, no return value (A from grilling)
-
-`diag.typeMismatch(span, expected, got)` — catalog of named methods,
-but each method *emits* into a module-level singleton collector and
-returns void. Caller doesn't see the diagnostic.
-
-**Rejected for the singleton; kept for the named-methods part.**
-Module-level collector causes test-isolation problems. The named
-methods themselves became part of the chosen design (option iii).
-
-### 10.2 Catalog returning `Diagnostic` objects (C from grilling)
-
-`Diag.typeMismatch(span, expected, got) → Diagnostic`. Caller pushes
-onto its own diag list.
-
-**Rejected.** Smaller delta but re-enshrines "checker still owns the
-diag list" — the very plumbing that the threaded-collector decision
-gets rid of.
-
-### 10.3 Builder API (B from grilling)
-
-`error().at(span).msg("...").note(...).build()`.
-
-**Rejected.** Doesn't actually consolidate wording — you can write
-162 different fluent chains and end up with the same wording-drift
-problem. The catalog is the thing that earns the locality win;
-builders fight that.
-
-### 10.4 Single `diag.error(payload)` with tagged union at call site (i)
-
-```ts
-diag.error({ kind: 'typeMismatch', span, expected, got });
-```
-
-**Rejected.** Mechanically equivalent to (iii) but loses
-parameter-type enforcement and autocomplete at 162+ call sites. TS
-rename works on union arm names but is less mechanical than method
-rename.
-
-### 10.5 Per-variant fields for secondary spans / notes / help (α)
-
-```ts
-| { kind: 'typeMismatch'; ...; declaredAt?: Span; note?: string; help?: string }
-```
-
-**Rejected.** Type-level enforcement that "typeMismatch carries a
-declaredAt" is theatre — secondary spans are advisory and optional
-anyway. β gives a simpler shape with the same expressive power.
-
-### 10.6 Stable error codes from day one
-
-Codes (`E0042`) become a SemVer commitment; renumbering is a
-breaking change.
-
-**Rejected.** kei is pre-1.0; over-committing on codes constrains
-catalog evolution before we know what the variants are. Advisory
-codes (codes appear in output for searchability but no stability
-promise) are the chosen middle ground. Stability can be promoted
-later.
-
-### 10.7 Big-bang migration
-
-One PR replaces all 162 call sites with their final specific variants.
-
-**Rejected.** Massive diff against ~1,900 tests; failures are hard to
-localise. The untriaged-codemod approach (§9 PR 2) gives the same
-end state with a strictly safer intermediate step.
-
-## 11. Open questions
-
-- **Code numbering scheme.** Sequential `E0001`+ (Rust-style) vs
-  categorical ranges (`E1xxx` type, `E2xxx` name, `E3xxx` calls, etc.,
-  TS-style). Defer until PR 4a is in flight — easier to pick once we
-  see the actual category sizes.
-- **Notes vs help vs secondary span boundaries.** When a diagnostic
-  has both a "did you mean X?" suggestion and a "the function was
-  declared here" pointer, which envelope field carries which? Kept
-  loose for now; the formatter establishes convention by example as
-  the catalog fills in.
-- **LintConfig schema.** `kei.toml` lint section, CLI flags, etc.
-  Not in v1; the resolver hook in §6 leaves room.
-
-## 12. Tests that come with the migration
-
-- **Catalog tests** — for each variant, assert the rendered text
-  output matches a snapshot fixture. Catches wording drift.
-- **Formatter tests** — JSON formatter output schema, text
-  formatter span annotation rules.
-- **Collector tests** — emit/snapshot, severity resolution under
-  various lint configs.
-- **End-to-end tests** continue to assert on full compile output;
-  they should pass unchanged through the migration. Substring
-  matches in existing tests may need updating once specific variants
-  introduce code prefixes (`error[E0042]:`); that's a per-PR cost in
-  PR 4a..g.
+The collector is per compilation to keep diagnostics isolated. Typed methods centralize catalog entries and severity resolution. A catch-all variant allowed incremental migration but should disappear when all call sites are specific.

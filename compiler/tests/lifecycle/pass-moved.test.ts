@@ -1,7 +1,7 @@
 /**
  * Lifecycle pass — `mark_moved` rewrite (PR 4d).
  *
- * Per `docs/design/lifecycle-module.md` §7/§9, lowering emits a
+ * Per `docs/design/lifecycle-module.md`, lowering emits a
  * `mark_moved x` marker at every `move x` site instead of mutating a
  * lowering-time `movedVars` set. The Lifecycle pass walks markers in
  * source order, building a per-function moved-set, and consults it

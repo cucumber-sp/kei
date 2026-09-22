@@ -187,37 +187,6 @@ fn handleRequest(cfg: ref AppConfig, body: ref string) -> string {
 
 ---
 
-## 5. Migration
+## Status
 
-The naming conventions doc lands first; downstream commits adopt the new
-conventions in passing during the ref-redesign rollout:
-
-- **Spec sweep** — every example, table, and prose reference updated to
-  the new conventions in one pass (`spec/03-types.md`, `spec/04-variables
-  .md`, `spec/06-functions.md`, `spec/07-structures.md`, `spec/08-memory
-  .md`, `spec/13-grammar.md`, `spec/02-lexical.md`, `SPEC-STATUS.md`).
-- **Test sweep** — fixture rewrites for the ~hundreds of touch points
-  across `compiler/tests/**` (snake_case methods/fields → camelCase;
-  `slice<T>` removal; `ptr<T>` → `ref T` / `*T`; `->` → `.` or `(*p).`).
-- **Stdlib** — `std/arena.kei` and `std/mem.kei` rename their public
-  surfaces (`arena_make` → `arenaMake`, `arena_alloc` → `arenaAlloc`,
-  etc.).
-- **Compiler** — checker enforcement for naming remains a future linting
-  layer. The language-level rules (`mut` removal, `ref T`, `readonly`,
-  `slice<T>` removal, raw `*T`, and required `unsafe struct` ref-field
-  initialization) are hard errors per the ref-redesign doc.
-
-The expected compatibility break is large — every existing test fixture
-that uses snake_case methods or fields will need one mechanical
-rename — but the rules are simple enough to be reviewed line-by-line.
-
----
-
-## 6. Things this doc does not address
-
-- The semantics of any type or operator (lives in `spec/`).
-- The lifecycle / reference model (lives in `docs/design/ref-redesign.md`).
-- The compiler's mangling scheme for monomorphized generics (internal,
-  see `compiler/src/checker/generics.ts`).
-- File / directory layout for stdlib modules beyond the snake_case file
-  name rule.
+The type and identifier spellings above are in use. Broad cosmetic lint enforcement is still future cleanup; language rules are specified in `spec/`.

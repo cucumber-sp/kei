@@ -6,8 +6,7 @@ keywords are gone from the lexer, parser, AST, checker, and KIR.
 Construction primitives (`onCopy<T>` / `onDestroy<T>` builtins, the
 `*T → ref T` literal coercion, `std/mem.kei`'s `placeAt<T>`) are
 shipped. The required-init rule on `unsafe struct` literals is
-enforced by the checker. Stages 1–4 of §6's migration sketch are all
-merged.
+enforced by the checker. The rollout is complete; its PR history is in Git.
 
 ## 1. Why
 
@@ -177,58 +176,6 @@ Every line is an arithmetic op, a cast, a regular call, or a struct
 literal. No new operators. Auto-deref still hides pointers from safe
 code: callers see `s.refcount` as i64, `s.value` as T.
 
-## 5. Old vs. new
+## Status
 
-| Topic                           | Old                                | New                                |
-|---------------------------------|------------------------------------|------------------------------------|
-| Read bound pointer              | `addr(field) as *void` (special)   | `&field as *void` (ordinary)       |
-| Write bound pointer             | `addr(field) = ptr;` (special)     | Struct literal field initializer   |
-| Place value through binding     | `init field = value;` (special)    | `placeAt(ptr, value)` (stdlib)     |
-| Empty `unsafe struct{}` literal | Allowed                            | Rejected if struct has `ref T`     |
-| Lifecycle hook fire from raw ptr| n/a (no path)                      | `onCopy<T>(p)` / `onDestroy<T>(p)` |
-| Safe-code surface               | unchanged                          | unchanged                          |
-| Auto-deref on `ref T` fields    | unchanged                          | unchanged                          |
-
-**Net language surface:** −2 keywords (`addr`, `init`), −1 statement
-form (`init lvalue = expr`). +1 invariant (ref fields required in
-literals). +2 compiler builtins (`onCopy<T>`, `onDestroy<T>`). Existing
-casts, struct literals, and `&` cover the rest.
-
-## 6. Rollout
-
-Each stage shipped as its own PR.
-
-| Stage | PR | What it landed |
-|-------|----|----------------|
-| 1 | #25 | Spec sweep — `addr` / `init` removed from `spec/`, examples migrated, "spec describes current state" policy added to `CLAUDE.md`. |
-| 2 | #26 | Foundation — `onCopy<T>` / `onDestroy<T>` compiler builtins, `*T → ref T` coercion in `unsafe struct` literals, `placeAt<T>` in `std/mem.kei`, `std/shared.kei` migrated to the new vocabulary. |
-| 3 | #27 | Checker rule — every field of an `unsafe struct` literal must be initialized by name. Empty / partial literals are a compile error. |
-| 4 | #28 | Cleanup — `addr` and `init` removed from the lexer, parser, AST, checker, and KIR. |
-
-Stage 5's `&field → &(*field)` sugar for `ref T` values has also shipped.
-
-## 7. Open questions
-
-- **Should `onCopy<T>` / `onDestroy<T>` accept `ref T` instead of
-  `*T`?** Probably not — they're explicitly the unsafe lifecycle
-  primitives, paired with raw memcpy. Pairing them with raw `*T` keeps
-  the "you're operating on bytes, vouch for them" intent visible.
-
-- **`placeAt` arg order?** Current draft is `(dest, src)` matching
-  memcpy. Alternative `(src, dest)` reads "place item into dest" but
-  diverges from memcpy. Sticking with `(dest, src)`.
-
-- **Allow `*T → ref T` coercion outside `unsafe struct` literals?**
-  No. The whole point is that the binding ceremony is gated behind
-  `unsafe` and limited to construction. Allowing the coercion in
-  arbitrary positions would re-open the leak/UAF surface auto-deref
-  ref fields are designed to close.
-
-## 8. References
-
-- `docs/design/ref-redesign.md` §2.3 (current construction vocabulary)
-- `docs/design/ref-redesign.md` §6.4 (alias-visible mutation through
-  Shared<T> — unchanged by this redesign)
-- `compiler/std/shared.kei` (current implementation)
-- Issue #21 (already closed) — surfaced the lifecycle wiring this
-  redesign builds on.
+Implemented. The current language rules are in [the specification](../../spec/03-types.md); this note preserves the construction rationale and worked example.

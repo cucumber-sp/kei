@@ -7,7 +7,7 @@
  * `KirFunction[]`.  No checker, no parser, no lowering driver — the
  * pure-function shape is what makes this seam testable.
  *
- * Cases (per `docs/design/lifecycle-module.md` §9 ("Synthesise tests")):
+ * Cases for hook synthesis:
  *   1. struct with one string field → `__destroy` body that destroys
  *      that field; no `__oncopy` (when only the destroy arm is decided)
  *   2. struct with one string field marked managed-on-copy → `__oncopy`

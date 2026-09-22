@@ -1,11 +1,6 @@
 # Lifecycle module — concept-cohesive consolidation
 
-**Status.** Designed, not yet implemented. First concrete instance of
-[ADR-0001](../adr/0001-concept-cohesive-modules.md) (concept-cohesive
-modules over pipeline-stage spread). Migration is staged across five
-PRs (§7). Blocked on [#38](https://github.com/cucumber-sp/kei/issues/38)
-for the defer-vs-destroy ordering question, but the architectural
-design is independent of that resolution.
+**Status.** Implemented. Sections 1–6 record the original design and describe the pre-migration code in historical present tense. Section 7 states the current implementation.
 
 ## 1. Why
 
@@ -33,8 +28,8 @@ how lowering names temporaries and how scope-exit destroy reads them.
 Neither side owns the policy; both reach into shared state
 (`structLifecycleCache`, `movedVars`).
 
-**Spec'd extensions can't be made cleanly.** [SPEC-STATUS.md](../../SPEC-STATUS.md)
-plans for `Optional<T>`, `Shared<T>`, and `String` migration to stdlib.
+**Spec'd extensions couldn't be made cleanly.** The design had to accommodate
+`Optional<T>`, `Shared<T>`, and a future `String` migration to stdlib.
 Each adds new managed types, each requires teaching the *insertion*
 logic about new patterns. Today that means edits in 4+ files; under
 the deepened design, it means one type-aware rewrite step inside the
@@ -226,96 +221,8 @@ which means callers run a loop — pushing the policy back into them.
 applies to cross-cutting concerns. Adding the module would be
 cargo-culting the pattern. (See §5.)
 
-### 6.5 Big-bang migration
+## 7. Current implementation
 
-Single PR: new `src/lifecycle/`, new markers, new pass, all old paths
-deleted.
+The `src/lifecycle/` module is in use. `decide.ts` computes hook decisions, `synthesise.ts` creates KIR bodies, and `pass.ts` rewrites markers after lowering and before mem2reg. Defer runs before automatic destruction at scope exit. Unit tests cover decisions, synthesis, marker rewrites, and end-to-end behavior.
 
-**Rejected.** ~1,900 tests are the only regression net; one massive
-diff against them invites untraceable failures. Staged migration (§7)
-gives each step its own behaviour-preservation check.
-
-## 7. Migration plan
-
-Five PRs. Each behaviour-preserving against the existing test suite,
-each independently reviewable.
-
-**PR 1 — Decide moves out.** Stand up `src/lifecycle/` with `decide`
-+ `LifecycleDecision` + `Map<StructType, LifecycleDecision>` + the
-fixed-point iteration. Replace pass 1.5 in `struct-checker.ts` with a
-call to `Lifecycle.decide`. Checker queries `Lifecycle.hasDestroy /
-hasOncopy` instead of inspecting `structType.methods`. Behaviour
-unchanged; structure clarified.
-
-**PR 2 — Synthesise moves out.** Move the hook-body generation code
-from `kir/lowering-struct.ts` into `src/lifecycle/synthesise.ts`.
-`lowering-struct.ts` calls `Lifecycle.synthesise(struct, decision)`.
-Behaviour unchanged.
-
-**PR 3 — Pass slot, no-op rewrite.** Introduce the marker KIR
-instructions and the rewrite pass. Initially the rewrite is a no-op:
-all markers are stripped, but the old insertion logic still runs in
-parallel. Adds infrastructure without committing to use it. KIR
-serialisation tests gain new instruction-kind cases.
-
-**PR 4 — Cut over insertion sites.** One PR per insertion site, in
-this order:
-
-  4a. `mark_scope_exit` replaces `popScopeAndDestroy` /
-      `emitAllScopeDestroys` etc. in `lowering-scope.ts`. The
-      Lifecycle pass starts producing real destroys for this case.
-  4b. `mark_assign` replaces the assignment-to-managed-slot logic in
-      `lowering-expr.ts`.
-  4c. `mark_param` replaces the function-exit param-destroy logic in
-      `lowering-decl.ts`.
-  4d. `mark_moved` replaces `LoweringCtx.movedVars`. Lowering emits
-      the marker; Lifecycle owns the moved-set during the rewrite.
-  4e. `mark_track` replaces the per-scope live-var tracking in
-      `lowering-scope.ts`.
-
-  Each sub-PR removes the old path *for that one site* and verifies
-  the test suite still passes. Sites that have not migrated yet keep
-  the old logic — markers and old logic do not overlap.
-
-**PR 5 — Cleanup.** Remove `structLifecycleCache` from
-`LoweringCtx`, remove any remaining dead helpers. Update
-`compiler/CLAUDE.md`'s "Where to add a feature" table to reflect the
-new layout.
-
-## 8. Open questions
-
-- **Spec-level: defer vs auto-destroy ordering.** Tracked in
-  [#38](https://github.com/cucumber-sp/kei/issues/38). Resolution
-  blocks PR 4a but does not block PRs 1–3.
-- **Lifecycle ↔ Monomorphization seam.** `Lifecycle.decide` must run
-  on monomorphized struct instances (`Foo<i32>` is a separate decide
-  call from `Foo<string>`). Today's code already handles this via the
-  registered-structs map; preserving that. Will be resolved properly
-  when candidate #3 (monomorphization deepening) is grilled.
-- **Managed enum payloads + `Optional<T>`.** Generic enums and the
-  `Optional<*T>` / `Optional<Shared<T>>` niche layouts have landed, but
-  lifecycle destruction for managed enum payloads is still a broader enum
-  ownership concern. The marker design is type-agnostic, so conditional
-  optional destroys should be additive rather than a reason to special-case
-  `Shared<T>` in the niche lowering path.
-
-## 9. Tests that come with the migration
-
-The marker-and-pass shape opens a test pyramid that doesn't exist
-today:
-
-- **`Lifecycle.decide` — pure, table-driven.** Input: a struct with
-  given fields. Output: a Decision. No fixture, no compiler driver.
-- **`Lifecycle.synthesise` — pure, table-driven.** Input: a struct +
-  Decision. Output: KIR functions. Diff-against-snapshot.
-- **Lifecycle pass — pure on KIR.** Input: KIR module with markers +
-  decision map. Output: KIR module without markers, with destroys
-  inserted. Diff-against-snapshot per fixture.
-- **Existing end-to-end tests** continue to assert behaviour from
-  `.kei` source through compiled binary. They should pass unchanged
-  through the migration.
-
-Today, every lifecycle test is end-to-end because there's no smaller
-seam to test through. After PR 4 lands, three new test files appear
-(`tests/lifecycle/decide.test.ts`, `synthesise.test.ts`,
-`pass.test.ts`) and the end-to-end coverage stays.
+Managed enum payload destruction remains a separate ownership question; see the memory-model gaps in [SPEC-STATUS.md](../../SPEC-STATUS.md). The migration sequence is recorded in Git history.

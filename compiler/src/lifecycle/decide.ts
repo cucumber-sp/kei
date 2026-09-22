@@ -26,12 +26,11 @@ import type { LifecycleDecision, ManagedFieldRef } from "./types";
  * Predicate used during fixed-point iteration: does a field's type carry
  * a destroy obligation?  String fields always do.  Struct fields do if
  * either the field-type's struct has a `__destroy` method registered
- * (user-written, or mirrored back by the struct-checker shim during
- * the migration — see `docs/design/lifecycle-module.md` §7 PR 1) **or**
+ * (user-written or registered by the checker) **or**
  * the field-type's struct already has a destroy decision in the current
  * decision map. The decision map is the authoritative record; the
  * `methods` check covers user-written hooks and stays load-bearing
- * until PR 4 retires the mirror.
+ * while checker-registered hooks are represented on the type.
  */
 function fieldNeedsDestroy(
   fieldType: Type,

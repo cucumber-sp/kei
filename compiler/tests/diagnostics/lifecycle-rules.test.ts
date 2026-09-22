@@ -1,6 +1,6 @@
 /**
  * Snapshot fixtures for PR 4e lifecycle / checker-rule variants
- * (`docs/design/diagnostics-module.md` §9 PR 4e, §12).
+ * (`docs/design/diagnostics-module.md`).
  *
  * One assertion per variant. Each test parses a minimal kei source that
  * trips exactly one rule on a hand-authored `__destroy` / `__oncopy`
@@ -9,7 +9,7 @@
  *
  * Scope reminder: these variants cover *user-authored* hooks only. The
  * Lifecycle module's auto-generation logic is a separate concern (see
- * `docs/design/lifecycle-module.md`) and lives in its own migration.
+ * `docs/design/lifecycle-module.md`).
  */
 
 import { describe, expect, test } from "bun:test";

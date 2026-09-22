@@ -1092,8 +1092,7 @@ export class Checker {
   // the lexer-span → `SourceLocation` conversion that the new union's
   // `Span` type still expects, and route into the typed methods on
   // `diag`. `message` carries the pre-formatted body so existing wording
-  // survives the migration (see `docs/design/diagnostics-module.md` §9
-  // PR 4f).
+  // stays stable while the remaining generic errors move to typed variants.
 
   /** Operator has no overload — built-in or user-defined — that applies. */
   errorNoOperatorOverload(op: string, message: string, span: Span): void {

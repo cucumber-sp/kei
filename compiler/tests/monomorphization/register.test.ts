@@ -7,7 +7,7 @@
  * accessor returns it. No checker, no parser — the records are
  * hand-rolled so each case targets exactly the storage seam.
  *
- * Cases (per `docs/migrations/monomorphization/pr-2.md`):
+ * Cases (per `docs/design/monomorphization-module.md`):
  *   1. registerStruct populates the struct map
  *   2. registerFunction populates the function map
  *   3. registerEnum populates the enum map

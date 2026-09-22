@@ -1,7 +1,7 @@
 /**
  * Lifecycle pass — `mark_scope_exit` rewrite (PR 4a, updated PR 4e).
  *
- * Per `docs/design/lifecycle-module.md` §9, these tests exercise the
+ * Per `docs/design/lifecycle-module.md`, these tests exercise the
  * `mark_scope_exit` → destroy-sequence rewrite on synthetic KIR (no
  * parser, no checker, no lowering driver). After PR 4e the tracked
  * vars are sourced from `mark_track` markers in the same function;

@@ -1,9 +1,6 @@
 # Monomorphization module — concept-cohesive consolidation
 
-**Status.** Designed, not yet implemented. Third concrete instance of
-[ADR-0001](../adr/0001-concept-cohesive-modules.md). Migration is
-staged across six PRs (§9). The end-state PR (PR 5) is the payoff —
-it deletes the per-instantiation type-map override on `LoweringCtx`.
+**Status.** Implemented. Sections 1–7 record the original design and describe the pre-migration code in historical present tense. Section 8 states the current implementation.
 
 ## 1. Why
 
@@ -72,7 +69,7 @@ src/monomorphization/
 ```
 
 The module is constructed-and-threaded, like Diagnostics' Collector
-and the planned Lifecycle:
+and Lifecycle:
 
 ```ts
 const lifecycle = createLifecycle();
@@ -187,7 +184,7 @@ a missing arm.
 
 **Spans on cloned nodes** point at the template (template span
 primary; instantiation site goes into diagnostic `secondarySpans`
-at error-emission time, not onto the AST node — see §9).
+at error-emission time, not onto the AST node).
 
 ### `checker.checkBody` signature extension
 
@@ -220,16 +217,16 @@ realisation. The cost shift is small — the recheck is the same
 work pass 3 does today, just keyed by clones instead of writing
 into the override on `LoweringCtx`.
 
-### PR 5's payoff under Path A
+### Override removal under Path A
 
-PR 5 still deletes the `LoweringCtx.currentBodyTypeMap` and
+The cleanup removed the `LoweringCtx.currentBodyTypeMap` and
 `currentBodyGenericResolutions` fields and every push/pop site on
 the lowering side. Lowering reads from `Checker.typeMap` directly
 by clone identity — same path as user-written decls take today.
 No override needed because there's nothing to override: clone keys
 are already in the global map. The *Checker's* internal
 `currentBodyTypeMap` field stays as an implementation detail of
-`checker.checkBody` — different scope from PR 5.
+`checker.checkBody` — a different scope from the lowering override.
 
 ### Three downstream consequences
 
@@ -347,102 +344,8 @@ how Lifecycle owns its fixed-point iteration. Symmetry across
 ADR-0001 modules helps maintainability — every concept module owns
 its loops, the Checker is just the convener.
 
-### 7.5 Big-bang migration
+## 8. Current implementation
 
-One PR moves everything: maps, drivers, baking, override removal, all
-at once.
+`src/monomorphization/` owns registration, adoption, baking and body checks. Baking clones generic AST declarations and substitutes concrete types; lowering walks these clones. The per-instantiation `LoweringCtx` type-map override was removed. Unit and end-to-end tests cover the module, including cross-module adoption.
 
-**Rejected.** Six staged PRs (§8) each behaviour-preserving against
-the existing test suite. The big simplification (PR 5, override
-removal) is gated behind PRs that verify no behaviour changed first.
-
-## 8. Migration plan
-
-Six PRs.
-
-**PR 1 — Stand up `src/monomorphization/`.** Move
-`substituteType`, `substituteFunctionType`, `mangleGenericName`,
-`MonomorphizedStruct`, `MonomorphizedFunction` from
-`checker/generics.ts` into the new module. Imports updated. Behaviour
-unchanged. Old `generics.ts` becomes a thin re-export, then deleted
-in PR 6.
-
-**PR 2 — Move maps off Checker.** `monomorphizedStructs`,
-`monomorphizedFunctions`, `monomorphizedEnums` migrate from `Checker`
-to a `Monomorphization` instance. Cross-module adoption methods
-(`adoptMonomorphizedX`) move with them. Checker calls
-`monomorphization.register(...)` instead of mutating its own maps.
-Lowering reads via Monomorphization's read API. Pass 3 still in
-Checker temporarily.
-
-**PR 3 — Move pass-3 driver.** Body-check loop relocates into
-`Monomorphization.checkBodies()`. Calls back into checker primitives
-(`checker.checkBody(decl)`). Pattern-consistency: Monomorphization
-owns its own driver, like Lifecycle owns its fixed-point.
-
-**PR 4 — Bake into synthesised AST decls.** Inside Monomorphization,
-transform each instantiation into a fully-substituted AST decl
-(Y-a). The output of Monomorphization changes shape from "map of
-MonomorphizedStruct/Function" to "list of synthesised AST decls."
-Pass 3 type-checks the synthesised decls directly. Lowering still
-has the override stack but it's a no-op for synthesised decls (they
-already carry concrete resolved types). Lifecycle integration
-(`lifecycle.register(bakedStructType)`) wires up here.
-
-**PR 5 — Delete the override stack.** Remove `LoweringCtx`'s
-per-instantiation type map field and all push/pop sites in
-`lowering-{decl,struct,expr,types}.ts`. Lowering treats synthesised
-decls identically to user-written ones. This is the payoff PR — the
-override-elimination win that justified Y-a in the first place.
-Test suite verifies no regression.
-
-**PR 6 — Cleanup.** Fold any remaining "is this from a
-monomorphization?" branches in lowering. Delete the thin re-export
-shim in `checker/generics.ts`. Update `compiler/CLAUDE.md`'s "Where
-to add a feature" table to point at `src/monomorphization/` for
-generic work.
-
-Each PR behaviour-preserving against the existing test suite. PR 5 is
-the simplification payoff; PRs 1–4 are setup that keeps everything
-working.
-
-## 9. Open questions
-
-- **Synthesised AST node spans.** Should baked AST nodes carry the
-  generic template's source span, or the instantiation site's span,
-  or both via a wrapper? Choice affects diagnostic readability.
-  Recommendation: template span as primary (where the *bug* is),
-  instantiation site as `secondarySpans` (where it was *triggered*).
-  Confirm during PR 4.
-- **Memory cost of synthesised AST.** Today's `MonomorphizedStruct`
-  is a small record; baked AST decls are heavier. For a code base
-  with many instantiations of the same generic from different
-  modules, this could matter. Mitigation: cross-module adoption
-  deduplicates. Worth measuring once PR 4 lands.
-- **Generic-function `throws` propagation.** [SPEC-STATUS.md](../../SPEC-STATUS.md)
-  notes "works for monomorphized cases; some edge cases still drop
-  the throws set." This is its own open issue, but worth checking
-  whether Y-a baking helps (every baked function has its own
-  throws set, so the propagation question becomes "compute throws
-  per baked function" — possibly simpler).
-
-## 10. Tests that come with the migration
-
-The product-list shape opens a test pyramid much like Lifecycle's:
-
-- **`Monomorphization.register` — pure, table-driven.** Input: a
-  generic decl + type args. Output: a baked AST decl. Snapshot
-  fixtures.
-- **`Monomorphization.bake` — pure substitution.** Input: a generic
-  AST + substitution map. Output: a fully-substituted AST. Diff against
-  golden output per fixture.
-- **`Monomorphization.adopt` — table-driven.** Input: two
-  monomorphization instances both containing `Foo<i32>`. Output:
-  merged products list, no duplicates.
-- **Existing end-to-end tests** continue to assert behaviour from
-  `.kei` source through compiled binary. They should pass unchanged
-  through the migration.
-
-After PR 5 lands, three new test files appear under
-`tests/monomorphization/` (`register.test.ts`, `bake.test.ts`,
-`adopt.test.ts`) and end-to-end coverage stays.
+Generic-function `throws` propagation still has edge cases; see [SPEC-STATUS.md](../../SPEC-STATUS.md). The completed PR sequence is available in Git history.

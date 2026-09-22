@@ -1,17 +1,8 @@
 /**
- * Monomorphization module — generic type substitution and instantiation.
- *
- * Owns the three caches (structs, functions, enums) for generic
- * instantiations as well as the cross-module adoption logic. Construct
- * one instance per compile via {@link createMonomorphization} and thread
- * it through to the {@link Checker} (and, downstream, to KIR lowering).
- *
- * Subsequent migration PRs deepen this module:
- * - PR 4: registration switches to baking fully-substituted AST decls.
- * - PR 5: deletes the per-instantiation override stack on `LoweringCtx`.
- *
- * See `docs/design/monomorphization-module.md` and
- * `docs/adr/0001-concept-cohesive-modules.md`.
+ * Monomorphization owns generic instantiation maps, cross-module adoption,
+ * AST baking, and instantiated body checks. Construct one instance per
+ * compile and thread it through the checker.
+ * See `docs/design/monomorphization-module.md` and ADR-0001.
  */
 
 import type { EnumType } from "../checker/types";
@@ -44,9 +35,7 @@ export interface MonomorphizationProducts {
 }
 
 /**
- * Public Monomorphization interface — a snapshot of what the module owns
- * at this stage of the migration.  Subsequent PRs add the pass-3 driver
- * (PR 3), AST baking (PR 4), and the override-stack deletion (PR 5).
+ * Public interface for registration, adoption, and instantiated body checks.
  */
 export interface Monomorphization {
   /** Record a generic struct instantiation. Keyed by mangled name. */
@@ -100,7 +89,7 @@ export interface Monomorphization {
    * body under that instantiation's substitution map. The per-decl
    * checking work stays in the Checker; this module owns the loop
    * (pattern-consistent with Lifecycle owning its fixed-point sweep).
-   * See `docs/design/monomorphization-module.md` §3, §7.4, §8 PR 3.
+   * See `docs/design/monomorphization-module.md` §3.
    */
   checkBodies(checkBody: CheckBodyCallback): void;
 }

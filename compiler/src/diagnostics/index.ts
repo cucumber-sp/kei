@@ -1,19 +1,8 @@
 /**
- * Public interface of the diagnostics module.
- *
- * `createDiagnostics(config)` returns the typed-methods object call sites
- * use. PR 2 exposes the `untriaged` catch-all so the existing checker
- * emit surface (Checker.error / .warning) can route through this module
- * unchanged at the call sites; PRs 4a–4g carve specific variants out of
- * the catch-all by category.
- *
- * Severity is resolved at emit time from the catalog default through
- * `resolveSeverity` (per design doc §6). v1 `LintConfig` is empty so
- * the catalog default flows through unchanged; the resolver hook is in
- * place so future CLI flags / `kei.toml` lint sections do not have to
- * thread anything new through call sites.
- *
- * See `docs/design/diagnostics-module.md` §4.
+ * Diagnostics API: typed emit methods, one collector per compilation,
+ * and a temporary `untriaged` path for remaining generic checker errors.
+ * Severity is resolved when emitted. See `docs/design/diagnostics-module.md`
+ * and `docs/roadmap.md`.
  */
 
 import { createCollector, type LintConfig, resolveSeverity } from "./collector";

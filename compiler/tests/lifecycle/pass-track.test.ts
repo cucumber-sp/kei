@@ -7,7 +7,7 @@
  * `mark_scope_exit`. These tests exercise that contract on synthetic
  * KIR (no parser, no checker, no lowering driver).
  *
- * Cases (per design doc §9):
+ * Cases (per design note):
  *
  *   1. single scope with two tracked vars → destroys in reverse
  *      declaration order

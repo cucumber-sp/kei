@@ -1,15 +1,7 @@
 /**
- * Discovery — recording generic instantiations into a Monomorphization
- * instance's internal maps.
- *
- * At this stage of the migration (PR 2 of
- * `docs/design/monomorphization-module.md`) callers in
- * `checker/literal-checker.ts` and `checker/call-checker.ts` still build
- * the `MonomorphizedStruct` / `MonomorphizedFunction` records themselves
- * and hand the finished record off here. PR 4 inverts the direction:
- * callers will pass `(decl, typeArgs)` and this module will bake the
- * fully-substituted AST decl. For now, registration is "set in the right
- * map keyed by mangled name."
+ * Record generic instantiations in the module's internal maps.
+ * Callers supply the records; the body-check pass later attaches baked
+ * declarations for KIR lowering.
  */
 
 import type { EnumType } from "../checker/types";

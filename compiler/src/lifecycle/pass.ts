@@ -1,40 +1,8 @@
 /**
- * Lifecycle module — Insert sub-concern (rewrite pass).
- *
- * Slots between KIR lowering and mem2reg. Walks every function, every
- * block, and rewrites the six marker instructions (`mark_scope_enter`,
- * `mark_scope_exit`, `mark_track`, `mark_moved`, `mark_assign`,
- * `mark_param`) into concrete `destroy` / `oncopy` instructions using the
- * Lifecycle decision map.
- *
- * Migration status (`docs/design/lifecycle-module.md` §7):
- *
- * - PR 3 — pass slot, no-op rewrite. All markers stripped, nothing
- *   concrete emitted in their place.
- * - PR 4a — `mark_scope_exit` rewrites into per-scope destroys in
- *   reverse declaration order, skipping moved-out vars. String slots
- *   lower to `call_extern_void("kei_string_destroy")`; struct slots
- *   lower to `destroy`.
- * - PR 4b — `mark_assign` rewrites into load/destroy/store/oncopy
- *   (the slot's pointee KIR type drives the dispatch).
- * - PR 4c — `mark_param` rewrites into per-exit destroys.
- * - PR 4d — `mark_moved x` is consumed by the rewriter into a
- *   per-function moved-set (walked in source order). The set is
- *   consulted when emitting destroys at `mark_scope_exit` and the
- *   per-exit param destroys, skipping any moved var.
- * - PR 4e — `mark_track` + `mark_scope_enter` are the source of
- *   truth for scope → tracked vars: the pass walks each function's
- *   marker stream pre-rewrite to build `Map<scopeId, TrackedVar[]>`,
- *   then reads it back at every `mark_scope_exit`. The skip-set still
- *   comes from the transitional `KirFunction.lifecycleScopeExits`
- *   side-table for early-return retained-name skips.
- *
- * After the pass, no `mark_*` instruction survives and no
- * `lifecycleScopeExits` side-table survives — mem2reg, de-SSA, and the
- * C emitter never see either.
- *
- * See `docs/design/lifecycle-module.md` §2 (pipeline diagram), §3
- * (marker IR table), and §5 (defer-vs-destroy interleave).
+ * Lifecycle insertion pass. Runs between KIR lowering and mem2reg.
+ * Rewrites lifecycle markers into concrete destroy/oncopy work and removes
+ * the marker stream and scope-exit side table before later passes run.
+ * See `docs/design/lifecycle-module.md` for marker and defer ordering rules.
  */
 
 import type { StructType } from "../checker/types";

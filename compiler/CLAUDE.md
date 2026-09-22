@@ -1,102 +1,32 @@
-# compiler/CLAUDE.md
+# Compiler guide
 
-How to build, test, and navigate the kei compiler. Project-wide policy
-(backlog, spec rules) lives in the repo-root `CLAUDE.md`.
+Run commands from `compiler/`. This project uses Bun and a system C compiler, not a Node test runner.
 
-## Runtime: Bun, not Node
-
-This subdir runs on [Bun](https://bun.sh/). Use `bun` / `bun test` / `bun run`
-/ `bunx` — never `node`, `vitest`, `jest`, `npm`, `pnpm`, `npx`. Bun loads
-`.env` automatically. Compiling a `.kei` program also requires a C compiler
-on `PATH` (`cc`, `gcc`, or `clang`).
-
-## Commands
-
-Run everything from `compiler/`.
-
-```bash
-bun install                                      # one-time
-bun test                                         # ~1,900 tests across lexer/parser/checker/kir/backend/e2e
-bun test tests/checker/arrays.test.ts            # single file
-bun test tests/checker/arrays.test.ts -t "name"  # single test by name pattern
-bunx biome check src/ tests/                     # lint + format check
-bunx biome check --write src/ tests/             # auto-fix
-
-# Compile + run a .kei program
-bun src/cli.ts program.kei --run         # compile and execute
-bun src/cli.ts program.kei --build       # binary only (debug; --release for -O2 -DNDEBUG)
-bun src/cli.ts program.kei --check       # type-check only
-bun src/cli.ts program.kei --ast         # print AST
-bun src/cli.ts program.kei --kir         # print KIR (pre-mem2reg)
-bun src/cli.ts program.kei --kir-opt     # print KIR (post-mem2reg)
-bun src/cli.ts program.kei --emit-c      # print generated C
-bun src/cli.ts program.kei --build --backend=clang   # pick C compiler
-
-# Standalone binary (no Bun runtime needed at runtime)
-bun run build                            # writes dist/kei + dist/std/
-./dist/kei program.kei --run
+```sh
+bun install
+bun test
+bun test tests/checker/arrays.test.ts
+bunx biome check src/ tests/
+bun src/cli.ts program.kei --run
+bun src/cli.ts program.kei --check
+bun src/cli.ts program.kei --emit-c
+bun src/cli.ts program.kei --kir
+bun src/cli.ts program.kei --kir-opt
+bun run build
 ```
 
-The standalone build relies on `std/` sitting next to the binary; the build
-script copies it. Don't move `std/` without updating the loader.
+`bun run build` writes a standalone `dist/kei` and copies `std/` to `dist/std/`; keep them together. `--build` emits a native binary, `--release` selects the optimized C build, and `--backend=clang` selects a C compiler.
 
-## Compilation pipeline
+## Where to edit
 
-```
-.kei source
-  → lexer       (src/lexer/)    → tokens
-  → parser      (src/parser/)   → AST  (src/ast/)
-  → checker     (src/checker/)  → typed AST + diagnostics
-  → kir lower   (src/kir/)      → SSA-form IR
-  → mem2reg     (src/kir/)      → optimised SSA
-  → de-SSA      (src/backend/)  → phi-free IR
-  → C emitter   (src/backend/)  → readable C
-  → cc                          → native binary
-```
+| Change | Main locations |
+| --- | --- |
+| Syntax | `src/lexer/`, `src/parser/`, `src/ast/`, then checker, KIR, and backend as needed |
+| Type rule | `src/checker/types/`, checker, `src/kir/lowering-types.ts`, backend |
+| KIR instruction | `src/kir/kir-types/`, lowering, `mem2reg.ts` if memory-related, de-SSA, C emitter |
+| Lifecycle hook or scope cleanup | `src/lifecycle/` and marker emission in `src/kir/` |
+| Generic instantiation | `src/monomorphization/`, checker integration, KIR lowering |
+| Diagnostic | `src/diagnostics/types.ts`, `index.ts`, `format.ts`, and emitting stage |
+| Standard library API | `std/*.kei` and end-to-end tests |
 
-Hand-written recursive-descent parser. Checker runs in passes: pass 1
-registers declarations, pass 1.5 auto-generates `__destroy` / `__oncopy`
-lifecycle hooks, pass 2 type-checks bodies. KIR is block-based SSA;
-`mem2reg` promotes stack allocations to SSA values before C emission.
-Modules are resolved with cyclic-import detection in `src/modules/`.
-
-The std lib (`std/*.kei`: `arena`, `io`, `mem`, `optional`, `shared`) is
-written *in kei* and compiled with the user program — touching it requires
-the same checker/backend understanding as language work.
-
-## Where to add a feature
-
-| Adding…                                  | Touch (in order)                                                                                         |
-|------------------------------------------|----------------------------------------------------------------------------------------------------------|
-| keyword / syntax                         | `src/lexer/token.ts` → `src/lexer/lexer.ts` → `src/ast/` → matching `src/parser/*-parser.ts` → matching `src/checker/*-checker.ts` → matching `src/kir/lowering-*.ts` → `src/backend/c-emitter-*.ts` |
-| type                                     | `src/checker/types/` → checker rules → KIR lowering → C emitter (size/layout/destroy)                    |
-| KIR instruction                          | `src/kir/kir-types/` → lowering pass that produces it → de-SSA pass → `src/backend/c-emitter-insts.ts`   |
-| lifecycle hook (`__destroy` / `__oncopy`) | `src/lifecycle/` — `decide.ts` (which structs need an auto hook), `synthesise.ts` (KIR body), `pass.ts` (rewrite marker insts into concrete destroy/oncopy/move at the right program points). Lowering only emits markers (`src/kir/lowering-scope.ts`); checker only kicks off `runLifecycleDecide` (`src/checker/struct-checker.ts`). |
-| diagnostic                               | `src/diagnostics/` — add the catalog variant in `types.ts`, typed emit method in `index.ts`, and formatter case in `format.ts`; stage code emits through the diagnostics module rather than `src/errors/`. |
-| stdlib API                               | `std/*.kei` (it's kei source — same rules as user code)                                                  |
-
-Skipping a layer leaves silent gaps (e.g. checker accepts something the
-emitter can't produce). When a feature can't land end-to-end in one PR,
-file a GitHub issue per the repo-root policy and link it from the PR.
-
-## Code style
-
-Biome enforces formatting and lint: 2-space indent, double quotes, semicolons,
-100-char line, `const` over `let`, no `any`, no unused vars, template literals
-over concatenation. TypeScript is strict (`strict`, `noUncheckedIndexedAccess`).
-Relative imports are extensionless (`from "./foo"`, not `./foo.ts`) — Bun resolves the `.ts` extension automatically.
-
-## Testing conventions
-
-`bun:test` (`import { test, expect } from "bun:test"`). Tests live under
-`tests/` mirroring `src/` (`tests/lexer/`, `tests/parser/`, `tests/checker/`,
-`tests/kir/`, `tests/backend/`, plus end-to-end binary tests). Add a test for
-every feature touch; CI runs `bun test` and `biome check` and both must pass.
-
-<claude-mem-context>
-# Recent Activity
-
-<!-- This section is auto-generated by claude-mem. Edit content outside the tags. -->
-
-*No recent activity*
-</claude-mem-context>
+The [architecture overview](../docs/architecture.md) traces the pipeline. Tests use `bun:test` in `tests/` and should cover the changed layer plus an end-to-end path when behavior crosses stages. Biome enforces formatting and linting; relative imports omit `.ts` extensions. Project-wide documentation rules live in [the root guidance](../CLAUDE.md).

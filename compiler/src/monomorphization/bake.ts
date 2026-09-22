@@ -32,8 +32,7 @@
  * decide "is this a template I should skip?", so the clone must say
  * "I am not a template."
  *
- * **Spans on cloned nodes point at the template.** Per design doc §4 /
- * §9, the instantiation site goes into diagnostic `secondarySpans` at
+ * **Spans on cloned nodes point at the template.** Per design doc §4, the instantiation site goes into diagnostic `secondarySpans` at
  * error-emission time, not onto the AST node.
  */
 

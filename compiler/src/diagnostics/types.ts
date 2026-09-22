@@ -1,30 +1,10 @@
 /**
- * Diagnostic types — discriminated union shape for the diagnostics module.
+ * Typed diagnostic variants and category codes.
+ * `untriaged` remains for checker errors without a specific variant; see
+ * `docs/roadmap.md`. Codes are advisory before Kei 1.0.
  *
- * The variant union is the source of truth. PR 2 adds the `untriaged`
- * catch-all so the existing checker emit surface (Checker.error /
- * .warning + a few raw pushes) can route through the new module without
- * disturbing the ~80 sub-checker call sites. PRs 4a–4g carve specific
- * variants out of `untriaged`. See
- * `docs/design/diagnostics-module.md` §3, §9 PR 2.
- *
- * Code numbering — categorical ranges (per design doc §11). Each
- * category of diagnostic gets a `Exxxx` block so codes from related
- * variants cluster together. Reserved ranges (mirror the PR 4a–4g
- * categories from design doc §9):
- *
- *   E1xxx — type errors             (PR 4a)
- *   E2xxx — name resolution         (PR 4b)
- *   E3xxx — calls / arity           (PR 4c)
- *   E4xxx — structs / fields        (PR 4d)
- *   E5xxx — lifecycle               (PR 4e)
- *   E6xxx — operators               (PR 4f)
- *   E7xxx — modules / imports       (PR 4g)
- *   W0xxx — warnings (cross-cutting)
- *
- * Per design doc §10.6 codes are *advisory* until kei stabilises —
- * they appear in output for searchability but carry no SemVer
- * stability promise; renumbering is allowed pre-1.0.
+ * E1xxx type errors, E2xxx names, E3xxx calls, E4xxx structs,
+ * E5xxx lifecycle, E6xxx operators, E7xxx modules, W0xxx warnings.
  */
 
 /**
@@ -280,9 +260,8 @@ export interface MethodNotFoundDiagnostic extends DiagnosticEnvelope {
  * Operator-category variants (PR 4f). Carved out of `untriaged` by
  * `operator-checker.ts`. Each carries the operator string in its
  * payload (`op`) plus the pre-formatted message text so existing
- * checker wording survives the migration. See
- * `docs/design/diagnostics-module.md` §9 PR 4f and §11 for the
- * `E6xxx` code range.
+ * checker wording survives. See `docs/design/diagnostics-module.md`
+ * for the category scheme.
  */
 
 /**
@@ -349,7 +328,7 @@ export interface UnaryTypeMismatchDiagnostic extends DiagnosticEnvelope {
 
 /**
  * Lifecycle / checker-rules variants (E5xxx) — see
- * `docs/design/diagnostics-module.md` §9 PR 4e.
+ * `docs/design/diagnostics-module.md`.
  *
  * Scope: *user-authored* `__destroy` / `__oncopy` hooks on an
  * `unsafe struct`. Auto-generated hooks belong to the Lifecycle module
@@ -415,7 +394,7 @@ export interface LifecycleReturnTypeWrongDiagnostic extends DiagnosticEnvelope {
  * fields only) and from `MemberExpr` when the object is a struct type
  * but the property name isn't in `fields`/`methods` (`access:
  * "member"`, fields and methods). PR 4d. See
- * `docs/migrations/diagnostics/pr-4d.md`.
+ * `docs/design/diagnostics-module.md`.
  */
 export interface UnknownFieldDiagnostic extends DiagnosticEnvelope {
   kind: "unknownField";
@@ -487,7 +466,7 @@ export interface UnsafeStructFieldRuleDiagnostic extends DiagnosticEnvelope {
 // `unresolvedImport` is *which-pass-emits-it*: errors that fire while
 // the resolver is still discovering / topologically-sorting modules
 // live here; symbol-level errors that fire later during the checker
-// pass live in 4b. See `docs/design/diagnostics-module.md` §9, PR 4g.
+// pass live in 4b. See `docs/design/diagnostics-module.md`.
 
 /**
  * The import graph contains a cycle. `path` carries the cycle ordered

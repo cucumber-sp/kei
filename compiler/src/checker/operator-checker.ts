@@ -337,9 +337,8 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
       const litInfo = extractLiteralInfo(expr.value);
       const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, targetType);
       if (!isLiteralOk) {
-        // Stays on `untriaged` (PR 4f) — plain `=` type mismatch is the
-        // assignment-context `typeMismatch` shape that PR 4a owns. See
-        // `docs/migrations/diagnostics/pr-4f.md` Out-of-scope.
+        // Plain `=` type mismatch still uses the generic diagnostic path;
+        // see `docs/roadmap.md` for the remaining migration.
         checker.error(
           `type mismatch: expected '${typeToString(targetType)}', got '${typeToString(valueType)}'`,
           expr.span

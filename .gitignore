@@ -9,3 +9,4 @@
 .worktrees/
 .security-key
 logs/security/
+.codegraph/

@@ -13,7 +13,7 @@
  * the argument expression — the design doc lists that as the
  * non-trivial payload field for this variant.
  *
- * See `docs/design/diagnostics-module.md` §12, `docs/migrations/diagnostics/pr-4c.md`.
+ * See `docs/design/diagnostics-module.md`.
  */
 
 import { describe, expect, test } from "bun:test";

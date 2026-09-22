@@ -6,7 +6,7 @@
  * `stack_alloc` / `field_ptr` / `index_ptr` instructions, runs the
  * Lifecycle pass, and asserts the emitted sequence.
  *
- * Cases per `docs/design/lifecycle-module.md` §9:
+ * Cases per `docs/design/lifecycle-module.md`:
  *   1. non-managed slot                → bare `store`
  *   2. managed-struct slot, non-move RHS → destroy / store / oncopy
  *   3. managed-struct slot, move RHS    → destroy / store (no oncopy)

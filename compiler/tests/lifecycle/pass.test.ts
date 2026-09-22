@@ -2,14 +2,11 @@
  * Lifecycle.runLifecyclePass — pure rewrite-pass tests on synthetic KIR.
  *
  * These tests build small `KirModule`s by hand (no parser, no checker, no
- * lowering) so the pass is exercised in isolation. PR 3 lands the pass as
- * a **no-op rewriter**: every `mark_*` instruction is stripped; nothing
- * concrete (e.g. `destroy` / `oncopy`) is emitted in its place. Real
- * insertion-site behaviour is staged across PRs 4a–4e
- * (`docs/design/lifecycle-module.md` §7).
+ * lowering) so the pass is exercised in isolation. These baseline cases
+ * cover modules without managed work and marker removal. Sibling files
+ * cover concrete destroy and oncopy rewrites.
  *
- * Cases mirror `docs/design/lifecycle-module.md` §9 ("pass tests on
- * synthetic inputs"):
+ * Cases on synthetic inputs:
  *   1. empty module → unchanged
  *   2. module with no markers → unchanged
  *   3. each marker kind in isolation → marker stripped, no concrete

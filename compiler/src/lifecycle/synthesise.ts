@@ -18,7 +18,7 @@
  * function table-testable without a checker driver — see
  * `tests/lifecycle/synthesise.test.ts`.
  *
- * See `docs/design/lifecycle-module.md` §2 ("Synthesise") and §7 PR 2.
+ * See `docs/design/lifecycle-module.md` §2 ("Synthesise").
  */
 
 import type { StructType, Type } from "../checker/types";

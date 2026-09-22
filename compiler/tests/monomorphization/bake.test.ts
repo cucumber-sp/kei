@@ -9,7 +9,7 @@
  * the clone identities — happens during pass-3 body-check and is
  * covered by the end-to-end suite.
  *
- * Cases (per `docs/migrations/monomorphization/pr-4.md`):
+ * Cases (per `docs/design/monomorphization-module.md`):
  *   (a) struct with `T` field — clone identities + empty genericParams
  *   (b) struct method body — every nested node is a fresh identity
  *   (c) nested generic reference `Bar<T>` — TypeNode is cloned
@@ -191,8 +191,12 @@ describe("bake", () => {
     // The inner `T` TypeNode is also a fresh identity. Substitution from
     // `T` to `i32` is the checker's job (via `TypeResolver`); the bake
     // walker is pure AST.
+    const templateField = template.fields[0];
+    if (!templateField || templateField.typeAnnotation.kind !== "GenericType") {
+      throw new Error("expected generic field");
+    }
     expect(clonedField.typeAnnotation.typeArgs[0]).not.toBe(
-      (template.fields[0]?.typeAnnotation as GenericType).typeArgs[0]
+      templateField.typeAnnotation.typeArgs[0]
     );
   });
 

@@ -8,7 +8,7 @@
  * module A and instantiated by both A and B should land once in A's
  * registry).
  *
- * Cases (per `docs/migrations/monomorphization/pr-2.md`):
+ * Cases (per `docs/design/monomorphization-module.md`):
  *   1. adopt merges new entries into the recipient
  *   2. adopting a duplicate key is idempotent — first entry wins
  *   3. per-kind adopt* methods exhibit the same dedup behaviour

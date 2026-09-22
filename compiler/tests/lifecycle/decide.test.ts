@@ -6,7 +6,7 @@
  * decisions came out.  No checker, no parser — the StructType graph is
  * built by hand so each test case targets exactly one decision pattern.
  *
- * Cases (per `docs/design/lifecycle-module.md` §10 ("Decide tests")):
+ * Cases for the decision fixed point:
  *   1. struct with no managed fields → no decision
  *   2. struct with one string field → decision with destroy carrying
  *      that field

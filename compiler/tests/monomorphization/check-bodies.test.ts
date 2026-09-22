@@ -9,7 +9,7 @@
  * independently of the checker primitive that runs underneath it in
  * production.
  *
- * Cases (per `docs/migrations/monomorphization/pr-3.md`):
+ * Cases (per `docs/design/monomorphization-module.md`):
  *   1. checkBodies invokes the callback once per registered function
  *   2. checkBodies invokes the callback once per registered struct
  *   3. checkBodies visits functions before structs

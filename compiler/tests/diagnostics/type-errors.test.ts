@@ -12,7 +12,7 @@
  * (see [#19]). We test the formatter directly until the checker grows
  * a site.
  *
- * See `docs/design/diagnostics-module.md` §12.
+ * See `docs/design/diagnostics-module.md`.
  */
 
 import { describe, expect, test } from "bun:test";

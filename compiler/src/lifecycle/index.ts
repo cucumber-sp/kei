@@ -1,16 +1,7 @@
 /**
- * Lifecycle module — public interface.
- *
- * First concrete instance of [ADR-0001](../../docs/adr/0001-concept-cohesive-modules.md).
- * Owns everything to do with `__destroy` / `__oncopy` hooks for managed
- * types.  Today (PR 1) only the **Decide** sub-concern lives here;
- * Synthesise and Insert follow in subsequent PRs of the migration plan
- * (`docs/design/lifecycle-module.md` §7).
- *
- * The module exposes a factory rather than a class — callers construct
- * a fresh `Lifecycle` per compile and thread it through the pipeline
- * stages that need it (today: struct-checker via decl-checker; later:
- * KIR lowering and the rewrite pass).
+ * Lifecycle owns hook decisions, KIR body synthesis, and marker rewriting.
+ * Construct one instance per compile and thread it through the checker.
+ * See `docs/design/lifecycle-module.md` and ADR-0001.
  */
 
 import type { StructType } from "../checker/types";
@@ -23,9 +14,7 @@ export { synthesise } from "./synthesise";
 export type { LifecycleDecision, ManagedFieldRef } from "./types";
 
 /**
- * Public Lifecycle interface — a snapshot of what the module owns at
- * this stage of the migration.  Subsequent PRs will add `synthesise()`,
- * the marker rewrite pass entry point, etc.
+ * Public Lifecycle interface for decision and hook synthesis.
  */
 export interface Lifecycle {
   /**
@@ -45,10 +34,7 @@ export interface Lifecycle {
    * for newly-added arms, so the caller's mirror state stays
    * consistent.
    *
-   * @param onArmAdded Transition shim hook — see
-   *                   `docs/design/lifecycle-module.md` §7 PR 1.
-   *                   Invoked once per (struct, arm) freshly added to
-   *                   the decision map.  Removed in PR 4.
+   * @param onArmAdded Invoked once per newly added (struct, arm) decision.
    */
   runFixedPoint(onArmAdded?: (struct: StructType, arm: "destroy" | "oncopy") => void): void;
 

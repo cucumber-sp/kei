@@ -1,6 +1,6 @@
 /**
  * Snapshot one fixture per struct-category variant carved out of
- * `untriaged` in PR 4d (`docs/migrations/diagnostics/pr-4d.md`).
+ * `untriaged` in PR 4d (`docs/design/diagnostics-module.md`).
  *
  * Each test feeds a minimal `.kei` source through the full check
  * pipeline, locks the new-union snapshot for the migrated kind, and
