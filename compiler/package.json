@@ -7,10 +7,10 @@
     "build": "bun build --compile --minify-syntax --minify-whitespace --keep-names --bytecode --sourcemap --target=bun src/cli.ts --outfile dist/kei && cp -R std dist/std"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.14",
-    "@types/bun": "latest"
+    "@biomejs/biome": "^2.5.14",
+    "@types/bun": "^1.4.2"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^7.0.2"
   }
 }
