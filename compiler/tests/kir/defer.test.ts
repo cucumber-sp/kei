@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { KirCallVoid } from "../../src/kir/index";
+import type { KirCallVoid } from "../../src/kir/kir-types";
 import { getInstructions, lowerAndPrint, lowerFunction } from "./helpers";
 
 const CLEANUP_DECLS = `

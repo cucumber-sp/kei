@@ -294,7 +294,7 @@ export function lowerCatchExpr(ctx: LoweringCtx, expr: CatchExpr): VarId {
 }
 
 /** Resolve the function name, args, and throws info for a call expression used in catch */
-export function resolveCallThrowsInfo(
+function resolveCallThrowsInfo(
   ctx: LoweringCtx,
   callExpr: Expression
 ): {
@@ -366,7 +366,7 @@ export function resolveCallThrowsInfo(
 /** For catch throw: propagate errors from callee to caller's error protocol.
  *  The callee already wrote the error value to the caller's __err buffer,
  *  so we only need to remap tags if the error type ordering differs. */
-export function lowerCatchThrowPropagation(
+function lowerCatchThrowPropagation(
   ctx: LoweringCtx,
   calleeThrowsTypes: KirType[],
   tagVar: VarId,

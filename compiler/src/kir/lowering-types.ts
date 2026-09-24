@@ -319,7 +319,7 @@ export function getFunctionReturnType(ctx: LoweringCtx, decl: FunctionDecl): Typ
   return { kind: "void" as const };
 }
 
-export function nameToCheckerType(_ctx: LoweringCtx, name: string): Type {
+function nameToCheckerType(_ctx: LoweringCtx, name: string): Type {
   switch (name) {
     case "int":
     case "i32":
@@ -354,88 +354,6 @@ export function nameToCheckerType(_ctx: LoweringCtx, name: string): Type {
   }
 }
 
-/** Resolve the byte size of a sizeof argument at compile time. */
-export function resolveSizeofArg(ctx: LoweringCtx, arg: Expression): number {
-  if (arg.kind === "Identifier") {
-    return sizeofTypeName(ctx, arg.name);
-  }
-  // For non-identifier args, use the checker type
-  const checkerType = ctx.checkResult.types.typeMap.get(arg);
-  if (checkerType) {
-    return sizeofCheckerType(ctx, checkerType);
-  }
-  return 0;
-}
-
-/** Get size from a type name string. */
-export function sizeofTypeName(ctx: LoweringCtx, name: string): number {
-  switch (name) {
-    case "i8":
-    case "u8":
-    case "bool":
-      return 1;
-    case "i16":
-    case "u16":
-      return 2;
-    case "i32":
-    case "u32":
-    case "int":
-    case "f32":
-    case "float":
-      return 4;
-    case "i64":
-    case "u64":
-    case "f64":
-    case "double":
-    case "usize":
-    case "isize":
-      return 8;
-    case "string":
-      return 32; // kei_string struct: data(8) + len(8) + cap(8) + ref(8)
-    default: {
-      // Look up struct in program declarations
-      for (const decl of ctx.program.declarations) {
-        if (
-          (decl.kind === "StructDecl" || decl.kind === "UnsafeStructDecl") &&
-          decl.name === name
-        ) {
-          let size = 0;
-          for (const field of decl.fields) {
-            size += sizeofTypeName(ctx, typeNodeName(field.typeAnnotation));
-          }
-          return size;
-        }
-      }
-      return 0;
-    }
-  }
-}
-
-/** Get size from a checker Type. */
-export function sizeofCheckerType(ctx: LoweringCtx, t: Type): number {
-  switch (t.kind) {
-    case "bool":
-      return 1;
-    case "int":
-      return t.bits / 8;
-    case "float":
-      return t.bits / 8;
-    case "string":
-      return 32; // kei_string struct: data(8) + len(8) + cap(8) + ref(8)
-    case "ptr":
-      return 8;
-    case "struct": {
-      let size = 0;
-      for (const [, fieldType] of t.fields) {
-        size += sizeofCheckerType(ctx, fieldType);
-      }
-      return size;
-    }
-    default:
-      return 8;
-  }
-}
-
 /** Build a mangled function name from a FunctionDecl (for overloaded definitions). */
 export function mangleFunctionName(ctx: LoweringCtx, baseName: string, decl: FunctionDecl): string {
   const paramSuffixes = decl.params.map((p) => typeNameSuffix(ctx, typeNodeName(p.typeAnnotation)));
@@ -453,7 +371,7 @@ export function mangleFunctionNameFromType(
 }
 
 /** Convert a type annotation name to a short suffix for mangling. */
-export function typeNameSuffix(_ctx: LoweringCtx, name: string): string {
+function typeNameSuffix(_ctx: LoweringCtx, name: string): string {
   switch (name) {
     case "int":
     case "i32":
@@ -506,7 +424,7 @@ function kirTypeNodeSuffix(ctx: LoweringCtx, node: TypeNode): string {
   return kirTypeSuffix(lowerTypeNode(ctx, node));
 }
 
-/** Mangle suffix for a KirType. Mirrors `mangleTypeName` in checker/generics.ts. */
+/** Mangle suffix for a KirType. Mirrors `mangleTypeName` in monomorphization/mangle.ts. */
 function kirTypeSuffix(t: KirType): string {
   switch (t.kind) {
     case "int":
@@ -532,7 +450,7 @@ function kirTypeSuffix(t: KirType): string {
 }
 
 /** Convert a checker Type to a short suffix for mangling. */
-export function checkerTypeSuffix(ctx: LoweringCtx, t: Type): string {
+function checkerTypeSuffix(ctx: LoweringCtx, t: Type): string {
   switch (t.kind) {
     case "int":
       return `${t.signed ? "i" : "u"}${t.bits}`;

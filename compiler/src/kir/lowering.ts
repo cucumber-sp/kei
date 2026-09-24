@@ -37,7 +37,7 @@ import { lowerCheckerType, lowerTypeNode, mangleFunctionName } from "./lowering-
  * by populating `ctx.functions`, `ctx.typeDecls`, etc., and returns the
  * assembled KirModule.
  */
-export function runLowering(ctx: LoweringCtx): KirModule {
+function runLowering(ctx: LoweringCtx): KirModule {
   // Detect which function names are overloaded
   const funcNameCounts = new Map<string, number>();
   for (const decl of ctx.program.declarations) {

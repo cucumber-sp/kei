@@ -4,10 +4,9 @@
 
 ## 1. Why
 
-Generic monomorphization today is implemented across 13+ files. The
-pure helpers in `compiler/src/checker/generics.ts` (`substituteType`,
-`substituteFunctionType`, `mangleGenericName`,
-`MonomorphizedStruct` / `MonomorphizedFunction` records) are clean.
+The original monomorphization code spanned 13+ files. Its pure helpers
+now live in `compiler/src/monomorphization/substitute.ts` and `mangle.ts`;
+they were previously grouped in `checker/generics.ts`.
 The friction is concentrated in two places that aren't:
 
 **Maps and drivers live on `Checker`.** Three caches

@@ -52,7 +52,7 @@ const COMPOUND_ASSIGN_OPS = new Set(["+=", "-=", "*=", "/=", "%="]);
 const COMPOUND_BITWISE_OPS = new Set(["&=", "|=", "^=", "<<=", ">>="]);
 
 /** Maps binary operators to their corresponding operator method names on structs. */
-export const BINARY_OP_METHODS: Record<string, string> = {
+const BINARY_OP_METHODS: Record<string, string> = {
   "+": "op_add",
   "-": "op_sub",
   "*": "op_mul",

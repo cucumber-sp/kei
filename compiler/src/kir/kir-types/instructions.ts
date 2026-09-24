@@ -89,7 +89,7 @@ export interface KirFieldPtr {
 }
 
 /** Compute a pointer to an element at a given index within an array. */
-export interface KirIndexPtr {
+interface KirIndexPtr {
   kind: "index_ptr";
   dest: VarId;
   base: VarId;
@@ -148,7 +148,7 @@ export interface KirNot {
 }
 
 /** Bitwise NOT (`~x`). */
-export interface KirBitNot {
+interface KirBitNot {
   kind: "bit_not";
   dest: VarId;
   operand: VarId;
@@ -188,7 +188,7 @@ export interface KirConstString {
 }
 
 /** Null pointer constant. */
-export interface KirConstNull {
+interface KirConstNull {
   kind: "const_null";
   dest: VarId;
   type: KirType;
@@ -213,7 +213,7 @@ export interface KirCallVoid {
 }
 
 /** Call an extern (FFI) function that returns a value. */
-export interface KirCallExtern {
+interface KirCallExtern {
   kind: "call_extern";
   dest: VarId;
   func: string;
@@ -233,7 +233,7 @@ export interface KirCallExternVoid {
  * The callee returns an i32 tag; `__out` and `__err` pointers are
  * appended to args by the emitter.
  */
-export interface KirCallThrows {
+interface KirCallThrows {
   kind: "call_throws";
   /** Receives the i32 tag (0 = success, 1+ = error variant). */
   dest: VarId;
@@ -252,7 +252,7 @@ export interface KirCallThrows {
 // ── Type operations ──────────────────────────────────────────────────────────
 
 /** Explicit type cast between compatible types. */
-export interface KirCast {
+interface KirCast {
   kind: "cast";
   dest: VarId;
   value: VarId;
@@ -260,7 +260,7 @@ export interface KirCast {
 }
 
 /** Compile-time sizeof a type (result is usize). */
-export interface KirSizeof {
+interface KirSizeof {
   kind: "sizeof";
   dest: VarId;
   type: KirType;
@@ -306,7 +306,7 @@ export interface KirMove {
 // shapes). See `docs/design/lifecycle-module.md` §3.
 
 /** Open a new lexical scope frame. Paired with `mark_scope_exit`. */
-export interface KirMarkScopeEnter {
+interface KirMarkScopeEnter {
   kind: "mark_scope_enter";
   scopeId: ScopeId;
 }
@@ -316,7 +316,7 @@ export interface KirMarkScopeEnter {
  * emits destroys for live tracked vars in reverse declaration order,
  * skipping moved ones.
  */
-export interface KirMarkScopeExit {
+interface KirMarkScopeExit {
   kind: "mark_scope_exit";
   scopeId: ScopeId;
 }
@@ -326,7 +326,7 @@ export interface KirMarkScopeExit {
  * source-level binding name — the Lifecycle pass uses it to honour the
  * `mark_scope_exit` skip-set (moved-out vars and the returned local).
  */
-export interface KirMarkTrack {
+interface KirMarkTrack {
   kind: "mark_track";
   varId: VarId;
   name: string;
@@ -334,7 +334,7 @@ export interface KirMarkTrack {
 }
 
 /** Mark `var` as moved out — the pass skips its future scope-exit and per-param destroys. */
-export interface KirMarkMoved {
+interface KirMarkMoved {
   kind: "mark_moved";
   var: string;
 }
@@ -351,7 +351,7 @@ export interface KirMarkAssign {
 }
 
 /** Destroy `param` at every function exit. */
-export interface KirMarkParam {
+interface KirMarkParam {
   kind: "mark_param";
   param: VarId;
 }
@@ -359,14 +359,14 @@ export interface KirMarkParam {
 // ── Debug checks ─────────────────────────────────────────────────────────────
 
 /** Runtime array bounds check — panics if `index >= length`. */
-export interface KirBoundsCheck {
+interface KirBoundsCheck {
   kind: "bounds_check";
   index: VarId;
   length: VarId;
 }
 
 /** Runtime integer overflow check for arithmetic operations. */
-export interface KirOverflowCheck {
+interface KirOverflowCheck {
   kind: "overflow_check";
   op: string;
   lhs: VarId;
@@ -374,20 +374,20 @@ export interface KirOverflowCheck {
 }
 
 /** Runtime null pointer check — panics if `ptr` is null. */
-export interface KirNullCheck {
+interface KirNullCheck {
   kind: "null_check";
   ptr: VarId;
 }
 
 /** Runtime assertion — panics with `message` if `cond` is false. */
-export interface KirAssertCheck {
+interface KirAssertCheck {
   kind: "assert_check";
   cond: VarId;
   message: string;
 }
 
 /** Runtime require check — returns error with `message` if `cond` is false. */
-export interface KirRequireCheck {
+interface KirRequireCheck {
   kind: "require_check";
   cond: VarId;
   message: string;

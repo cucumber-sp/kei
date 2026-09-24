@@ -27,28 +27,28 @@ export interface KirFloatType {
 }
 
 /** Boolean type in KIR. */
-export interface KirBoolType {
+interface KirBoolType {
   kind: "bool";
 }
 
 /** Void type in KIR — used for functions with no return value. */
-export interface KirVoidType {
+interface KirVoidType {
   kind: "void";
 }
 
 /** String type in KIR (pointer + length). */
-export interface KirStringType {
+interface KirStringType {
   kind: "string";
 }
 
 /** Pointer type in KIR. */
-export interface KirPtrType {
+interface KirPtrType {
   kind: "ptr";
   pointee: KirType;
 }
 
 /** Named field within a KIR struct type. */
-export interface KirField {
+interface KirField {
   name: string;
   type: KirType;
 }
@@ -84,14 +84,14 @@ export interface KirEnumType {
 }
 
 /** Fixed-length array type in KIR. */
-export interface KirArrayType {
+interface KirArrayType {
   kind: "array";
   element: KirType;
   length: number;
 }
 
 /** Function signature type in KIR (used for indirect calls). */
-export interface KirFunctionType {
+interface KirFunctionType {
   kind: "function";
   params: KirType[];
   returnType: KirType;

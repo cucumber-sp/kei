@@ -30,4 +30,4 @@ Tests under `compiler/tests/` follow the source tree. Parser, checker, and KIR t
 
 Keep these in sync when behavior changes. Avoid putting rollout history into the specification or leaving completed PR plans in the current docs. Branch from `main`, describe what changed and why, and include test, format, lint, and typecheck results in the PR.
 
-`bun run format` applies Oxfmt; `bun run lint:fix` applies safe Oxlint fixes. `bun run deadcode` reports unused files, exports, types, and dependencies with a nonzero exit code so it can be used as a cleanup gate. CI runs `deadcode:report` to show existing findings without blocking unrelated changes. `bun run cycles` reports import cycles separately.
+`bun run format` applies Oxfmt; `bun run lint:fix` applies safe Oxlint fixes. `bun run deadcode` checks for unused files, exports, types, and dependencies in CI. `bun run cycles` reports import cycles separately.

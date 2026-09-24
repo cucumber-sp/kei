@@ -1,12 +1,5 @@
 import type { BaseNode } from "./base";
 
-export enum TypeNodeKind {
-  Named = "NamedType",
-  Generic = "GenericType",
-  Ref = "RefType",
-  RawPtr = "RawPtrType",
-}
-
 /** A simple named type reference, e.g. `i32`, `MyStruct`. */
 export interface NamedType extends BaseNode {
   kind: "NamedType";
@@ -30,7 +23,7 @@ export interface GenericType extends BaseNode {
  * `readonly: true` corresponds to C# `in` (no write-through). The
  * default form is C# `ref` (mutable through the reference).
  */
-export interface RefType extends BaseNode {
+interface RefType extends BaseNode {
   kind: "RefType";
   pointee: TypeNode;
   readonly: boolean;
@@ -43,7 +36,7 @@ export interface RefType extends BaseNode {
  * `unsafe` blocks, and `extern fn` signatures. No auto-deref; field
  * access is `(*p).field`.
  */
-export interface RawPtrType extends BaseNode {
+interface RawPtrType extends BaseNode {
   kind: "RawPtrType";
   pointee: TypeNode;
 }

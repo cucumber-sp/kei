@@ -58,7 +58,7 @@ export function lowerBlock(ctx: LoweringCtx, block: BlockStmt): void {
 }
 
 /** Lower a block statement that introduces its own scope (e.g., nested { } blocks) */
-export function lowerScopedBlock(ctx: LoweringCtx, block: BlockStmt): void {
+function lowerScopedBlock(ctx: LoweringCtx, block: BlockStmt): void {
   pushScope(ctx);
   for (const stmt of block.statements) {
     lowerStatement(ctx, stmt);
@@ -133,7 +133,7 @@ export function lowerStatement(ctx: LoweringCtx, stmt: Statement): void {
   }
 }
 
-export function lowerLetStmt(ctx: LoweringCtx, stmt: LetStmt): void {
+function lowerLetStmt(ctx: LoweringCtx, stmt: LetStmt): void {
   const type = getExprKirType(ctx, stmt.initializer);
 
   // Evaluate initializer first
@@ -184,7 +184,7 @@ export function lowerLetStmt(ctx: LoweringCtx, stmt: LetStmt): void {
   trackScopeVar(ctx, stmt.name, ptrId, stmt.initializer);
 }
 
-export function lowerConstStmt(ctx: LoweringCtx, stmt: ConstStmt): void {
+function lowerConstStmt(ctx: LoweringCtx, stmt: ConstStmt): void {
   // `const` is "immutable binding" — the spec only blocks rebinding `x = v`
   // (the checker enforces that). Field paths `x.field = v` are allowed, so
   // const struct values need their own stack slot just like `let` does.
@@ -228,7 +228,7 @@ export function lowerConstStmt(ctx: LoweringCtx, stmt: ConstStmt): void {
   trackScopeVar(ctx, stmt.name, ptrId, stmt.initializer);
 }
 
-export function lowerReturnStmt(ctx: LoweringCtx, stmt: ReturnStmt): void {
+function lowerReturnStmt(ctx: LoweringCtx, stmt: ReturnStmt): void {
   if (ctx.currentFunctionThrowsTypes.length > 0) {
     // In a throws function: store value to __out pointer, return tag 0 (success)
     if (stmt.value) {
@@ -275,7 +275,7 @@ export function lowerReturnStmt(ctx: LoweringCtx, stmt: ReturnStmt): void {
   }
 }
 
-export function lowerIfStmt(ctx: LoweringCtx, stmt: IfStmt): void {
+function lowerIfStmt(ctx: LoweringCtx, stmt: IfStmt): void {
   const condId = lowerExpr(ctx, stmt.condition);
   const thenLabel = freshBlockId(ctx, "if.then");
   const elseLabel = stmt.elseBlock ? freshBlockId(ctx, "if.else") : freshBlockId(ctx, "if.end");
@@ -315,7 +315,7 @@ export function lowerIfStmt(ctx: LoweringCtx, stmt: IfStmt): void {
   startBlock(ctx, endLabel);
 }
 
-export function lowerWhileStmt(ctx: LoweringCtx, stmt: WhileStmt): void {
+function lowerWhileStmt(ctx: LoweringCtx, stmt: WhileStmt): void {
   const headerLabel = freshBlockId(ctx, "while.header");
   const bodyLabel = freshBlockId(ctx, "while.body");
   const endLabel = freshBlockId(ctx, "while.end");
@@ -359,7 +359,7 @@ export function lowerWhileStmt(ctx: LoweringCtx, stmt: WhileStmt): void {
   startBlock(ctx, endLabel);
 }
 
-export function lowerForStmt(ctx: LoweringCtx, stmt: ForStmt): void {
+function lowerForStmt(ctx: LoweringCtx, stmt: ForStmt): void {
   // For loops over ranges: for x in start..end { body }
   // Lower as: init → header (condition) → body → latch (increment) → header
   const initLabel = freshBlockId(ctx, "for.init");
@@ -468,7 +468,7 @@ export function lowerForStmt(ctx: LoweringCtx, stmt: ForStmt): void {
   startBlock(ctx, endLabel);
 }
 
-export function lowerCForStmt(ctx: LoweringCtx, stmt: CForStmt): void {
+function lowerCForStmt(ctx: LoweringCtx, stmt: CForStmt): void {
   // C-style for: for (let i = 0; i < 10; i = i + 1) { body }
   // Lower as: init → header (condition) → body → latch (update) → header → end
   const headerLabel = freshBlockId(ctx, "cfor.header");
@@ -524,7 +524,7 @@ export function lowerCForStmt(ctx: LoweringCtx, stmt: CForStmt): void {
   startBlock(ctx, endLabel);
 }
 
-export function lowerSwitchStmt(ctx: LoweringCtx, stmt: SwitchStmt): void {
+function lowerSwitchStmt(ctx: LoweringCtx, stmt: SwitchStmt): void {
   const subjectId = lowerExpr(ctx, stmt.subject);
   const endLabel = freshBlockId(ctx, "switch.end");
 
@@ -674,7 +674,7 @@ export function lowerSwitchStmt(ctx: LoweringCtx, stmt: SwitchStmt): void {
   startBlock(ctx, endLabel);
 }
 
-export function lowerExprStmt(ctx: LoweringCtx, stmt: ExprStmt): void {
+function lowerExprStmt(ctx: LoweringCtx, stmt: ExprStmt): void {
   const valueId = lowerExpr(ctx, stmt.expression);
 
   // Spec §3 / lifecycle: when an expression statement produces an owned
@@ -716,19 +716,19 @@ export function lowerExprStmt(ctx: LoweringCtx, stmt: ExprStmt): void {
   emit(ctx, { kind: "destroy", value: slot, structName: lifecycle.structName });
 }
 
-export function lowerAssertStmt(ctx: LoweringCtx, stmt: AssertStmt): void {
+function lowerAssertStmt(ctx: LoweringCtx, stmt: AssertStmt): void {
   const condId = lowerExpr(ctx, stmt.condition);
   const msg = stmt.message?.kind === "StringLiteral" ? stmt.message.value : "assertion failed";
   emit(ctx, { kind: "assert_check", cond: condId, message: msg });
 }
 
-export function lowerRequireStmt(ctx: LoweringCtx, stmt: RequireStmt): void {
+function lowerRequireStmt(ctx: LoweringCtx, stmt: RequireStmt): void {
   const condId = lowerExpr(ctx, stmt.condition);
   const msg = stmt.message?.kind === "StringLiteral" ? stmt.message.value : "requirement failed";
   emit(ctx, { kind: "require_check", cond: condId, message: msg });
 }
 
-export function lowerDeferStmt(ctx: LoweringCtx, stmt: DeferStmt): void {
+function lowerDeferStmt(ctx: LoweringCtx, stmt: DeferStmt): void {
   const frame = ctx.deferStack.at(-1);
   if (!frame) return;
 

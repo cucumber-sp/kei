@@ -69,7 +69,7 @@ export interface ArrayType {
 }
 
 /** Named field within a struct. */
-export interface StructFieldInfo {
+interface StructFieldInfo {
   name: string;
   type: Type;
 }

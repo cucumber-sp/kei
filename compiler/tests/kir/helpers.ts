@@ -2,13 +2,7 @@
  * Test utilities for KIR lowering.
  */
 
-import type {
-  KirBlock,
-  KirFunction,
-  KirInst,
-  KirModule,
-  KirTerminator,
-} from "../../src/kir/kir-types";
+import type { KirFunction, KirInst, KirModule, KirTerminator } from "../../src/kir/kir-types";
 import { printKir } from "../../src/kir/printer";
 import { runLifecyclePass } from "../../src/lifecycle";
 import { lowerSource } from "../helpers/pipeline";
@@ -65,20 +59,4 @@ export function getTerminators(fn: KirFunction, kind: string): KirTerminator[] {
     }
   }
   return result;
-}
-
-/** Get a block by its id. */
-export function getBlock(fn: KirFunction, id: string): KirBlock | undefined {
-  return fn.blocks.find((b) => b.id === id);
-}
-
-/** Count total instructions across all blocks. */
-export function countInstructions(fn: KirFunction, kind?: string): number {
-  let count = 0;
-  for (const block of fn.blocks) {
-    for (const inst of block.instructions) {
-      if (!kind || inst.kind === kind) count++;
-    }
-  }
-  return count;
 }

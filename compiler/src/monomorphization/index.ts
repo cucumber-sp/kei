@@ -18,7 +18,7 @@ import {
 import type { MonomorphizedFunction, MonomorphizedStruct } from "./types";
 
 export { bake } from "./bake";
-export type { CheckBodyCallback, MonomorphizedProduct } from "./check-bodies";
+export type { MonomorphizedProduct } from "./check-bodies";
 export { mangleGenericName } from "./mangle";
 export { buildTypeSubstitutionMap, substituteFunctionType, substituteType } from "./substitute";
 export type { MonomorphizedFunction, MonomorphizedStruct } from "./types";

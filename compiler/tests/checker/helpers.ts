@@ -22,29 +22,6 @@ export function checkOk(source: string): void {
   }
 }
 
-/** Parse + check, expect specific error messages (substring match). */
-export function checkErrors(source: string, expectedErrors: string[]): void {
-  const errors = errorsOf(check(source));
-
-  for (const expected of expectedErrors) {
-    const found = errors.some((d) => d.message.includes(expected));
-    if (!found) {
-      const actual = errors.map((d) => d.message).join("\n  ");
-      throw new Error(
-        `Expected error containing '${expected}' but got:\n  ${actual || "(no errors)"}`
-      );
-    }
-  }
-
-  if (errors.length > expectedErrors.length) {
-    const unexpected = errors.filter((e) => !expectedErrors.some((exp) => e.message.includes(exp)));
-    if (unexpected.length > 0) {
-      const msgs = unexpected.map((d) => d.message).join("\n  ");
-      throw new Error(`Unexpected errors:\n  ${msgs}`);
-    }
-  }
-}
-
 /** Parse + check, expect at least one error containing the given substring. */
 export function checkError(source: string, expectedError: string): void {
   const errors = errorsOf(check(source));
@@ -87,9 +64,4 @@ export function checkWarning(source: string, expectedWarning: string): void {
       `Expected warning containing '${expectedWarning}' but got:\n  ${actual || "(no warnings)"}`
     );
   }
-}
-
-/** Get error count from check. */
-export function errorCount(source: string): number {
-  return errorsOf(check(source)).length;
 }

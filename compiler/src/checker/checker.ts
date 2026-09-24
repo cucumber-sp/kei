@@ -47,7 +47,7 @@ import type { EnumType, FunctionType, StructType, Type } from "./types";
 import { ERROR_TYPE, TypeKind, typeToString } from "./types";
 
 /** Per-expression resolution metadata produced by the checker. */
-export interface CheckTypes {
+interface CheckTypes {
   /** Resolved type for every checked expression. */
   typeMap: Map<Expression, Type>;
   /** Operator-overload resolution: which method satisfies an operator at a call site. */
@@ -68,7 +68,7 @@ export interface CheckTypes {
 }
 
 /** Generic monomorphization output. */
-export interface CheckGenerics {
+interface CheckGenerics {
   /**
    * The Monomorphization instance carrying every generic instantiation
    * discovered during this check. KIR lowering iterates
@@ -82,7 +82,7 @@ export interface CheckGenerics {
 }
 
 /** Auto-generated lifecycle hook info (which structs got __destroy / __oncopy). */
-export interface CheckLifecycle {
+interface CheckLifecycle {
   autoDestroyStructs: Map<string, StructType>;
   autoOncopyStructs: Map<string, StructType>;
   /**

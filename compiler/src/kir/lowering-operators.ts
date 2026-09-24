@@ -59,7 +59,7 @@ export function lowerBinaryExpr(ctx: LoweringCtx, expr: BinaryExpr): VarId {
   return lhs;
 }
 
-export function lowerShortCircuitAnd(ctx: LoweringCtx, expr: BinaryExpr): VarId {
+function lowerShortCircuitAnd(ctx: LoweringCtx, expr: BinaryExpr): VarId {
   const resultType: KirType = { kind: "bool" };
   const resultPtr = emitStackAlloc(ctx, resultType);
 
@@ -93,7 +93,7 @@ export function lowerShortCircuitAnd(ctx: LoweringCtx, expr: BinaryExpr): VarId 
   return dest;
 }
 
-export function lowerShortCircuitOr(ctx: LoweringCtx, expr: BinaryExpr): VarId {
+function lowerShortCircuitOr(ctx: LoweringCtx, expr: BinaryExpr): VarId {
   const resultType: KirType = { kind: "bool" };
   const resultPtr = emitStackAlloc(ctx, resultType);
 

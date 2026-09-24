@@ -1,4 +1,3 @@
-export type { BaseNode } from "./base";
 export type {
   Declaration,
   EnumDecl,
@@ -13,7 +12,6 @@ export type {
   TypeAlias,
   UnsafeStructDecl,
 } from "./declarations";
-export { DeclKind } from "./declarations";
 export type {
   ArrayLiteral,
   AssignExpr,
@@ -43,7 +41,6 @@ export type {
   UnaryExpr,
   UnsafeExpr,
 } from "./expressions";
-export { ExprKind } from "./expressions";
 export type { Program } from "./program";
 export type {
   AssertStmt,
@@ -65,6 +62,4 @@ export type {
   UnsafeBlock,
   WhileStmt,
 } from "./statements";
-export { StmtKind } from "./statements";
-export type { GenericType, NamedType, RawPtrType, RefType, TypeNode } from "./types";
-export { TypeNodeKind } from "./types";
+export type { GenericType, NamedType, TypeNode } from "./types";

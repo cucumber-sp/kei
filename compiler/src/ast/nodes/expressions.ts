@@ -2,33 +2,6 @@ import type { BaseNode } from "./base";
 import type { BlockStmt, Statement, SwitchCase } from "./statements";
 import type { TypeNode } from "./types";
 
-export enum ExprKind {
-  Binary = "BinaryExpr",
-  Unary = "UnaryExpr",
-  Call = "CallExpr",
-  Member = "MemberExpr",
-  Index = "IndexExpr",
-  Deref = "DerefExpr",
-  Assign = "AssignExpr",
-  StructLiteral = "StructLiteral",
-  IfExpr = "IfExpr",
-  IntLiteral = "IntLiteral",
-  FloatLiteral = "FloatLiteral",
-  StringLiteral = "StringLiteral",
-  BoolLiteral = "BoolLiteral",
-  NullLiteral = "NullLiteral",
-  Identifier = "Identifier",
-  Move = "MoveExpr",
-  Catch = "CatchExpr",
-  Throw = "ThrowExpr",
-  Group = "GroupExpr",
-  Range = "RangeExpr",
-  Unsafe = "UnsafeExpr",
-  Cast = "CastExpr",
-  ArrayLiteral = "ArrayLiteral",
-  SwitchExpr = "SwitchExpr",
-}
-
 /** Binary operation (`a + b`, `x == y`, `p && q`). */
 export interface BinaryExpr extends BaseNode {
   kind: "BinaryExpr";

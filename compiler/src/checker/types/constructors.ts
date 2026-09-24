@@ -18,11 +18,11 @@ import type {
 } from "./definitions";
 import { TypeKind } from "./kinds";
 
-export function intType(bits: 8 | 16 | 32 | 64, signed: boolean): IntType {
+function intType(bits: 8 | 16 | 32 | 64, signed: boolean): IntType {
   return { kind: TypeKind.Int, bits, signed };
 }
 
-export function floatType(bits: 32 | 64): FloatType {
+function floatType(bits: 32 | 64): FloatType {
   return { kind: TypeKind.Float, bits };
 }
 

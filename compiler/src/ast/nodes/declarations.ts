@@ -3,17 +3,6 @@ import type { Expression } from "./expressions";
 import type { BlockStmt } from "./statements";
 import type { TypeNode } from "./types";
 
-export enum DeclKind {
-  Function = "FunctionDecl",
-  ExternFunction = "ExternFunctionDecl",
-  Struct = "StructDecl",
-  UnsafeStruct = "UnsafeStructDecl",
-  Enum = "EnumDecl",
-  TypeAlias = "TypeAlias",
-  Import = "ImportDecl",
-  Static = "StaticDecl",
-}
-
 /**
  * Function parameter.
  *

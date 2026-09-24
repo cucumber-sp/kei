@@ -2,25 +2,6 @@ import type { BaseNode } from "./base";
 import type { Expression } from "./expressions";
 import type { TypeNode } from "./types";
 
-export enum StmtKind {
-  Block = "BlockStmt",
-  Let = "LetStmt",
-  Const = "ConstStmt",
-  Return = "ReturnStmt",
-  If = "IfStmt",
-  While = "WhileStmt",
-  For = "ForStmt",
-  CFor = "CForStmt",
-  Switch = "SwitchStmt",
-  Defer = "DeferStmt",
-  Break = "BreakStmt",
-  Continue = "ContinueStmt",
-  Expr = "ExprStmt",
-  Assert = "AssertStmt",
-  Require = "RequireStmt",
-  UnsafeBlock = "UnsafeBlock",
-}
-
 /** Braced block of statements `{ ... }`. */
 export interface BlockStmt extends BaseNode {
   kind: "BlockStmt";

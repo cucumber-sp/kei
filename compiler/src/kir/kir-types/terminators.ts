@@ -6,24 +6,24 @@ import type { BlockId, VarId } from "./identifiers";
 export type KirTerminator = KirRet | KirRetVoid | KirJump | KirBranch | KirSwitch | KirUnreachable;
 
 /** Return a value from the function. */
-export interface KirRet {
+interface KirRet {
   kind: "ret";
   value: VarId;
 }
 
 /** Return void from the function. */
-export interface KirRetVoid {
+interface KirRetVoid {
   kind: "ret_void";
 }
 
 /** Unconditional jump to a target block. */
-export interface KirJump {
+interface KirJump {
   kind: "jump";
   target: BlockId;
 }
 
 /** Conditional branch — jumps to `thenBlock` if `cond` is true, else `elseBlock`. */
-export interface KirBranch {
+interface KirBranch {
   kind: "br";
   cond: VarId;
   thenBlock: BlockId;
@@ -31,7 +31,7 @@ export interface KirBranch {
 }
 
 /** Multi-way switch on an integer value with a default fallthrough. */
-export interface KirSwitch {
+interface KirSwitch {
   kind: "switch";
   value: VarId;
   cases: { value: VarId; target: BlockId }[];
@@ -39,6 +39,6 @@ export interface KirSwitch {
 }
 
 /** Marks unreachable code (e.g. after a guaranteed return/panic). */
-export interface KirUnreachable {
+interface KirUnreachable {
   kind: "unreachable";
 }

@@ -151,7 +151,7 @@ export function lowerExprAsPtr(ctx: LoweringCtx, expr: Expression): VarId {
   return valueId;
 }
 
-export function lowerIdentifier(ctx: LoweringCtx, expr: Identifier): VarId {
+function lowerIdentifier(ctx: LoweringCtx, expr: Identifier): VarId {
   const varId = ctx.varMap.get(expr.name);
   if (!varId) {
     // Could be a function name or unknown — just return a symbolic reference
@@ -225,7 +225,7 @@ function resolveStructNameForStaticCall(expr: CallExpr): string {
   return `${baseName}_${argSuffixes.join("_")}`;
 }
 
-export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
+function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
   // Enum variant construction: Shape.Circle(3.14) → stack_alloc + tag + data fields
   const enumResult = lowerEnumVariantConstruction(ctx, expr);
   if (enumResult !== null) return enumResult;
@@ -438,7 +438,7 @@ export function lowerCallExpr(ctx: LoweringCtx, expr: CallExpr): VarId {
   return dest;
 }
 
-export function lowerMemberExpr(ctx: LoweringCtx, expr: MemberExpr): VarId {
+function lowerMemberExpr(ctx: LoweringCtx, expr: MemberExpr): VarId {
   // Handle .len on arrays — emit compile-time constant
   if (expr.property === "len") {
     const objectType = ctx.checkResult.types.typeMap.get(expr.object);
@@ -566,7 +566,7 @@ function lowerArrayAsStoragePtr(ctx: LoweringCtx, expr: Expression): VarId {
   return lowerExpr(ctx, expr);
 }
 
-export function lowerIndexExpr(ctx: LoweringCtx, expr: IndexExpr): VarId {
+function lowerIndexExpr(ctx: LoweringCtx, expr: IndexExpr): VarId {
   // Check for operator overloading (e.g., obj[i] → obj.op_index(i))
   const opMethod = ctx.checkResult.types.operatorMethods.get(expr);
   if (opMethod) {
@@ -604,7 +604,7 @@ export function lowerIndexExpr(ctx: LoweringCtx, expr: IndexExpr): VarId {
   return dest;
 }
 
-export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
+function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
   // Check for operator overloading: obj[i] = v → obj.op_index_set(i, v)
   const opMethod = ctx.checkResult.types.operatorMethods.get(expr);
   if (opMethod && expr.target.kind === "IndexExpr") {
@@ -782,7 +782,7 @@ export function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
   return valueId;
 }
 
-export function lowerIfExpr(ctx: LoweringCtx, expr: IfExpr): VarId {
+function lowerIfExpr(ctx: LoweringCtx, expr: IfExpr): VarId {
   const condId = lowerExpr(ctx, expr.condition);
   const resultType = getExprKirType(ctx, expr);
 
@@ -836,7 +836,7 @@ export function lowerIfExpr(ctx: LoweringCtx, expr: IfExpr): VarId {
   return dest;
 }
 
-export function lowerDerefExpr(ctx: LoweringCtx, expr: DerefExpr): VarId {
+function lowerDerefExpr(ctx: LoweringCtx, expr: DerefExpr): VarId {
   const ptr = lowerExpr(ctx, expr.operand);
   const type = getExprKirType(ctx, expr);
   const dest = freshVar(ctx);
@@ -844,7 +844,7 @@ export function lowerDerefExpr(ctx: LoweringCtx, expr: DerefExpr): VarId {
   return dest;
 }
 
-export function lowerUnsafeExpr(ctx: LoweringCtx, expr: UnsafeExpr): VarId {
+function lowerUnsafeExpr(ctx: LoweringCtx, expr: UnsafeExpr): VarId {
   pushScope(ctx);
   const outerVarMap = ctx.varMap;
   ctx.varMap = new Map(outerVarMap);
@@ -873,7 +873,7 @@ export function lowerUnsafeExpr(ctx: LoweringCtx, expr: UnsafeExpr): VarId {
   return result ?? emitConstInt(ctx, 0);
 }
 
-export function lowerMoveExpr(ctx: LoweringCtx, expr: MoveExpr): VarId {
+function lowerMoveExpr(ctx: LoweringCtx, expr: MoveExpr): VarId {
   const sourceId = lowerExpr(ctx, expr.operand);
   const dest = freshVar(ctx);
   const type = getExprKirType(ctx, expr.operand);
@@ -888,7 +888,7 @@ export function lowerMoveExpr(ctx: LoweringCtx, expr: MoveExpr): VarId {
   return dest;
 }
 
-export function lowerCastExpr(ctx: LoweringCtx, expr: CastExpr): VarId {
+function lowerCastExpr(ctx: LoweringCtx, expr: CastExpr): VarId {
   const targetType = getExprKirType(ctx, expr);
   const sourceType = ctx.checkResult.types.typeMap.get(expr.operand);
   const value =

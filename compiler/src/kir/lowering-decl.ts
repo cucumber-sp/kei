@@ -138,11 +138,7 @@ export function finalizeFunctionBody(
 }
 
 /** Add __out and __err pointer params for throws functions. */
-export function addThrowsParams(
-  ctx: LoweringCtx,
-  params: KirParam[],
-  originalReturnType: KirType
-): void {
+function addThrowsParams(ctx: LoweringCtx, params: KirParam[], originalReturnType: KirType): void {
   const outParamId: VarId = "%__out";
   const errParamId: VarId = "%__err";
   ctx.varMap.set("__out", outParamId);
@@ -160,7 +156,7 @@ export function addThrowsParams(
   params.push({ name: "__err", type: { kind: "ptr", pointee: { kind: "void" } } });
 }
 
-export function lowerFunction(ctx: LoweringCtx, decl: FunctionDecl): KirFunction {
+function lowerFunction(ctx: LoweringCtx, decl: FunctionDecl): KirFunction {
   resetFunctionState(ctx);
 
   // Detect throws function
@@ -243,7 +239,7 @@ export function lowerFunction(ctx: LoweringCtx, decl: FunctionDecl): KirFunction
   };
 }
 
-export function lowerExternFunction(ctx: LoweringCtx, decl: ExternFunctionDecl): KirExtern {
+function lowerExternFunction(ctx: LoweringCtx, decl: ExternFunctionDecl): KirExtern {
   const params: KirParam[] = decl.params.map((p) => ({
     name: p.name,
     type: lowerTypeNode(ctx, p.typeAnnotation),
@@ -340,7 +336,7 @@ export function lowerMonomorphizedFunction(
   };
 }
 
-export function lowerStaticDecl(ctx: LoweringCtx, decl: StaticDecl): KirGlobal {
+function lowerStaticDecl(ctx: LoweringCtx, decl: StaticDecl): KirGlobal {
   const type = decl.typeAnnotation
     ? lowerTypeNode(ctx, decl.typeAnnotation)
     : getExprKirType(ctx, decl.initializer);

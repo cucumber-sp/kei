@@ -207,7 +207,7 @@ function printTerminator(term: KirTerminator): string {
   }
 }
 
-export function printType(t: KirType): string {
+function printType(t: KirType): string {
   switch (t.kind) {
     case "int": {
       const prefix = t.signed ? "i" : "u";

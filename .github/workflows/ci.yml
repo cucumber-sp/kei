@@ -37,8 +37,8 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      - name: Unused code report
-        run: bun run deadcode:report
+      - name: Unused code check
+        run: bun run deadcode
 
   test:
     name: Test

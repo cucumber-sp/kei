@@ -20,7 +20,7 @@ import { SourceFile } from "../../src/utils/source";
 const DEFAULT_FILENAME = "test.kei";
 
 /** Build a `SourceFile` for an in-memory test snippet. */
-export function makeSourceFile(content: string, filename = DEFAULT_FILENAME): SourceFile {
+function makeSourceFile(content: string, filename = DEFAULT_FILENAME): SourceFile {
   return new SourceFile(filename, content);
 }
 
@@ -63,19 +63,6 @@ export function parseSource(content: string, filename = DEFAULT_FILENAME): Parse
   const parser = new Parser(tokens);
   const program = parser.parse();
   return { source, tokens, parser, program, diagnostics: parser.getDiagnostics() };
-}
-
-/**
- * Run lexer + parser, throwing on lexer **or** parser errors. Returns the
- * `Program` directly — for tests that want a clean AST.
- */
-export function parseClean(content: string, filename = DEFAULT_FILENAME): Program {
-  const { program, diagnostics } = parseSource(content, filename);
-  const errors = diagnostics.filter((d) => d.severity === Severity.Error);
-  if (errors.length > 0) {
-    throw new Error(`Parser errors: ${errors.map((d) => d.message).join(", ")}`);
-  }
-  return program;
 }
 
 export interface CheckResult {

@@ -18,5 +18,3 @@ export const TypeKind = {
   TypeParam: "type_param",
   Module: "module",
 } as const;
-
-export type TypeKindValue = (typeof TypeKind)[keyof typeof TypeKind];

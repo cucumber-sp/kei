@@ -50,7 +50,7 @@ export interface LegacyDiagnostic {
 export type Span = SourceLocation;
 
 /** Common envelope fields carried by every diagnostic variant (β shape). */
-export interface DiagnosticEnvelope {
+interface DiagnosticEnvelope {
   severity: Severity;
   span: Span;
   secondarySpans?: { span: Span; label: string }[];
@@ -66,7 +66,7 @@ export interface DiagnosticEnvelope {
  * is a sentinel (`'TODO'`) and intentionally not rendered by the
  * formatter; advisory codes only appear once specific variants exist.
  */
-export interface UntriagedDiagnostic extends DiagnosticEnvelope {
+interface UntriagedDiagnostic extends DiagnosticEnvelope {
   kind: "untriaged";
   code: "TODO";
   message: string;
@@ -83,7 +83,7 @@ export interface UntriagedDiagnostic extends DiagnosticEnvelope {
  * losing the caller's locality cue. Type names are pre-rendered to
  * keep the diagnostics module decoupled from the checker's `Type`.
  */
-export interface TypeMismatchDiagnostic extends DiagnosticEnvelope {
+interface TypeMismatchDiagnostic extends DiagnosticEnvelope {
   kind: "typeMismatch";
   code: "E1001";
   context: string;
@@ -97,7 +97,7 @@ export interface TypeMismatchDiagnostic extends DiagnosticEnvelope {
  * structural ("must be bool", "must be integer type") rather than an
  * equality / assignability check against a concrete declared type.
  */
-export interface ExpectedTypeDiagnostic extends DiagnosticEnvelope {
+interface ExpectedTypeDiagnostic extends DiagnosticEnvelope {
   kind: "expectedType";
   code: "E1002";
   context: string;
@@ -108,7 +108,7 @@ export interface ExpectedTypeDiagnostic extends DiagnosticEnvelope {
 /**
  * Explicit `as` cast between two types the cast rules do not allow.
  */
-export interface CannotCastDiagnostic extends DiagnosticEnvelope {
+interface CannotCastDiagnostic extends DiagnosticEnvelope {
   kind: "cannotCast";
   code: "E1003";
   from: string;
@@ -121,7 +121,7 @@ export interface CannotCastDiagnostic extends DiagnosticEnvelope {
  * does not fit the slot. The `target` carries the slot identifier
  * already-quoted to match existing wording (`field 'x'`).
  */
-export interface IncompatibleAssignmentDiagnostic extends DiagnosticEnvelope {
+interface IncompatibleAssignmentDiagnostic extends DiagnosticEnvelope {
   kind: "incompatibleAssignment";
   code: "E1004";
   target: string;
@@ -136,7 +136,7 @@ export interface IncompatibleAssignmentDiagnostic extends DiagnosticEnvelope {
  * (see [#19] and the `Optional` stdlib type), the call site has a
  * landing pad in the catalog without another PR-4-shaped migration.
  */
-export interface NonOptionalAccessDiagnostic extends DiagnosticEnvelope {
+interface NonOptionalAccessDiagnostic extends DiagnosticEnvelope {
   kind: "nonOptionalAccess";
   code: "E1005";
   operation: string;
@@ -150,7 +150,7 @@ export interface NonOptionalAccessDiagnostic extends DiagnosticEnvelope {
  * namespaces are separate in kei, and the wording / hint surface
  * differs ("did you mean a type, not a value?").
  */
-export interface UnknownTypeDiagnostic extends DiagnosticEnvelope {
+interface UnknownTypeDiagnostic extends DiagnosticEnvelope {
   kind: "unknownType";
   code: "E1006";
   name: string;
@@ -169,7 +169,7 @@ export interface UnknownTypeDiagnostic extends DiagnosticEnvelope {
  * `message` field is the pre-built user-facing wording the legacy
  * substring tests still match against.
  */
-export interface ArityMismatchDiagnostic extends DiagnosticEnvelope {
+interface ArityMismatchDiagnostic extends DiagnosticEnvelope {
   kind: "arityMismatch";
   code: "E3001";
   expected: number;
@@ -190,7 +190,7 @@ export interface ArityMismatchDiagnostic extends DiagnosticEnvelope {
  * paths that don't currently track the decl (instance / static methods)
  * we emit the diagnostic without a secondary span.
  */
-export interface ArgumentTypeMismatchDiagnostic extends DiagnosticEnvelope {
+interface ArgumentTypeMismatchDiagnostic extends DiagnosticEnvelope {
   kind: "argumentTypeMismatch";
   code: "E3002";
   /** 0-based parameter index (user-visible message renders `paramIndex + 1`). */
@@ -209,7 +209,7 @@ export interface ArgumentTypeMismatchDiagnostic extends DiagnosticEnvelope {
  * the post-resolution variant.  Pre-resolution `undeclaredName` errors
  * remain PR 4b's territory.
  */
-export interface NotCallableDiagnostic extends DiagnosticEnvelope {
+interface NotCallableDiagnostic extends DiagnosticEnvelope {
   kind: "notCallable";
   code: "E3003";
   /** Pretty-printed type of the non-callable expression. */
@@ -227,7 +227,7 @@ export interface NotCallableDiagnostic extends DiagnosticEnvelope {
  * "function is not generic but was called with N type argument(s)"
  * shape.
  */
-export interface GenericArgMismatchDiagnostic extends DiagnosticEnvelope {
+interface GenericArgMismatchDiagnostic extends DiagnosticEnvelope {
   kind: "genericArgMismatch";
   code: "E3004";
   /** Name of the generic entity (function / struct / enum). */
@@ -248,7 +248,7 @@ export interface GenericArgMismatchDiagnostic extends DiagnosticEnvelope {
  * lookup in `expr-checker.ts`. The receiver type name is in
  * `typeName`; the missing method name is in `methodName`.
  */
-export interface MethodNotFoundDiagnostic extends DiagnosticEnvelope {
+interface MethodNotFoundDiagnostic extends DiagnosticEnvelope {
   kind: "methodNotFound";
   code: "E3005";
   typeName: string;
@@ -270,7 +270,7 @@ export interface MethodNotFoundDiagnostic extends DiagnosticEnvelope {
  * and "unknown assignment operator" sites: the operator token has no
  * usable overload at all.
  */
-export interface NoOperatorOverloadDiagnostic extends DiagnosticEnvelope {
+interface NoOperatorOverloadDiagnostic extends DiagnosticEnvelope {
   kind: "noOperatorOverload";
   code: "E6001";
   /** The operator token (e.g. `+`, `<<`, `!`). */
@@ -286,7 +286,7 @@ export interface NoOperatorOverloadDiagnostic extends DiagnosticEnvelope {
  * variant covers the broader "operand isn't shaped right for the
  * operator at all" cases.
  */
-export interface InvalidOperandDiagnostic extends DiagnosticEnvelope {
+interface InvalidOperandDiagnostic extends DiagnosticEnvelope {
   kind: "invalidOperand";
   code: "E6002";
   /** The operator token (e.g. `-`, `[]=`, `op_neg`). */
@@ -302,7 +302,7 @@ export interface InvalidOperandDiagnostic extends DiagnosticEnvelope {
  * (`+=`, `<<=`, …) and indexed-write overload checks also surface as
  * this variant — they have two effective operands.
  */
-export interface BinaryTypeMismatchDiagnostic extends DiagnosticEnvelope {
+interface BinaryTypeMismatchDiagnostic extends DiagnosticEnvelope {
   kind: "binaryTypeMismatch";
   code: "E6003";
   /** The operator token (e.g. `+`, `==`, `+=`). */
@@ -318,7 +318,7 @@ export interface BinaryTypeMismatchDiagnostic extends DiagnosticEnvelope {
  * type rules differs from the broader "operand isn't shaped right"
  * variant.
  */
-export interface UnaryTypeMismatchDiagnostic extends DiagnosticEnvelope {
+interface UnaryTypeMismatchDiagnostic extends DiagnosticEnvelope {
   kind: "unaryTypeMismatch";
   code: "E6004";
   /** The operator token (e.g. `-`, `!`, `~`). */
@@ -341,7 +341,7 @@ export interface UnaryTypeMismatchDiagnostic extends DiagnosticEnvelope {
  * `lifecycleHookSelfMismatch` (param type wrong) and
  * `lifecycleReturnTypeWrong` (non-void return).
  */
-export interface InvalidLifecycleSignatureDiagnostic extends DiagnosticEnvelope {
+interface InvalidLifecycleSignatureDiagnostic extends DiagnosticEnvelope {
   kind: "invalidLifecycleSignature";
   code: "E5001";
   /** `"__destroy"` or `"__oncopy"`. */
@@ -357,14 +357,14 @@ export interface InvalidLifecycleSignatureDiagnostic extends DiagnosticEnvelope 
  * `__destroy` (or no lifecycle hooks at all). The pair rule comes from
  * the spec — fields that may own resources need both halves.
  */
-export interface UnsafeStructMissingDestroyDiagnostic extends DiagnosticEnvelope {
+interface UnsafeStructMissingDestroyDiagnostic extends DiagnosticEnvelope {
   kind: "unsafeStructMissingDestroy";
   code: "E5002";
   structName: string;
 }
 
 /** Symmetric pair-rule companion to `unsafeStructMissingDestroy`. */
-export interface UnsafeStructMissingOncopyDiagnostic extends DiagnosticEnvelope {
+interface UnsafeStructMissingOncopyDiagnostic extends DiagnosticEnvelope {
   kind: "unsafeStructMissingOncopy";
   code: "E5003";
   structName: string;
@@ -374,7 +374,7 @@ export interface UnsafeStructMissingOncopyDiagnostic extends DiagnosticEnvelope 
  * `self` parameter type doesn't match `ref Self`. By-value `self: T` or
  * raw `*T` doesn't fit the C-emitted prototype; only `ref T` does.
  */
-export interface LifecycleHookSelfMismatchDiagnostic extends DiagnosticEnvelope {
+interface LifecycleHookSelfMismatchDiagnostic extends DiagnosticEnvelope {
   kind: "lifecycleHookSelfMismatch";
   code: "E5004";
   hookName: string;
@@ -382,7 +382,7 @@ export interface LifecycleHookSelfMismatchDiagnostic extends DiagnosticEnvelope 
 }
 
 /** Lifecycle hook return type isn't `void`. */
-export interface LifecycleReturnTypeWrongDiagnostic extends DiagnosticEnvelope {
+interface LifecycleReturnTypeWrongDiagnostic extends DiagnosticEnvelope {
   kind: "lifecycleReturnTypeWrong";
   code: "E5005";
   hookName: string;
@@ -396,7 +396,7 @@ export interface LifecycleReturnTypeWrongDiagnostic extends DiagnosticEnvelope {
  * "member"`, fields and methods). PR 4d. See
  * `docs/design/diagnostics-module.md`.
  */
-export interface UnknownFieldDiagnostic extends DiagnosticEnvelope {
+interface UnknownFieldDiagnostic extends DiagnosticEnvelope {
   kind: "unknownField";
   code: "E4001";
   structName: string;
@@ -416,7 +416,7 @@ export interface UnknownFieldDiagnostic extends DiagnosticEnvelope {
  * Struct literal omits a required field. Fires once per missing field
  * at the literal's span. PR 4d.
  */
-export interface MissingFieldDiagnostic extends DiagnosticEnvelope {
+interface MissingFieldDiagnostic extends DiagnosticEnvelope {
   kind: "missingField";
   code: "E4002";
   structName: string;
@@ -429,7 +429,7 @@ export interface MissingFieldDiagnostic extends DiagnosticEnvelope {
  * no field X" case is `unknownField`; this variant covers "this type
  * cannot have fields at all".
  */
-export interface InvalidFieldAccessDiagnostic extends DiagnosticEnvelope {
+interface InvalidFieldAccessDiagnostic extends DiagnosticEnvelope {
   kind: "invalidFieldAccess";
   code: "E4003";
   typeName: string;
@@ -440,7 +440,7 @@ export interface InvalidFieldAccessDiagnostic extends DiagnosticEnvelope {
  * Struct-literal expression for a name that doesn't resolve to a struct
  * type (e.g. trying to construct a primitive or an enum). PR 4d.
  */
-export interface CannotConstructStructDiagnostic extends DiagnosticEnvelope {
+interface CannotConstructStructDiagnostic extends DiagnosticEnvelope {
   kind: "cannotConstructStruct";
   code: "E4004";
   name: string;
@@ -452,7 +452,7 @@ export interface CannotConstructStructDiagnostic extends DiagnosticEnvelope {
  * allowed on `unsafe struct`). PR 4d. Lifecycle-hook signature rules
  * are out of scope for this variant — those route through 4e.
  */
-export interface UnsafeStructFieldRuleDiagnostic extends DiagnosticEnvelope {
+interface UnsafeStructFieldRuleDiagnostic extends DiagnosticEnvelope {
   kind: "unsafeStructFieldRule";
   code: "E4005";
   structName: string;
@@ -473,7 +473,7 @@ export interface UnsafeStructFieldRuleDiagnostic extends DiagnosticEnvelope {
  * from entry to closing edge (e.g. `["a", "b", "a"]` for `A → B → A`).
  * The formatter renders the chain joined by `→`.
  */
-export interface CyclicImportDiagnostic extends DiagnosticEnvelope {
+interface CyclicImportDiagnostic extends DiagnosticEnvelope {
   kind: "cyclicImport";
   code: "E7001";
   path: readonly string[];
@@ -483,7 +483,7 @@ export interface CyclicImportDiagnostic extends DiagnosticEnvelope {
  * An `import` references a module path that does not resolve to any
  * `.kei` file in the search roots.
  */
-export interface ModuleNotFoundDiagnostic extends DiagnosticEnvelope {
+interface ModuleNotFoundDiagnostic extends DiagnosticEnvelope {
   kind: "moduleNotFound";
   code: "E7002";
   /** The dotted import path that failed to resolve. */
@@ -505,7 +505,7 @@ export interface ModuleNotFoundDiagnostic extends DiagnosticEnvelope {
  * variant exists so resolver-pass instances have a typed kind to land
  * on without re-using `untriaged`.
  */
-export interface ImportedSymbolNotExportedDiagnostic extends DiagnosticEnvelope {
+interface ImportedSymbolNotExportedDiagnostic extends DiagnosticEnvelope {
   kind: "importedSymbolNotExported";
   code: "E7003";
   /** Dotted module path the symbol was imported from. */
@@ -520,7 +520,7 @@ export interface ImportedSymbolNotExportedDiagnostic extends DiagnosticEnvelope 
  * enforces; no migration site fires today, but the catalog carries the
  * variant so the rule's eventual surfacing has a kind to land on.
  */
-export interface MixedModuleStylesDiagnostic extends DiagnosticEnvelope {
+interface MixedModuleStylesDiagnostic extends DiagnosticEnvelope {
   kind: "mixedModuleStyles";
   code: "E7004";
   message: string;
@@ -529,14 +529,14 @@ export interface MixedModuleStylesDiagnostic extends DiagnosticEnvelope {
 // ─── E2xxx — name resolution (PR 4b) ─────────────────────────────────────
 
 /** Value identifier referenced before declaration / not in scope. */
-export interface UndeclaredNameDiagnostic extends DiagnosticEnvelope {
+interface UndeclaredNameDiagnostic extends DiagnosticEnvelope {
   kind: "undeclaredName";
   code: "E2001";
   name: string;
 }
 
 /** Two declarations of the same name in the same scope. */
-export interface DuplicateDeclDiagnostic extends DiagnosticEnvelope {
+interface DuplicateDeclDiagnostic extends DiagnosticEnvelope {
   kind: "duplicateDecl";
   code: "E2002";
   name: string;
@@ -549,7 +549,7 @@ export interface DuplicateDeclDiagnostic extends DiagnosticEnvelope {
  * export set. Module-level resolution failures (missing module, cyclic
  * import) are 4g's territory; this is the symbol-level slice.
  */
-export interface UnresolvedImportDiagnostic extends DiagnosticEnvelope {
+interface UnresolvedImportDiagnostic extends DiagnosticEnvelope {
   kind: "unresolvedImport";
   code: "E2003";
   name: string;
@@ -561,7 +561,7 @@ export interface UnresolvedImportDiagnostic extends DiagnosticEnvelope {
  * `foo` isn't in `m`'s export set. Field-not-found on a struct and
  * variant-not-found on an enum live in 4d / 4c respectively.
  */
-export interface NameNotFoundDiagnostic extends DiagnosticEnvelope {
+interface NameNotFoundDiagnostic extends DiagnosticEnvelope {
   kind: "nameNotFound";
   code: "E2004";
   name: string;

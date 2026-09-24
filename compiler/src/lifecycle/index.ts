@@ -11,7 +11,7 @@ import type { LifecycleDecision } from "./types";
 
 export { type LifecycleDecisionLookup, runLifecyclePass } from "./pass";
 export { synthesise } from "./synthesise";
-export type { LifecycleDecision, ManagedFieldRef } from "./types";
+export type { LifecycleDecision } from "./types";
 
 /**
  * Public Lifecycle interface for decision and hook synthesis.

@@ -7,11 +7,4 @@ export {
   isOctalDigit,
   Lexer,
 } from "./lexer";
-export {
-  getReservedTokenKind,
-  isReservedKeyword,
-  lookupKeyword,
-  type Span,
-  type Token,
-  TokenKind,
-} from "./token";
+export { type Token, TokenKind } from "./token";

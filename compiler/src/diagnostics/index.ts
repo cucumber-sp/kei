@@ -8,50 +8,9 @@
 import { createCollector, type LintConfig, resolveSeverity } from "./collector";
 import type { Diagnostic, Severity, Span } from "./types";
 
-export type { Collector, LintConfig } from "./collector";
-export { resolveSeverity } from "./collector";
-export { formatDiagnostic, formatDiagnostics, messageOf } from "./format";
-export type {
-  ArgumentTypeMismatchDiagnostic,
-  ArityMismatchDiagnostic,
-  BinaryTypeMismatchDiagnostic,
-  CannotCastDiagnostic,
-  CannotConstructStructDiagnostic,
-  CyclicImportDiagnostic,
-  Diagnostic,
-  DiagnosticEnvelope,
-  DuplicateDeclDiagnostic,
-  ExpectedTypeDiagnostic,
-  GenericArgMismatchDiagnostic,
-  ImportedSymbolNotExportedDiagnostic,
-  IncompatibleAssignmentDiagnostic,
-  InvalidFieldAccessDiagnostic,
-  InvalidLifecycleSignatureDiagnostic,
-  InvalidOperandDiagnostic,
-  LegacyDiagnostic,
-  LifecycleHookSelfMismatchDiagnostic,
-  LifecycleReturnTypeWrongDiagnostic,
-  MethodNotFoundDiagnostic,
-  MissingFieldDiagnostic,
-  MixedModuleStylesDiagnostic,
-  ModuleNotFoundDiagnostic,
-  NameNotFoundDiagnostic,
-  NonOptionalAccessDiagnostic,
-  NoOperatorOverloadDiagnostic,
-  NotCallableDiagnostic,
-  SourceLocation,
-  Span,
-  TypeMismatchDiagnostic,
-  UnaryTypeMismatchDiagnostic,
-  UndeclaredNameDiagnostic,
-  UnknownFieldDiagnostic,
-  UnknownTypeDiagnostic,
-  UnresolvedImportDiagnostic,
-  UnsafeStructFieldRuleDiagnostic,
-  UnsafeStructMissingDestroyDiagnostic,
-  UnsafeStructMissingOncopyDiagnostic,
-  UntriagedDiagnostic,
-} from "./types";
+export type { LintConfig } from "./collector";
+export { formatDiagnostic, messageOf } from "./format";
+export type { Diagnostic, LegacyDiagnostic, SourceLocation } from "./types";
 export { Severity } from "./types";
 
 /**
