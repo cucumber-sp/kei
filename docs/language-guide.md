@@ -1240,9 +1240,8 @@ fn main() -> int {
 }
 ```
 
-`move` survives as an **expression form** only — `let b = move a` and
-`f(move x)` at call sites. The previous `move` parameter form is
-removed. Moved variables are skipped by the auto-emitted `__destroy`
+Use `move` as an expression — `let b = move a` or `f(move x)` at a call
+site. Moved variables are skipped by the auto-emitted `__destroy`
 at scope exit, so `move` produces a real zero-cost transfer in codegen.
 
 ---

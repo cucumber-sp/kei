@@ -26,7 +26,7 @@ Tests under `compiler/tests/` follow the source tree. Parser, checker, and KIR t
 - `spec/` states language rules; `SPEC-STATUS.md` records implementation gaps.
 - `docs/language-guide.md` teaches implemented behavior.
 - `docs/design/` and `docs/adr/` preserve architectural decisions.
-- GitHub issues track actionable work. [Remaining work](docs/roadmap.md) records cleanup left by the module migrations.
+- GitHub issues track actionable work. [Remaining work](docs/roadmap.md) records known compiler cleanup.
 
 Keep these in sync when behavior changes. Avoid putting rollout history into the specification or leaving completed PR plans in the current docs. Branch from `main`, describe what changed and why, and include test, format, lint, and typecheck results in the PR.
 

@@ -15,7 +15,7 @@
  * remove); the decision space is bounded by `2 * |structs|` total arms,
  * so termination is guaranteed in `O(|structs|)` iterations.
  *
- * See `docs/design/lifecycle-module.md` §2 ("Decide") and §4.
+ * See `docs/design/lifecycle-module.md`.
  */
 
 import type { StructType, Type } from "../checker/types";
@@ -78,21 +78,18 @@ function collectManagedFields(
  * arm (the user-written one wins).
  *
  * The iteration is split into two phases — destroys first, then
- * oncopies — to mirror the historical pass-1.5 ordering and to keep
- * the per-arm semantics independently testable.  Each phase is its own
+ * oncopies. Each phase is its own
  * fixed point; an oncopy decision can depend on a previous-phase
  * destroy decision via the `methods` mirror (struct-checker writes it
- * back as a transition shim).
+ * back to the type table).
  *
  * @param structs    Structs to consider, in source order.
  * @param decisions  Decision map keyed by `StructType`; mutated in place.
  * @param onArmAdded Optional hook invoked when an arm is freshly added
  *                   to a struct's decision.  Lets callers (today: the
- *                   struct-checker shim) mirror the decision back onto
+ *                   the struct checker) mirror the decision back onto
  *                   `structType.methods` so type-checking call sites
- *                   that reference `s.__destroy()` / `s.__oncopy()` keep
- *                   working.  Removed in PR 4 once Diagnostics-style
- *                   queries replace the type-table lookups.
+ *                   that reference `s.__destroy()` / `s.__oncopy()` work.
  */
 export function runDecideFixedPoint(
   structs: readonly StructType[],

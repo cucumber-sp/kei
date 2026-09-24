@@ -161,7 +161,7 @@ export function lowerUnaryExpr(ctx: LoweringCtx, expr: UnaryExpr): VarId {
 }
 
 function lowerAddressOfExpr(ctx: LoweringCtx, expr: Expression): VarId {
-  // Stage 5 sugar: `&x` for an operand of type `ref T` is the bound
+  // `&x` for an operand of type `ref T` is the bound
   // pointer (the slot's contents), not the slot's address. The
   // parameter / field already holds a `*T` at the byte level, so we
   // return it directly — no extra alloc + store.

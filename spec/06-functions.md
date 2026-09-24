@@ -55,9 +55,6 @@ value. Reassigning a mutable parameter does not affect the caller. The
 `readonly` modifier exists for clarity and (in the `ref T` case) for
 forbidding write-through to the caller's slot.
 
-There is no `mut` keyword. The previous `mut x: T` parameter form is
-removed.
-
 ### `ref T` and `readonly ref T` parameters
 
 To take a parameter by reference, use `ref T` (mutable through the ref,
@@ -80,8 +77,6 @@ let len2 = p.lengthSquared();   // implicit &p; readonly forbids writes
 ```
 
 `ref T` parameters compile to `T*` and `readonly ref T` to `const T*`.
-The C-level ABI is identical to the old `ptr<T>` receiver style — only the source
-spelling and the safety rules differ.
 
 ### Parameter passing
 
@@ -121,10 +116,9 @@ fn createUser(name: string) -> User {
 
 ### Move expression
 
-`move` survives as an **expression form only** — `consume(move user)` at
-the call site, or `let b = move a` for explicit consumption before last
-use. The parameter form (`fn consume(move x: T)`) is removed; auto-last-
-use analysis covers the case.
+Use `move` as an expression to transfer ownership explicitly:
+`consume(move user)` at a call site, or `let b = move a`. Automatic
+last-use elision is planned; see [SPEC-STATUS.md](../SPEC-STATUS.md).
 
 ```kei
 fn consume(user: User) {

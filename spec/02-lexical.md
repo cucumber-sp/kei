@@ -167,17 +167,6 @@ super       trait       where       yield
 `match` is reserved for full pattern-matching with destructuring beyond
 what `switch` covers today.
 
-Removed since the previous spec (no longer recognised at all):
-
-- `mut` — replaced by `readonly` for binding/write-through immutability
-  (see [`07-structures.md`](./07-structures.md)).
-- `ptr` — replaced by `ref T` / `readonly ref T` (safe) and `*T` (unsafe).
-- `slice` — `slice<T>` removed entirely; use `Array<T>` for refcounted
-  views, `ref inline<T, N>` for stack views, raw `*T` + `usize` at C
-  boundaries.
-- `shared` — un-reserved; the stdlib type is `Shared<T>` (no lowercase
-  alias).
-
 ## Operators
 
 ### Arithmetic operators

@@ -301,9 +301,8 @@ export interface KirMove {
 //
 // Markers are deliberately type-agnostic: `mark_track` / `mark_assign`
 // carry vars/slots, not types. Type is re-read off the var's KIR type at
-// rewrite time. This keeps the planned String stdlib migration additive
-// (string becomes just-another-managed-struct without churning marker
-// shapes). See `docs/design/lifecycle-module.md` §3.
+// rewrite time. A managed string struct can use the same marker
+// shapes. See `docs/design/lifecycle-module.md`.
 
 /** Open a new lexical scope frame. Paired with `mark_scope_exit`. */
 interface KirMarkScopeEnter {

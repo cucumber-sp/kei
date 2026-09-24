@@ -1,7 +1,7 @@
 /**
  * Position validation for `ref T` / `readonly ref T` type annotations.
  *
- * Per `docs/design/ref-redesign.md` §2.1, `ref T` is legal in:
+ * Per `docs/design/ref-redesign.md`, `ref T` is legal in:
  *   - function/method parameter types,
  *   - `unsafe struct` field types.
  *
@@ -36,9 +36,7 @@ import type { Span } from "../lexer/token";
 /**
  * Raw `(message, span)` pair. Returned to the `Checker` so it can route
  * each through the diagnostics module (which knows how to convert the
- * lexer `Span` into a `SourceLocation` via the source file). Avoids the
- * historical fake `{file: "", line: 1, column: 1}` placeholder this
- * pass used to fabricate.
+ * lexer `Span` into a `SourceLocation` via the source file).
  */
 export interface RefPositionError {
   message: string;

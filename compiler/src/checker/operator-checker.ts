@@ -250,13 +250,12 @@ export function checkUnaryExpression(checker: Checker, expr: UnaryExpr): Type {
 
     case "&":
       if (!checker.currentScope.isInsideUnsafe()) {
-        // Stays on `untriaged` (PR 4f) — this is a context-mode error,
-        // not an operator type rule. A future PR carves out unsafe-block
-        // diagnostics into their own category.
+        // This context error uses `untriaged`; it is not an operator
+        // type rule.
         checker.error("address-of operator '&' requires unsafe block", expr.span);
         return ERROR_TYPE;
       }
-      // Stage 5 sugar: `&item` for an operand of type `ref T` is the
+      // `&item` for an operand of type `ref T` is the
       // address of the auto-deref'd T, which is the slot's bound
       // pointer (a `*T`). Without this, `&item` would yield `*ref T`
       // (i.e. `**T` after unwrapping the ref bit), which is the
@@ -337,8 +336,8 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
       const litInfo = extractLiteralInfo(expr.value);
       const isLiteralOk = litInfo && isLiteralAssignableTo(litInfo.kind, litInfo.value, targetType);
       if (!isLiteralOk) {
-        // Plain `=` type mismatch still uses the generic diagnostic path;
-        // see `docs/roadmap.md` for the remaining migration.
+        // Plain `=` type mismatch uses the generic diagnostic path;
+        // see `docs/roadmap.md` for remaining work.
         checker.error(
           `type mismatch: expected '${typeToString(targetType)}', got '${typeToString(valueType)}'`,
           expr.span
@@ -404,14 +403,13 @@ export function checkAssignExpression(checker: Checker, expr: AssignExpr): Type 
 
 function checkAssignTarget(checker: Checker, target: Expression): void {
   // Direct rebinding `x = v` — the const/readonly binding rule only
-  // fires here. `let mut x` and `let x` (today's mutable default) bind
-  // mutably; `const x` and `readonly x` bind immutably.
+  // fires here. `let x` binds mutably; `const x` and `readonly x`
+  // bind immutably.
   if (target.kind === "Identifier") {
     const sym = checker.currentScope.lookup(target.name);
     if (sym && sym.kind === SymbolKind.Variable && !sym.isMutable) {
-      // Mutability error — not an operator type rule. Stays on
-      // `untriaged` (PR 4f); a future PR carves out binding/mutability
-      // diagnostics into their own category.
+      // Mutability errors use `untriaged`; they are not operator
+      // type rules.
       checker.error(`cannot assign to immutable variable '${target.name}'`, target.span);
     }
   }
@@ -429,8 +427,7 @@ function checkAssignTarget(checker: Checker, target: Expression): void {
       objectType.kind === TypeKind.Struct &&
       objectType.readonlyFields?.has(target.property)
     ) {
-      // Readonly-field error — stays on `untriaged` (PR 4f) for the
-      // same reason as the immutable-variable site above.
+      // Readonly-field errors use `untriaged`.
       checker.error(`cannot assign to readonly field '${target.property}'`, target.span);
     }
   }
@@ -461,8 +458,7 @@ function checkAssignRoot(checker: Checker, target: Expression): void {
       // `readonly ref T` parameter — write-through is forbidden, and
       // field paths rooted at `x` count as writes through the ref.
       if (sym.type.kind === TypeKind.Ptr && sym.type.isRef && sym.type.isReadonly) {
-        // Readonly-ref write-through — stays on `untriaged` (PR 4f);
-        // not an operator type rule.
+        // Readonly-ref write-through uses `untriaged`.
         checker.error(`cannot write through readonly reference '${target.name}'`, target.span);
       }
     }
@@ -474,8 +470,7 @@ function checkAssignRoot(checker: Checker, target: Expression): void {
   }
   if (target.kind === "DerefExpr") {
     if (!checker.currentScope.isInsideUnsafe()) {
-      // Unsafe-context error — stays on `untriaged` (PR 4f); not an
-      // operator type rule.
+      // Unsafe-context errors use `untriaged`.
       checker.error("pointer dereference assignment requires unsafe block", target.span);
     }
     return;

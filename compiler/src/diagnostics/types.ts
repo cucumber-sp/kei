@@ -41,11 +41,9 @@ export interface LegacyDiagnostic {
 }
 
 /**
- * Source-position span. PR 1 reuses the existing checker `SourceLocation`
- * shape (single point) so the new module integrates without disturbing
- * existing call sites. A future PR may widen this to a half-open range
- * once the formatter needs primary/secondary span ranges; the alias
- * gives us that seam without churn now.
+ * Source-position span, currently a single point represented by
+ * `SourceLocation`. A range can be introduced when the formatter
+ * supports primary and secondary span ranges.
  */
 export type Span = SourceLocation;
 
@@ -61,10 +59,8 @@ interface DiagnosticEnvelope {
 /**
  * Catch-all variant for diagnostics that haven't been triaged into a
  * specific kind yet. The existing `Checker.error / .warning` helpers
- * route through `diag.untriaged({...})` — PRs 4a–4g carve specific
- * variants out of this and migrate call sites by category. The `code`
- * is a sentinel (`'TODO'`) and intentionally not rendered by the
- * formatter; advisory codes only appear once specific variants exist.
+ * route through `diag.untriaged({...})`. The `code` is a sentinel
+ * (`'TODO'`) and is not rendered by the formatter.
  */
 interface UntriagedDiagnostic extends DiagnosticEnvelope {
   kind: "untriaged";
@@ -72,7 +68,7 @@ interface UntriagedDiagnostic extends DiagnosticEnvelope {
   message: string;
 }
 
-// ─── E1xxx — type errors (PR 4a) ─────────────────────────────────────────
+// ─── E1xxx — type errors ─────────────────────────────────────────────────
 
 /**
  * Two types do not unify where one is required to assign / equal another.
@@ -134,7 +130,7 @@ interface IncompatibleAssignmentDiagnostic extends DiagnosticEnvelope {
  * `Optional<T>`. No checker site emits this yet — the variant is
  * pre-declared so once the checker grows `Optional<T>`-aware lowering
  * (see [#19] and the `Optional` stdlib type), the call site has a
- * landing pad in the catalog without another PR-4-shaped migration.
+ * landing pad in the catalog.
  */
 interface NonOptionalAccessDiagnostic extends DiagnosticEnvelope {
   kind: "nonOptionalAccess";
@@ -146,7 +142,7 @@ interface NonOptionalAccessDiagnostic extends DiagnosticEnvelope {
 /**
  * Type-name resolution failure inside a type position (`let x: Foo`,
  * `fn f(x: Bar)`, struct-literal head `Baz { ... }`). Distinct from
- * the value-namespace `undeclaredName` (PR 4b) — type and value
+ * the value-namespace `undeclaredName` — type and value
  * namespaces are separate in kei, and the wording / hint surface
  * differs ("did you mean a type, not a value?").
  */
@@ -156,7 +152,7 @@ interface UnknownTypeDiagnostic extends DiagnosticEnvelope {
   name: string;
 }
 
-// ─── PR 4c — Calls (E3xxx) ───────────────────────────────────────────────────
+// ─── Calls (E3xxx) ───────────────────────────────────────────────────────────
 
 /**
  * A call expression was passed the wrong number of arguments.
@@ -181,7 +177,7 @@ interface ArityMismatchDiagnostic extends DiagnosticEnvelope {
  * A call expression's argument at position `paramIndex` (0-based) does
  * not satisfy the parameter type.
  *
- * Distinct from the assignment / return `typeMismatch` (PR 4a) because
+ * Distinct from the assignment / return `typeMismatch` because
  * call-site context — the parameter's index and its declaration span —
  * is part of the diagnostic's identity. The optional `secondarySpans`
  * envelope field carries the parameter-declaration pointer when the
@@ -207,7 +203,7 @@ interface ArgumentTypeMismatchDiagnostic extends DiagnosticEnvelope {
  *
  * The callee was already bound (name resolution succeeded) — this is
  * the post-resolution variant.  Pre-resolution `undeclaredName` errors
- * remain PR 4b's territory.
+ * use the name-resolution variant.
  */
 interface NotCallableDiagnostic extends DiagnosticEnvelope {
   kind: "notCallable";
@@ -257,7 +253,7 @@ interface MethodNotFoundDiagnostic extends DiagnosticEnvelope {
 }
 
 /**
- * Operator-category variants (PR 4f). Carved out of `untriaged` by
+ * Operator-category variants emitted by
  * `operator-checker.ts`. Each carries the operator string in its
  * payload (`op`) plus the pre-formatted message text so existing
  * checker wording survives. See `docs/design/diagnostics-module.md`
@@ -393,7 +389,7 @@ interface LifecycleReturnTypeWrongDiagnostic extends DiagnosticEnvelope {
  * Fires from struct-literal field assignments (`access: "literal"`,
  * fields only) and from `MemberExpr` when the object is a struct type
  * but the property name isn't in `fields`/`methods` (`access:
- * "member"`, fields and methods). PR 4d. See
+ * "member"`, fields and methods). See
  * `docs/design/diagnostics-module.md`.
  */
 interface UnknownFieldDiagnostic extends DiagnosticEnvelope {
@@ -407,14 +403,14 @@ interface UnknownFieldDiagnostic extends DiagnosticEnvelope {
    * for `.field` access on a struct value (lookup spans both fields
    * and methods, so the user-facing wording reflects that). The
    * formatter dispatches on this so the two sites preserve their
-   * existing wording — no rephrasing on migration.
+   * current wording.
    */
   access: "literal" | "member";
 }
 
 /**
  * Struct literal omits a required field. Fires once per missing field
- * at the literal's span. PR 4d.
+ * at the literal's span.
  */
 interface MissingFieldDiagnostic extends DiagnosticEnvelope {
   kind: "missingField";
@@ -425,7 +421,7 @@ interface MissingFieldDiagnostic extends DiagnosticEnvelope {
 
 /**
  * `.field` access on a value whose type has no field/method concept
- * (non-struct, non-module, non-enum). PR 4d. The companion "struct has
+ * (non-struct, non-module, non-enum). The companion "struct has
  * no field X" case is `unknownField`; this variant covers "this type
  * cannot have fields at all".
  */
@@ -438,7 +434,7 @@ interface InvalidFieldAccessDiagnostic extends DiagnosticEnvelope {
 
 /**
  * Struct-literal expression for a name that doesn't resolve to a struct
- * type (e.g. trying to construct a primitive or an enum). PR 4d.
+ * type (e.g. trying to construct a primitive or an enum).
  */
 interface CannotConstructStructDiagnostic extends DiagnosticEnvelope {
   kind: "cannotConstructStruct";
@@ -449,8 +445,8 @@ interface CannotConstructStructDiagnostic extends DiagnosticEnvelope {
 /**
  * Struct field declaration violates the safe/unsafe field-shape rule
  * (today: a plain `struct` carrying a `ptr<T>` field, which is only
- * allowed on `unsafe struct`). PR 4d. Lifecycle-hook signature rules
- * are out of scope for this variant — those route through 4e.
+ * allowed on `unsafe struct`). Lifecycle-hook signature rules
+ * use separate variants.
  */
 interface UnsafeStructFieldRuleDiagnostic extends DiagnosticEnvelope {
   kind: "unsafeStructFieldRule";
@@ -460,13 +456,13 @@ interface UnsafeStructFieldRuleDiagnostic extends DiagnosticEnvelope {
   message: string;
 }
 
-// ─── Modules (PR 4g) ─────────────────────────────────────────────────────────
+// ─── Modules (E7xxx) ─────────────────────────────────────────────────────────
 //
-// Module-level resolver-pass errors. The boundary with 4b's
+// Module-level resolver-pass errors. The boundary with
 // `unresolvedImport` is *which-pass-emits-it*: errors that fire while
 // the resolver is still discovering / topologically-sorting modules
 // live here; symbol-level errors that fire later during the checker
-// pass live in 4b. See `docs/design/diagnostics-module.md`.
+// pass use name-resolution variants. See `docs/design/diagnostics-module.md`.
 
 /**
  * The import graph contains a cycle. `path` carries the cycle ordered
@@ -497,13 +493,8 @@ interface ModuleNotFoundDiagnostic extends DiagnosticEnvelope {
 /**
  * A selective import names a symbol the target module does not export.
  *
- * Intentionally overlaps with 4b's `unresolvedImport`; the split is
- * *which-pass-emits-it*. 4g owns the resolver-pass surfacing (e.g. if
- * the resolver ever inspects exports during discovery); 4b owns the
- * checker-pass surfacing where today's `decl-checker.ts` "X is not
- * exported by Y" lives. PR 4b will migrate the checker site; this
- * variant exists so resolver-pass instances have a typed kind to land
- * on without re-using `untriaged`.
+ * This variant is reserved for resolver-pass checks during module
+ * discovery. Checker-pass symbol resolution uses `unresolvedImport`.
  */
 interface ImportedSymbolNotExportedDiagnostic extends DiagnosticEnvelope {
   kind: "importedSymbolNotExported";
@@ -517,8 +508,7 @@ interface ImportedSymbolNotExportedDiagnostic extends DiagnosticEnvelope {
 /**
  * The import graph mixes module styles (e.g. selective vs whole-module)
  * in a way the resolver disallows. Reserved for the rule the resolver
- * enforces; no migration site fires today, but the catalog carries the
- * variant so the rule's eventual surfacing has a kind to land on.
+ * enforces. The catalog has a dedicated variant for this rule.
  */
 interface MixedModuleStylesDiagnostic extends DiagnosticEnvelope {
   kind: "mixedModuleStyles";
@@ -526,7 +516,7 @@ interface MixedModuleStylesDiagnostic extends DiagnosticEnvelope {
   message: string;
 }
 
-// ─── E2xxx — name resolution (PR 4b) ─────────────────────────────────────
+// ─── E2xxx — name resolution ─────────────────────────────────────────────
 
 /** Value identifier referenced before declaration / not in scope. */
 interface UndeclaredNameDiagnostic extends DiagnosticEnvelope {
@@ -572,10 +562,9 @@ interface NameNotFoundDiagnostic extends DiagnosticEnvelope {
 /**
  * The discriminated union of all diagnostics the compiler can emit.
  *
- * PR 2 introduced the `untriaged` catch-all; PRs 4a–4g carve specific
- * categories out by category (E1xxx type errors, E2xxx name resolution,
- * E3xxx calls, E4xxx structs, E5xxx lifecycle, E6xxx operators, E7xxx
- * modules). The catch-all is removed once every category is carved.
+ * Categories include E1xxx type errors, E2xxx name resolution, E3xxx
+ * calls, E4xxx structs, E5xxx lifecycle, E6xxx operators, and E7xxx
+ * modules. `untriaged` covers checker errors without a specific variant.
  */
 export type Diagnostic =
   | UntriagedDiagnostic

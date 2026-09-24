@@ -1,9 +1,8 @@
 /**
- * Bake — produce a fully-substituted AST clone of a generic declaration.
+ * Bake — produce an AST clone of a generic declaration with fresh node identities.
  *
- * Path A (revised) of the Monomorphization migration (see
- * `docs/design/monomorphization-module.md` §4). The bake operation is
- * structured as two cooperating halves:
+ * The bake operation has two cooperating halves (see
+ * `docs/design/monomorphization-module.md`):
  *
  * 1. **AST clone (this file, pure).** A walker over the template
  *    `Declaration` produces a fresh AST subtree. Every nested
@@ -32,8 +31,8 @@
  * decide "is this a template I should skip?", so the clone must say
  * "I am not a template."
  *
- * **Spans on cloned nodes point at the template.** Per design doc §4, the instantiation site goes into diagnostic `secondarySpans` at
- * error-emission time, not onto the AST node.
+ * **Spans on cloned nodes point at the template.** The instantiation site
+ * goes into diagnostic `secondarySpans` at error-emission time.
  */
 
 import type {
@@ -81,9 +80,7 @@ import type {
 } from "../ast/nodes";
 import type { Type } from "../checker/types";
 
-// The substitution map is accepted as a parameter for forward-compatibility
-// with name-mangling of nested generic references (see §4 walker scope).
-// Today the bake walker is a deep clone; substitution is performed by the
+// The bake walker is a deep clone; substitution is performed by the
 // checker re-walk under `typeResolver.setSubstitutions(typeSubs)`.
 // `substitutionMap` is unused for now but kept on the signature so
 // downstream extensions (e.g. mangling `Bar<T>` → `Bar_i32` at the AST

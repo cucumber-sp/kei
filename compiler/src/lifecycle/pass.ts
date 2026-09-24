@@ -54,7 +54,7 @@ interface TrackedVar {
  * `mark_scope_exit scope_id` is rewritten into reverse-order destroys
  * for the tracked vars in that scope (read from a pre-pass over
  * `mark_track` markers in the same function), skipping any var named in
- * the matching `skipNames` set from the transitional side-table.
+ * the matching `skipNames` set from the scope-exit side table.
  *
  * Returns a new module — input is not mutated.
  */

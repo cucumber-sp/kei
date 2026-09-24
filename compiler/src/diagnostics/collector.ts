@@ -2,11 +2,11 @@
  * Collector — holds emitted diagnostics for one compile.
  *
  * Constructed and threaded; no module-level singleton. See
- * `docs/design/diagnostics-module.md` §5.
+ * `docs/design/diagnostics-module.md`.
  *
  * `LintConfig` is `{}` in v1; the resolver hook stays so a future CLI
  * flag / `kei.toml` lint section can override severities without touching
- * any call site (§6).
+ * any call site.
  */
 
 import type { Diagnostic, Severity } from "./types";
@@ -23,9 +23,8 @@ export interface LintConfig {
 /**
  * Resolve the severity for a diagnostic kind given the lint config and the
  * catalog default. With an empty config, returns the catalog default
- * unchanged. Exposed so `createDiagnostics`'s typed methods (PR 4+) can
- * resolve severity at emit time without each method re-implementing the
- * lookup.
+ * unchanged. Exposed so `createDiagnostics`'s typed methods can
+ * resolve severity at emit time without repeating the lookup.
  */
 export function resolveSeverity(
   kind: string,

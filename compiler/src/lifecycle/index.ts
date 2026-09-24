@@ -62,9 +62,7 @@ export interface Lifecycle {
  *
  * Each compile run gets its own instance.  Decisions live in an
  * internal `Map<StructType, LifecycleDecision>` keyed by the
- * StructType identity — *not* mutated onto the type table.  See
- * design doc §6.2 for why we rejected the storage-on-StructType
- * alternative.
+ * StructType identity. Decisions are separate from the type table.
  */
 export function createLifecycle(): Lifecycle {
   const registered: StructType[] = [];

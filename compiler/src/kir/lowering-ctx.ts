@@ -72,10 +72,8 @@ export interface LoweringCtx {
    * from any per-exit returned-name skip so the Lifecycle pass can honour
    * those when rewriting destroys.
    *
-   * After PR 4d + 4e, both the moved-set and the live tracked-vars are
-   * reconstructed by the pass from the marker stream. This side-table
-   * survives only to carry returned-name skips; once those migrate too
-   * it goes away entirely.
+   * The pass reconstructs moved and live tracked vars from the marker
+   * stream. This side table carries returned-name skips.
    */
   scopeExitData: Map<ScopeId, KirScopeExitInfo>;
 

@@ -103,8 +103,7 @@ interface CheckLifecycle {
  * module today (each Checker still owns its own instance, then the
  * orchestrator routes adoptions across them); the Diagnostics
  * `Collector` is constructed and threaded the same way per
- * `docs/design/diagnostics-module.md` §5. A future migration will
- * thread a shared `Lifecycle` through here too.
+ * `docs/design/diagnostics-module.md`.
  */
 export interface CheckerOptions {
   monomorphization?: Monomorphization;
@@ -155,11 +154,11 @@ export class Checker {
   private source: SourceFile;
   /**
    * Diagnostics sink. Constructed and threaded per
-   * `docs/design/diagnostics-module.md` §5: the CLI driver /
+   * `docs/design/diagnostics-module.md`: the CLI driver /
    * orchestrator owns the sink and passes it in via `CheckerOptions`.
    * The `error / warning` helpers route here via
-   * `diag.untriaged({...})`; specific PR 4+ variants (e.g. PR 4e's
-   * `invalidLifecycleSignature`) are called by sub-checkers via the
+   * `diag.untriaged({...})`; specific variants such as
+   * `invalidLifecycleSignature` are called by sub-checkers via the
    * `diag` accessor below. Defaults to a fresh sink when no caller
    * supplied one (test convenience).
    */
@@ -238,7 +237,7 @@ export class Checker {
     this.lifecycle = createLifecycle();
     // Thread `lifecycle` into the Monomorphization factory so each
     // baked struct registration triggers a `lifecycle.register(concrete)`
-    // call (design doc §5). Falls back to a fresh instance for callers
+    // call. Falls back to a fresh instance for callers
     // that don't supply one (single-module builds).
     this.monomorphization =
       options.monomorphization ?? createMonomorphization({ lifecycle: this.lifecycle });
@@ -438,8 +437,7 @@ export class Checker {
    * statement walk.  Splitting the responsibility this way keeps the
    * loop ordering in `Monomorphization.checkBodies()` and the
    * checker-internal machinery (scopes, type tables, type resolver)
-   * here on the Checker.  See `docs/design/monomorphization-module.md`
-   * §3, §7.4.
+   * here on the Checker. See `docs/design/monomorphization-module.md`.
    */
   private checkBody(product: MonomorphizedProduct): void {
     if (product.kind === "function") {
@@ -455,7 +453,7 @@ export class Checker {
    * per-body type-map / generic-resolution snapshots on the
    * `MonomorphizedFunction` record.
    *
-   * **Y-a-clone (PR 4, design doc §4).** The Monomorphization driver
+   * The Monomorphization driver
    * stashes a baked AST clone on `monoFunc.bakedDecl` before invoking
    * this callback. Every `setExprType` writes into the global
    * `typeMap` keyed by clone identities; KIR lowering reads those
@@ -539,7 +537,7 @@ export class Checker {
    * `originalDecl` reference; this method lazily backfills it by name +
    * arity match against the program before walking the methods.
    *
-   * **Y-a-clone (PR 4, design doc §4).** When the Monomorphization
+   * When the Monomorphization
    * driver has stashed a baked AST clone on `monoStruct.bakedDecl`, we
    * iterate the *clone's* methods (each itself a clone produced by
    * `bake.ts`). `setExprType` then writes into the global `typeMap`
@@ -1007,7 +1005,7 @@ export class Checker {
     });
   }
 
-  // ─── PR 4c — typed methods for the calls slice ─────────────────────────
+  // ─── Typed methods for calls ─────────────────────────
   //
   // Sub-checkers (`call-checker.ts`, `expr-checker.ts`) call these
   // rather than `error(...)` so the resulting diagnostic carries
@@ -1087,7 +1085,7 @@ export class Checker {
     });
   }
 
-  // ─── Operator-category diagnostics (PR 4f, E6xxx) ───────────────────────
+  // ─── Operator diagnostics (E6xxx) ───────────────────────
   // Pass-through helpers for `operator-checker.ts` call sites. They handle
   // the lexer-span → `SourceLocation` conversion that the new union's
   // `Span` type still expects, and route into the typed methods on
@@ -1117,11 +1115,8 @@ export class Checker {
   /**
    * Public accessor for the typed-method diagnostics sink. Sub-checkers
    * (expr/decl/literal/…) call `this.checker.diagnostics.typeMismatch({...})`
-   * to emit specific variants directly, bypassing the legacy
-   * `error`/`warning` untriaged path. PR 4a (this PR) routes the
-   * type-error category through this accessor; sibling categories still
-   * use `this.checker.error(...)` until their own PRs land. The
-   * accessor is exposed as a getter (not a public field) so the
+   * to emit specific variants directly, bypassing the
+   * `error`/`warning` untriaged path. The accessor is a getter so the
    * underlying `Diagnostics` value stays an implementation detail of
    * the Checker — replacing it via `CheckerOptions` is the only
    * intended mutation path.
@@ -1130,7 +1125,7 @@ export class Checker {
     return this.diag;
   }
 
-  // Typed emit shims (PR 4d, structs). Sub-checkers carry the AST
+  // Typed emit shims for structs. Sub-checkers carry the AST
   // `Span`; conversion to `SourceLocation` happens once, here, so the
   // call sites stay one-liners and the typed-method payload mirrors
   // the variant shape.
@@ -1165,7 +1160,7 @@ export class Checker {
     this.diag.unsafeStructFieldRule({ ...payload, span: this.spanToLocation(payload.span) });
   }
 
-  // ─── Typed diagnostics (PR 4b: name resolution) ───────────────────────
+  // ─── Typed diagnostics for name resolution ───────────────────────
   //
   // Sub-checkers call these instead of `error()` so the resulting
   // diagnostic carries a specific `kind` + `code` rather than landing in
@@ -1208,11 +1203,9 @@ export class Checker {
   /**
    * Snapshot the current diagnostics as the legacy
    * `{ severity, message, location }` shape that `CheckResult` and the
-   * rest of the pipeline still consume. PR 4+ migrates consumers onto
-   * the new union shape; until then we adapt at the boundary. The
-   * message text is pulled through `messageOf` so each variant (including
-   * the PR 4a–4g ones with structured fields) renders its wording
-   * without the new `error[Exxxx]:` prefix — the legacy CLI formatter
+   * rest of the pipeline consume. The adapter preserves this boundary.
+   * The message text is pulled through `messageOf` so each variant
+   * renders without the `error[Exxxx]:` prefix — the CLI formatter
    * already adds the severity prefix on top.
    */
   private collectDiagnostics(): LegacyDiagnostic[] {

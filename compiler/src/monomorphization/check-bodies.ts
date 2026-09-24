@@ -11,15 +11,13 @@
  * Pattern-consistency with Lifecycle: Lifecycle owns its fixed-point
  * sweep over registered structs; Monomorphization owns its sweep over
  * registered instantiations.  Every ADR-0001 concept module owns its
- * own loops; the Checker is the convener (see design doc §7.4).
+ * own loops; the Checker coordinates them.
  *
- * Ordering note: functions are visited before structs, matching the
- * historical pass-3 ordering on `Checker`.  KIR lowering doesn't
- * depend on this order, but preserving it keeps the migration
- * behaviour-preserving.
+ * Functions are visited before structs. KIR lowering does not depend
+ * on this order.
  *
- * **Y-a-clone bake (PR 4 — design doc §4).** Before each callback,
- * this driver bakes a fully-substituted AST clone of the template via
+ * Before each callback,
+ * this driver bakes an AST clone of the template via
  * {@link bake} and attaches it to the product (`bakedDecl`). The
  * callback (i.e. the Checker's per-decl primitive) then walks the
  * clone, populating `Checker.typeMap` keyed by the cloned expression
@@ -27,7 +25,7 @@
  * hit the clone-keyed entries naturally — no per-instantiation
  * override needed.
  *
- * See `docs/design/monomorphization-module.md` §3 (`check-bodies.ts`) and §4 (Y-a-clone).
+ * See `docs/design/monomorphization-module.md`.
  */
 
 import { bake } from "./bake";
@@ -49,11 +47,10 @@ export type CheckBodyCallback = (product: MonomorphizedProduct) => void;
 
 /**
  * Walk every registered instantiation and invoke `checkBody` for each.
- * Functions are visited first (matching the historical order on
- * `Checker`); structs follow.
+ * Functions are visited first; structs follow.
  *
  * Before invoking the callback for an instantiation that has an
- * original AST decl attached, this driver bakes a fully-substituted
+ * original AST decl attached, this driver bakes an
  * AST clone and stashes it on the product as `bakedDecl`. The clone is
  * what the callback (and, downstream, KIR lowering) walks.
  */

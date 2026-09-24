@@ -15,7 +15,7 @@
  * `untriaged` renders without a code prefix — the `'TODO'` sentinel is
  * internal and would only confuse users to see in output.
  *
- * See `docs/design/diagnostics-module.md` §7.
+ * See `docs/design/diagnostics-module.md`.
  */
 
 import type { Diagnostic } from "./types";
@@ -68,12 +68,10 @@ export function messageOf(diag: Diagnostic): string {
     case "notCallable":
     case "genericArgMismatch":
     case "methodNotFound":
-      // PR 4c (calls) — semantic message text preserved byte-for-byte
-      // from the pre-migration wording.
+      // Call diagnostics carry their own user-facing message.
       return diag.message;
     case "unknownField":
-      // Two access forms produce two slightly different wordings,
-      // preserved verbatim from the pre-migration call sites:
+      // Two access forms produce different wording:
       // struct-literal lookups only see fields, while `MemberExpr`
       // lookups span both fields and methods.
       return diag.access === "member"
@@ -87,14 +85,13 @@ export function messageOf(diag: Diagnostic): string {
       return `'${diag.name}' is not a struct type`;
     case "unsafeStructFieldRule":
       // The structName/fieldName fields enrich the payload for
-      // programmatic consumers; the rendered text matches the
-      // pre-migration wording verbatim via `message`.
+      // programmatic consumers; `message` supplies the rendered text.
       return diag.message;
     case "noOperatorOverload":
     case "invalidOperand":
     case "binaryTypeMismatch":
     case "unaryTypeMismatch":
-      // PR 4f (operators) — carry op + pre-formatted message body.
+      // Operator diagnostics carry op and a preformatted message body.
       return diag.message;
     case "invalidLifecycleSignature":
       return diag.reason === "wrong-arity"

@@ -156,9 +156,8 @@ fn example() {
 3. Any use of the moved-from variable is a compile-time error
    (use-after-move check).
 
-`move` survives as an **expression form** only. The previous parameter
-form (`fn f(move x: T)`) is removed; auto-last-use analysis covers most
-cases, and the explicit expression form covers the rest.
+Use `move` as an expression to transfer ownership explicitly. Automatic
+last-use elision is planned; see [SPEC-STATUS.md](../SPEC-STATUS.md).
 
 **When to use move:**
 - Performance-critical paths where copy overhead matters.

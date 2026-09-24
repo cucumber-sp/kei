@@ -12,6 +12,6 @@ export type BlockId = string;
  * lowering, consumed by the Lifecycle rewrite pass; meaningless after the
  * pass has run (all markers carrying it are dropped).
  *
- * See `docs/design/lifecycle-module.md` §3.
+ * See `docs/design/lifecycle-module.md`.
  */
 export type ScopeId = number;

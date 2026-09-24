@@ -91,7 +91,7 @@ function runLowering(ctx: LoweringCtx): KirModule {
     const ourPrefix = ctx.modulePrefix ?? "";
     if (definingModulePrefix !== ourPrefix) continue;
     ctx.typeDecls.push(lowerMonomorphizedStruct(ctx, mangledName, monoStruct));
-    // Lower methods on the *baked clone* (Path A, PR 4). The clone's
+    // Lower methods on the baked clone. The clone's
     // methods have fresh AST identities and the global
     // `Checker.typeMap` carries entries keyed by them, so
     // `getExprKirType` returns concrete types for every expression

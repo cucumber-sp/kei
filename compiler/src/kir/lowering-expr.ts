@@ -639,7 +639,7 @@ function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
       // Assignment to a managed slot — the Lifecycle pass rewrites this
       // marker into load/destroy/store/(oncopy unless isMove) at rewrite
       // time, reading the slot's pointee KIR type to dispatch. See
-      // `docs/design/lifecycle-module.md` §3.
+      // `docs/design/lifecycle-module.md`.
       emit(ctx, {
         kind: "mark_assign",
         slot: ptrId,
@@ -744,7 +744,7 @@ function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
       // Assignment to a managed field slot — the Lifecycle pass rewrites
       // this marker into load/destroy/store/(oncopy unless isMove) at
       // rewrite time, reading the slot's pointee KIR type to dispatch.
-      // See `docs/design/lifecycle-module.md` §3.
+      // See `docs/design/lifecycle-module.md`.
       emit(ctx, {
         kind: "mark_assign",
         slot: ptrDest,
@@ -770,7 +770,7 @@ function lowerAssignExpr(ctx: LoweringCtx, expr: AssignExpr): VarId {
     // Assignment to a managed array element — the Lifecycle pass rewrites
     // this marker into load/destroy/store/(oncopy unless isMove) at rewrite
     // time, reading the slot's pointee KIR type to dispatch. See
-    // `docs/design/lifecycle-module.md` §3.
+    // `docs/design/lifecycle-module.md`.
     emit(ctx, {
       kind: "mark_assign",
       slot: ptrDest,

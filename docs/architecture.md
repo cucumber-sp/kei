@@ -14,7 +14,7 @@ Three concepts have their own modules outside the pipeline directories:
 | Module | Responsibility | Integration |
 | --- | --- | --- |
 | `src/lifecycle/` | Decide which structs need `__destroy` / `__oncopy`, synthesise hooks, and replace lifecycle markers with concrete KIR instructions | Checker, KIR lowering, CLI driver |
-| `src/monomorphization/` | Register generic instantiations, clone and substitute declarations, adopt products across modules, and check instantiated bodies | Checker and KIR lowering |
+| `src/monomorphization/` | Register generic instantiations, clone declarations, substitute checker types, adopt products across modules, and check instantiated bodies | Checker and KIR lowering |
 | `src/diagnostics/` | Collect typed diagnostics per compilation and format text | Checker, module resolver, CLI driver |
 
-The lifecycle and monomorphization migrations are complete. Diagnostics still has a generic `untriaged` variant and legacy `Checker.error` / `warning` helpers; see [remaining work](roadmap.md). The module layout follows [ADR-0001](adr/0001-concept-cohesive-modules.md). Detailed invariants remain in the [Lifecycle](design/lifecycle-module.md), [Monomorphization](design/monomorphization-module.md), and [Diagnostics](design/diagnostics-module.md) notes.
+Diagnostics still has a generic `untriaged` variant and `Checker.error` / `warning` helpers; see [remaining work](roadmap.md). The module layout follows [ADR-0001](adr/0001-concept-cohesive-modules.md). Detailed invariants are in the [Lifecycle](design/lifecycle-module.md), [Monomorphization](design/monomorphization-module.md), and [Diagnostics](design/diagnostics-module.md) notes.

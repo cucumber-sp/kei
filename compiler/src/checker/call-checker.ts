@@ -312,9 +312,8 @@ export function checkCallExpression(checker: Checker, expr: CallExpr): Type {
           // Check argument types. Enum-variant payload mismatches use
           // a field-name-prefixed wording (`argument 'name':`) that
           // differs from the call-site `argument N:` form, so they
-          // stay on `untriaged` rather than `argumentTypeMismatch` —
-          // changing the wording would violate the "Don't rephrase
-          // messages" forbidden shortcut in the migration brief.
+          // stay on `untriaged` rather than `argumentTypeMismatch`
+          // until the typed variant supports that wording.
           for (let i = 0; i < expr.args.length; i++) {
             const arg = expr.args[i];
             if (!arg) continue;

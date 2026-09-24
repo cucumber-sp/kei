@@ -32,8 +32,8 @@ export interface MonomorphizedStruct {
    */
   originalDecl?: StructDecl | UnsafeStructDecl;
   /**
-   * The fully-substituted AST clone produced by `bake.ts` (Path A,
-   * design doc §4). Created lazily by `Monomorphization.checkBodies`
+   * The AST clone produced by `bake.ts`.
+   * Created lazily by `Monomorphization.checkBodies`
    * just before invoking the body-check callback. KIR lowering walks
    * this clone (not {@link originalDecl}); the global `Checker.typeMap`
    * carries entries keyed by the cloned expression identities, populated
@@ -73,8 +73,8 @@ export interface MonomorphizedFunction {
    */
   declaration?: FunctionDecl;
   /**
-   * The fully-substituted AST clone produced by `bake.ts` (Path A,
-   * design doc §4). Created lazily by `Monomorphization.checkBodies`
+   * The AST clone produced by `bake.ts`.
+   * Created lazily by `Monomorphization.checkBodies`
    * just before invoking the body-check callback. KIR lowering walks
    * this clone (not {@link declaration}); the global `Checker.typeMap`
    * carries entries keyed by the cloned expression identities, populated

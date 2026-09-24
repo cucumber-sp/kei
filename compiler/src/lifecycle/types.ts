@@ -3,13 +3,13 @@
  *
  * The {@link LifecycleDecision} is the bridge between checker-time existence
  * queries (`hasDestroy(struct)` / `hasOncopy(struct)`) and lowering-time
- * body synthesis (PR 2). It records *which* fields drive auto-generation,
+ * body synthesis. It records *which* fields drive auto-generation,
  * not the order they should be visited — field-iteration order
  * (reverse-declaration per spec §6.9) is the module's invariant, applied at
  * synthesise time, so callers can't accidentally produce wrong-order
  * destroys.
  *
- * See `docs/design/lifecycle-module.md` §4.
+ * See `docs/design/lifecycle-module.md`.
  */
 
 /**

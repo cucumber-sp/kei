@@ -10,4 +10,4 @@ Kei has one buildable artifact: `compiler/`, a TypeScript compiler running on Bu
 - GitHub issues are the actionable backlog. File coherent follow-up work there instead of leaving unexplained TODOs.
 - `CONTEXT.md` defines the compiler vocabulary used in architecture discussions.
 
-When changing behavior, update the relevant spec and status entry, documentation examples, and tests. Do not describe an unimplemented feature as available in the guide. Put completed migration details in Git history rather than current plans.
+When changing behavior, update the relevant spec and status entry, documentation examples, and tests. Do not describe an unimplemented feature as available in the guide. Follow the current-state documentation rule in [AGENTS.md](AGENTS.md).

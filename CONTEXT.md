@@ -12,7 +12,7 @@ A top-level module owns a cross-cutting concern even when several compilation st
 
 ## Monomorphization
 
-`src/monomorphization/` registers generic instantiations, clones and substitutes declarations, adopts products across modules, and checks instantiated bodies. Lowering reads the baked declarations. See the [Monomorphization design](docs/design/monomorphization-module.md).
+`src/monomorphization/` registers generic instantiations, clones declarations, substitutes checker types, adopts products across modules, and checks instantiated bodies. Lowering reads the baked declarations. See the [Monomorphization design](docs/design/monomorphization-module.md).
 
 ## Diagnostics
 

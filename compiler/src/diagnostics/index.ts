@@ -14,12 +14,11 @@ export type { Diagnostic, LegacyDiagnostic, SourceLocation } from "./types";
 export { Severity } from "./types";
 
 /**
- * The typed-methods object handed to checker call sites. PR 2 exposes
- * the `untriaged` catch-all; later PRs add typed methods alongside.
+ * The typed-methods object handed to checker call sites. It includes
+ * an `untriaged` catch-all for remaining generic checker errors.
  * Each named method takes its variant-specific payload (no severity —
  * that resolves from the catalog default at emit time) plus the standard
- * `span`, and returns `void` (caller blind, per design doc §6's "Caller
- * doesn't see the diagnostic").
+ * `span`, and returns `void` so callers do not handle the diagnostic.
  */
 export interface Diagnostics {
   /**
@@ -31,7 +30,7 @@ export interface Diagnostics {
    */
   untriaged(payload: { severity: Severity; span: Span; message: string }): void;
 
-  /** Type-error variants (PR 4a, `E1xxx`). */
+  /** Type-error variants (`E1xxx`). */
   typeMismatch(payload: { span: Span; context: string; expected: string; got: string }): void;
   expectedType(payload: { span: Span; context: string; expected: string; got: string }): void;
   cannotCast(payload: { span: Span; from: string; to: string }): void;
@@ -52,8 +51,7 @@ export interface Diagnostics {
     /**
      * Override for the user-visible message. Builtins (`sizeof`,
      * `alloc`, `free`, `onCopy`/`onDestroy`) and enum-variant /
-     * generic-function call sites carry their own wording from before
-     * the migration; we preserve those strings byte-for-byte.
+     * generic-function call sites provide their own wording.
      * Omitted → uses the canonical
      * `expected <N> argument(s), got <M>` wording.
      */
@@ -114,7 +112,7 @@ export interface Diagnostics {
    * misses the rule. Severity defaults to `error`.
    */
   unaryTypeMismatch(payload: { span: Span; op: string; message: string }): void;
-  // ─── Lifecycle / checker-rules (E5xxx, PR 4e) ─────────────────────────
+  // ─── Lifecycle / checker-rules (E5xxx) ─────────────────────────
   //
   // Scope: validation of user-authored `__destroy` / `__oncopy` hooks on
   // an `unsafe struct`. Auto-generated hooks belong to the Lifecycle
@@ -140,7 +138,7 @@ export interface Diagnostics {
   /** Lifecycle hook return type isn't `void`. */
   lifecycleReturnTypeWrong(payload: { span: Span; hookName: string }): void;
 
-  // ─── Struct field-rule variants (E4xxx, PR 4d) ────────────────────────
+  // ─── Struct field-rule variants (E4xxx) ────────────────────────
 
   /** Struct/struct-literal references a field name that doesn't exist. */
   unknownField(payload: {
@@ -167,7 +165,7 @@ export interface Diagnostics {
     message: string;
   }): void;
 
-  // ─── Modules (PR 4g) ───────────────────────────────────────────────────────
+  // ─── Modules (E7xxx) ───────────────────────────────────────────────────────
 
   /**
    * Emit a `cyclicImport` (E7001). Severity defaults to `error`; pass an
@@ -190,7 +188,7 @@ export interface Diagnostics {
   /** Emit a `mixedModuleStyles` (E7004). */
   mixedModuleStyles(payload: { span: Span; message: string }): void;
 
-  // ─── E2xxx — name resolution (PR 4b) ──────────────────────────────────
+  // ─── E2xxx — name resolution ──────────────────────────────────
 
   /** Value identifier not in scope. Severity default: `error`. */
   undeclaredName(payload: { span: Span; name: string }): void;

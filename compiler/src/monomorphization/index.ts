@@ -85,7 +85,7 @@ export interface Monomorphization {
    * body under that instantiation's substitution map. The per-decl
    * checking work stays in the Checker; this module owns the loop
    * (pattern-consistent with Lifecycle owning its fixed-point sweep).
-   * See `docs/design/monomorphization-module.md` §3.
+   * See `docs/design/monomorphization-module.md`.
    */
   checkBodies(checkBody: CheckBodyCallback): void;
 }
@@ -93,7 +93,7 @@ export interface Monomorphization {
 /**
  * Optional dependencies threaded into the Monomorphization factory.
  *
- * `lifecycle` is the integration seam from design doc §5: each struct
+ * `lifecycle` integrates concrete struct instantiations: each struct
  * instantiation registered here gets a `lifecycle.register(info.concrete)`
  * call so the new concrete struct gets its own destroy/oncopy decision.
  * Omitted in tests and in the multi-module orchestrator's combined view
@@ -126,7 +126,7 @@ export function createMonomorphization(options: MonomorphizationOptions = {}): M
     registerStruct(mangledName, info) {
       const wasNew = !stores.structs.has(mangledName);
       registerStruct(stores, mangledName, info);
-      // Lifecycle integration (design doc §5): each baked struct gets a
+      // Each baked struct gets a
       // `lifecycle.register(concrete)` call so the new instance gets its
       // own destroy/oncopy decision. Only fires on the *first* registration
       // of a mangled name — re-registrations (e.g. literal-checker hitting

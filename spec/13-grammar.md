@@ -21,9 +21,8 @@ function_decl    = ["pub"] "fn" IDENT [generic_params] "(" [param_list] ")" ["->
 extern_fn_decl   = "extern" "fn" IDENT "(" [extern_param_list] ")" ["->" type] ";" ;
 param_list       = param { "," param } ;
 param            = ["readonly"] IDENT ":" type ;
-   (* The `mut` parameter form is removed; parameters bind mutably by default,
-      `readonly` opts out. The `move` parameter form is also removed; use
-      the `move` expression at the call site instead. *)
+   (* Parameters bind mutably by default; `readonly` opts out.
+      Use the `move` expression at a call site to transfer ownership. *)
 
 (* Generics *)
 generic_params   = "<" IDENT { "," IDENT } ">" ;
@@ -153,20 +152,6 @@ super       trait       where       yield
 
 `match` is reserved for fuller pattern matching beyond what `switch`
 covers today.
-
-## Removed keywords
-
-These keywords were active in earlier versions and have been removed:
-
-- `mut` — replaced by `readonly` (see §07-structures.md). Bindings are
-  mutable by default; `readonly` opts out.
-- `ptr` — replaced by `ref T` / `readonly ref T` (safe) and `*T`
-  (unsafe). The `ptr<T>` generic-style spelling is gone.
-- `slice` — `slice<T>` removed entirely. Use `Array<T>` for refcounted
-  views, `ref inline<T, N>` for stack views, or raw `*T` + `usize` at
-  C boundaries.
-- `shared` — un-reserved. The stdlib type is `Shared<T>` (no lowercase
-  alias).
 
 ## Assertions
 

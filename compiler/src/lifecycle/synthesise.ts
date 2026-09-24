@@ -18,7 +18,7 @@
  * function table-testable without a checker driver — see
  * `tests/lifecycle/synthesise.test.ts`.
  *
- * See `docs/design/lifecycle-module.md` §2 ("Synthesise").
+ * See `docs/design/lifecycle-module.md`.
  */
 
 import type { StructType, Type } from "../checker/types";
@@ -31,7 +31,7 @@ import type { LifecycleDecision, ManagedFieldRef } from "./types";
  * `__oncopy` C functions.  Mirrors {@link mangledLifecycleStructName} in
  * `kir/lowering-scope.ts` — kept private to this module to avoid an
  * `import` from `kir/` (Lifecycle has no other dependencies on KIR
- * lowering, and that's the point of the migration).
+ * lowering.
  */
 function mangledStructPrefix(struct: StructType): string {
   return struct.modulePrefix ? `${struct.modulePrefix}_${struct.name}` : struct.name;
